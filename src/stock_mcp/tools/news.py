@@ -10,6 +10,17 @@ from stock_mcp.data.yfinance_client import fetch_ticker
 from stock_mcp.utils.provenance import build_error_response, build_meta, build_provenance
 from stock_mcp.utils.sanitize import sanitize_text
 
+POSITIVE_KEYWORDS = {
+    "beat", "beats", "exceeded", "growth", "profit", "surge", "gain",
+    "upgrade", "buy", "outperform", "record", "strong", "bullish",
+    "raises", "raised", "higher", "boost", "soars", "jumps",
+}
+NEGATIVE_KEYWORDS = {
+    "miss", "missed", "decline", "loss", "cut", "downgrade", "sell",
+    "weak", "bearish", "lawsuit", "investigation", "recall", "layoff",
+    "warns", "warning", "falls", "drops", "lower", "slump", "plunge",
+}
+
 
 async def stock_news(symbol: str, days: int = 7) -> dict[str, Any]:
     """
@@ -80,12 +91,14 @@ async def stock_news(symbol: str, days: int = 7) -> dict[str, Any]:
         if canonical:
             url = canonical.get("url")
 
+        sentiment = _score_sentiment(f"{title} {summary}")
         articles.append({
             "date": pub_date_naive.strftime("%Y-%m-%d"),
             "title": title,
             "summary": summary,
             "provider": provider,
             "url": url,
+            "sentiment": sentiment,
         })
 
     # Sort by date descending
@@ -131,6 +144,75 @@ async def stock_news(symbol: str, days: int = 7) -> dict[str, Any]:
     except Exception:
         pass
 
+    # Aggregate sentiment by time windows
+    now = datetime.utcnow()
+    cutoff_7d = now - timedelta(days=7)
+    cutoff_30d = now - timedelta(days=30)
+
+    # Total counts (over full period)
+    sentiment_counts = {"positive": 0, "negative": 0, "neutral": 0}
+    # 7-day window counts
+    sentiment_counts_7d = {"positive": 0, "negative": 0, "neutral": 0}
+    # 30-day window counts
+    sentiment_counts_30d = {"positive": 0, "negative": 0, "neutral": 0}
+
+    for a in articles:
+        sentiment_counts[a["sentiment"]] += 1
+        # Parse article date for window checks
+        try:
+            article_date = datetime.strptime(a["date"], "%Y-%m-%d")
+            if article_date >= cutoff_7d:
+                sentiment_counts_7d[a["sentiment"]] += 1
+            if article_date >= cutoff_30d:
+                sentiment_counts_30d[a["sentiment"]] += 1
+        except (ValueError, KeyError):
+            pass
+
+    def _derive_sentiment(counts: dict[str, int]) -> str | None:
+        """Derive overall sentiment from counts."""
+        total = sum(counts.values())
+        if total == 0:
+            return None
+        if counts["positive"] > counts["negative"]:
+            return "positive"
+        elif counts["negative"] > counts["positive"]:
+            return "negative"
+        return "neutral"
+
+    def _derive_confidence(count: int) -> str:
+        """Derive confidence from sample size."""
+        if count >= 10:
+            return "high"
+        elif count >= 5:
+            return "moderate"
+        elif count >= 1:
+            return "low"
+        return "none"
+
+    overall_sentiment = _derive_sentiment(sentiment_counts)
+    sentiment_7d = _derive_sentiment(sentiment_counts_7d)
+    sentiment_30d = _derive_sentiment(sentiment_counts_30d)
+
+    sample_size_7d = sum(sentiment_counts_7d.values())
+    sample_size_30d = sum(sentiment_counts_30d.values())
+
+    # Sentiment confidence based on sample size (using 7d window for primary)
+    sentiment_confidence = _derive_confidence(sample_size_7d)
+
+    sentiment_summary = {
+        "overall": overall_sentiment,
+        "confidence": sentiment_confidence,
+        "counts": sentiment_counts,
+        "method": "keyword_v1",
+        # Recency windows for investors to weight recent news more heavily
+        "sentiment_7d": sentiment_7d,
+        "sample_size_7d": sample_size_7d,
+        "confidence_7d": _derive_confidence(sample_size_7d),
+        "sentiment_30d": sentiment_30d,
+        "sample_size_30d": sample_size_30d,
+        "confidence_30d": _derive_confidence(sample_size_30d),
+    }
+
     # Build warnings
     warnings: list[str] = []
     if len(articles) == 0:
@@ -150,6 +232,7 @@ async def stock_news(symbol: str, days: int = 7) -> dict[str, Any]:
         "period_days": days,
         "article_count": len(articles),
         "articles": articles,
+        "sentiment": sentiment_summary,
         "recent_earnings": recent_earnings,
         "warnings": warnings if warnings else None,
     }
@@ -173,3 +256,16 @@ def _safe_round(value: float | None, decimals: int) -> float | None:
     if value is None:
         return None
     return round(value, decimals)
+
+
+def _score_sentiment(text: str) -> str:
+    """Simple keyword-based sentiment scoring."""
+    text_lower = text.lower()
+    pos = sum(1 for w in POSITIVE_KEYWORDS if w in text_lower)
+    neg = sum(1 for w in NEGATIVE_KEYWORDS if w in text_lower)
+
+    if pos > neg:
+        return "positive"
+    elif neg > pos:
+        return "negative"
+    return "neutral"

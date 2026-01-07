@@ -208,6 +208,9 @@ async def risk_metrics(
         stop_suggestions=stop_suggestions,
     )
 
+    # Market context (SPY trend for regime awareness)
+    market_context = _build_market_context(benchmark_indexed if benchmark_df is not None else None)
+
     duration_ms = (perf_counter() - start_time) * 1000
 
     return {
@@ -229,6 +232,7 @@ async def risk_metrics(
         "liquidity": liquidity,
         "stop_suggestions": stop_suggestions,
         "position_sizing": position_sizing,
+        "market_context": market_context,
     }
 
 
@@ -362,4 +366,107 @@ def _build_position_sizing(
         "by_stop_level": by_stop_level,
         "constraints": constraints,
         "recommended": recommended,
+    }
+
+
+def _build_market_context(benchmark_df: pd.DataFrame | None) -> dict[str, Any]:
+    """
+    Build market context from benchmark (SPY) data.
+
+    Provides regime flags for mid/long-term investors to understand
+    whether the tide is with them or against them.
+    """
+    if benchmark_df is None or len(benchmark_df) < 200:
+        return {
+            "spy_trend": None,
+            "spy_above_200d": None,
+            "spy_above_50d": None,
+            "warning": "insufficient_benchmark_data",
+        }
+
+    # Get SPY price series
+    spy_close = pd.to_numeric(benchmark_df["close"], errors="coerce")
+    if spy_close.isna().all():
+        return {
+            "spy_trend": None,
+            "spy_above_200d": None,
+            "spy_above_50d": None,
+            "warning": "invalid_benchmark_data",
+        }
+
+    current_spy = float(spy_close.iloc[-1])
+
+    # Calculate SMAs
+    spy_sma_50 = calculate_sma(spy_close, 50)
+    spy_sma_200 = calculate_sma(spy_close, 200)
+
+    sma_50_val = float(spy_sma_50.iloc[-1]) if not pd.isna(spy_sma_50.iloc[-1]) else None
+    sma_200_val = float(spy_sma_200.iloc[-1]) if not pd.isna(spy_sma_200.iloc[-1]) else None
+
+    # Determine trend
+    above_200d = current_spy > sma_200_val if sma_200_val else None
+    above_50d = current_spy > sma_50_val if sma_50_val else None
+
+    # Simple trend classification
+    if above_200d is None:
+        spy_trend = "unknown"
+    elif above_200d and above_50d:
+        spy_trend = "bullish"
+    elif above_200d and not above_50d:
+        spy_trend = "neutral"  # Above long-term but below short-term = pullback
+    elif not above_200d and above_50d:
+        spy_trend = "recovering"  # Below long-term but above short-term = bounce
+    else:
+        spy_trend = "bearish"
+
+    # Calculate distances
+    distance_200d = None
+    distance_50d = None
+    if sma_200_val and current_spy:
+        distance_200d = round((current_spy - sma_200_val) / sma_200_val, 4)
+    if sma_50_val and current_spy:
+        distance_50d = round((current_spy - sma_50_val) / sma_50_val, 4)
+
+    # Get last bar date for provenance
+    last_bar_date = None
+    if benchmark_df is not None and len(benchmark_df) > 0:
+        last_idx = benchmark_df.index[-1]
+        if hasattr(last_idx, "strftime"):
+            last_bar_date = last_idx.strftime("%Y-%m-%d")
+        else:
+            last_bar_date = str(last_idx)
+
+    # Sanity checks for data quality
+    sanity_warnings: list[str] = []
+
+    # Check for invalid/suspicious SPY price
+    if current_spy <= 0:
+        sanity_warnings.append("spy_price_invalid")
+    elif current_spy > 1000:
+        # SPY has never been above $600 historically as of 2024
+        # Flag if > 1000 as potentially suspicious (though could be valid in future)
+        sanity_warnings.append("spy_price_unusually_high")
+
+    # Check for missing SMAs
+    if sma_200_val is None:
+        sanity_warnings.append("spy_sma200_missing")
+    if sma_50_val is None:
+        sanity_warnings.append("spy_sma50_missing")
+
+    return {
+        "spy_trend": spy_trend,
+        "spy_above_200d": above_200d,
+        "spy_above_50d": above_50d,
+        "spy_price": round(current_spy, 2),
+        "spy_sma_200": round(sma_200_val, 2) if sma_200_val else None,
+        "spy_sma_50": round(sma_50_val, 2) if sma_50_val else None,
+        "spy_distance_to_200d": distance_200d,
+        "spy_distance_to_50d": distance_50d,
+        # Provenance fields for auditability
+        "symbol_used": "SPY",
+        "source": "yfinance",
+        "as_of": last_bar_date,
+        "price_adjustment": "split_adjusted",
+        # Sanity check warnings
+        "sanity_warnings": sanity_warnings if sanity_warnings else None,
     }

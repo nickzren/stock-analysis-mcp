@@ -178,16 +178,150 @@ async def get_news(symbol: str, days: int = 7) -> str:
 @mcp.tool
 async def analyze(symbol: str) -> str:
     """
-    Comprehensive stock analysis aggregating multiple data sources.
+    Comprehensive stock analysis for mid/long-term investors.
 
-    Runs technicals, fundamentals, risk metrics, and events analysis
-    in parallel and provides bullish/bearish/neutral signals.
+    Runs technicals, fundamentals, risk metrics, events, and news analysis
+    in parallel. Returns verdict with decomposed scores, horizon fit assessment,
+    valuation-aware action zones, and multi-factor decision context.
+
+    IMPORTANT RENDERING INSTRUCTIONS - Present analysis in this order:
+
+    1. HEADER: Symbol, price, market cap, sector
+
+    2. EXECUTIVE SUMMARY (from executive_summary field):
+       - Render VERBATIM as a blockquote or italicized paragraph
+       - This is the TL;DR - a 2-4 sentence narrative summary
+       - Do NOT paraphrase or rewrite - use the exact text from the field
+       - Example: "Moderna shows strong technicals (golden cross, above SMAs, +40% in 1 month)
+         but faces severe fundamental headwinds..."
+
+    3. VERDICT SUMMARY:
+       - Tilt (bullish/neutral/bearish) + confidence level
+       - Decomposed scores: setup (technicals), business_quality, risk regime
+       - Horizon fit: mid_term + long_term assessments with reasons
+
+    4. HORIZON DRIVERS (from decision_context.horizon_drivers):
+       - Render ONLY if non-empty
+       - These are policy gates (not score-based) that affect horizon fit
+       - Format: "[long_term] gate: reason" or "[mid_term] gate: reason"
+       - Example: "[long_term] burn_metrics_missing: unprofitable with runway unknown"
+       - Example: "[mid_term] extreme_risk: volatility > 60%"
+
+    5. SCORE MATH (always render with CONSISTENT 6-decimal precision):
+       - Use score_display.formula for pre-formatted output
+       - Use score_display.component_breakdown for audit trail
+       - Example: "Score: 0.050000 = 0.090909 × 0.550000"
+       - Example breakdown: "technicals=0.990×0.545455=0.540000 + risk=-0.990×0.454545=-0.450000"
+       - INVARIANT: sum(score_delta) == score_raw (use same precision everywhere)
+       - 6 decimals avoids rounding artifacts that make sums appear wrong
+       - ALWAYS show component_exclusions when coverage < 1.0:
+         ```
+         Excluded components:
+           - fundamentals: {component_exclusions.fundamentals}
+         ```
+         Possible exclusion reasons:
+           - fundamentals_data_unavailable: no fundamentals data fetched
+           - fundamentals_not_meaningful_unprofitable: data present but company unprofitable
+           - fundamentals_key_inputs_missing: coverage=true but margin/EPS/PE all null
+           - no_fundamental_signals_fired: data available but no thresholds triggered
+
+    6. CONFIDENCE PATH (from verdict.confidence_path):
+       - Current blockers: list what's preventing higher confidence
+       - Upgrade if: what would increase confidence (profitability, FCF, etc.)
+       - Downgrade if: what would decrease confidence (guidance cut, etc.)
+
+    7. TOP DRIVERS (from decision_context.top_triggers):
+       - Show each trigger with category, direction, reason, and score_delta
+       - score_delta = actual contribution to final score (not just weight)
+       - BALANCE RULE: If tilt=neutral, show top 2 bearish + top 1 bullish
+       - If tilt=bullish, still show top bearish driver for balance
+       - Include next_update dates for fundamental triggers
+       - DEDUPE: Only show one trigger per category (don't show both risk_regime_extreme AND very_high_volatility)
+
+    8. SIGNALS: Bullish (pros) and Bearish (cons) lists
+
+    9. KEY METRICS TABLE with audit fields:
+       - P/E or P/S: show value + source (e.g., "6.2x (computed from mcap/rev)")
+       - Cash runway: show quarters + basis (e.g., "9.1q (min_fcf_ocf)")
+       - Quarterly burn: FCF $X, OCF $Y (from burn_metrics)
+       - Beta, volatility, drawdown
+
+    10. ACTION ZONES:
+        - Current zone + valuation_assessment.gate
+        - Price levels with distances
+        - For unprofitable companies, show P/S-based valuation gate
+        - If valuation_gate="unknown", add warning: "(valuation confidence reduced)"
+
+    11. POSITION SIZING (from action_zones.position_sizing_range):
+        - Show range as percentage AND dollars (e.g., "0.5%-3% = $250-$1,500")
+        - Show shares range at current price (e.g., "~7-42 shares @ $35.66")
+        - Show stop-implied max size if stop distance available
+
+    12. DECISION CONTEXT - Render BY CATEGORY with EXPLICIT status fields:
+        Render each category as a separate block (not combined) for scanability.
+
+        a) Fundamentals (include business_quality_evidence for transparency):
+           ```
+           Fundamentals: {business_quality}
+             Status: {status} ({status_explanation if present})
+             Evidence: {decomposed.business_quality_evidence}
+             Bullish if: {bullish_if[0].condition} ({bullish_if[0].current})
+             Bullish if: {bullish_if[1].condition} ({bullish_if[1].current})
+             Bearish if: {bearish_if[0].condition} ({bearish_if[0].current})
+             Next update: {next_update}
+           ```
+           For unprofitable companies, always show 2-3 checkpoints with current values inline.
+
+        b) Valuation (show BOTH P/E and P/S status explicitly):
+           ```
+           Valuation: Gate = {current_gate}
+             P/E: {pe_status} ({pe_explanation if present})
+             P/S: {ps_status} ({ps_explanation if present})
+             Bullish if: {bullish_if}
+             Bearish if: {bearish_if}
+           ```
+           INVARIANT: If gate="unknown", ps_status MUST be "unavailable"
+
+        c) Risk:
+           ```
+           Risk: {current_regime}
+             Bullish if: {bullish_if}
+             Bearish if: {bearish_if}
+           ```
+
+        d) Technicals:
+           ```
+           Technicals:
+             Bullish if: {bullish_if}
+             Bearish if: {bearish_if}
+           ```
+
+        e) News:
+           ```
+           News: {current_sentiment} (confidence: {sentiment_confidence})
+             Headline triggers: {headline_triggers}
+           ```
+
+        f) Next catalyst: earnings date with days countdown
+
+    13. MARKET CONTEXT (from market_context):
+        - SPY trend: above/below 200d SMA
+        - Provenance: "SPY as_of={as_of} source={source} adjustment={price_adjustment}"
+        - If sanity_warnings is non-empty, show: "Warnings: {sanity_warnings}"
+
+    14. NEWS: Recent headlines if available
+
+    For UNPROFITABLE companies specifically:
+    - Show P/S instead of P/E in metrics
+    - Show burn_metrics: liquidity, runway, burn rates, dilution risk
+    - If burn_metrics.status != "available", show status_reason
+    - Emphasize path-to-profitability triggers in fundamentals
 
     Args:
         symbol: Stock ticker symbol
 
     Returns:
-        JSON with complete analysis and signals
+        JSON with complete analysis - render ALL sections per instructions above
     """
     result = await analyze_stock(symbol=symbol)
     return json.dumps(result, indent=2, default=str)

@@ -10,7 +10,7 @@ An MCP server that gives AI agents (Claude Code, Codex, etc.) stock analysis cap
 
 ## Philosophy
 
-**One command, complete picture.** Just say "Analyze AAPL" and get news, technicals, fundamentals, risk metrics, and events in a consistent JSON schema.
+**One command, complete picture.** Just say "Analyze AAPL" and get a verdict, action zones, decision context, and executive summary — all in a consistent JSON schema.
 
 ## Quick Start
 
@@ -60,14 +60,12 @@ The primary way to use this server—just say:
 ```
 
 This returns a comprehensive JSON report covering:
-- Company overview and current price
-- Recent news and sentiment
-- Technical signals (trend, support/resistance)
-- Fundamental metrics (valuation, growth, margins)
-- Risk profile (volatility, beta, drawdown)
-- Upcoming events (earnings, dividends)
-- Investment thesis with bull/bear cases
-- Verdict with action recommendation
+- **Executive summary** — materiality-first narrative (leads with what matters most)
+- **Verdict** — score, tilt (bullish/neutral/bearish), confidence, horizon fit
+- **Policy action** — mid-term/long-term recommendations with position sizing
+- **Action zones** — ATR-based price levels (accumulate/reduce/stop)
+- **Decision context** — what would change the verdict (bullish_if/bearish_if)
+- Technical signals, fundamental metrics, risk regime, news sentiment, events
 
 The output follows a consistent schema, making it easy to compare multiple stocks or track changes over time.
 

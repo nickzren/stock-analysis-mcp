@@ -40,13 +40,45 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
     normalized_symbol = symbol.upper().strip()
 
     # Valuation
+    # P/S: try direct field first, then compute from market_cap / revenue
+    ps_trailing = _safe_float(info.get("priceToSalesTrailing12Months"))
+    ps_source: str | None = None
+    if ps_trailing is not None:
+        ps_source = "direct"
+    else:
+        # Fallback: compute P/S from market_cap / revenue_ttm
+        market_cap_val = _safe_float(info.get("marketCap"))
+        revenue_ttm = _safe_float(info.get("totalRevenue"))
+        if market_cap_val is not None and revenue_ttm is not None and revenue_ttm > 0:
+            ps_trailing = market_cap_val / revenue_ttm
+            ps_source = "computed"
+
+    # Build ps_explanation for auditability when computed
+    ps_explanation: str | None = None
+    if ps_source == "computed":
+        ps_explanation = "P/S computed from market_cap / revenue_ttm (priceToSalesTrailing12Months unavailable)"
+
+    # EV/Sales: compute from enterpriseValue / totalRevenue
+    # Better than P/S when debt/cash position is material
+    enterprise_value = _safe_float(info.get("enterpriseValue"))
+    revenue_ttm = _safe_float(info.get("totalRevenue"))
+    ev_to_sales: float | None = None
+    ev_to_sales_source: str | None = None
+    if enterprise_value is not None and revenue_ttm is not None and revenue_ttm > 0:
+        ev_to_sales = enterprise_value / revenue_ttm
+        ev_to_sales_source = "computed"
+
     valuation = {
         "pe_trailing": _safe_float(info.get("trailingPE")),
         "pe_forward": _safe_float(info.get("forwardPE")),
-        "ps_trailing": _safe_float(info.get("priceToSalesTrailing12Months")),
+        "ps_trailing": _safe_round(ps_trailing, 2),
+        "ps_source": ps_source,  # "direct" or "computed" or None
+        "ps_explanation": ps_explanation,  # Only present when ps_source="computed"
         "pb_ratio": _safe_float(info.get("priceToBook")),
         "peg_ratio": _safe_float(info.get("pegRatio")),
         "ev_to_ebitda": _safe_float(info.get("enterpriseToEbitda")),
+        "ev_to_sales": _safe_round(ev_to_sales, 2),
+        "ev_to_sales_source": ev_to_sales_source,
     }
 
     # Growth
@@ -97,6 +129,13 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
 
     # Financial Health
     total_cash = _safe_float(info.get("totalCash"))
+    # Cash + short-term investments (more accurate liquidity for burn calculations)
+    # yfinance doesn't always have this separately, but we can use total cash as proxy
+    # Some tickers have cashAndShortTermInvestments
+    cash_and_st_investments = _safe_float(info.get("cashAndShortTermInvestments"))
+    if cash_and_st_investments is None:
+        cash_and_st_investments = total_cash  # Fallback to total cash
+
     total_debt = _safe_float(info.get("totalDebt"))
     net_cash = (
         total_cash - total_debt
@@ -111,6 +150,7 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
 
     financial_health = {
         "total_cash": total_cash,
+        "cash_and_st_investments": cash_and_st_investments,
         "total_debt": total_debt,
         "net_cash": net_cash,
         "current_ratio": current_ratio,
@@ -135,9 +175,9 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
     # Cash Flow
     operating_cf = _safe_float(info.get("operatingCashflow"))
     free_cash_flow = _safe_float(info.get("freeCashflow"))
-
-    # Calculate FCF margin
+    market_cap = _safe_float(info.get("marketCap"))
     revenue = _safe_float(info.get("totalRevenue"))
+
     fcf_margin = (
         free_cash_flow / revenue
         if free_cash_flow is not None and revenue is not None and revenue > 0
@@ -154,6 +194,78 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
                 "threshold": 0,
             },
         },
+    }
+
+    # Yield metrics
+    fcf_yield = (
+        free_cash_flow / market_cap
+        if free_cash_flow is not None and market_cap is not None and market_cap > 0
+        else None
+    )
+    pe_trailing = _safe_float(info.get("trailingPE"))
+    earnings_yield = (
+        1 / pe_trailing
+        if pe_trailing is not None and pe_trailing > 0
+        else None
+    )
+    dividend_yield = _safe_float(info.get("dividendYield"))
+
+    # Dividend sustainability
+    dividend_rate = _safe_float(info.get("dividendRate"))
+    trailing_eps = _safe_float(info.get("trailingEps"))
+    payout_ratio = (
+        dividend_rate / trailing_eps
+        if dividend_rate is not None and trailing_eps is not None and trailing_eps > 0
+        else None
+    )
+    shares_outstanding = _safe_float(info.get("sharesOutstanding"))
+    fcf_payout = (
+        (dividend_rate * shares_outstanding) / free_cash_flow
+        if (dividend_rate is not None and shares_outstanding is not None
+            and free_cash_flow is not None and free_cash_flow > 0)
+        else None
+    )
+
+    # Build yield metrics warnings
+    yield_warnings: list[str] = []
+
+    # FCF yield: still compute if negative, but mark and don't trigger "attractive"
+    is_fcf_negative = free_cash_flow is not None and free_cash_flow <= 0
+    if is_fcf_negative:
+        yield_warnings.append("negative_fcf")
+
+    # Earnings yield: if EPS <= 0, yield is meaningless
+    is_eps_negative = trailing_eps is not None and trailing_eps <= 0
+    if is_eps_negative:
+        yield_warnings.append("negative_eps")
+
+    # Attractive FCF yield rule: None if FCF is negative (not False)
+    attractive_fcf_triggered: bool | None = None
+    if fcf_yield is not None and not is_fcf_negative:
+        attractive_fcf_triggered = check_rule(fcf_yield, 0.05, operator.gt)
+
+    # Sustainable dividend: None if EPS <= 0 (payout ratio meaningless)
+    sustainable_div_triggered: bool | None = None
+    if payout_ratio is not None and not is_eps_negative:
+        sustainable_div_triggered = check_rule(payout_ratio, 0.75, operator.lt)
+
+    yield_metrics = {
+        "fcf_yield": _safe_round(fcf_yield, 4),
+        "earnings_yield": _safe_round(earnings_yield, 4) if not is_eps_negative else None,
+        "dividend_yield": _safe_round(dividend_yield, 4),
+        "dividend_payout_ratio": _safe_round(payout_ratio, 4) if not is_eps_negative else None,
+        "fcf_payout_ratio": _safe_round(fcf_payout, 4) if not is_fcf_negative else None,
+        "rules": {
+            "attractive_fcf_yield": {
+                "triggered": attractive_fcf_triggered,
+                "threshold": 0.05,
+            },
+            "sustainable_dividend": {
+                "triggered": sustainable_div_triggered,
+                "threshold": 0.75,
+            },
+        },
+        "warnings": yield_warnings if yield_warnings else None,
     }
 
     # Build provenance with fiscal period info
@@ -188,6 +300,7 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
         "profitability": profitability,
         "financial_health": financial_health,
         "cash_flow": cash_flow,
+        "yield_metrics": yield_metrics,
     }
 
 

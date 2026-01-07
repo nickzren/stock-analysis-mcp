@@ -16,4 +16,7 @@ def get_server_version() -> str:
 
 
 SERVER_VERSION = get_server_version()
-SCHEMA_VERSION = "1"
+# Bump when output schema changes materially (new fields, renamed fields, structure changes)
+# v1: Initial schema
+# v2: Added watchlist_snapshot with snapshot_version/hash, NaN sanitization, policy_action enhancements
+SCHEMA_VERSION = "2"
