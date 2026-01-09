@@ -5,7 +5,9 @@ from datetime import datetime
 from time import perf_counter
 from typing import Any
 
-from stock_mcp.data.yfinance_client import fetch_info
+import pandas as pd
+
+from stock_mcp.data.yfinance_client import fetch_info, fetch_ticker
 from stock_mcp.utils.provenance import build_error_response, build_meta, build_provenance
 from stock_mcp.utils.validators import check_rule
 
@@ -38,6 +40,16 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
         )
 
     normalized_symbol = symbol.upper().strip()
+
+    # Fiscal period label (used for cash flow period metadata)
+    fiscal_year_end = info.get("lastFiscalYearEnd")
+    fiscal_period = None
+    if fiscal_year_end:
+        try:
+            fiscal_date = datetime.fromtimestamp(fiscal_year_end)
+            fiscal_period = f"FY {fiscal_date.year}"
+        except (ValueError, TypeError, OSError):
+            pass
 
     # Valuation
     # P/S: try direct field first, then compute from market_cap / revenue
@@ -175,6 +187,78 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
     # Cash Flow
     operating_cf = _safe_float(info.get("operatingCashflow"))
     free_cash_flow = _safe_float(info.get("freeCashflow"))
+    financial_currency = info.get("financialCurrency")
+    price_currency = info.get("currency")
+
+    fcf_period: str | None = None
+    fcf_period_end: str | None = None
+    fcf_source: str | None = None
+
+    # Prefer cash flow statements when available (info.freeCashflow can be stale/incorrect)
+    try:
+        ticker = await fetch_ticker(symbol)
+        quarterly_cf = _get_cashflow_df(ticker, freq="quarterly")
+        yearly_cf = _get_cashflow_df(ticker, freq=None)
+
+        quarterly_cols = _sorted_cashflow_columns(quarterly_cf.columns) if quarterly_cf is not None else []
+        yearly_cols = _sorted_cashflow_columns(yearly_cf.columns) if yearly_cf is not None else []
+        quarterly_period_end = _period_end_from_columns(quarterly_cols)
+        yearly_period_end = _period_end_from_columns(yearly_cols)
+
+        fcf_quarterly = _sum_recent_periods(
+            _select_cashflow_series(quarterly_cf, _FCF_LABELS),
+            quarterly_cols,
+            periods=4,
+        )
+        ocf_quarterly = _sum_recent_periods(
+            _select_cashflow_series(quarterly_cf, _OCF_LABELS),
+            quarterly_cols,
+            periods=4,
+        )
+        capex_quarterly = _sum_recent_periods(
+            _select_cashflow_series(quarterly_cf, _CAPEX_LABELS),
+            quarterly_cols,
+            periods=4,
+        )
+        if fcf_quarterly is None and ocf_quarterly is not None and capex_quarterly is not None:
+            fcf_quarterly = ocf_quarterly + capex_quarterly
+
+        fcf_yearly = _latest_period_value(
+            _select_cashflow_series(yearly_cf, _FCF_LABELS),
+            yearly_cols,
+        )
+        ocf_yearly = _latest_period_value(
+            _select_cashflow_series(yearly_cf, _OCF_LABELS),
+            yearly_cols,
+        )
+        capex_yearly = _latest_period_value(
+            _select_cashflow_series(yearly_cf, _CAPEX_LABELS),
+            yearly_cols,
+        )
+        if fcf_yearly is None and ocf_yearly is not None and capex_yearly is not None:
+            fcf_yearly = ocf_yearly + capex_yearly
+
+        if fcf_quarterly is not None:
+            free_cash_flow = fcf_quarterly
+            fcf_period = "TTM"
+            fcf_period_end = quarterly_period_end
+            fcf_source = "cashflow_quarterly"
+        elif fcf_yearly is not None:
+            free_cash_flow = fcf_yearly
+            fcf_period = fiscal_period or "FY"
+            fcf_period_end = yearly_period_end
+            fcf_source = "cashflow_yearly"
+
+        if ocf_quarterly is not None:
+            operating_cf = ocf_quarterly
+        elif ocf_yearly is not None:
+            operating_cf = ocf_yearly
+    except Exception:
+        pass
+
+    if fcf_period is None and free_cash_flow is not None:
+        fcf_period = "TTM"
+        fcf_source = fcf_source or "info"
     market_cap = _safe_float(info.get("marketCap"))
     revenue = _safe_float(info.get("totalRevenue"))
 
@@ -187,6 +271,10 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
     cash_flow = {
         "operating_cf_ttm": operating_cf,
         "free_cash_flow_ttm": free_cash_flow,
+        "free_cash_flow_period": fcf_period,
+        "free_cash_flow_period_end": fcf_period_end,
+        "free_cash_flow_source": fcf_source,
+        "currency": financial_currency,
         "fcf_margin": _safe_round(fcf_margin, 4),
         "rules": {
             "positive_fcf": {
@@ -197,9 +285,19 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
     }
 
     # Yield metrics
+    currency_mismatch = (
+        financial_currency is not None
+        and price_currency is not None
+        and financial_currency != price_currency
+    )
     fcf_yield = (
         free_cash_flow / market_cap
-        if free_cash_flow is not None and market_cap is not None and market_cap > 0
+        if (
+            free_cash_flow is not None
+            and market_cap is not None
+            and market_cap > 0
+            and not currency_mismatch
+        )
         else None
     )
     pe_trailing = _safe_float(info.get("trailingPE"))
@@ -221,8 +319,13 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
     shares_outstanding = _safe_float(info.get("sharesOutstanding"))
     fcf_payout = (
         (dividend_rate * shares_outstanding) / free_cash_flow
-        if (dividend_rate is not None and shares_outstanding is not None
-            and free_cash_flow is not None and free_cash_flow > 0)
+        if (
+            dividend_rate is not None
+            and shares_outstanding is not None
+            and free_cash_flow is not None
+            and free_cash_flow > 0
+            and not currency_mismatch
+        )
         else None
     )
 
@@ -231,6 +334,8 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
 
     # FCF yield: still compute if negative, but mark and don't trigger "attractive"
     is_fcf_negative = free_cash_flow is not None and free_cash_flow <= 0
+    if currency_mismatch:
+        yield_warnings.append("currency_mismatch")
     if is_fcf_negative:
         yield_warnings.append("negative_fcf")
 
@@ -267,16 +372,6 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
         },
         "warnings": yield_warnings if yield_warnings else None,
     }
-
-    # Build provenance with fiscal period info
-    fiscal_year_end = info.get("lastFiscalYearEnd")
-    fiscal_period = None
-    if fiscal_year_end:
-        try:
-            fiscal_date = datetime.fromtimestamp(fiscal_year_end)
-            fiscal_period = f"FY {fiscal_date.year}"
-        except (ValueError, TypeError, OSError):
-            pass
 
     warnings = []
     if info.get("trailingPE") and not info.get("forwardPE"):
@@ -323,3 +418,100 @@ def _safe_round(value: float | None, decimals: int) -> float | None:
     if value is None:
         return None
     return round(value, decimals)
+
+
+_FCF_LABELS: tuple[str, ...] = ("freecashflow",)
+_OCF_LABELS: tuple[str, ...] = ("operatingcashflow",)
+_CAPEX_LABELS: tuple[str, ...] = ("capitalexpenditure", "capitalexpenditures")
+
+
+def _normalize_cashflow_label(label: str) -> str:
+    """Normalize cash flow row labels for matching."""
+    return "".join(ch for ch in str(label).lower() if ch.isalnum())
+
+
+def _select_cashflow_series(
+    df: pd.DataFrame | None,
+    candidates: tuple[str, ...],
+) -> pd.Series | None:
+    """Return the first matching cashflow series by normalized label."""
+    if df is None or df.empty:
+        return None
+    normalized_index = {
+        _normalize_cashflow_label(idx): idx
+        for idx in df.index
+    }
+    for candidate in candidates:
+        idx = normalized_index.get(candidate)
+        if idx is not None:
+            return pd.to_numeric(df.loc[idx], errors="coerce")
+    return None
+
+
+def _sorted_cashflow_columns(columns: pd.Index) -> list[Any]:
+    """Sort cashflow columns by date desc when possible; else keep order."""
+    cols = list(columns)
+    if not cols:
+        return cols
+    try:
+        parsed = pd.to_datetime(cols, errors="coerce")
+    except Exception:
+        return cols
+    if parsed.notna().all():
+        return [c for _, c in sorted(zip(parsed, cols), reverse=True)]
+    return cols
+
+
+def _sum_recent_periods(
+    series: pd.Series | None,
+    columns: list[Any],
+    *,
+    periods: int,
+) -> float | None:
+    """Sum most recent periods from a series; returns None if insufficient data."""
+    if series is None:
+        return None
+    ordered = series.reindex(columns)
+    values = pd.to_numeric(ordered, errors="coerce").dropna()
+    if len(values) < periods:
+        return None
+    return float(values.iloc[:periods].sum())
+
+
+def _latest_period_value(
+    series: pd.Series | None,
+    columns: list[Any],
+) -> float | None:
+    """Return most recent value from a series."""
+    if series is None:
+        return None
+    ordered = series.reindex(columns)
+    values = pd.to_numeric(ordered, errors="coerce").dropna()
+    if values.empty:
+        return None
+    return float(values.iloc[0])
+
+
+def _period_end_from_columns(columns: list[Any]) -> str | None:
+    """Return ISO date for the most recent period end column."""
+    if not columns:
+        return None
+    try:
+        dt = pd.to_datetime(columns[0], errors="coerce")
+    except Exception:
+        return None
+    if pd.isna(dt):
+        return None
+    return dt.date().isoformat()
+
+
+def _get_cashflow_df(ticker: Any, freq: str | None) -> pd.DataFrame | None:
+    """Fetch cashflow DataFrame with yfinance fallbacks."""
+    try:
+        if hasattr(ticker, "get_cashflow"):
+            return ticker.get_cashflow(freq=freq) if freq else ticker.get_cashflow()
+        if freq == "quarterly":
+            return ticker.quarterly_cashflow
+        return ticker.cashflow
+    except Exception:
+        return None

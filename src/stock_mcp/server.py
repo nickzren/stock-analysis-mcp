@@ -192,6 +192,7 @@ async def analyze(symbol: str) -> str:
        - Render VERBATIM as a blockquote or italicized paragraph
        - This is the TL;DR - a 2-4 sentence narrative summary
        - Do NOT paraphrase or rewrite - use the exact text from the field
+       - If FCF is mentioned, it must include value+period via fundamentals_summary.cash_flow.free_cash_flow_label
        - Example: "Moderna shows strong technicals (golden cross, above SMAs, +40% in 1 month)
          but faces severe fundamental headwinds..."
 
@@ -227,7 +228,7 @@ async def analyze(symbol: str) -> str:
 
     6. CONFIDENCE PATH (from verdict.confidence_path):
        - Current blockers: list what's preventing higher confidence
-       - Upgrade if: what would increase confidence (profitability, FCF, etc.)
+       - Upgrade if: list only UNMET conditions (omit any already satisfied)
        - Downgrade if: what would decrease confidence (guidance cut, etc.)
 
     7. TOP DRIVERS (from decision_context.top_triggers):
@@ -242,22 +243,106 @@ async def analyze(symbol: str) -> str:
 
     9. KEY METRICS TABLE with audit fields:
        - P/E or P/S: show value + source (e.g., "6.2x (computed from mcap/rev)")
+       - FCF: use fundamentals_summary.cash_flow.free_cash_flow_label (omit if unavailable)
        - Cash runway: show quarters + basis (e.g., "9.1q (min_fcf_ocf)")
        - Quarterly burn: FCF $X, OCF $Y (from burn_metrics)
        - Beta, volatility, drawdown
 
     10. ACTION ZONES:
         - Current zone + valuation_assessment.gate
-        - Price levels with distances
+        - Price levels with distances (use action_zones.distance_labels; fallback to price_vs_levels)
+        - For stop loss, prefer action_zones.level_vs_current_labels.stop_loss ("X% below current")
         - For unprofitable companies, show P/S-based valuation gate
         - If valuation_gate="unknown", add warning: "(valuation confidence reduced)"
 
-    11. POSITION SIZING (from action_zones.position_sizing_range):
+    11. DIP ASSESSMENT (from dip_assessment) - FOR BUY-THE-DIP INVESTORS:
+        This section helps dip buyers assess entry timing. Render as follows:
+
+        a) DIP CLASSIFICATION:
+           ```
+           Dip Type: {dip_classification.type}
+           {dip_classification.explanation}
+           Signals: {dip_classification.signals}
+           ```
+           Types: falling_knife (avoid), extended_decline (caution), healthy_pullback (favorable),
+                  mixed_signals (uncertain), undetermined
+
+        b) DIP DEPTH:
+           ```
+           Severity: {dip_depth.severity} (basis: {dip_depth.severity_basis})
+           From 52W High: {dip_depth.from_52w_high}
+           From 6M High: {dip_depth.from_6m_high}
+           From 3M High: {dip_depth.from_3m_high}
+           From 52W Low: {dip_depth.from_52w_low}
+           Days Since 52W High: {dip_depth.days_since_52w_high} (52W high set today if dip_depth.high_set_today)
+           Days Since 52W Low: {dip_depth.days_since_52w_low} (52W low set today if dip_depth.low_set_today)
+           ```
+           Severity levels: none (>=-2%), shallow (>-10%), moderate (>-25%), deep (>-40%), extreme (<=-40%)
+           Render percentages as negative values (e.g., -45.2% from high).
+           If dip_depth.low_set_today is true, add: "A new 52-week low was set today (intraday)."
+
+        c) OVERSOLD METRICS:
+           ```
+           Oversold Composite: {oversold_metrics.oversold_composite.level} (score: {oversold_metrics.oversold_composite.score})
+           Components: momentum={oversold_metrics.oversold_composite.components.momentum},
+                       trend_deviation={oversold_metrics.oversold_composite.components.trend_deviation},
+                       range_position={oversold_metrics.oversold_composite.components.range_position}
+           Legacy Oversold: {oversold_metrics.level} (score: {oversold_metrics.score})
+           RSI: {oversold_metrics.rsi_value} ({oversold_metrics.rsi_status})
+           Distance from SMA20: {oversold_metrics.distance_from_sma20}
+           Distance from SMA50: {oversold_metrics.distance_from_sma50}
+           Distance from SMA200: {oversold_metrics.distance_from_sma200}
+           Distance from SMA50 (ATR): {oversold_metrics.distance_from_sma50_atr}
+           1W Return Z-Score: {oversold_metrics.return_1w_zscore}
+           SMA200 Slope: {oversold_metrics.sma200_slope_pct_per_day}
+           Position in 52W Range: {oversold_metrics.position_in_52w_range}
+           ```
+
+        d) SUPPORT LEVELS (render as table):
+           | Level | Type | Distance | Strength | Status |
+           Show closest 4 support levels
+
+        e) VOLUME ANALYSIS:
+           ```
+           Volume Signal: {volume_analysis.signal}
+           Volume Ratio: {volume_analysis.ratio}x average
+           {volume_analysis.interpretation}
+           ```
+           Signals: low_conviction (<0.5x), below_average (0.5-0.9x), normal (0.9-1.5x),
+                    above_average (1.5-2x), elevated/potential_capitulation/accumulation (>2x)
+
+        f) BOUNCE POTENTIAL:
+           ```
+           Rating: {bounce_potential.rating} (score: {bounce_potential.score})
+           Factors: {bounce_potential.factors}
+           ```
+
+        g) ENTRY TIMING:
+           - Entry Signals: list each with signal, action, rationale
+           - Wait For: list conditions that would improve entry
+
+        h) DIP CONFIDENCE:
+           ```
+           Confidence: {dip_confidence.level} (score: {dip_confidence.score})
+           Missing: {dip_confidence.missing}
+           ```
+           Always render DIP CONFIDENCE. If Missing is empty, render "Missing: none".
+
+        i) OVERALL ASSESSMENT (render prominently):
+           ```
+           Dip Quality: {assessment.dip_quality}
+           Recommendation: {assessment.recommendation}
+           {assessment.rationale}
+           ```
+           Recommendations: strong_buy_the_dip, buy_the_dip, cautious_accumulation,
+                           small_speculative_position, do_not_catch_falling_knife, wait_for_better_setup
+
+    12. POSITION SIZING (from action_zones.position_sizing_range):
         - Show range as percentage AND dollars (e.g., "0.5%-3% = $250-$1,500")
         - Show shares range at current price (e.g., "~7-42 shares @ $35.66")
         - Show stop-implied max size if stop distance available
 
-    12. DECISION CONTEXT - Render BY CATEGORY with EXPLICIT status fields:
+    13. DECISION CONTEXT - Render BY CATEGORY with EXPLICIT status fields:
         Render each category as a separate block (not combined) for scanability.
 
         a) Fundamentals (include business_quality_evidence for transparency):
@@ -304,12 +389,12 @@ async def analyze(symbol: str) -> str:
 
         f) Next catalyst: earnings date with days countdown
 
-    13. MARKET CONTEXT (from market_context):
+    14. MARKET CONTEXT (from market_context):
         - SPY trend: above/below 200d SMA
         - Provenance: "SPY as_of={as_of} source={source} adjustment={price_adjustment}"
         - If sanity_warnings is non-empty, show: "Warnings: {sanity_warnings}"
 
-    14. NEWS: Recent headlines if available
+    15. NEWS: Recent headlines if available
 
     For UNPROFITABLE companies specifically:
     - Show P/S instead of P/E in metrics

@@ -81,8 +81,20 @@ class TestToolResponseSchemas:
             "valuation",
             "growth",
             "profitability",
+            "cash_flow",
             "health",
             "burn_metrics",  # NEW: for unprofitable companies
+        }
+        cash_flow_fields = {
+            "operating_cf_ttm",
+            "free_cash_flow_ttm",
+            "free_cash_flow_period",
+            "free_cash_flow_period_end",
+            "free_cash_flow_source",
+            "currency",
+            "free_cash_flow_label",
+            "fcf_margin",
+            "rules",
         }
         # Burn metrics sub-fields (ALWAYS present for unprofitable companies)
         burn_metrics_fields = {
@@ -157,6 +169,7 @@ class TestToolResponseSchemas:
             "signals",
             "verdict",
             "action_zones",
+            "dip_assessment",
             "relative_performance",
             "market_context",  # NEW: SPY trend for regime awareness
             "decision_context",
@@ -218,12 +231,104 @@ class TestToolResponseSchemas:
             "current_zone",
             "levels",
             "distance_to_levels",
+            "price_vs_levels",
+            "distance_labels",
+            "level_vs_current_labels",
             "basis",
             "stop_calculation",
             "position_sizing_range",
             "valuation_assessment",
             "zone_warnings",
             "method",
+        }
+        # Dip assessment sub-fields
+        dip_assessment_fields = {
+            "dip_classification",
+            "dip_depth",
+            "oversold_metrics",
+            "support_levels",
+            "volume_analysis",
+            "bounce_potential",
+            "entry_timing",
+            "dip_confidence",
+            "assessment",
+            "method",
+        }
+        dip_classification_fields = {
+            "type",
+            "signals",
+            "explanation",
+        }
+        dip_depth_fields = {
+            "from_52w_high",
+            "from_52w_low",
+            "from_3m_high",
+            "from_6m_high",
+            "days_since_52w_high",
+            "days_since_52w_low",
+            "low_set_today",
+            "high_set_today",
+            "severity",  # none/shallow/moderate/deep/extreme/unknown
+            "severity_basis",  # from_52w_high or max_drawdown_1y (fallback)
+        }
+        oversold_metrics_fields = {
+            "level",
+            "score",
+            "rsi_status",
+            "rsi_value",
+            "indicators",
+            "distance_from_sma20",
+            "distance_from_sma50",
+            "distance_from_sma200",
+            "distance_from_sma50_atr",
+            "return_1w_zscore",
+            "sma200_slope_pct_per_day",
+            "position_in_52w_range",
+            "oversold_composite",
+        }
+        oversold_composite_fields = {
+            "score",
+            "level",
+            "components",
+            "cap",
+            "notes",
+        }
+        support_level_fields = {
+            "level",
+            "type",
+            "distance_pct",
+            "strength",
+            "status",
+            "price_basis",
+        }
+        volume_analysis_fields = {
+            "signal",
+            "ratio",
+            "interpretation",
+        }
+        bounce_potential_fields = {
+            "rating",
+            "score",
+            "factors",
+        }
+        entry_timing_fields = {
+            "signals",
+            "wait_for",
+        }
+        entry_signal_fields = {
+            "signal",
+            "action",
+            "rationale",
+        }
+        dip_assessment_summary_fields = {
+            "dip_quality",
+            "recommendation",
+            "rationale",
+        }
+        dip_confidence_fields = {
+            "level",
+            "score",
+            "missing",
         }
         # Position sizing range sub-fields (with dollar amounts)
         position_sizing_range_fields = {
@@ -551,3 +656,66 @@ class TestVerdictInvariants:
                 f"INVARIANT VIOLATED: score_raw ({score_raw:.10f}) != "
                 f"sum(score_delta) ({score_delta_sum:.10f})"
             )
+
+
+class TestDipAssessmentLogic:
+    """Tests for dip assessment helper logic."""
+
+    def test_oversold_composite_extreme(self) -> None:
+        """Composite should cap at 5 and classify as extreme."""
+        from stock_mcp.tools.analyze import _build_oversold_composite
+
+        result = _build_oversold_composite(
+            rsi=24.0,
+            return_1w_zscore=-2.1,
+            distance_to_sma50_atr=-2.2,
+            position_in_range=0.03,
+        )
+
+        assert result["level"] == "extreme"
+        assert result["score"] == 5.0
+        assert result["components"]["momentum"] == 2.0
+        assert result["components"]["trend_deviation"] == 2.0
+        assert result["components"]["range_position"] == 1.0
+
+    def test_oversold_composite_missing_momentum(self) -> None:
+        """Missing RSI and z-score should emit momentum_missing note."""
+        from stock_mcp.tools.analyze import _build_oversold_composite
+
+        result = _build_oversold_composite(
+            rsi=None,
+            return_1w_zscore=None,
+            distance_to_sma50_atr=-1.2,
+            position_in_range=0.2,
+        )
+
+        assert "momentum_missing" in result["notes"]
+
+    def test_action_zone_distance_labels(self) -> None:
+        """Distance labels should be level-relative to current price."""
+        from stock_mcp.tools.analyze import _build_action_zones
+
+        current_price = 100.0
+        tech_data = {
+            "moving_averages": {"sma_50": 110.0, "sma_200": 120.0},
+            "price_position": {"week_52_low": 80.0, "week_52_high": 150.0},
+        }
+        risk_data = {"atr": {"value": 5.0, "as_pct_of_price": 0.05}}
+        fund_data = {"valuation": {}, "yield_metrics": {}, "profitability": {}}
+        risk_regime = {"classification": "extreme"}
+
+        result = _build_action_zones(
+            current_price=current_price,
+            tech_data=tech_data,
+            risk_data=risk_data,
+            fund_data=fund_data,
+            risk_regime=risk_regime,
+            signals={"bullish": [], "bearish": []},
+        )
+
+        labels = result["distance_labels"]
+        assert labels["strong_buy_below"] == "16.0% below current"
+        assert labels["accumulate_near"] == "20.0% above current"
+        assert labels["reduce_above"] == "42.5% above current"
+        assert labels["stop_loss"] == "12.5% below current"
+        assert result["level_vs_current_labels"] == labels

@@ -64,6 +64,7 @@ This returns a comprehensive JSON report covering:
 - **Verdict** — score, tilt (bullish/neutral/bearish), confidence, horizon fit
 - **Policy action** — mid-term/long-term recommendations with position sizing
 - **Action zones** — ATR-based price levels (accumulate/reduce/stop)
+- **Dip assessment** — oversold metrics, support levels, bounce potential, entry timing
 - **Decision context** — what would change the verdict (bullish_if/bearish_if)
 - Technical signals, fundamental metrics, risk regime, news sentiment, events
 

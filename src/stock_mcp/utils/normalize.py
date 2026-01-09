@@ -79,6 +79,7 @@ LIST_NORMALIZATION_RULES: dict[tuple[str, ...], str] = {
     ("decision_context", "risk", "bearish_if"): "sorted_by_id",
     ("decision_context", "technicals", "bullish_if"): "sorted_by_id",
     ("decision_context", "technicals", "bearish_if"): "sorted_by_id",
+    ("dip_assessment", "dip_confidence", "missing"): "set",
 }
 
 # Paths where null should become [] for stability
@@ -101,6 +102,7 @@ NULL_TO_EMPTY_LIST_PATHS: set[tuple[str, ...]] = {
     ("verdict", "cons"),
     ("decision_context", "horizon_drivers"),
     ("decision_context", "top_triggers"),
+    ("dip_assessment", "dip_confidence", "missing"),
 }
 
 # Money fields to coerce to int (avoid .0 noise)
@@ -109,6 +111,7 @@ MONEY_FIELD_PATHS: list[tuple[str, ...]] = [
     ("fundamentals_summary", "burn_metrics", "liquidity"),
     ("fundamentals_summary", "burn_metrics", "quarterly_fcf_burn"),
     ("fundamentals_summary", "burn_metrics", "quarterly_ocf_burn"),
+    ("fundamentals_summary", "cash_flow", "free_cash_flow_ttm"),
 ]
 
 # Timestamp paths to normalize to date-only

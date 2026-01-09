@@ -29,6 +29,165 @@ def _is_pos(x: float | None) -> bool:
     return x is not None and x > 0
 
 
+# Volatility regime thresholds
+VOLATILITY_REGIME_THRESHOLDS = {
+    "low": 0.25,
+    "medium": 0.40,
+    "high": 0.60,
+}
+
+
+def _format_cashflow_value(value: float | None, currency: str | None = None) -> str | None:
+    """Format cash flow values with sign, scale, and currency."""
+    if value is None:
+        return None
+    sign = "+" if value > 0 else "-" if value < 0 else ""
+    abs_val = abs(value)
+
+    if abs_val >= 1e9:
+        scaled = abs_val / 1e9
+        unit = "B"
+        decimals = 1
+    elif abs_val >= 1e6:
+        scaled = abs_val / 1e6
+        unit = "M"
+        decimals = 0 if abs_val >= 1e8 else 1
+    elif abs_val >= 1e3:
+        scaled = abs_val / 1e3
+        unit = "K"
+        decimals = 0
+    else:
+        scaled = abs_val
+        unit = ""
+        decimals = 0
+
+    number = f"{scaled:.{decimals}f}{unit}"
+    if currency and currency != "USD":
+        return f"{sign}{currency} {number}"
+    return f"{sign}${number}"
+
+
+def _format_fcf_label(
+    value: float | None,
+    period: str | None,
+    currency: str | None,
+    period_end: str | None = None,
+) -> str | None:
+    """Format FCF value with period for reporting."""
+    value_str = _format_cashflow_value(value, currency)
+    if value_str is None:
+        return None
+    period_label = period or "TTM"
+    end_label = f" (end {period_end})" if period_end else ""
+    return f"FCF ({period_label}): {value_str}{end_label}"
+
+
+def _format_level_distance_label(pct: float | None) -> str | None:
+    """Format level distance relative to current price."""
+    if pct is None:
+        return None
+    if abs(pct) < 0.0005:
+        return "at current"
+    direction = "above" if pct > 0 else "below"
+    return f"{abs(pct) * 100:.1f}% {direction} current"
+
+
+def _vol_threshold_for_improvement(
+    risk_regime: str | None,
+    annualized_vol: float | None,
+) -> float | None:
+    """Return volatility threshold that improves the current regime."""
+    if risk_regime == "extreme":
+        return VOLATILITY_REGIME_THRESHOLDS["high"]
+    if risk_regime == "high":
+        return VOLATILITY_REGIME_THRESHOLDS["medium"]
+    if risk_regime == "medium":
+        return VOLATILITY_REGIME_THRESHOLDS["low"]
+    if annualized_vol is None:
+        return None
+    if annualized_vol >= VOLATILITY_REGIME_THRESHOLDS["high"]:
+        return VOLATILITY_REGIME_THRESHOLDS["high"]
+    if annualized_vol >= VOLATILITY_REGIME_THRESHOLDS["medium"]:
+        return VOLATILITY_REGIME_THRESHOLDS["medium"]
+    if annualized_vol >= VOLATILITY_REGIME_THRESHOLDS["low"]:
+        return VOLATILITY_REGIME_THRESHOLDS["low"]
+    return None
+
+
+def _build_oversold_composite(
+    rsi: float | None,
+    return_1w_zscore: float | None,
+    distance_to_sma50_atr: float | None,
+    position_in_range: float | None,
+) -> dict[str, Any]:
+    """Build oversold composite score from de-duplicated buckets."""
+    oversold_notes: list[str] = []
+    rsi_score = 0.0
+    if rsi is not None:
+        if rsi < 25:
+            rsi_score = 2.0
+        elif rsi < 30:
+            rsi_score = 1.5
+        elif rsi < 35:
+            rsi_score = 1.0
+    elif return_1w_zscore is None:
+        oversold_notes.append("momentum_missing")
+
+    z_score = 0.0
+    if return_1w_zscore is not None:
+        if return_1w_zscore <= -2.0:
+            z_score = 1.5
+        elif return_1w_zscore <= -1.5:
+            z_score = 1.0
+        elif return_1w_zscore <= -1.0:
+            z_score = 0.5
+
+    momentum_score = max(rsi_score, z_score)
+
+    trend_deviation = 0.0
+    if distance_to_sma50_atr is not None:
+        if distance_to_sma50_atr <= -2.0:
+            trend_deviation = 2.0
+        elif distance_to_sma50_atr <= -1.0:
+            trend_deviation = 1.0
+    else:
+        oversold_notes.append("trend_deviation_missing")
+
+    range_position = 0.0
+    if position_in_range is not None:
+        if position_in_range <= 0.05:
+            range_position = 1.0
+        elif position_in_range <= 0.15:
+            range_position = 0.5
+    else:
+        oversold_notes.append("range_position_missing")
+
+    optional_band = 0.0
+
+    oversold_raw = momentum_score + trend_deviation + range_position + optional_band
+    oversold_composite_score = min(5.0, oversold_raw)
+    if oversold_composite_score >= 4.0:
+        oversold_composite_level = "extreme"
+    elif oversold_composite_score >= 2.0:
+        oversold_composite_level = "oversold"
+    elif oversold_composite_score >= 1.0:
+        oversold_composite_level = "mild"
+    else:
+        oversold_composite_level = "not_oversold"
+
+    return {
+        "score": round(oversold_composite_score, 2),
+        "level": oversold_composite_level,
+        "components": {
+            "momentum": round(momentum_score, 2),
+            "trend_deviation": round(trend_deviation, 2),
+            "range_position": round(range_position, 2),
+            "optional_band": round(optional_band, 2),
+        },
+        "cap": 5.0,
+        "notes": oversold_notes or [],
+    }
+
 # Weights for verdict scoring (mid/long-term investor bias)
 # fundamentals > technicals > risk
 # Note: news sentiment is shown but not scored (keyword-based sentiment unreliable for mid/long-term)
@@ -358,6 +517,13 @@ async def analyze_stock(symbol: str) -> dict[str, Any]:
     # Get gross_margin for profitability assessment
     # Gross margin is especially important for unprofitable companies to assess path to profitability
     gross_margin = profit.get("gross_margin")
+    cash_flow = fund_data.get("cash_flow", {})
+    fcf_value = cash_flow.get("free_cash_flow_ttm")
+    fcf_period = cash_flow.get("free_cash_flow_period")
+    fcf_period_end = cash_flow.get("free_cash_flow_period_end")
+    fcf_currency = cash_flow.get("currency")
+    fcf_source = cash_flow.get("free_cash_flow_source")
+    fcf_label = _format_fcf_label(fcf_value, fcf_period, fcf_currency, fcf_period_end)
 
     fundamentals_summary = {
         "valuation": valuation_summary,
@@ -369,6 +535,14 @@ async def analyze_stock(symbol: str) -> dict[str, Any]:
             "gross_margin": gross_margin,  # Important for path-to-profitability assessment
             "net_margin": net_margin,
             "fcf_positive": _get_rule_triggered(cf, "positive_fcf"),
+        },
+        "cash_flow": {
+            "free_cash_flow_ttm": fcf_value,
+            "free_cash_flow_period": fcf_period,
+            "free_cash_flow_period_end": fcf_period_end,
+            "free_cash_flow_source": fcf_source,
+            "currency": fcf_currency,
+            "free_cash_flow_label": fcf_label,
         },
         "health": {
             "debt_to_equity": health.get("debt_to_equity"),
@@ -515,6 +689,22 @@ async def analyze_stock(symbol: str) -> dict[str, Any]:
 
     # Extract market context from risk_data (SPY trend)
     market_context = risk_data.get("market_context", {})
+
+    # Build dip assessment for buy-the-dip investors
+    dip_assessment = _build_dip_assessment(
+        tech_data=tech_data,
+        risk_data=risk_data,
+        fund_data=fund_data,
+        market_context=market_context,
+        signals=signals,
+    )
+
+    # Align action zones with dip context and risk regime
+    action_zones = _apply_dip_gates_to_action_zones(
+        action_zones=action_zones,
+        dip_assessment=dip_assessment,
+        risk_regime=risk_regime,
+    )
 
     # Calculate data quality
     # For unprofitable companies, check P/S instead of P/E (P/E not meaningful)
@@ -674,6 +864,7 @@ async def analyze_stock(symbol: str) -> dict[str, Any]:
         action_zones=action_zones,
         decomposed=verdict.get("decomposed"),
         risk_regime=risk_regime,
+        dip_assessment=dip_assessment,
     )
 
     # Build executive summary - narrative TL;DR for investors
@@ -708,6 +899,7 @@ async def analyze_stock(symbol: str) -> dict[str, Any]:
         "policy_action": policy_action,
         "relative_performance": relative_performance,
         "market_context": market_context,
+        "dip_assessment": dip_assessment,
         "decision_context": decision_context,
         "data_quality": data_quality,
     }
@@ -749,13 +941,13 @@ def _classify_risk_regime(
 
     # Classify volatility
     if annualized_vol is not None:
-        if annualized_vol < 0.25:
+        if annualized_vol < VOLATILITY_REGIME_THRESHOLDS["low"]:
             factors["volatility"] = "low"
             scores.append(0)
-        elif annualized_vol < 0.40:
+        elif annualized_vol < VOLATILITY_REGIME_THRESHOLDS["medium"]:
             factors["volatility"] = "medium"
             scores.append(1)
-        elif annualized_vol < 0.60:
+        elif annualized_vol < VOLATILITY_REGIME_THRESHOLDS["high"]:
             factors["volatility"] = "high"
             scores.append(2)
         else:
@@ -808,7 +1000,18 @@ def _classify_risk_regime(
         "classification": classification,
         "factors": factors,
         "thresholds": {
-            "volatility": {"low": "<25%", "medium": "25-40%", "high": "40-60%", "extreme": ">60%"},
+            "volatility": {
+                "low": f"<{VOLATILITY_REGIME_THRESHOLDS['low'] * 100:.0f}%",
+                "medium": (
+                    f"{VOLATILITY_REGIME_THRESHOLDS['low'] * 100:.0f}-"
+                    f"{VOLATILITY_REGIME_THRESHOLDS['medium'] * 100:.0f}%"
+                ),
+                "high": (
+                    f"{VOLATILITY_REGIME_THRESHOLDS['medium'] * 100:.0f}-"
+                    f"{VOLATILITY_REGIME_THRESHOLDS['high'] * 100:.0f}%"
+                ),
+                "extreme": f">{VOLATILITY_REGIME_THRESHOLDS['high'] * 100:.0f}%",
+            },
             "drawdown": {"low": ">-20%", "medium": "-20% to -35%", "high": "-35% to -50%", "extreme": "<-50%"},
             "beta": {"low": "<0.8", "medium": "0.8-1.2", "high": "1.2-1.8", "extreme": ">1.8"},
         },
@@ -895,7 +1098,7 @@ def _generate_signals(
     # Risk signals
     annualized_vol = vol.get("annualized")
     if annualized_vol is not None:
-        if annualized_vol > 0.60:
+        if annualized_vol >= VOLATILITY_REGIME_THRESHOLDS["high"]:
             bearish.append("very_high_volatility")
         elif _get_rule_triggered(vol, "high_volatility") is True:
             bearish.append("high_volatility")
@@ -953,7 +1156,6 @@ def _build_verdict(
         "net_cash_positive": "Net cash positive balance sheet",
         "low_debt": "Low debt-to-equity ratio",
         "profitable": "Currently profitable",
-        "positive_free_cash_flow": "Generating positive free cash flow",
         # Bearish signals
         "price_below_sma200": "Trading below 200-day moving average (downtrend)",
         "death_cross": "Death cross pattern (bearish trend)",
@@ -962,7 +1164,6 @@ def _build_verdict(
         "weak_3m_momentum": "Weak 3-month price momentum",
         "negative_revenue_growth": "Negative revenue growth",
         "unprofitable": "Currently unprofitable",
-        "negative_free_cash_flow": "Negative free cash flow",
         "high_volatility": "High price volatility",
         "very_high_volatility": "Very high volatility (>60% annualized)",
         "deep_drawdown": "Deep drawdown (>50% from peak)",
@@ -970,15 +1171,33 @@ def _build_verdict(
 
     # Build pros from bullish signals
     for sig in signals.get("bullish", []):
+        if sig in ("positive_free_cash_flow", "negative_free_cash_flow"):
+            continue
         prose = signal_prose.get(sig, sig.replace("_", " ").title())
         if prose not in pros:  # Deduplicate
             pros.append(prose)
 
     # Build cons from bearish signals
     for sig in signals.get("bearish", []):
+        if sig in ("positive_free_cash_flow", "negative_free_cash_flow"):
+            continue
         prose = signal_prose.get(sig, sig.replace("_", " ").title())
         if prose not in cons:  # Deduplicate
             cons.append(prose)
+
+    cash_flow = fundamentals_data.get("cash_flow", {})
+    fcf_value = cash_flow.get("free_cash_flow_ttm")
+    fcf_period = cash_flow.get("free_cash_flow_period")
+    fcf_period_end = cash_flow.get("free_cash_flow_period_end")
+    fcf_currency = cash_flow.get("currency")
+    fcf_label = _format_fcf_label(fcf_value, fcf_period, fcf_currency, fcf_period_end)
+    if fcf_label:
+        if fcf_value is not None and fcf_value > 0:
+            if fcf_label not in pros:
+                pros.append(fcf_label)
+        elif fcf_value is not None and fcf_value < 0:
+            if fcf_label not in cons:
+                cons.append(fcf_label)
 
     # Add fundamental-specific context (beyond signals)
     val = fundamentals_data.get("valuation", {})
@@ -1054,6 +1273,16 @@ def _build_verdict(
 
     net_margin = profit.get("net_margin")
     fcf_positive = cf.get("rules", {}).get("positive_fcf", {}).get("triggered")
+    fcf_value = cf.get("free_cash_flow_ttm")
+    fcf_period = cf.get("free_cash_flow_period")
+    fcf_period_end = cf.get("free_cash_flow_period_end")
+    fcf_currency = cf.get("currency")
+    fcf_value_label = _format_fcf_label(
+        fcf_value,
+        fcf_period,
+        fcf_currency,
+        fcf_period_end,
+    )
     low_debt = health.get("rules", {}).get("low_debt", {}).get("triggered")
 
     # Check if we can assess business quality
@@ -1096,10 +1325,13 @@ def _build_verdict(
         business_quality_status = "evaluated_unprofitable"
         business_quality_label = "unprofitable"
     elif fcf_ttm_val is not None and fcf_ttm_val < 0 and has_negative_fcf_signal:
-        # Negative FCF confirmed by both value and signal = likely unprofitable
-        # But without explicit margin/EPS signal, use "weak" instead
+        # Negative FCF confirmed by both value and signal
+        # If profitability is positive, call this "mixed" (profitability strong, cash conversion weak)
         business_quality_status = "available"
-        business_quality_label = "weak"
+        if net_margin is not None and net_margin > 0:
+            business_quality_label = "mixed"
+        else:
+            business_quality_label = "weak"
     elif net_margin is None and pe_trailing is None and trailing_eps is None:
         # Insufficient data to assess profitability
         business_quality_status = "data_missing"
@@ -1174,10 +1406,10 @@ def _build_verdict(
                 evidence_positives.append(f"net_margin={net_margin*100:.1f}%")
             elif net_margin < 0:
                 evidence_negatives.append(f"net_margin={net_margin*100:.1f}%")
-        if fcf_positive is True:
-            evidence_positives.append("fcf_positive")
-        elif fcf_positive is False:
-            evidence_negatives.append("fcf_negative")
+        if fcf_positive is True and fcf_value_label:
+            evidence_positives.append(fcf_value_label)
+        elif fcf_positive is False and fcf_value_label:
+            evidence_negatives.append(fcf_value_label)
         if low_debt is True:
             evidence_positives.append("low_debt")
         elif low_debt is False and health.get("debt_to_equity") is not None:
@@ -1645,11 +1877,29 @@ def _build_confidence_path(
     if confidence == "low":
         # For low confidence, focus on data availability and risk improvement
         if has_extreme_risk:
-            upgrade_conditions.append({
-                "condition": "risk_regime_improves",
-                "threshold": "risk_regime <= high",
-                "current": f"risk_regime={risk_regime}",
-            })
+            added_specific = False
+            if risk_regime == "extreme":
+                if max_drawdown is not None and max_drawdown <= -0.50:
+                    upgrade_conditions.append({
+                        "condition": "drawdown_recovers",
+                        "threshold": "max_drawdown_1y > -50%",
+                        "current": f"{max_drawdown*100:.0f}%",
+                    })
+                    added_specific = True
+                vol_threshold = _vol_threshold_for_improvement(risk_regime, annualized_vol)
+                if annualized_vol is not None and vol_threshold is not None and annualized_vol >= vol_threshold:
+                    upgrade_conditions.append({
+                        "condition": "volatility_decreases",
+                        "threshold": f"annualized_vol < {vol_threshold * 100:.0f}%",
+                        "current": f"{annualized_vol*100:.0f}%",
+                    })
+                    added_specific = True
+            if not added_specific:
+                upgrade_conditions.append({
+                    "condition": "risk_regime_improves",
+                    "threshold": "risk_regime <= high",
+                    "current": f"risk_regime={risk_regime}",
+                })
         if is_unprofitable:
             upgrade_conditions.append({
                 "condition": "company_turns_profitable",
@@ -1665,12 +1915,14 @@ def _build_confidence_path(
                 "condition": "burn_metrics_available",
                 "threshold": "liquidity and cash flow data populated",
             })
-        if annualized_vol is not None and annualized_vol > 0.50:
-            upgrade_conditions.append({
-                "condition": "volatility_decreases",
-                "threshold": "annualized_vol < 50%",
-                "current": f"{annualized_vol*100:.0f}%",
-            })
+        if not has_extreme_risk:
+            vol_threshold = _vol_threshold_for_improvement(risk_regime, annualized_vol)
+            if annualized_vol is not None and vol_threshold is not None and annualized_vol >= vol_threshold:
+                upgrade_conditions.append({
+                    "condition": "volatility_decreases",
+                    "threshold": f"annualized_vol < {vol_threshold * 100:.0f}%",
+                    "current": f"{annualized_vol*100:.0f}%",
+                })
 
     elif confidence == "moderate":
         # For moderate confidence, focus on quality improvements
@@ -1899,6 +2151,9 @@ def _build_action_zones(
             "current_zone": None,
             "levels": {},
             "distance_to_levels": {},
+            "price_vs_levels": {},
+            "distance_labels": {},
+            "level_vs_current_labels": {},
             "basis": {},
             "stop_calculation": None,
             "zone_warnings": ["missing_price"],
@@ -1993,6 +2248,25 @@ def _build_action_zones(
             )
         else:
             distance_to_levels[level_name] = None
+
+    # Calculate price vs level (negative means price below level)
+    price_vs_levels: dict[str, float | None] = {}
+    for level_name, level_price in levels.items():
+        if level_price is not None and level_price != 0:
+            price_vs_levels[level_name] = round(
+                (current_price / level_price) - 1, 4
+            )
+        else:
+            price_vs_levels[level_name] = None
+
+    # Preformatted distance labels for clearer display (level vs current)
+    distance_labels = {
+        level_name: _format_level_distance_label(pct)
+        for level_name, pct in distance_to_levels.items()
+    }
+
+    # Separate field for renderer semantics (stop loss vs other levels)
+    level_vs_current_labels = distance_labels.copy()
 
     # Determine current zone
     current_zone: str | None = None
@@ -2261,12 +2535,665 @@ def _build_action_zones(
         "current_zone": current_zone,
         "levels": levels,
         "distance_to_levels": distance_to_levels,
+        "price_vs_levels": price_vs_levels,
+        "distance_labels": distance_labels,
+        "level_vs_current_labels": level_vs_current_labels,
         "basis": basis,
         "stop_calculation": stop_calculation,
         "position_sizing_range": position_sizing_range,
         "valuation_assessment": valuation_assessment,
         "zone_warnings": zone_warnings or [],
         "method": "atr_valuation_v2",
+    }
+
+
+def _apply_dip_gates_to_action_zones(
+    action_zones: dict[str, Any],
+    dip_assessment: dict[str, Any],
+    risk_regime: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """
+    Apply dip-aware guards to action zones to avoid conflicting guidance.
+    """
+    current_zone = action_zones.get("current_zone")
+    zone_warnings = list(action_zones.get("zone_warnings") or [])
+    dip_type = (dip_assessment.get("dip_classification") or {}).get("type")
+    risk_label = risk_regime.get("classification") if risk_regime else None
+
+    def _cap_zone(reason: str) -> None:
+        nonlocal current_zone
+        if current_zone in ("strong_buy", "accumulate"):
+            current_zone = "hold_neutral"
+        if reason not in zone_warnings:
+            zone_warnings.append(reason)
+
+    if dip_type == "falling_knife":
+        _cap_zone("zone_capped_falling_knife")
+    elif dip_type == "extended_decline":
+        if current_zone == "strong_buy":
+            current_zone = "accumulate"
+            if "zone_capped_extended_decline" not in zone_warnings:
+                zone_warnings.append("zone_capped_extended_decline")
+
+    if risk_label == "extreme":
+        _cap_zone("zone_capped_extreme_risk")
+
+    action_zones["current_zone"] = current_zone
+    action_zones["zone_warnings"] = zone_warnings
+    return action_zones
+
+
+def _build_dip_depth(
+    from_52w_high: float | None,
+    from_52w_low: float | None,
+    from_3m_high: float | None,
+    from_6m_high: float | None,
+    days_since_52w_high: int | None,
+    days_since_52w_low: int | None,
+    risk_data: dict[str, Any],
+) -> dict[str, Any]:
+    """
+    Build dip depth metrics with severity classification.
+
+    Severity bands (based on distance from 52w high):
+    - none: >= -2% (within 2% of high)
+    - shallow: > -10%
+    - moderate: > -25%
+    - deep: > -40%
+    - extreme: <= -40%
+    """
+    # Primary basis: from_52w_high
+    # Fallback: max_drawdown_1y from risk_data
+    dd_data = risk_data.get("drawdown", {})
+    max_drawdown_1y = dd_data.get("max_1y")
+
+    # Determine which value to use for severity
+    severity_value: float | None = None
+    severity_basis: str | None = None
+
+    if from_52w_high is not None:
+        severity_value = from_52w_high
+        severity_basis = "from_52w_high"
+    elif max_drawdown_1y is not None:
+        severity_value = max_drawdown_1y
+        severity_basis = "max_drawdown_1y"
+
+    # Classify severity
+    severity: str
+    if severity_value is None:
+        severity = "unknown"
+    elif severity_value >= -0.02:
+        severity = "none"
+    elif severity_value > -0.10:
+        severity = "shallow"
+    elif severity_value > -0.25:
+        severity = "moderate"
+    elif severity_value > -0.40:
+        severity = "deep"
+    else:
+        severity = "extreme"
+
+    low_set_today = days_since_52w_low == 0 if days_since_52w_low is not None else None
+    high_set_today = days_since_52w_high == 0 if days_since_52w_high is not None else None
+
+    return {
+        "from_52w_high": from_52w_high,
+        "from_52w_low": from_52w_low,
+        "from_3m_high": from_3m_high,
+        "from_6m_high": from_6m_high,
+        "days_since_52w_high": days_since_52w_high,
+        "days_since_52w_low": days_since_52w_low,
+        "low_set_today": low_set_today,
+        "high_set_today": high_set_today,
+        "severity": severity,
+        "severity_basis": severity_basis,
+    }
+
+
+def _build_dip_assessment(
+    tech_data: dict[str, Any],
+    risk_data: dict[str, Any],
+    fund_data: dict[str, Any],
+    market_context: dict[str, Any],
+    signals: dict[str, list[str]],
+) -> dict[str, Any]:
+    """
+    Assess whether current price action represents a buying opportunity for dip buyers.
+
+    Analyzes:
+    - Dip classification (pullback vs falling knife)
+    - Oversold conditions (RSI, distance from MAs)
+    - Support levels and bounce potential
+    - Volume patterns (capitulation/accumulation)
+    - Market context (buying dips in uptrending market vs downtrending)
+    """
+    ma = tech_data.get("moving_averages", {})
+    rsi_data = tech_data.get("rsi", {})
+    price_pos = tech_data.get("price_position", {})
+    returns = tech_data.get("returns", {})
+    volume = tech_data.get("volume", {})
+    macd_data = tech_data.get("macd", {})
+    price_action = tech_data.get("price_action", {})
+    current_price = tech_data.get("current_price")
+    atr_data = risk_data.get("atr", {})
+
+    # Extract values
+    sma_20 = ma.get("sma_20")
+    sma_50 = ma.get("sma_50")
+    sma_200 = ma.get("sma_200")
+    sma_200_slope = ma.get("sma_200_slope_pct_per_day")
+    rsi = rsi_data.get("value")
+    rsi_divergence = rsi_data.get("bullish_divergence")
+    week_52_high = price_pos.get("week_52_high")
+    week_52_low = price_pos.get("week_52_low")
+    from_52w_high = price_pos.get("from_52w_high")
+    from_52w_low = price_pos.get("from_52w_low")
+    from_3m_high = price_pos.get("from_3m_high")
+    from_6m_high = price_pos.get("from_6m_high")
+    days_since_52w_high = price_pos.get("days_since_52w_high")
+    days_since_52w_low = price_pos.get("days_since_52w_low")
+    low_1m = price_pos.get("low_1m")
+    position_in_range = price_pos.get("position_in_range")
+    return_1w = returns.get("return_1w")
+    return_1w_zscore = returns.get("return_1w_zscore")
+    return_1m = returns.get("return_1m")
+    return_3m = returns.get("return_3m")
+    volume_ratio = volume.get("ratio")
+    atr_val = atr_data.get("value")
+    atr_pct = atr_data.get("as_pct_of_price")
+
+    bullish_signals = signals.get("bullish", [])
+    bearish_signals = signals.get("bearish", [])
+
+    # --- DIP CLASSIFICATION ---
+    # Determine if this is a healthy pullback vs falling knife
+    dip_type: str = "undetermined"
+    dip_signals: list[str] = []
+
+    # Falling knife indicators
+    falling_knife_score = 0
+    if "death_cross" in bearish_signals:
+        falling_knife_score += 2
+        dip_signals.append("death_cross_active")
+    if "price_below_sma200" in bearish_signals:
+        falling_knife_score += 1
+        dip_signals.append("below_sma200")
+    if return_3m is not None and return_3m < -0.30:
+        falling_knife_score += 2
+        dip_signals.append("severe_3m_decline")
+    elif return_3m is not None and return_3m < -0.20:
+        falling_knife_score += 1
+        dip_signals.append("significant_3m_decline")
+    if position_in_range is not None and position_in_range < 0.10:
+        falling_knife_score += 1
+        dip_signals.append("near_52w_low")
+    if sma_200_slope is not None and sma_200_slope < 0:
+        falling_knife_score += 1
+        dip_signals.append("sma200_downtrend")
+    if days_since_52w_high is not None and days_since_52w_high > 180:
+        falling_knife_score += 1
+        dip_signals.append("stale_52w_high")
+
+    # Healthy pullback indicators
+    pullback_score = 0
+    if "golden_cross" in bullish_signals or (sma_50 and sma_200 and sma_50 > sma_200):
+        pullback_score += 2
+        dip_signals.append("uptrend_intact")
+    if sma_200_slope is not None and sma_200_slope > 0:
+        pullback_score += 1
+        dip_signals.append("sma200_uptrend")
+    if sma_200 and current_price and current_price > sma_200:
+        pullback_score += 1
+        dip_signals.append("above_sma200")
+    if return_3m is not None and return_3m > 0:
+        pullback_score += 1
+        dip_signals.append("positive_3m_trend")
+    if from_3m_high is not None and from_3m_high > -0.15:
+        pullback_score += 1
+        dip_signals.append("near_3m_high")
+
+    # Classify dip
+    if falling_knife_score >= 4:
+        dip_type = "falling_knife"
+    elif falling_knife_score >= 2 and pullback_score < 2:
+        dip_type = "extended_decline"
+    elif pullback_score >= 2 and falling_knife_score <= 1:
+        dip_type = "healthy_pullback"
+    elif pullback_score >= 1:
+        dip_type = "mixed_signals"
+    else:
+        dip_type = "undetermined"
+
+    # --- OVERSOLD METRICS ---
+    oversold_indicators: list[str] = []
+    oversold_score = 0
+
+    # RSI oversold
+    rsi_status: str = "neutral"
+    if rsi is not None:
+        if rsi < 30:
+            rsi_status = "oversold"
+            oversold_score += 2
+            oversold_indicators.append(f"rsi_oversold_{rsi:.0f}")
+        elif rsi < 40:
+            rsi_status = "approaching_oversold"
+            oversold_score += 1
+            oversold_indicators.append(f"rsi_low_{rsi:.0f}")
+        elif rsi > 70:
+            rsi_status = "overbought"
+            oversold_indicators.append(f"rsi_overbought_{rsi:.0f}")
+
+    # Distance from moving averages (mean reversion potential)
+    price_vs_sma20 = ma.get("price_vs_sma20")
+    price_vs_sma50 = ma.get("price_vs_sma50")
+    price_vs_sma200 = ma.get("price_vs_sma200")
+
+    distance_to_sma50_atr: float | None = None
+    if atr_val and sma_50 and current_price:
+        distance_to_sma50_atr = (current_price - sma_50) / atr_val
+
+    if price_vs_sma20 is not None and price_vs_sma20 < -0.10:
+        oversold_score += 1
+        oversold_indicators.append(f"extended_below_sma20_{price_vs_sma20:.1%}")
+    if price_vs_sma50 is not None and price_vs_sma50 < -0.15:
+        oversold_score += 1
+        oversold_indicators.append(f"extended_below_sma50_{price_vs_sma50:.1%}")
+    if price_vs_sma200 is not None and price_vs_sma200 < -0.20:
+        oversold_score += 1
+        oversold_indicators.append(f"extended_below_sma200_{price_vs_sma200:.1%}")
+    if distance_to_sma50_atr is not None and distance_to_sma50_atr < -2.0:
+        oversold_score += 1
+        oversold_indicators.append(f"below_sma50_{abs(distance_to_sma50_atr):.1f}atr")
+
+    # Position in 52-week range
+    if position_in_range is not None and position_in_range < 0.20:
+        oversold_score += 1
+        oversold_indicators.append(f"bottom_20pct_of_range")
+
+    if return_1w_zscore is not None and return_1w_zscore <= -1.5:
+        oversold_score += 1
+        oversold_indicators.append(f"1w_return_zscore_{return_1w_zscore:.1f}")
+
+    oversold_level: str
+    if oversold_score >= 4:
+        oversold_level = "extremely_oversold"
+    elif oversold_score >= 2:
+        oversold_level = "oversold"
+    elif oversold_score >= 1:
+        oversold_level = "mildly_oversold"
+    else:
+        oversold_level = "not_oversold"
+
+    # Oversold composite (de-dup correlated signals)
+    oversold_composite = _build_oversold_composite(
+        rsi,
+        return_1w_zscore,
+        distance_to_sma50_atr,
+        position_in_range,
+    )
+    oversold_composite_level = oversold_composite["level"]
+
+    # --- SUPPORT LEVELS ---
+    support_levels: list[dict[str, Any]] = []
+    price_basis = "close"
+
+    def _support_status(distance_pct: float | None) -> str | None:
+        if distance_pct is None:
+            return None
+        if distance_pct > 0:
+            return "breached" if distance_pct <= 0.01 else "broken"
+        if abs(distance_pct) <= 0.01:
+            return "tested"
+        return "above"
+
+    # 1-month low as immediate support
+    if low_1m and current_price:
+        distance = (low_1m - current_price) / current_price
+        support_levels.append({
+            "level": round(low_1m, 2),
+            "type": "1m_low",
+            "distance_pct": round(distance, 4),
+            "strength": "weak",
+            "status": _support_status(distance),
+            "price_basis": price_basis,
+        })
+
+    # SMA 50 as support (if above it)
+    if sma_50 and current_price and current_price > sma_50:
+        distance = (sma_50 - current_price) / current_price
+        support_levels.append({
+            "level": round(sma_50, 2),
+            "type": "sma_50",
+            "distance_pct": round(distance, 4),
+            "strength": "medium",
+            "status": _support_status(distance),
+            "price_basis": price_basis,
+        })
+
+    # SMA 200 as major support
+    if sma_200 and current_price:
+        distance = (sma_200 - current_price) / current_price
+        support_levels.append({
+            "level": round(sma_200, 2),
+            "type": "sma_200",
+            "distance_pct": round(distance, 4),
+            "strength": "strong",
+            "status": _support_status(distance),
+            "price_basis": price_basis,
+        })
+
+    # 52-week low as ultimate support
+    if week_52_low and current_price:
+        distance = (week_52_low - current_price) / current_price
+        support_levels.append({
+            "level": round(week_52_low, 2),
+            "type": "52w_low",
+            "distance_pct": round(distance, 4),
+            "strength": "critical",
+            "status": _support_status(distance),
+            "price_basis": price_basis,
+        })
+
+    # Sort by distance (closest first)
+    support_levels.sort(key=lambda x: abs(x["distance_pct"]))
+
+    # --- VOLUME ANALYSIS ---
+    volume_signal: str = "neutral"
+    volume_interpretation: str | None = None
+
+    if volume_ratio is not None:
+        if volume_ratio > 2.0:
+            # High volume - could be capitulation or breakout
+            if return_1w is not None and return_1w < -0.05:
+                volume_signal = "potential_capitulation"
+                volume_interpretation = "High volume on decline may indicate capitulation selling"
+            elif return_1w is not None and return_1w > 0.03:
+                volume_signal = "accumulation"
+                volume_interpretation = "High volume on advance suggests institutional buying"
+            else:
+                volume_signal = "elevated"
+                volume_interpretation = "Elevated volume - watch for directional confirmation"
+        elif volume_ratio > 1.5:
+            volume_signal = "above_average"
+            volume_interpretation = "Above average interest"
+        elif volume_ratio >= 0.9:
+            volume_signal = "normal"
+            volume_interpretation = "Normal volume"
+        elif volume_ratio >= 0.5:
+            volume_signal = "below_average"
+            volume_interpretation = "Below average interest"
+        else:
+            volume_signal = "low_conviction"
+            volume_interpretation = "Low volume - moves may lack conviction"
+
+    # --- BOUNCE POTENTIAL ---
+    # Calculate likelihood of a bounce based on combined factors
+    bounce_score = 0
+    bounce_factors: list[str] = []
+
+    # Oversold conditions favor bounce
+    if oversold_composite_level == "extreme":
+        bounce_score += 2
+        bounce_factors.append("oversold_composite_extreme")
+    elif oversold_composite_level == "oversold":
+        bounce_score += 1
+        bounce_factors.append("oversold_composite_oversold")
+
+    # Healthy pullback in uptrend
+    if dip_type == "healthy_pullback":
+        bounce_score += 2
+        bounce_factors.append("pullback_in_uptrend")
+    elif dip_type == "falling_knife":
+        bounce_score -= 2
+        bounce_factors.append("falling_knife_risk")
+
+    # Near support
+    if support_levels and abs(support_levels[0]["distance_pct"]) < 0.03:
+        if support_levels[0]["strength"] in ("strong", "critical"):
+            bounce_score += 1
+            bounce_factors.append(f"near_{support_levels[0]['type']}")
+
+    # Capitulation volume
+    if volume_signal == "potential_capitulation":
+        bounce_score += 1
+        bounce_factors.append("capitulation_volume")
+
+    # Market context - buying dips in bull market more favorable
+    spy_bullish = market_context.get("spy_above_200d", False)
+    if spy_bullish:
+        bounce_score += 1
+        bounce_factors.append("bullish_market_context")
+    else:
+        bounce_score -= 1
+        bounce_factors.append("bearish_market_context")
+
+    bounce_potential: str
+    if bounce_score >= 4:
+        bounce_potential = "high"
+    elif bounce_score >= 2:
+        bounce_potential = "moderate"
+    elif bounce_score >= 0:
+        bounce_potential = "low"
+    else:
+        bounce_potential = "very_low"
+
+    # --- ENTRY TIMING ---
+    entry_signals: list[dict[str, str]] = []
+    wait_for: list[str] = []
+
+    # Immediate entry signals
+    if rsi_status == "oversold" and dip_type != "falling_knife":
+        entry_signals.append({
+            "signal": "rsi_oversold",
+            "action": "consider_small_position",
+            "rationale": "RSI indicates oversold but confirm with price action",
+        })
+
+    if rsi_divergence is True:
+        entry_signals.append({
+            "signal": "rsi_bullish_divergence",
+            "action": "starter_position",
+            "rationale": "Price made lower low while RSI improved",
+        })
+
+    if volume_signal == "potential_capitulation":
+        entry_signals.append({
+            "signal": "capitulation_volume",
+            "action": "watch_for_reversal",
+            "rationale": "High volume selling may exhaust sellers",
+        })
+
+    if dip_type == "healthy_pullback" and oversold_level in ("oversold", "mildly_oversold"):
+        entry_signals.append({
+            "signal": "pullback_in_uptrend",
+            "action": "accumulate",
+            "rationale": "Healthy pullback to buy in established uptrend",
+        })
+
+    if price_action.get("higher_closes_2d") is True:
+        entry_signals.append({
+            "signal": "two_higher_closes",
+            "action": "starter_position",
+            "rationale": "Short-term momentum stabilizing",
+        })
+
+    if price_action.get("break_5d_high") is True:
+        entry_signals.append({
+            "signal": "break_5d_high",
+            "action": "add_position",
+            "rationale": "Price reclaimed recent high",
+        })
+
+    if price_vs_sma20 is not None and price_vs_sma20 > 0:
+        entry_signals.append({
+            "signal": "close_above_sma20",
+            "action": "add_position",
+            "rationale": "Reclaimed short-term trend",
+        })
+
+    if macd_data.get("histogram_rising_3d") is True:
+        entry_signals.append({
+            "signal": "macd_histogram_rising",
+            "action": "add_position",
+            "rationale": "Momentum improving for 3 sessions",
+        })
+
+    # Wait signals
+    if dip_type == "falling_knife":
+        wait_for.append("price_stabilization_above_support")
+        if rsi_divergence is not True:
+            wait_for.append("rsi_bullish_divergence")
+        wait_for.append("volume_dry_up")
+
+    if sma_200 and current_price and current_price < sma_200:
+        wait_for.append(f"reclaim_sma200_at_{sma_200:.2f}")
+
+    if rsi is not None and rsi > 50 and dip_type != "healthy_pullback":
+        wait_for.append("deeper_pullback_or_rsi_oversold")
+
+    if price_action.get("higher_closes_2d") is not True:
+        wait_for.append("two_higher_closes")
+    if price_action.get("break_5d_high") is not True:
+        wait_for.append("break_5d_high")
+    if price_vs_sma20 is not None and price_vs_sma20 <= 0:
+        wait_for.append("close_above_sma20")
+    if macd_data.get("histogram_rising_3d") is not True:
+        wait_for.append("macd_histogram_rising_3d")
+
+    # --- DIP CONFIDENCE ---
+    confidence_score = 0
+    missing_metrics: list[str] = []
+
+    def _score_metric(value: Any, name: str) -> None:
+        nonlocal confidence_score
+        if value is None:
+            missing_metrics.append(name)
+        else:
+            confidence_score += 1
+
+    _score_metric(rsi, "rsi")
+    _score_metric(price_vs_sma200, "price_vs_sma200")
+    _score_metric(return_3m, "return_3m")
+    _score_metric(volume_ratio, "volume_ratio")
+    _score_metric(atr_pct, "atr_pct")
+
+    if dip_type in ("healthy_pullback", "falling_knife"):
+        confidence_score += 1
+    elif dip_type == "mixed_signals":
+        confidence_score -= 1
+
+    if oversold_level in ("oversold", "extremely_oversold"):
+        confidence_score += 1
+    elif oversold_level == "not_oversold":
+        confidence_score -= 1
+
+    if confidence_score >= 5:
+        confidence_level = "high"
+    elif confidence_score >= 3:
+        confidence_level = "medium"
+    else:
+        confidence_level = "low"
+
+    # --- OVERALL ASSESSMENT ---
+    # Combine all factors for buy-the-dip recommendation
+    dip_quality: str
+    if dip_type == "healthy_pullback" and oversold_level in ("oversold", "extremely_oversold"):
+        dip_quality = "excellent"
+    elif dip_type == "healthy_pullback" and oversold_level == "mildly_oversold":
+        dip_quality = "good"
+    elif dip_type == "mixed_signals" and oversold_level in ("oversold", "extremely_oversold"):
+        dip_quality = "fair"
+    elif dip_type == "extended_decline" and oversold_level == "extremely_oversold":
+        dip_quality = "speculative"
+    elif dip_type == "falling_knife":
+        dip_quality = "avoid"
+    else:
+        dip_quality = "wait"
+
+    # Buy recommendation
+    buy_recommendation: str
+    if dip_quality == "excellent":
+        buy_recommendation = "strong_buy_the_dip"
+    elif dip_quality == "good":
+        buy_recommendation = "buy_the_dip"
+    elif dip_quality == "fair":
+        buy_recommendation = "cautious_accumulation"
+    elif dip_quality == "speculative":
+        buy_recommendation = "small_speculative_position"
+    elif dip_quality == "avoid":
+        buy_recommendation = "do_not_catch_falling_knife"
+    else:
+        buy_recommendation = "wait_for_better_setup"
+
+    return {
+        "dip_classification": {
+            "type": dip_type,
+            "signals": dip_signals,
+            "explanation": {
+                "falling_knife": "Severe decline with broken trends - high risk of further downside",
+                "extended_decline": "Prolonged weakness but not in freefall",
+                "healthy_pullback": "Normal retracement in an uptrend - favorable for dip buying",
+                "mixed_signals": "Conflicting trend signals - proceed with caution",
+                "undetermined": "Insufficient data to classify",
+            }.get(dip_type, ""),
+        },
+        "dip_depth": _build_dip_depth(
+            from_52w_high,
+            from_52w_low,
+            from_3m_high,
+            from_6m_high,
+            days_since_52w_high,
+            days_since_52w_low,
+            risk_data,
+        ),
+        "oversold_metrics": {
+            "level": oversold_level,
+            "score": oversold_score,
+            "rsi_status": rsi_status,
+            "rsi_value": rsi,
+            "indicators": oversold_indicators,
+            "distance_from_sma20": price_vs_sma20,
+            "distance_from_sma50": price_vs_sma50,
+            "distance_from_sma200": price_vs_sma200,
+            "distance_from_sma50_atr": _round_or_none(distance_to_sma50_atr, 2),
+            "return_1w_zscore": return_1w_zscore,
+            "sma200_slope_pct_per_day": sma_200_slope,
+            "position_in_52w_range": position_in_range,
+            "oversold_composite": oversold_composite,
+        },
+        "support_levels": support_levels[:4],  # Top 4 closest supports
+        "volume_analysis": {
+            "signal": volume_signal,
+            "ratio": volume_ratio,
+            "interpretation": volume_interpretation,
+        },
+        "bounce_potential": {
+            "rating": bounce_potential,
+            "score": bounce_score,
+            "factors": bounce_factors,
+        },
+        "entry_timing": {
+            "signals": entry_signals,
+            "wait_for": wait_for,
+        },
+        "dip_confidence": {
+            "level": confidence_level,
+            "score": confidence_score,
+            "missing": missing_metrics or [],
+        },
+        "assessment": {
+            "dip_quality": dip_quality,
+            "recommendation": buy_recommendation,
+            "rationale": {
+                "strong_buy_the_dip": "Oversold pullback in uptrend - high probability bounce",
+                "buy_the_dip": "Good entry point in established trend",
+                "cautious_accumulation": "Acceptable entry but use smaller position size",
+                "small_speculative_position": "High risk but extremely oversold - small position only",
+                "do_not_catch_falling_knife": "Trend is broken - wait for stabilization",
+                "wait_for_better_setup": "Conditions not favorable for dip buying yet",
+            }.get(buy_recommendation, ""),
+        },
+        "method": "dip_assessment_v2",
     }
 
 
@@ -2386,6 +3313,15 @@ def _build_decision_context(
     pe_trailing = val.get("pe_trailing")
     net_margin = profit.get("net_margin")
     fcf = cf.get("free_cash_flow_ttm")
+    fcf_period = cf.get("free_cash_flow_period")
+    fcf_currency = cf.get("currency")
+    fcf_period_end = cf.get("free_cash_flow_period_end")
+    fcf_label = _format_fcf_label(
+        fcf,
+        fcf_period,
+        fcf_currency,
+        fcf_period_end,
+    )
     revenue_yoy = growth.get("revenue_yoy")
 
     # Get burn_metrics from fundamentals_summary (already computed with liquidity)
@@ -2540,11 +3476,14 @@ def _build_decision_context(
 
     if business_quality == "strong":
         score_delta = _calc_score_delta("fundamentals")
+        reason = "profitable"
+        if fcf_label:
+            reason = f"{reason}, {fcf_label}"
         bullish_fund_trigger: dict[str, Any] = {
             "id": "strong_business_quality",
             "category": "fundamentals",
             "direction": "bullish",
-            "reason": "profitable with positive FCF",
+            "reason": reason,
             "component_score": fund_component,
             "weight_used": weights_used.get("fundamentals"),
             "score_delta": score_delta,
@@ -2580,7 +3519,18 @@ def _build_decision_context(
                 reason = "valuation_attractive (unprofitable)"
         else:
             fcf_yield = yield_m.get("fcf_yield")
-            reason = f"fcf_yield={fcf_yield*100:.1f}%" if fcf_yield else "valuation_attractive"
+            earnings_yield = yield_m.get("earnings_yield")
+            peg_ratio = val.get("peg_ratio")
+            if val_basis == "fcf_yield" and fcf_yield is not None:
+                reason = f"fcf_yield={fcf_yield*100:.1f}%"
+            elif val_basis == "earnings_yield" and earnings_yield is not None:
+                reason = f"earnings_yield={earnings_yield*100:.1f}%"
+            elif val_basis == "peg_ratio" and peg_ratio is not None:
+                reason = f"peg_ratio={peg_ratio:.2f}"
+            elif val_basis == "pe_trailing" and pe_trailing is not None:
+                reason = f"pe_trailing={pe_trailing:.1f}x"
+            else:
+                reason = "valuation_attractive"
         score_delta = _calc_score_delta("fundamentals")
         bullish_triggers.append({
             "id": "attractive_valuation",
@@ -2991,7 +3941,7 @@ def _build_decision_context(
                     "threshold": "forward_pe < 25",
                     "current": f"forward_pe = {pe_forward:.1f}",
                 })
-            if fcf_yield_val is not None and fcf_yield_val < 0.03:
+            if fcf_yield_val is not None and fcf_yield_val > 0 and fcf_yield_val < 0.03:
                 valuation_bullish.append({
                     "condition": "fcf_yield_expands",
                     "threshold": "fcf_yield > 4%",
@@ -3004,7 +3954,7 @@ def _build_decision_context(
                     "threshold": "forward_pe > 30",
                     "current": f"forward_pe = {pe_forward:.1f}",
                 })
-            if fcf_yield_val is not None:
+            if fcf_yield_val is not None and fcf_yield_val > 0:
                 valuation_bearish.append({
                     "condition": "fcf_yield_compresses",
                     "threshold": "fcf_yield < 3%",
@@ -3062,17 +4012,19 @@ def _build_decision_context(
     # Thresholds aligned with risk_regime boundaries:
     # extreme: >60%, high: 40-60%, medium: 25-40%, low: <25%
     # bullish_if targets the next lower regime boundary
-    if "very_high_volatility" in bearish_list and annualized_vol is not None:
+    vol_threshold = _vol_threshold_for_improvement(risk_label, annualized_vol)
+    if annualized_vol is not None and vol_threshold is not None and annualized_vol >= vol_threshold:
         risk_bullish.append({
             "condition": "volatility_decreases",
-            "threshold": "annualized_vol < 60%",  # extreme -> high boundary
+            "threshold": f"annualized_vol < {vol_threshold * 100:.0f}%",
             "current": f"{annualized_vol * 100:.1f}%",
         })
-    elif "high_volatility" in bearish_list and annualized_vol is not None:
+
+    if max_dd is not None and max_dd <= -0.50:
         risk_bullish.append({
-            "condition": "volatility_decreases",
-            "threshold": "annualized_vol < 40%",  # high -> medium boundary
-            "current": f"{annualized_vol * 100:.1f}%",
+            "condition": "drawdown_recovers",
+            "threshold": "max_drawdown_1y > -50%",
+            "current": f"{max_dd * 100:.1f}%",
         })
 
     if "deep_drawdown" in bearish_list and max_dd is not None:
@@ -3814,6 +4766,7 @@ def _build_executive_summary(
     valuation = fundamentals_summary.get("valuation", {})
     profitability = fundamentals_summary.get("profitability", {})
     growth = fundamentals_summary.get("growth", {})
+    cash_flow_summary = fundamentals_summary.get("cash_flow", {})
     burn_metrics = fundamentals_summary.get("burn_metrics") or {}
     is_unprofitable = valuation.get("valuation_note") == "pe_not_meaningful"
     business_quality = decomposed.get("business_quality", "unknown")
@@ -3869,9 +4822,20 @@ def _build_executive_summary(
     if net_margin is not None:
         fund_parts.append(f"net_margin {net_margin * 100:.1f}%")
 
-    fcf = profitability.get("fcf_positive")
+    fcf_value = cash_flow_summary.get("free_cash_flow_ttm")
+    fcf_period = cash_flow_summary.get("free_cash_flow_period")
+    fcf_currency = cash_flow_summary.get("currency")
+    fcf_period_end = cash_flow_summary.get("free_cash_flow_period_end")
+    fcf_label = _format_fcf_label(
+        fcf_value,
+        fcf_period,
+        fcf_currency,
+        fcf_period_end,
+    )
+    if fcf_label:
+        fund_parts.append(fcf_label)
     quarterly_burn = burn_metrics.get("quarterly_fcf_burn")
-    if fcf is False and quarterly_burn is not None and quarterly_burn > 0:
+    if quarterly_burn is not None and quarterly_burn > 0:
         annual_fcf = -quarterly_burn * 4
         fund_parts.append(f"FCF ${annual_fcf / 1_000_000:.0f}M")
 
@@ -4019,6 +4983,7 @@ def _build_policy_action(
     action_zones: dict[str, Any],
     decomposed: dict[str, Any] | None = None,
     risk_regime: dict[str, Any] | None = None,
+    dip_assessment: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Build policy_action - the primary "what to do" decision output.
@@ -4042,6 +5007,9 @@ def _build_policy_action(
     valuation_basis = valuation_assessment.get("basis")
     is_unprofitable = valuation_assessment.get("is_unprofitable", False)
     position_sizing = action_zones.get("position_sizing_range", {})
+    dip_type = None
+    if dip_assessment:
+        dip_type = (dip_assessment.get("dip_classification") or {}).get("type")
 
     # Get decomposed scores for conditions
     business_quality = decomposed.get("business_quality") if decomposed else None
@@ -4079,6 +5047,10 @@ def _build_policy_action(
     else:  # unknown
         mid_term_action = "insufficient_data"
         rationale.append("mid_term_fit=unknown")
+
+    if dip_type == "falling_knife":
+        mid_term_action = "wait_for_entry"
+        rationale.append("dip_type=falling_knife")
 
     # === LONG-TERM ACTION (1-5 years) ===
     long_term_action: str
@@ -4133,9 +5105,13 @@ def _build_policy_action(
     # Risk-based conditions (aligned with risk_regime boundaries)
     # extreme: >60%, high: 40-60%, medium: 25-40%, low: <25%
     if risk_label == "extreme":
-        conditions_to_upgrade.append("risk_regime <= high (volatility < 60%)")
+        conditions_to_upgrade.append(
+            f"risk_regime <= high (volatility < {VOLATILITY_REGIME_THRESHOLDS['high'] * 100:.0f}%)"
+        )
     elif risk_label == "high":
-        conditions_to_upgrade.append("risk_regime <= medium (volatility < 40%)")
+        conditions_to_upgrade.append(
+            f"risk_regime <= medium (volatility < {VOLATILITY_REGIME_THRESHOLDS['medium'] * 100:.0f}%)"
+        )
 
     # Profitability conditions for unprofitable companies
     if is_unprofitable or business_quality_status == "evaluated_unprofitable":
@@ -4173,7 +5149,9 @@ def _build_policy_action(
     conditions_to_downgrade: list[str] = []
 
     if risk_label in ("low", "medium"):
-        conditions_to_downgrade.append("volatility spike > 50%")
+        conditions_to_downgrade.append(
+            f"volatility spike > {VOLATILITY_REGIME_THRESHOLDS['medium'] * 100:.0f}%"
+        )
     if not is_unprofitable:
         conditions_to_downgrade.append("guidance cut or profit warning")
         conditions_to_downgrade.append("net_margin turns negative")
