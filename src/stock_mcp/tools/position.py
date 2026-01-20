@@ -4,8 +4,6 @@ from datetime import datetime
 from time import perf_counter
 from typing import Any
 
-import pandas as pd
-
 from stock_mcp.tools.technicals import technicals
 from stock_mcp.utils.provenance import build_error_response, build_meta
 

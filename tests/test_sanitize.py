@@ -1,6 +1,5 @@
 """Tests for text sanitization."""
 
-import pytest
 
 from stock_mcp.utils.sanitize import sanitize_text
 

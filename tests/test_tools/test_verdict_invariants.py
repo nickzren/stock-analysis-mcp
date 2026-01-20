@@ -2,7 +2,6 @@
 
 import logging
 
-import pytest
 
 from stock_mcp.tools.analyze import _validate_verdict_invariants
 

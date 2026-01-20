@@ -1,6 +1,5 @@
 """Tests for URI canonicalization."""
 
-import pytest
 
 from stock_mcp.utils.validators import FetchParams
 

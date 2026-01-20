@@ -3,7 +3,6 @@
 import math
 
 import pandas as pd
-import pytest
 
 from stock_mcp.utils.indicators import (
     calculate_atr,

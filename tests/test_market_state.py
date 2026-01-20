@@ -3,7 +3,6 @@
 from datetime import datetime
 from unittest.mock import patch
 
-import pytest
 import pytz
 
 from stock_mcp.data.yfinance_client import get_market_state

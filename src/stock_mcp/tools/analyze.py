@@ -1,7 +1,7 @@
 """Analyze stock aggregator tool."""
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime
 from time import perf_counter
 from typing import Any
 
@@ -22,11 +22,6 @@ def _round_or_none(x: float | None, ndigits: int = 0) -> float | None:
     if x is None:
         return None
     return round(x, ndigits)
-
-
-def _is_pos(x: float | None) -> bool:
-    """Check if value is positive (not None and > 0)."""
-    return x is not None and x > 0
 
 
 # Volatility regime thresholds
@@ -2678,13 +2673,11 @@ def _build_dip_assessment(
     atr_data = risk_data.get("atr", {})
 
     # Extract values
-    sma_20 = ma.get("sma_20")
     sma_50 = ma.get("sma_50")
     sma_200 = ma.get("sma_200")
     sma_200_slope = ma.get("sma_200_slope_pct_per_day")
     rsi = rsi_data.get("value")
     rsi_divergence = rsi_data.get("bullish_divergence")
-    week_52_high = price_pos.get("week_52_high")
     week_52_low = price_pos.get("week_52_low")
     from_52w_high = price_pos.get("from_52w_high")
     from_52w_low = price_pos.get("from_52w_low")
@@ -2696,7 +2689,6 @@ def _build_dip_assessment(
     position_in_range = price_pos.get("position_in_range")
     return_1w = returns.get("return_1w")
     return_1w_zscore = returns.get("return_1w_zscore")
-    return_1m = returns.get("return_1m")
     return_3m = returns.get("return_3m")
     volume_ratio = volume.get("ratio")
     atr_val = atr_data.get("value")
@@ -4193,13 +4185,6 @@ def _build_decision_context(
     horizon_drivers: list[dict[str, Any]] = []
 
     burn_status = burn_metrics.get("status")
-
-    # Use business_quality_status for consistency with _build_horizon_fit
-    # This includes both explicit "unprofitable" label AND "evaluated_unprofitable" status
-    is_unprofitable_for_horizon = (
-        business_quality_status == "evaluated_unprofitable"
-        or business_quality == "unprofitable"
-    )
 
     # Long-term horizon drivers - ONLY emit drivers that fired in horizon_fit
     # This ensures 1:1 alignment between horizon_fit reasons and horizon_drivers

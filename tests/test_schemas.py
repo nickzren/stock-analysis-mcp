@@ -1,6 +1,5 @@
 """Tests for response schemas."""
 
-import pytest
 
 from stock_mcp import SCHEMA_VERSION, SERVER_VERSION
 from stock_mcp.utils.provenance import build_error_response, build_meta, build_provenance

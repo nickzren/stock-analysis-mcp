@@ -1,7 +1,6 @@
 """Tests for OHLCV standardization."""
 
 import pandas as pd
-import pytest
 
 from stock_mcp.utils.ohlcv import df_to_csv, df_to_rows, standardize_ohlcv
 

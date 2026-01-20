@@ -1,14 +1,14 @@
 """Tests for normalize module."""
 
 import math
-import json
+
 import pytest
 
 from stock_mcp.utils.normalize import (
+    SNAPSHOT_VERSION,
+    build_watchlist_snapshot,
     canonical_dumps,
     normalize_for_watchlist_diff,
-    build_watchlist_snapshot,
-    SNAPSHOT_VERSION,
 )
 
 

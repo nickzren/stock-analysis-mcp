@@ -2,12 +2,9 @@
 
 import math
 
-import pytest
-
 from stock_mcp.data.yfinance_client import (
     INFO_CORE_FUND_SENTINELS,
     INFO_FUND_SENTINELS,
-    InfoCompleteness,
     YFinanceIncompleteInfoError,
     _has_value,
     assess_info_completeness,
