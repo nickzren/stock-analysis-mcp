@@ -20,4 +20,5 @@ SERVER_VERSION = get_server_version()
 # v1: Initial schema
 # v2: Added watchlist_snapshot with snapshot_version/hash, NaN sanitization, policy_action enhancements
 # v3: Added dip_assessment, cash_flow metadata, action_zones distance labels, oversold_composite
-SCHEMA_VERSION = "3"
+# v4: Added analyst coverage, ownership/short interest, governance, quality, valuation context, section summaries
+SCHEMA_VERSION = "4"

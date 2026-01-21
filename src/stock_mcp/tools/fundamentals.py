@@ -40,6 +40,7 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
         )
 
     normalized_symbol = symbol.upper().strip()
+    current_price = _safe_float(info.get("regularMarketPrice") or info.get("currentPrice"))
 
     # Fiscal period label (used for cash flow period metadata)
     fiscal_year_end = info.get("lastFiscalYearEnd")
@@ -83,6 +84,7 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
     valuation = {
         "pe_trailing": _safe_float(info.get("trailingPE")),
         "pe_forward": _safe_float(info.get("forwardPE")),
+        "trailing_eps": _safe_float(info.get("trailingEps")),
         "ps_trailing": _safe_round(ps_trailing, 2),
         "ps_source": ps_source,  # "direct" or "computed" or None
         "ps_explanation": ps_explanation,  # Only present when ps_source="computed"
@@ -373,6 +375,87 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
         "warnings": yield_warnings if yield_warnings else None,
     }
 
+    target_low = _safe_float(info.get("targetLowPrice"))
+    target_mean = _safe_float(info.get("targetMeanPrice"))
+    target_high = _safe_float(info.get("targetHighPrice"))
+    target_median = _safe_float(info.get("targetMedianPrice"))
+
+    upside_to_mean_target = (
+        (target_mean - current_price) / current_price
+        if target_mean is not None and current_price is not None and current_price > 0
+        else None
+    )
+    upside_to_median_target = (
+        (target_median - current_price) / current_price
+        if target_median is not None and current_price is not None and current_price > 0
+        else None
+    )
+
+    analyst_coverage = {
+        "rating": _safe_str(info.get("recommendationKey")),
+        "rating_score": _safe_float(info.get("recommendationMean")),
+        "num_analysts": _safe_int(info.get("numberOfAnalystOpinions")),
+        "price_target_low": target_low,
+        "price_target_mean": target_mean,
+        "price_target_high": target_high,
+        "price_target_median": target_median,
+        "upside_to_mean_target": _safe_round(upside_to_mean_target, 4),
+        "upside_to_median_target": _safe_round(upside_to_median_target, 4),
+    }
+
+    shares_short = _safe_int(info.get("sharesShort"))
+    shares_short_prior = _safe_int(info.get("sharesShortPriorMonth"))
+    short_change_mom = (
+        (shares_short - shares_short_prior) / shares_short_prior
+        if shares_short is not None and shares_short_prior
+        else None
+    )
+
+    short_interest = {
+        "shares_short": shares_short,
+        "short_pct_of_float": _safe_float(info.get("shortPercentOfFloat")),
+        "days_to_cover": _safe_float(info.get("shortRatio")),
+        "short_change_mom": _safe_round(short_change_mom, 4),
+        "as_of_date": _to_date_string(info.get("dateShortInterest")),
+    }
+
+    ownership = {
+        "insider_pct": _safe_float(info.get("heldPercentInsiders")),
+        "institutional_pct": _safe_float(info.get("heldPercentInstitutions")),
+        "float_shares": _safe_int(info.get("floatShares")),
+    }
+
+    governance = {
+        "audit_risk": _safe_int(info.get("auditRisk")),
+        "board_risk": _safe_int(info.get("boardRisk")),
+        "compensation_risk": _safe_int(info.get("compensationRisk")),
+        "shareholder_rights_risk": _safe_int(info.get("shareHolderRightsRisk")),
+        "overall_risk": _safe_int(info.get("overallRisk")),
+    }
+
+    quality = {
+        "roic": _safe_float(info.get("returnOnInvestedCapital") or info.get("returnOnCapitalEmployed")),
+        "gross_profit": _safe_float(info.get("grossProfits")),
+        "ebitda": _safe_float(info.get("ebitda")),
+        "ebitda_margin": _safe_float(info.get("ebitdaMargins")),
+        "revenue_per_share": _safe_float(info.get("revenuePerShare")),
+        "quick_ratio": _safe_float(info.get("quickRatio")),
+    }
+
+    pe_current = valuation.get("pe_trailing")
+    ps_current = valuation.get("ps_trailing")
+    valuation_context_status = "partial" if pe_current is not None or ps_current is not None else "unavailable"
+
+    valuation_context = {
+        "pe_current": pe_current,
+        "pe_5y_avg": None,
+        "pe_percentile_5y": None,
+        "ps_current": ps_current,
+        "ps_5y_avg": None,
+        "status": valuation_context_status,
+        "status_reason": "historical_pe_ps_unavailable",
+    }
+
     warnings = []
     if info.get("trailingPE") and not info.get("forwardPE"):
         warnings.append("using_trailing_data")
@@ -396,6 +479,12 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
         "financial_health": financial_health,
         "cash_flow": cash_flow,
         "yield_metrics": yield_metrics,
+        "analyst_coverage": analyst_coverage,
+        "short_interest": short_interest,
+        "ownership": ownership,
+        "governance": governance,
+        "quality": quality,
+        "valuation_context": valuation_context,
     }
 
 
@@ -418,6 +507,48 @@ def _safe_round(value: float | None, decimals: int) -> float | None:
     if value is None:
         return None
     return round(value, decimals)
+
+
+def _safe_int(value: Any) -> int | None:
+    """Convert to int or return None."""
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return None
+
+
+def _safe_str(value: Any) -> str | None:
+    """Convert to stripped string or return None."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _to_date_string(value: Any) -> str | None:
+    """Normalize date-like values to YYYY-MM-DD when possible."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, (int, float)):
+        try:
+            return datetime.fromtimestamp(value).date().isoformat()
+        except (ValueError, OSError, OverflowError):
+            return None
+    if isinstance(value, str):
+        raw = value.strip()
+        if not raw:
+            return None
+        for fmt in ("%Y-%m-%d", "%Y%m%d"):
+            try:
+                return datetime.strptime(raw, fmt).date().isoformat()
+            except ValueError:
+                continue
+        return raw
+    return None
 
 
 _FCF_LABELS: tuple[str, ...] = ("freecashflow",)

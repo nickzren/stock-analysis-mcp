@@ -1,6 +1,7 @@
 """Analyze stock aggregator tool."""
 
 import asyncio
+import re
 from datetime import datetime
 from time import perf_counter
 from typing import Any
@@ -85,6 +86,53 @@ def _format_level_distance_label(pct: float | None) -> str | None:
         return "at current"
     direction = "above" if pct > 0 else "below"
     return f"{abs(pct) * 100:.1f}% {direction} current"
+
+
+def _format_pct(value: float | None, decimals: int = 1) -> str | None:
+    """Format a decimal ratio as a percent string."""
+    if value is None:
+        return None
+    return f"{value * 100:.{decimals}f}%"
+
+
+def _format_compact_number(value: float | int | None) -> str | None:
+    """Format large numbers with compact suffixes."""
+    if value is None:
+        return None
+    abs_val = abs(float(value))
+    if abs_val >= 1e12:
+        return f"{value / 1e12:.1f}T"
+    if abs_val >= 1e9:
+        return f"{value / 1e9:.1f}B"
+    if abs_val >= 1e6:
+        return f"{value / 1e6:.1f}M"
+    if abs_val >= 1e3:
+        return f"{value / 1e3:.1f}K"
+    return f"{value:.0f}"
+
+
+def _format_price(value: float | None, currency: str | None = None) -> str | None:
+    """Format price with 2 decimals and optional currency code."""
+    if value is None:
+        return None
+    label = f"{value:.2f}"
+    if currency and currency != "USD":
+        return f"{currency} {label}"
+    return f"${label}"
+
+
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
+
+
+def _first_sentences(text: str | None, max_sentences: int = 2) -> str | None:
+    """Return the first N sentences from text."""
+    if not text:
+        return None
+    cleaned = str(text).strip()
+    if not cleaned:
+        return None
+    parts = _SENTENCE_SPLIT_RE.split(cleaned)
+    return " ".join(parts[:max_sentences]).strip()
 
 
 def _vol_threshold_for_improvement(
@@ -182,6 +230,326 @@ def _build_oversold_composite(
         "cap": 5.0,
         "notes": oversold_notes or [],
     }
+
+
+def _build_technicals_summary_text(technicals_summary: dict[str, Any]) -> str | None:
+    trend = technicals_summary.get("trend", {})
+    momentum = technicals_summary.get("momentum", {})
+    returns = technicals_summary.get("returns", {})
+    position = technicals_summary.get("position_in_52w_range")
+
+    if trend.get("above_sma200") is True:
+        trend_clause = "Uptrend (above 200-day MA)"
+    elif trend.get("above_sma200") is False:
+        trend_clause = "Downtrend (below 200-day MA)"
+    else:
+        trend_clause = "Trend unclear (200-day MA unavailable)"
+
+    if trend.get("golden_cross") is True:
+        trend_clause = f"{trend_clause} with a golden cross"
+    elif trend.get("death_cross") is True:
+        trend_clause = f"{trend_clause} with a death cross"
+
+    if trend.get("above_sma50") is True and trend.get("above_sma200") is True:
+        trend_clause = f"{trend_clause}, above 50-day MA"
+    elif trend.get("above_sma50") is False and trend.get("above_sma200") is False:
+        trend_clause = f"{trend_clause}, below 50-day MA"
+
+    trend_sentence = f"{trend_clause}."
+
+    momentum_parts: list[str] = []
+    rsi_val = momentum.get("rsi")
+    if rsi_val is not None:
+        if momentum.get("rsi_oversold") is True:
+            momentum_parts.append(f"RSI {rsi_val:.1f} (oversold)")
+        elif momentum.get("rsi_overbought") is True:
+            momentum_parts.append(f"RSI {rsi_val:.1f} (overbought)")
+        else:
+            momentum_parts.append(f"RSI {rsi_val:.1f}")
+
+    if momentum.get("macd_bullish") is True:
+        momentum_parts.append("MACD bullish")
+
+    return_1m = returns.get("return_1m")
+    if return_1m is not None and abs(return_1m) >= 0.05:
+        momentum_parts.append(f"1M {return_1m * 100:+.1f}%")
+
+    return_3m = returns.get("return_3m")
+    if return_3m is not None and abs(return_3m) >= 0.05:
+        momentum_parts.append(f"3M {return_3m * 100:+.1f}%")
+
+    if position is not None:
+        if position <= 0.2:
+            momentum_parts.append("near 52-week lows")
+        elif position >= 0.8:
+            momentum_parts.append("near 52-week highs")
+
+    if not momentum_parts:
+        return trend_sentence
+
+    momentum_sentence = "; ".join(momentum_parts) + "."
+    return f"{trend_sentence} {momentum_sentence}"
+
+
+def _build_fundamentals_summary_text(fundamentals_summary: dict[str, Any]) -> str | None:
+    valuation = fundamentals_summary.get("valuation", {})
+    growth = fundamentals_summary.get("growth", {})
+    profitability = fundamentals_summary.get("profitability", {})
+    cash_flow = fundamentals_summary.get("cash_flow", {})
+
+    net_margin = profitability.get("net_margin")
+    gross_margin = profitability.get("gross_margin")
+    is_unprofitable = valuation.get("valuation_note") == "pe_not_meaningful"
+    if net_margin is not None and net_margin < 0:
+        is_unprofitable = True
+
+    sentence_one_parts: list[str] = []
+    if is_unprofitable:
+        if net_margin is not None:
+            sentence_one_parts.append(f"Unprofitable (net margin {net_margin * 100:.1f}%)")
+        else:
+            sentence_one_parts.append("Unprofitable")
+    elif net_margin is not None:
+        sentence_one_parts.append(f"Net margin {net_margin * 100:.1f}%")
+
+    if gross_margin is not None:
+        sentence_one_parts.append(f"gross margin {gross_margin * 100:.1f}%")
+
+    fcf_label = cash_flow.get("free_cash_flow_label")
+    if fcf_label:
+        sentence_one_parts.append(fcf_label)
+
+    sentence_two_parts: list[str] = []
+    revenue_yoy = growth.get("revenue_yoy")
+    if revenue_yoy is not None:
+        sentence_two_parts.append(f"Revenue {revenue_yoy * 100:+.1f}% YoY")
+
+    eps_yoy = growth.get("eps_yoy")
+    if eps_yoy is not None:
+        sentence_two_parts.append(f"EPS {eps_yoy * 100:+.1f}% YoY")
+
+    pe = valuation.get("pe_trailing")
+    ps = valuation.get("ps_trailing")
+    if pe is not None:
+        sentence_two_parts.append(f"P/E {pe:.1f}x")
+    elif ps is not None:
+        sentence_two_parts.append(f"P/S {ps:.1f}x")
+
+    if not sentence_one_parts and not sentence_two_parts:
+        return None
+
+    sentences: list[str] = []
+    if sentence_one_parts:
+        sentences.append("; ".join(sentence_one_parts) + ".")
+    if sentence_two_parts:
+        sentences.append("; ".join(sentence_two_parts) + ".")
+
+    return " ".join(sentences[:2])
+
+
+def _build_risk_summary_text(risk_summary: dict[str, Any]) -> str | None:
+    risk_regime = risk_summary.get("risk_regime", {})
+    classification = risk_regime.get("classification")
+    vol = risk_summary.get("annualized_volatility")
+    dd = risk_summary.get("max_drawdown_1y")
+    beta = risk_summary.get("beta")
+
+    parts: list[str] = []
+    if vol is not None:
+        parts.append(f"{vol * 100:.1f}% annualized volatility")
+    if dd is not None:
+        parts.append(f"{dd * 100:.1f}% max drawdown")
+    if beta is not None:
+        parts.append(f"beta {beta:.2f}")
+
+    if classification:
+        if parts:
+            return f"Risk regime {classification}: {', '.join(parts)}."
+        return f"Risk regime {classification}."
+
+    if parts:
+        return f"Risk profile: {', '.join(parts)}."
+    return None
+
+
+def _build_ownership_summary_text(ownership: dict[str, Any]) -> str | None:
+    insider_pct = ownership.get("insider_pct")
+    institutional_pct = ownership.get("institutional_pct")
+    float_shares = ownership.get("float_shares")
+
+    parts: list[str] = []
+    inst_label = _format_pct(institutional_pct, decimals=1)
+    if inst_label:
+        parts.append(f"{inst_label} institutional")
+    insider_label = _format_pct(insider_pct, decimals=2)
+    if insider_label:
+        parts.append(f"{insider_label} insider")
+    float_label = _format_compact_number(float_shares)
+    if float_label:
+        parts.append(f"float {float_label} shares")
+
+    if not parts:
+        return None
+    return f"Ownership: {', '.join(parts)}."
+
+
+def _build_short_interest_summary_text(short_interest: dict[str, Any]) -> str | None:
+    short_pct = short_interest.get("short_pct_of_float")
+    days_to_cover = short_interest.get("days_to_cover")
+    short_change = short_interest.get("short_change_mom")
+
+    parts: list[str] = []
+    pct_label = _format_pct(short_pct, decimals=2)
+    if pct_label:
+        parts.append(f"{pct_label} of float short")
+    if days_to_cover is not None:
+        parts.append(f"{days_to_cover:.1f} days to cover")
+    if short_change is not None and abs(short_change) >= 0.05:
+        parts.append(f"{short_change * 100:+.1f}% m/m")
+
+    if not parts:
+        return None
+    return f"Short interest: {', '.join(parts)}."
+
+
+def _build_analyst_summary_text(
+    analyst_coverage: dict[str, Any],
+    current_price: float | None,
+    currency: str | None = None,
+) -> str | None:
+    rating = analyst_coverage.get("rating")
+    rating_score = analyst_coverage.get("rating_score")
+    num_analysts = analyst_coverage.get("num_analysts")
+    target_mean = analyst_coverage.get("price_target_mean")
+    upside = analyst_coverage.get("upside_to_mean_target")
+
+    sentences: list[str] = []
+    summary_parts: list[str] = []
+
+    if rating:
+        summary_parts.append(f"Analyst consensus: {str(rating).replace('_', ' ').title()}")
+    elif rating_score is not None or num_analysts is not None:
+        summary_parts.append("Analyst coverage")
+    if rating_score is not None:
+        summary_parts.append(f"mean {rating_score:.2f}")
+    if num_analysts is not None:
+        summary_parts.append(f"{num_analysts} analysts")
+
+    if summary_parts:
+        sentence = summary_parts[0]
+        if len(summary_parts) > 1:
+            sentence = f"{sentence} ({', '.join(summary_parts[1:])})."
+        else:
+            sentence = f"{sentence}."
+        sentences.append(sentence)
+
+    if target_mean is not None:
+        target_label = _format_price(target_mean, currency)
+        if upside is not None:
+            sentences.append(f"Mean target {target_label} ({upside * 100:+.1f}% vs current).")
+        elif current_price is not None and current_price > 0:
+            implied = (target_mean - current_price) / current_price
+            sentences.append(f"Mean target {target_label} ({implied * 100:+.1f}% vs current).")
+        else:
+            sentences.append(f"Mean target {target_label}.")
+
+    if not sentences:
+        return None
+    return " ".join(sentences[:2])
+
+
+def _build_governance_summary_text(governance: dict[str, Any]) -> str | None:
+    overall = governance.get("overall_risk")
+    audit = governance.get("audit_risk")
+    board = governance.get("board_risk")
+    comp = governance.get("compensation_risk")
+    rights = governance.get("shareholder_rights_risk")
+
+    if overall is None and audit is None and board is None and comp is None and rights is None:
+        return None
+
+    parts: list[str] = []
+    if overall is not None:
+        parts.append(f"overall {overall}/10")
+    if audit is not None:
+        parts.append(f"audit {audit}/10")
+    if board is not None:
+        parts.append(f"board {board}/10")
+    if comp is not None:
+        parts.append(f"comp {comp}/10")
+    if rights is not None:
+        parts.append(f"rights {rights}/10")
+
+    return f"Governance risk (1=low, 10=high): {', '.join(parts)}."
+
+
+def _build_valuation_context_summary_text(valuation_context: dict[str, Any]) -> str | None:
+    pe_current = valuation_context.get("pe_current")
+    ps_current = valuation_context.get("ps_current")
+    status_reason = valuation_context.get("status_reason")
+
+    parts: list[str] = []
+    if pe_current is not None:
+        parts.append(f"current P/E {pe_current:.1f}x")
+    if ps_current is not None:
+        parts.append(f"current P/S {ps_current:.1f}x")
+
+    if not parts:
+        return None
+    summary = "; ".join(parts)
+    if status_reason:
+        summary = f"{summary}. History unavailable."
+    else:
+        summary = f"{summary}."
+    return summary
+
+
+def _build_news_summary_text(news_summary: dict[str, Any]) -> str | None:
+    if not news_summary:
+        return None
+    article_count = news_summary.get("article_count")
+    sentiment = (news_summary.get("sentiment") or {}).get("overall")
+    confidence = (news_summary.get("sentiment") or {}).get("confidence")
+
+    parts: list[str] = []
+    if article_count is not None:
+        parts.append(f"{article_count} recent headlines")
+    if sentiment:
+        if confidence is not None:
+            if isinstance(confidence, (int, float)) and not isinstance(confidence, bool):
+                parts.append(f"sentiment {sentiment} (conf {confidence:.2f})")
+            else:
+                parts.append(f"sentiment {sentiment} (conf {confidence})")
+        else:
+            parts.append(f"sentiment {sentiment}")
+
+    if not parts:
+        return None
+    return f"News: {', '.join(parts)}."
+
+
+def _build_dip_summary_text(dip_assessment: dict[str, Any]) -> str | None:
+    dip_classification = dip_assessment.get("dip_classification") or {}
+    dip_depth = dip_assessment.get("dip_depth") or {}
+    dip_type = dip_classification.get("type")
+    severity = dip_depth.get("severity")
+    from_52w_high = dip_depth.get("from_52w_high")
+
+    parts: list[str] = []
+    if dip_type:
+        parts.append(f"Dip type {dip_type}")
+    if severity:
+        parts.append(f"severity {severity}")
+    if from_52w_high is not None:
+        if isinstance(from_52w_high, (int, float)) and not isinstance(from_52w_high, bool):
+            pct = _format_pct(float(from_52w_high), decimals=1)
+            parts.append(f"{pct} from 52W high" if pct else "from 52W high")
+        else:
+            parts.append(f"{from_52w_high} from 52W high")
+
+    if not parts:
+        return None
+    return f"{', '.join(parts)}."
 
 # Weights for verdict scoring (mid/long-term investor bias)
 # fundamentals > technicals > risk
@@ -284,8 +652,17 @@ async def analyze_stock(symbol: str) -> dict[str, Any]:
     summary = {
         "name": summary_data.get("name"),
         "sector": summary_data.get("sector"),
+        "industry": summary_data.get("industry"),
         "market_cap": summary_data.get("market_cap"),
+        "currency": summary_data.get("currency"),
         "current_price": summary_data.get("current_price") or tech_data.get("current_price"),
+    }
+
+    company_profile = {
+        "description": _first_sentences(summary_data.get("description"), max_sentences=2),
+        "employees": summary_data.get("employees"),
+        "industry": summary_data.get("industry"),
+        "website": summary_data.get("website"),
     }
 
     # Technicals summary
@@ -300,6 +677,7 @@ async def analyze_stock(symbol: str) -> dict[str, Any]:
             "above_sma50": _get_rule_triggered(ma, "above_sma50"),
             "above_sma200": _get_rule_triggered(ma, "above_sma200"),
             "golden_cross": _get_rule_triggered(ma, "golden_cross"),
+            "death_cross": _get_rule_triggered(ma, "death_cross"),
         },
         "momentum": {
             "rsi": rsi.get("value"),
@@ -314,6 +692,7 @@ async def analyze_stock(symbol: str) -> dict[str, Any]:
         },
         "position_in_52w_range": price_pos.get("position_in_range"),
     }
+    technicals_summary["summary"] = _build_technicals_summary_text(technicals_summary)
 
     # Fundamentals summary
     val = fund_data.get("valuation", {})
@@ -358,12 +737,15 @@ async def analyze_stock(symbol: str) -> dict[str, Any]:
         cash_runway_quarters = round(runway_quarters_ocf, 1)
         runway_basis = "ocf_only"
 
+    fundamentals_fetched = tool_results.get("fundamentals_snapshot") is not None
+
     # Check if company is unprofitable (P/E not meaningful)
     pe_trailing = val.get("pe_trailing")
+    trailing_eps = val.get("trailing_eps")
     net_margin = profit.get("net_margin")
-    is_unprofitable_company = (
-        pe_trailing is None
-        or (net_margin is not None and net_margin < 0)
+    is_unprofitable_company = fundamentals_fetched and (
+        (net_margin is not None and net_margin < 0)
+        or (trailing_eps is not None and trailing_eps <= 0)
     )
 
     # Build valuation dict - include alternate metrics for unprofitable companies
@@ -379,7 +761,7 @@ async def analyze_stock(symbol: str) -> dict[str, Any]:
     ev_to_ebitda = val.get("ev_to_ebitda")
     ev_to_sales = val.get("ev_to_sales")  # Better than P/S when debt/cash material
 
-    if is_unprofitable_company or pe_trailing is None:
+    if fundamentals_fetched and (is_unprofitable_company or pe_trailing is None):
         # Essential for unprofitable companies
         valuation_summary["ps_trailing"] = ps_trailing
         valuation_summary["ps_source"] = ps_source  # Audit field: how P/S was derived
@@ -387,7 +769,8 @@ async def analyze_stock(symbol: str) -> dict[str, Any]:
             valuation_summary["ps_explanation"] = ps_explanation  # Show computation basis
         valuation_summary["ev_to_ebitda"] = ev_to_ebitda
         valuation_summary["ev_to_sales"] = ev_to_sales  # EV/Sales for debt/cash aware valuation
-        valuation_summary["valuation_note"] = "pe_not_meaningful"
+        if is_unprofitable_company:
+            valuation_summary["valuation_note"] = "pe_not_meaningful"
 
     # Add valuation warning for unprofitable high P/S
     valuation_warnings: list[str] = []
@@ -545,6 +928,18 @@ async def analyze_stock(symbol: str) -> dict[str, Any]:
         },
         "burn_metrics": burn_metrics,  # Only present for unprofitable companies
     }
+    fundamentals_summary["summary"] = (
+        _build_fundamentals_summary_text(fundamentals_summary)
+        if fundamentals_fetched
+        else "Fundamentals unavailable (data fetch failed)."
+    )
+
+    analyst_coverage = fund_data.get("analyst_coverage") or {}
+    short_interest = fund_data.get("short_interest") or {}
+    ownership = fund_data.get("ownership") or {}
+    governance = fund_data.get("governance") or {}
+    quality = fund_data.get("quality") or {}
+    valuation_context = fund_data.get("valuation_context") or {}
 
     # Risk summary
     vol = risk_data.get("volatility", {})
@@ -566,6 +961,7 @@ async def analyze_stock(symbol: str) -> dict[str, Any]:
         "atr_pct": atr.get("as_pct_of_price"),
         "risk_regime": risk_regime,
     }
+    risk_summary["summary"] = _build_risk_summary_text(risk_summary)
 
     # Events summary with next catalyst status + reason (always output)
     earnings = events_data.get("earnings", {})
@@ -638,6 +1034,7 @@ async def analyze_stock(symbol: str) -> dict[str, Any]:
         "sentiment": sentiment_summary,
         "recent_earnings": earnings_highlight,
     }
+    news_summary["summary"] = _build_news_summary_text(news_summary)
 
     # Generate signals (all signals, no strategy bias)
     signals = _generate_signals(
@@ -693,6 +1090,8 @@ async def analyze_stock(symbol: str) -> dict[str, Any]:
         market_context=market_context,
         signals=signals,
     )
+    if dip_assessment:
+        dip_assessment["summary"] = _build_dip_summary_text(dip_assessment)
 
     # Align action zones with dip context and risk regime
     action_zones = _apply_dip_gates_to_action_zones(
@@ -700,6 +1099,23 @@ async def analyze_stock(symbol: str) -> dict[str, Any]:
         dip_assessment=dip_assessment,
         risk_regime=risk_regime,
     )
+
+    section_summaries = {
+        "technicals": technicals_summary.get("summary"),
+        "fundamentals": fundamentals_summary.get("summary"),
+        "risk": risk_summary.get("summary"),
+        "ownership": _build_ownership_summary_text(ownership),
+        "short_interest": _build_short_interest_summary_text(short_interest),
+        "analyst_view": _build_analyst_summary_text(
+            analyst_coverage,
+            summary.get("current_price"),
+            summary.get("currency"),
+        ),
+        "governance": _build_governance_summary_text(governance),
+        "valuation_context": _build_valuation_context_summary_text(valuation_context),
+        "dip_quality": dip_assessment.get("summary") if dip_assessment else None,
+        "news": news_summary.get("summary"),
+    }
 
     # Calculate data quality
     # For unprofitable companies, check P/S instead of P/E (P/E not meaningful)
@@ -883,6 +1299,14 @@ async def analyze_stock(symbol: str) -> dict[str, Any]:
         "symbol": normalized_symbol,
         "executive_summary": executive_summary,
         "summary": summary,
+        "company_profile": company_profile,
+        "section_summaries": section_summaries,
+        "analyst_coverage": analyst_coverage,
+        "short_interest": short_interest,
+        "ownership": ownership,
+        "governance": governance,
+        "quality": quality,
+        "valuation_context": valuation_context,
         "technicals_summary": technicals_summary,
         "fundamentals_summary": fundamentals_summary,
         "risk_summary": risk_summary,
@@ -1814,12 +2238,24 @@ def _validate_verdict_invariants(verdict: dict[str, Any]) -> None:
                 )
 
     # Invariant 4: coverage_factor consistency (if calculable)
+    # NOTE: weights_used is RENORMALIZED to sum to 1.0 across used components.
+    # coverage_factor reflects the fraction of full weights actually present.
     if coverage_factor is not None and weights_used:
-        expected_coverage = sum(weights_used.values())
-        # Allow small floating point tolerance
-        if abs(expected_coverage - coverage_factor) > 0.0001:
+        weights_full = verdict.get("weights_full") or {}
+        full_weight = sum(float(w) for w in weights_full.values() if w is not None)
+        used_full_weight = sum(
+            float(weights_full.get(comp_name, 0.0) or 0.0)
+            for comp_name in weights_used
+        )
+        expected_coverage_factor = (
+            used_full_weight / full_weight
+            if full_weight > 0
+            else None
+        )
+
+        if expected_coverage_factor is not None and abs(expected_coverage_factor - coverage_factor) > 0.0001:
             violations.append(
-                f"coverage_factor={coverage_factor} but sum(weights_used)={expected_coverage}"
+                f"coverage_factor={coverage_factor} but expected_coverage_factor={expected_coverage_factor}"
             )
 
     if violations:

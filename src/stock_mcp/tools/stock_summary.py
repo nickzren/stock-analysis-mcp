@@ -75,6 +75,8 @@ async def stock_summary(symbol: str) -> dict[str, Any]:
         "avg_volume_30d": _safe_int(avg_volume),
         "shares_outstanding": _safe_int(info.get("sharesOutstanding")),
         "dividend_yield": _safe_round(div_yield, 4),
+        "employees": _safe_int(info.get("fullTimeEmployees")),
+        "website": sanitize_text(info.get("website")),
         "description": sanitize_text(info.get("longBusinessSummary"), max_length=500),
     }
 

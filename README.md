@@ -6,11 +6,14 @@
 [![Data: yfinance](https://img.shields.io/badge/Data-yfinance-720e9e)](https://github.com/ranaroussi/yfinance)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-An MCP server that gives AI agents (Claude Code, Codex, etc.) stock analysis capabilities.
+An MCP server that gives AI agents (Claude Code, Codex, etc.) single-stock analysis capabilities.
+Informational only — not financial advice.
 
 ## Philosophy
 
-**One command, complete picture.** Just say "Analyze AAPL" and get a verdict, action zones, decision context, and executive summary — all in a consistent JSON schema.
+**One command, complete picture.** Just say "Analyze AAPL" and get a comprehensive,
+human-readable report (section summaries, analyst coverage, ownership, short interest,
+governance, and company context) in a consistent JSON schema.
 
 ## Quick Start
 
@@ -61,16 +64,29 @@ The primary way to use this server—just say:
 
 This returns a comprehensive JSON report covering:
 - **Executive summary** — materiality-first narrative (leads with what matters most)
+- **Section summaries** — 1–2 sentence takeaways per major section
 - **Verdict** — score, tilt (bullish/neutral/bearish), confidence, horizon fit
-- **Policy action** — mid-term/long-term recommendations with position sizing
+- **Policy action** — mid/long-term decision framing with position sizing ranges (informational)
 - **Action zones** — ATR-based price levels (accumulate/reduce/stop)
 - **Dip assessment** — oversold metrics, support levels, bounce potential, entry timing
 - **Decision context** — what would change the verdict (bullish_if/bearish_if)
+- **Analyst coverage** — consensus rating + targets
+- **Ownership & short interest** — insiders/institutions/float, days-to-cover
+- **Governance** — audit/board/comp/rights risk scores
+- **Company profile** — description, industry, employees, website
 - Technical signals, fundamental metrics, risk regime, news sentiment, events
 
 The output follows a consistent schema, making it easy to compare multiple stocks or track changes over time.
 
 ## Available Tools
+
+### Primary
+
+| Tool | Description |
+|------|-------------|
+| `analyze` | Comprehensive single-stock analysis with human-readable summaries |
+
+### Additional
 
 | Tool | Description |
 |------|-------------|
@@ -81,7 +97,6 @@ The output follows a consistent schema, making it easy to compare multiple stock
 | `get_fundamentals` | Financial metrics (P/E, margins, growth, debt) |
 | `get_events` | Earnings dates, dividends, splits |
 | `get_news` | Recent news headlines and earnings surprise data |
-| `analyze` | Comprehensive analysis with news, technicals, fundamentals, risk, events |
 | `analyze_my_position` | Hold/sell analysis for existing positions |
 | `analyze_portfolio` | Concentration, sector exposure, correlation |
 | `check_data_quality` | Verify data availability for symbols |
@@ -104,4 +119,4 @@ ruff check src/ tests/
 
 ## Disclaimer
 
-This tool is for **informational and educational purposes only**. It is not financial advice. Always do your own research and consult a qualified financial advisor before making investment decisions. The authors are not responsible for any financial losses incurred from using this tool.
+This tool is for **informational purposes only**. It is not financial advice. Always do your own research and consult a qualified financial advisor before making investment decisions. The authors are not responsible for any financial losses incurred from using this tool.

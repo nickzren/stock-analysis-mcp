@@ -22,6 +22,7 @@ class TestVerdictInvariants:
                 "fundamentals": 0.3,
                 "risk": -0.2,
             },
+            "weights_full": {"technicals": 0.3, "fundamentals": 0.45, "risk": 0.25},
             "weights_used": {
                 "technicals": 0.3,
                 "fundamentals": 0.45,
@@ -70,6 +71,7 @@ class TestVerdictInvariants:
                 "fundamentals": 0.3,
                 "risk": -0.2,
             },
+            "weights_full": {"technicals": 0.3, "fundamentals": 0.45, "risk": 0.25},
             "weights_used": {
                 "technicals": 0.3,
                 "fundamentals": 0.45,
@@ -96,6 +98,7 @@ class TestVerdictInvariants:
                 "fundamentals": 0.3,
                 "risk": -0.2,
             },
+            "weights_full": {"technicals": 0.3, "fundamentals": 0.45, "risk": 0.25},
             "weights_used": {
                 "technicals": 0.3,
                 # fundamentals missing!
@@ -122,6 +125,7 @@ class TestVerdictInvariants:
                 "fundamentals": None,  # None but in weights_used!
                 "risk": -0.2,
             },
+            "weights_full": {"technicals": 0.3, "fundamentals": 0.45, "risk": 0.25},
             "weights_used": {
                 "technicals": 0.3,
                 "fundamentals": 0.45,  # Shouldn't be here!
@@ -136,7 +140,7 @@ class TestVerdictInvariants:
         assert "components.fundamentals=None but fundamentals in weights_used" in caplog.text
 
     def test_coverage_factor_mismatch(self, caplog):
-        """Should warn if coverage_factor doesn't match sum of weights_used."""
+        """Should warn if coverage_factor doesn't match expected coverage factor."""
         verdict = {
             "coverage": {
                 "price": {"fetched": True, "used_in_score": True, "reason_excluded": None},
@@ -148,9 +152,11 @@ class TestVerdictInvariants:
                 "fundamentals": 0.3,
                 "risk": None,
             },
+            "weights_full": {"technicals": 0.3, "fundamentals": 0.45, "risk": 0.25},
             "weights_used": {
-                "technicals": 0.3,
-                "fundamentals": 0.45,
+                # Renormalized to sum to 1.0 since risk is excluded
+                "technicals": 0.4,
+                "fundamentals": 0.6,
             },
             "coverage_factor": 1.0,  # Wrong! Should be 0.75
         }
@@ -158,7 +164,7 @@ class TestVerdictInvariants:
         with caplog.at_level(logging.WARNING):
             _validate_verdict_invariants(verdict)
 
-        assert "coverage_factor=1.0 but sum(weights_used)=0.75" in caplog.text
+        assert "coverage_factor=1.0 but expected_coverage_factor=0.75" in caplog.text
 
     def test_empty_verdict_no_crash(self, caplog):
         """Should handle empty verdict without crashing."""
