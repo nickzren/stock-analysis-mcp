@@ -15,7 +15,6 @@ dependencies = [
     "numpy>=1.24.0",
     "diskcache>=5.6.0",
     "pytz>=2024.1",
-    "fredapi>=0.5.0",
 ]
 
 [project.scripts]
