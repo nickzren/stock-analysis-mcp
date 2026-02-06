@@ -2,8 +2,7 @@
 
 import logging
 
-
-from stock_mcp.tools.analyze import _validate_verdict_invariants
+from stock_mcp.tools.analyze.verdict import _validate_verdict_invariants
 
 
 class TestVerdictInvariants:

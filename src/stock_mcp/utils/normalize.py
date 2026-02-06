@@ -21,8 +21,9 @@ import copy
 import hashlib
 import json
 import math
+from collections.abc import Callable
 from datetime import datetime
-from typing import Any, Callable
+from typing import Any
 
 # Snapshot format version - bump when normalization logic changes
 SNAPSHOT_VERSION = "1.0.0"

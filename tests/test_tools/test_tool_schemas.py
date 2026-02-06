@@ -162,7 +162,7 @@ class TestDipAssessmentLogic:
 
     def test_oversold_composite_extreme(self) -> None:
         """Composite should cap at 5 and classify as extreme."""
-        from stock_mcp.tools.analyze import _build_oversold_composite
+        from stock_mcp.tools.analyze.dip_assessment import _build_oversold_composite
 
         result = _build_oversold_composite(
             rsi=24.0,
@@ -179,7 +179,7 @@ class TestDipAssessmentLogic:
 
     def test_oversold_composite_missing_momentum(self) -> None:
         """Missing RSI and z-score should emit momentum_missing note."""
-        from stock_mcp.tools.analyze import _build_oversold_composite
+        from stock_mcp.tools.analyze.dip_assessment import _build_oversold_composite
 
         result = _build_oversold_composite(
             rsi=None,
@@ -192,7 +192,7 @@ class TestDipAssessmentLogic:
 
     def test_action_zone_distance_labels(self) -> None:
         """Distance labels should be level-relative to current price."""
-        from stock_mcp.tools.analyze import _build_action_zones
+        from stock_mcp.tools.analyze.action_zones import build_action_zones
 
         current_price = 100.0
         tech_data = {
@@ -203,7 +203,7 @@ class TestDipAssessmentLogic:
         fund_data = {"valuation": {}, "yield_metrics": {}, "profitability": {}}
         risk_regime = {"classification": "extreme"}
 
-        result = _build_action_zones(
+        result = build_action_zones(
             current_price=current_price,
             tech_data=tech_data,
             risk_data=risk_data,

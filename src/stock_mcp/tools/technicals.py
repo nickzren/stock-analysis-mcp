@@ -8,10 +8,14 @@ from typing import Any
 import pandas as pd
 
 from stock_mcp.data.yfinance_client import fetch_history
+from stock_mcp.utils.helpers import safe_round
 from stock_mcp.utils.indicators import (
     calculate_atr,
+    calculate_bollinger_bands,
     calculate_ema,
+    calculate_fibonacci_levels,
     calculate_macd,
+    calculate_obv,
     calculate_returns,
     calculate_rsi,
     calculate_sma,
@@ -108,7 +112,7 @@ async def technicals(symbol: str) -> dict[str, Any]:
         "sma_200": round(sma_200_val, 2) if sma_200_val else None,
         "ema_12": round(ema_12_val, 2) if ema_12_val else None,
         "ema_26": round(ema_26_val, 2) if ema_26_val else None,
-        "sma_200_slope_pct_per_day": _safe_round(sma_200_slope, 6),
+        "sma_200_slope_pct_per_day": safe_round(sma_200_slope, 6),
         "price_vs_sma20": round(price_vs_sma20, 4) if price_vs_sma20 is not None else None,
         "price_vs_sma50": round(price_vs_sma50, 4) if price_vs_sma50 is not None else None,
         "price_vs_sma200": round(price_vs_sma200, 4) if price_vs_sma200 is not None else None,
@@ -274,14 +278,19 @@ async def technicals(symbol: str) -> dict[str, Any]:
 
     # Returns
     return_1w_zscore = _zscore_weekly_return(close, lookback_weeks=104)
+    return_1y = calculate_returns(close, 252)
+    if return_1y is None and len(close) >= 200:
+        # 1y fetches can be slightly short of 252 trading days.
+        return_1y = calculate_returns(close, len(close) - 1)
+
     returns = {
-        "return_1w": _safe_round(calculate_returns(close, 5), 4),
-        "return_1w_zscore": _safe_round(return_1w_zscore, 2),
-        "return_1m": _safe_round(calculate_returns(close, 21), 4),
-        "return_3m": _safe_round(calculate_returns(close, 63), 4),
-        "return_6m": _safe_round(calculate_returns(close, 126), 4),
+        "return_1w": safe_round(calculate_returns(close, 5), 4),
+        "return_1w_zscore": safe_round(return_1w_zscore, 2),
+        "return_1m": safe_round(calculate_returns(close, 21), 4),
+        "return_3m": safe_round(calculate_returns(close, 63), 4),
+        "return_6m": safe_round(calculate_returns(close, 126), 4),
         "return_ytd": _calculate_ytd_return(df),
-        "return_1y": _safe_round(calculate_returns(close, 252), 4),
+        "return_1y": safe_round(return_1y, 4),
     }
 
     # Volume
@@ -296,6 +305,51 @@ async def technicals(symbol: str) -> dict[str, Any]:
         "avg_20d": int(avg_volume_20d) if avg_volume_20d else None,
         "ratio": round(volume_ratio, 2) if volume_ratio else None,
     }
+
+    # Bollinger Bands
+    bb = calculate_bollinger_bands(close)
+    bollinger = {
+        **bb,
+        "rules": {
+            "above_upper": {
+                "triggered": current_price > bb["upper"] if bb["upper"] is not None else None,
+                "threshold": "price > upper_band",
+            },
+            "below_lower": {
+                "triggered": current_price < bb["lower"] if bb["lower"] is not None else None,
+                "threshold": "price < lower_band",
+            },
+            "squeeze": {
+                "triggered": bb["bandwidth"] is not None and bb["bandwidth"] < 0.05,
+                "threshold": "bandwidth < 0.05",
+            },
+        },
+    }
+
+    # On-Balance Volume
+    obv_series = calculate_obv(close, volume)
+    obv_data: dict[str, Any] = {"current": None, "sma_20": None, "trend": None}
+    if obv_series is not None and len(obv_series) >= 20:
+        obv_current = float(obv_series.iloc[-1])
+        obv_sma20 = float(obv_series.tail(20).mean())
+        obv_data = {
+            "current": round(obv_current, 0),
+            "sma_20": round(obv_sma20, 0),
+            "trend": "rising" if obv_current > obv_sma20 else "falling",
+        }
+
+    # Fibonacci retracement levels (52-week)
+    fib_levels: dict[str, Any] | None = None
+    w52_high = price_position.get("week_52_high")
+    w52_low = price_position.get("week_52_low")
+    if w52_high is not None and w52_low is not None and w52_high > w52_low:
+        fib_levels = calculate_fibonacci_levels(w52_high, w52_low)
+        # Find nearest support/resistance
+        fib_values = sorted(fib_levels.values())
+        nearest_support = max((v for v in fib_values if v <= current_price), default=None)
+        nearest_resistance = min((v for v in fib_values if v >= current_price), default=None)
+        fib_levels["nearest_support"] = nearest_support
+        fib_levels["nearest_resistance"] = nearest_resistance
 
     price_action = _build_price_action(close)
 
@@ -319,15 +373,13 @@ async def technicals(symbol: str) -> dict[str, Any]:
         "price_position": price_position,
         "returns": returns,
         "volume": volume_data,
+        "bollinger": bollinger,
+        "obv": obv_data,
+        "fibonacci": fib_levels,
         "price_action": price_action,
     }
 
 
-def _safe_round(value: float | None, decimals: int) -> float | None:
-    """Round value if not None."""
-    if value is None:
-        return None
-    return round(value, decimals)
 
 
 def _calculate_ytd_return(df: pd.DataFrame) -> float | None:

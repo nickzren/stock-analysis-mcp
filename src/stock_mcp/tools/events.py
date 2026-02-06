@@ -7,6 +7,7 @@ from typing import Any
 import pandas as pd
 
 from stock_mcp.data.yfinance_client import fetch_ticker
+from stock_mcp.utils.helpers import safe_float, safe_round
 from stock_mcp.utils.provenance import build_error_response, build_meta, build_provenance
 
 
@@ -55,8 +56,8 @@ async def events_calendar(symbol: str) -> dict[str, Any]:
         if earnings_dates is not None and len(earnings_dates) > 0:
             # earnings_dates is a DataFrame with columns like 'EPS Estimate', 'Reported EPS', etc.
             for date, row in earnings_dates.head(8).iterrows():
-                estimate = _safe_float(row.get("EPS Estimate"))
-                actual = _safe_float(row.get("Reported EPS"))
+                estimate = safe_float(row.get("EPS Estimate"))
+                actual = safe_float(row.get("Reported EPS"))
 
                 surprise = None
                 if estimate is not None and actual is not None and estimate != 0:
@@ -76,7 +77,7 @@ async def events_calendar(symbol: str) -> dict[str, Any]:
                         "date": date_str,
                         "estimate": estimate,
                         "actual": actual,
-                        "surprise": _safe_round(surprise, 4),
+                        "surprise": safe_round(surprise, 4),
                     }
                 )
     except Exception:
@@ -169,7 +170,7 @@ async def events_calendar(symbol: str) -> dict[str, Any]:
         "next_date_status_reason": earnings_date_status_reason if earnings_date_status == "unavailable" else None,
         "days_until": days_until_earnings,
         "history": earnings_history,
-        "beat_rate": _safe_round(beat_rate, 2),
+        "beat_rate": safe_round(beat_rate, 2),
     }
 
     # Dividends
@@ -186,9 +187,9 @@ async def events_calendar(symbol: str) -> dict[str, Any]:
             pay_date = _format_date(div_date)
 
     # Use pre-fetched info for dividend data
-    dividend_amount = _safe_float(info.get("lastDividendValue"))
-    annual_dividend = _safe_float(info.get("dividendRate"))
-    dividend_yield = _safe_float(info.get("dividendYield"))
+    dividend_amount = safe_float(info.get("lastDividendValue"))
+    annual_dividend = safe_float(info.get("dividendRate"))
+    dividend_yield = safe_float(info.get("dividendYield"))
     # Convert yield to decimal if it's in percentage form
     if dividend_yield is not None and dividend_yield > 1:
         dividend_yield = dividend_yield / 100
@@ -198,7 +199,7 @@ async def events_calendar(symbol: str) -> dict[str, Any]:
         "pay_date": pay_date,
         "amount": dividend_amount,
         "annual": annual_dividend,
-        "yield": _safe_round(dividend_yield, 4),
+        "yield": safe_round(dividend_yield, 4),
     }
 
     # Splits
@@ -232,11 +233,11 @@ async def events_calendar(symbol: str) -> dict[str, Any]:
     }
     analyst_warnings: list[str] = []
 
-    current_price = _safe_float(info.get("regularMarketPrice")) or _safe_float(info.get("currentPrice"))
+    current_price = safe_float(info.get("regularMarketPrice")) or safe_float(info.get("currentPrice"))
 
-    target_mean = _safe_float(info.get("targetMeanPrice"))
-    target_low = _safe_float(info.get("targetLowPrice"))
-    target_high = _safe_float(info.get("targetHighPrice"))
+    target_mean = safe_float(info.get("targetMeanPrice"))
+    target_low = safe_float(info.get("targetLowPrice"))
+    target_high = safe_float(info.get("targetHighPrice"))
     num_analysts = info.get("numberOfAnalystOpinions")
 
     if target_mean is not None:
@@ -249,7 +250,7 @@ async def events_calendar(symbol: str) -> dict[str, Any]:
             "mean": target_mean,
             "low": target_low,
             "high": target_high,
-            "upside": _safe_round(upside, 4),
+            "upside": safe_round(upside, 4),
         }
         analyst["num_analysts"] = num_analysts
 
@@ -304,21 +305,3 @@ def _format_date(value: Any) -> str | None:
     return None
 
 
-def _safe_float(value: Any) -> float | None:
-    """Convert to float or return None."""
-    if value is None:
-        return None
-    try:
-        result = float(value)
-        if pd.isna(result):
-            return None
-        return result
-    except (ValueError, TypeError):
-        return None
-
-
-def _safe_round(value: float | None, decimals: int) -> float | None:
-    """Round to decimals or return None."""
-    if value is None:
-        return None
-    return round(value, decimals)

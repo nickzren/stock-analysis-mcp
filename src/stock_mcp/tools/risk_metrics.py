@@ -81,6 +81,11 @@ async def risk_metrics(
 
     benchmark_df = None
     beta_data: dict[str, Any] = {"value": None, "warning": "benchmark_fetch_failed"}
+    benchmark_returns_summary: dict[str, float | None] = {
+        "return_1m": None,
+        "return_3m": None,
+        "return_1y": None,
+    }
 
     try:
         benchmark_df = await fetch_history(benchmark_params)
@@ -125,6 +130,12 @@ async def risk_metrics(
         benchmark_indexed = benchmark_indexed.set_index("date")
         benchmark_close = pd.to_numeric(benchmark_indexed["close"], errors="coerce")
         benchmark_returns = benchmark_close.pct_change().dropna()
+
+        benchmark_returns_summary = {
+            "return_1m": _calculate_period_return(benchmark_close, 21),
+            "return_3m": _calculate_period_return(benchmark_close, 63),
+            "return_1y": _calculate_period_return(benchmark_close, 252),
+        }
 
         # Create returns series with date index
         symbol_returns = pd.to_numeric(df_indexed["close"], errors="coerce").pct_change().dropna()
@@ -224,6 +235,7 @@ async def risk_metrics(
         },
         "symbol": params.symbol,
         "benchmark": benchmark,
+        "benchmark_returns": benchmark_returns_summary,
         "volatility": volatility,
         "beta": beta,
         "drawdown": drawdown,
@@ -367,6 +379,24 @@ def _build_position_sizing(
         "constraints": constraints,
         "recommended": recommended,
     }
+
+
+def _calculate_period_return(series: pd.Series, periods: int) -> float | None:
+    """Calculate period return using trading-day lookback (e.g., 21d ~= 1 month)."""
+    clean = pd.to_numeric(series, errors="coerce").dropna()
+    if len(clean) < 2:
+        return None
+
+    lookback = periods if len(clean) > periods else len(clean) - 1
+    if lookback <= 0:
+        return None
+
+    current = float(clean.iloc[-1])
+    prior = float(clean.iloc[-(lookback + 1)])
+    if prior <= 0:
+        return None
+
+    return round((current - prior) / prior, 4)
 
 
 def _build_market_context(benchmark_df: pd.DataFrame | None) -> dict[str, Any]:

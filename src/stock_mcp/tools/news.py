@@ -7,6 +7,7 @@ from typing import Any
 import pandas as pd
 
 from stock_mcp.data.yfinance_client import fetch_ticker
+from stock_mcp.utils.helpers import safe_float, safe_round
 from stock_mcp.utils.provenance import build_error_response, build_meta, build_provenance
 from stock_mcp.utils.sanitize import sanitize_text
 
@@ -19,6 +20,26 @@ NEGATIVE_KEYWORDS = {
     "miss", "missed", "decline", "loss", "cut", "downgrade", "sell",
     "weak", "bearish", "lawsuit", "investigation", "recall", "layoff",
     "warns", "warning", "falls", "drops", "lower", "slump", "plunge",
+}
+
+POSITIVE_BIGRAMS = {
+    "beat expectations", "raised guidance", "price target raised",
+    "strong demand", "market share gains", "record revenue",
+    "positive outlook", "margin expansion", "better than expected",
+    "earnings beat", "revenue beat", "analyst upgrade",
+    "buy rating", "outperform rating", "strong buy",
+    "raised dividend", "share buyback", "beat estimates",
+    "exceeded expectations", "strong growth",
+}
+
+NEGATIVE_BIGRAMS = {
+    "missed expectations", "lowered guidance", "price target cut",
+    "weak demand", "market share loss", "revenue decline",
+    "negative outlook", "margin compression", "worse than expected",
+    "earnings miss", "revenue miss", "analyst downgrade",
+    "sell rating", "underperform rating", "cut dividend",
+    "share dilution", "missed estimates", "below expectations",
+    "profit warning", "going concern",
 }
 
 
@@ -91,7 +112,8 @@ async def stock_news(symbol: str, days: int = 7) -> dict[str, Any]:
         if canonical:
             url = canonical.get("url")
 
-        sentiment = _score_sentiment(f"{title} {summary}")
+        sentiment_result = _score_sentiment(title, summary)
+        sentiment = sentiment_result["label"]
         articles.append({
             "date": pub_date_naive.strftime("%Y-%m-%d"),
             "title": title,
@@ -99,6 +121,8 @@ async def stock_news(symbol: str, days: int = 7) -> dict[str, Any]:
             "provider": provider,
             "url": url,
             "sentiment": sentiment,
+            "matched_positive": sentiment_result["matched_positive"] or None,
+            "matched_negative": sentiment_result["matched_negative"] or None,
         })
 
     # Sort by date descending
@@ -118,8 +142,8 @@ async def stock_news(symbol: str, days: int = 7) -> dict[str, Any]:
 
                 # Check if this earnings is within our lookback period and in the past
                 if cutoff_date <= earnings_date <= datetime.utcnow():
-                    estimate = _safe_float(row.get("EPS Estimate"))
-                    actual = _safe_float(row.get("Reported EPS"))
+                    estimate = safe_float(row.get("EPS Estimate"))
+                    actual = safe_float(row.get("Reported EPS"))
 
                     # Only include if we have actual reported earnings (not future)
                     if actual is not None:
@@ -136,8 +160,8 @@ async def stock_news(symbol: str, days: int = 7) -> dict[str, Any]:
                             "date": earnings_date.strftime("%Y-%m-%d"),
                             "eps_estimate": estimate,
                             "eps_actual": actual,
-                            "surprise": _safe_round(surprise, 4),
-                            "surprise_pct": _safe_round(surprise_pct, 4),
+                            "surprise": safe_round(surprise, 4),
+                            "surprise_pct": safe_round(surprise_pct, 4),
                             "beat_miss": beat_miss,
                         }
                         break  # Only get the most recent one
@@ -199,11 +223,26 @@ async def stock_news(symbol: str, days: int = 7) -> dict[str, Any]:
     # Sentiment confidence based on sample size (using 7d window for primary)
     sentiment_confidence = _derive_confidence(sample_size_7d)
 
+    # Aggregate unique triggers across all articles
+    all_positive_triggers: set[str] = set()
+    all_negative_triggers: set[str] = set()
+    for a in articles:
+        if a.get("matched_positive"):
+            all_positive_triggers.update(a["matched_positive"])
+        if a.get("matched_negative"):
+            all_negative_triggers.update(a["matched_negative"])
+
+    headline_triggers = {
+        "positive": sorted(all_positive_triggers)[:10],
+        "negative": sorted(all_negative_triggers)[:10],
+    } if all_positive_triggers or all_negative_triggers else None
+
     sentiment_summary = {
         "overall": overall_sentiment,
         "confidence": sentiment_confidence,
         "counts": sentiment_counts,
-        "method": "keyword_v1",
+        "method": "keyword_v2",
+        "headline_triggers": headline_triggers,
         # Recency windows for investors to weight recent news more heavily
         "sentiment_7d": sentiment_7d,
         "sample_size_7d": sample_size_7d,
@@ -238,34 +277,53 @@ async def stock_news(symbol: str, days: int = 7) -> dict[str, Any]:
     }
 
 
-def _safe_float(value: Any) -> float | None:
-    """Convert to float or return None."""
-    if value is None:
-        return None
-    try:
-        result = float(value)
-        if pd.isna(result):
-            return None
-        return result
-    except (ValueError, TypeError):
-        return None
 
 
-def _safe_round(value: float | None, decimals: int) -> float | None:
-    """Round to decimals or return None."""
-    if value is None:
-        return None
-    return round(value, decimals)
+def _score_sentiment(title: str, summary: str = "") -> dict[str, Any]:
+    """
+    Upgraded keyword+bigram sentiment scoring (v2).
 
+    Title is weighted 2x. Bigrams checked first (higher confidence).
+    Returns dict with sentiment label and matched triggers.
+    """
+    title_lower = title.lower()
+    summary_lower = summary.lower()
 
-def _score_sentiment(text: str) -> str:
-    """Simple keyword-based sentiment scoring."""
-    text_lower = text.lower()
-    pos = sum(1 for w in POSITIVE_KEYWORDS if w in text_lower)
-    neg = sum(1 for w in NEGATIVE_KEYWORDS if w in text_lower)
+    matched_positive: list[str] = []
+    matched_negative: list[str] = []
 
-    if pos > neg:
-        return "positive"
-    elif neg > pos:
-        return "negative"
-    return "neutral"
+    # Check bigrams first (higher confidence, weight 2)
+    for bg in POSITIVE_BIGRAMS:
+        if bg in title_lower or bg in summary_lower:
+            matched_positive.append(bg)
+    for bg in NEGATIVE_BIGRAMS:
+        if bg in title_lower or bg in summary_lower:
+            matched_negative.append(bg)
+
+    # Check unigrams (title weighted 2x)
+    for w in POSITIVE_KEYWORDS:
+        if w in title_lower or w in summary_lower:
+            matched_positive.append(w)
+    for w in NEGATIVE_KEYWORDS:
+        if w in title_lower or w in summary_lower:
+            matched_negative.append(w)
+
+    # Title match bonus: count title matches double
+    title_pos = sum(1 for w in POSITIVE_KEYWORDS if w in title_lower)
+    title_neg = sum(1 for w in NEGATIVE_KEYWORDS if w in title_lower)
+
+    pos_score = len(matched_positive) + title_pos  # title counted twice
+    neg_score = len(matched_negative) + title_neg
+
+    if pos_score > neg_score:
+        sentiment = "positive"
+    elif neg_score > pos_score:
+        sentiment = "negative"
+    else:
+        sentiment = "neutral"
+
+    return {
+        "label": sentiment,
+        "matched_positive": list(set(matched_positive))[:5],
+        "matched_negative": list(set(matched_negative))[:5],
+    }

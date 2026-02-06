@@ -5,6 +5,7 @@ from time import perf_counter
 from typing import Any
 
 from stock_mcp.data.yfinance_client import fetch_info
+from stock_mcp.utils.helpers import safe_float, safe_int, safe_round
 from stock_mcp.utils.provenance import build_error_response, build_meta, build_provenance
 from stock_mcp.utils.sanitize import sanitize_text
 
@@ -69,43 +70,15 @@ async def stock_summary(symbol: str) -> dict[str, Any]:
         "industry": sanitize_text(info.get("industry")),
         "exchange": info.get("exchange"),
         "currency": info.get("currency", "USD"),
-        "current_price": _safe_float(current_price),
-        "previous_close": _safe_float(previous_close),
-        "market_cap": _safe_int(info.get("marketCap")),
-        "avg_volume_30d": _safe_int(avg_volume),
-        "shares_outstanding": _safe_int(info.get("sharesOutstanding")),
-        "dividend_yield": _safe_round(div_yield, 4),
-        "employees": _safe_int(info.get("fullTimeEmployees")),
+        "current_price": safe_float(current_price),
+        "previous_close": safe_float(previous_close),
+        "market_cap": safe_int(info.get("marketCap")),
+        "avg_volume_30d": safe_int(avg_volume),
+        "shares_outstanding": safe_int(info.get("sharesOutstanding")),
+        "dividend_yield": safe_round(div_yield, 4),
+        "employees": safe_int(info.get("fullTimeEmployees")),
         "website": sanitize_text(info.get("website")),
         "description": sanitize_text(info.get("longBusinessSummary"), max_length=500),
     }
 
 
-def _safe_float(value: Any) -> float | None:
-    """Convert to float or return None."""
-    if value is None:
-        return None
-    try:
-        return float(value)
-    except (ValueError, TypeError):
-        return None
-
-
-def _safe_int(value: Any) -> int | None:
-    """Convert to int or return None."""
-    if value is None:
-        return None
-    try:
-        return int(value)
-    except (ValueError, TypeError):
-        return None
-
-
-def _safe_round(value: Any, decimals: int) -> float | None:
-    """Round to decimals or return None."""
-    if value is None:
-        return None
-    try:
-        return round(float(value), decimals)
-    except (ValueError, TypeError):
-        return None

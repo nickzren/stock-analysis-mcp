@@ -13,23 +13,25 @@ from stock_mcp.prompts.templates import get_prompt
 from stock_mcp.tools import (
     analyze_position,
     analyze_stock,
+    compare_stocks,
     data_quality_report,
     events_calendar,
     fundamentals_snapshot,
+    options_signals,
+    ownership_analysis,
     portfolio_exposure,
     price_history,
     stock_news,
     stock_summary,
     symbol_search,
     technicals,
+    what_changed,
 )
 
-# Configure logging
 log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(level=getattr(logging, log_level, logging.INFO))
 logger = logging.getLogger(__name__)
 
-# Create FastMCP server instance
 mcp = FastMCP(
     name="stock-analysis",
 )
@@ -456,6 +458,83 @@ async def analyze_portfolio(positions: list[dict[str, Any]]) -> str:
         JSON with concentration metrics, sector breakdown, correlation matrix, and liquidity analysis
     """
     result = await portfolio_exposure(positions=positions)
+    return json.dumps(result, indent=2, default=str)
+
+
+@mcp.tool
+async def get_ownership(symbol: str) -> str:
+    """
+    Get insider transactions and institutional ownership for a stock.
+
+    Includes insider buy/sell activity (3/6/12 month aggregates),
+    top 5 recent transactions, insider sentiment, and top 10 institutional holders.
+
+    Args:
+        symbol: Stock ticker symbol
+
+    Returns:
+        JSON with insider activity, institutional holders, and ownership summary
+    """
+    result = await ownership_analysis(symbol=symbol)
+    return json.dumps(result, indent=2, default=str)
+
+
+@mcp.tool
+async def get_options_signals(symbol: str) -> str:
+    """
+    Get options-derived signals for a stock.
+
+    Computes ATM implied volatility, IV/HV ratio, put/call ratios
+    (volume and open interest based), and flags unusual options activity.
+
+    Args:
+        symbol: Stock ticker symbol
+
+    Returns:
+        JSON with implied volatility, put/call ratios, and unusual activity flags
+    """
+    result = await options_signals(symbol=symbol)
+    return json.dumps(result, indent=2, default=str)
+
+
+@mcp.tool
+async def compare(symbols: list[str]) -> str:
+    """
+    Compare 2-5 stocks side by side across key metrics.
+
+    Compares valuation, growth, profitability, risk, technicals, and yield.
+    Ranks each stock per metric (direction-aware) and computes composite ranking.
+
+    Args:
+        symbols: List of 2-5 stock ticker symbols to compare
+
+    Returns:
+        JSON with comparison table, rankings, and per-symbol summaries
+    """
+    result = await compare_stocks(symbols=symbols)
+    return json.dumps(result, indent=2, default=str)
+
+
+@mcp.tool
+async def detect_changes(
+    symbol: str,
+    previous_snapshot: dict[str, Any] | None = None,
+) -> str:
+    """
+    Detect material changes for a stock since a previous snapshot.
+
+    Runs fresh analysis and diffs against previous watchlist_snapshot.
+    Identifies price moves >5%, score changes >0.10, tilt/zone/regime shifts,
+    and new or removed signals.
+
+    Args:
+        symbol: Stock ticker symbol
+        previous_snapshot: Previous watchlist_snapshot dict (optional - if omitted, returns current snapshot only)
+
+    Returns:
+        JSON with changes summary, key_changes list, and investment impact narrative
+    """
+    result = await what_changed(symbol=symbol, previous_snapshot=previous_snapshot)
     return json.dumps(result, indent=2, default=str)
 
 

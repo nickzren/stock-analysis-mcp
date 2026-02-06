@@ -5,6 +5,7 @@ from time import perf_counter
 from typing import Any
 
 from stock_mcp.tools.technicals import technicals
+from stock_mcp.utils.helpers import safe_round
 from stock_mcp.utils.provenance import build_error_response, build_meta
 
 
@@ -64,9 +65,9 @@ async def analyze_position(
         "cost_basis": cost_basis,
         "current_price": current_price,
         "shares": shares,
-        "current_value": _safe_round(current_value, 2),
-        "gain_loss": _safe_round(gain_loss, 4),
-        "gain_loss_dollars": _safe_round(gain_loss_dollars, 2),
+        "current_value": safe_round(current_value, 2),
+        "gain_loss": safe_round(gain_loss, 4),
+        "gain_loss_dollars": safe_round(gain_loss_dollars, 2),
     }
 
     # Holding period calculations
@@ -105,9 +106,9 @@ async def analyze_position(
         "type": tax_type,
         "rate_if_sold_now": rate_now,
         "rate_if_long_term": LONG_TERM_RATE,
-        "tax_on_gain_now": _safe_round(tax_on_gain_now, 2),
-        "tax_if_waited": _safe_round(tax_if_waited, 2),
-        "potential_savings": _safe_round(potential_savings, 2),
+        "tax_on_gain_now": safe_round(tax_on_gain_now, 2),
+        "tax_if_waited": safe_round(tax_if_waited, 2),
+        "potential_savings": safe_round(potential_savings, 2),
     }
 
     # Extract current signals from technicals
@@ -193,7 +194,7 @@ async def analyze_position(
     support_levels = {
         "sma_50": sma_50,
         "sma_200": sma_200,
-        "atr_1x_below": _safe_round(atr_1x_below, 2),
+        "atr_1x_below": safe_round(atr_1x_below, 2),
         "recent_low_1m": recent_low_1m,
     }
 
@@ -226,8 +227,3 @@ def _invert_nullable(value: bool | None) -> bool | None:
     return not value
 
 
-def _safe_round(value: float | None, decimals: int) -> float | None:
-    """Round to decimals or return None."""
-    if value is None:
-        return None
-    return round(value, decimals)

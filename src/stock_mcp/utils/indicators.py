@@ -360,3 +360,59 @@ def calculate_pairwise_correlations(
         "total_pairs": len(pairs),
         "pairs_with_data": len(valid_corrs),
     }
+
+
+def calculate_bollinger_bands(
+    prices: pd.Series, period: int = 20, std_dev: float = 2.0
+) -> dict[str, float | None]:
+    """Calculate Bollinger Bands."""
+    if prices is None or len(prices) < period:
+        return {"upper": None, "middle": None, "lower": None, "bandwidth": None, "pct_b": None}
+    sma = prices.rolling(window=period).mean()
+    std = prices.rolling(window=period).std()
+    upper = sma + std_dev * std
+    lower = sma - std_dev * std
+    current_price = float(prices.iloc[-1])
+    upper_val = float(upper.iloc[-1]) if not pd.isna(upper.iloc[-1]) else None
+    lower_val = float(lower.iloc[-1]) if not pd.isna(lower.iloc[-1]) else None
+    middle_val = float(sma.iloc[-1]) if not pd.isna(sma.iloc[-1]) else None
+    bandwidth = (upper_val - lower_val) / middle_val if upper_val and lower_val and middle_val else None
+    pct_b = (current_price - lower_val) / (upper_val - lower_val) if upper_val and lower_val and upper_val != lower_val else None
+    return {
+        "upper": round(upper_val, 2) if upper_val else None,
+        "middle": round(middle_val, 2) if middle_val else None,
+        "lower": round(lower_val, 2) if lower_val else None,
+        "bandwidth": round(bandwidth, 4) if bandwidth else None,
+        "pct_b": round(pct_b, 4) if pct_b is not None else None,
+    }
+
+
+def calculate_obv(close: pd.Series, volume: pd.Series) -> pd.Series | None:
+    """Calculate On-Balance Volume."""
+    if close is None or volume is None or len(close) < 2:
+        return None
+    obv = pd.Series(0.0, index=close.index)
+    for i in range(1, len(close)):
+        if close.iloc[i] > close.iloc[i - 1]:
+            obv.iloc[i] = obv.iloc[i - 1] + volume.iloc[i]
+        elif close.iloc[i] < close.iloc[i - 1]:
+            obv.iloc[i] = obv.iloc[i - 1] - volume.iloc[i]
+        else:
+            obv.iloc[i] = obv.iloc[i - 1]
+    return obv
+
+
+def calculate_fibonacci_levels(
+    high: float, low: float
+) -> dict[str, float]:
+    """Calculate Fibonacci retracement levels from high to low."""
+    diff = high - low
+    return {
+        "level_0": round(high, 2),
+        "level_236": round(high - 0.236 * diff, 2),
+        "level_382": round(high - 0.382 * diff, 2),
+        "level_500": round(high - 0.500 * diff, 2),
+        "level_618": round(high - 0.618 * diff, 2),
+        "level_786": round(high - 0.786 * diff, 2),
+        "level_1000": round(low, 2),
+    }

@@ -15,6 +15,7 @@ import pytz
 import yfinance as yf
 from requests.exceptions import HTTPError
 
+from stock_mcp.data.cache_manager import DataType, get_ttl, info_cache, ticker_cache
 from stock_mcp.utils.ohlcv import standardize_ohlcv
 from stock_mcp.utils.validators import FetchParams
 
@@ -451,7 +452,14 @@ async def fetch_history(params: FetchParams) -> pd.DataFrame:
         raise ServerShuttingDownError("Server is shutting down")
 
     def _fetch() -> pd.DataFrame:
-        df = yf.download(**params.to_yf_kwargs())
+        # Use per-symbol history instead of yf.download to avoid cross-symbol
+        # contamination when multiple symbols are fetched concurrently.
+        ticker = yf.Ticker(params.symbol)
+        df = ticker.history(
+            period=params.period,
+            interval=params.interval,
+            auto_adjust=params.adjusted,
+        )
         if df.empty:
             raise ValueError(f"No data returned for {params.symbol}")
         # Standardize here - single place for both preview and cache
@@ -478,7 +486,14 @@ async def fetch_history_with_provenance(params: FetchParams) -> tuple[pd.DataFra
         raise ServerShuttingDownError("Server is shutting down")
 
     def _fetch() -> pd.DataFrame:
-        df = yf.download(**params.to_yf_kwargs())
+        # Use per-symbol history instead of yf.download to avoid cross-symbol
+        # contamination when multiple symbols are fetched concurrently.
+        ticker = yf.Ticker(params.symbol)
+        df = ticker.history(
+            period=params.period,
+            interval=params.interval,
+            auto_adjust=params.adjusted,
+        )
         if df.empty:
             raise ValueError(f"No data returned for {params.symbol}")
         return standardize_ohlcv(df, params.adjusted)
@@ -592,7 +607,7 @@ async def _fetch_info_with_singleflight(
 
 async def fetch_info(symbol: str) -> dict[str, Any]:
     """
-    Fetch stock info (fundamentals, metadata) with retry logic and singleflight.
+    Fetch stock info (fundamentals, metadata) with TTL cache, retry logic, and singleflight.
 
     Args:
         symbol: Stock ticker symbol
@@ -606,7 +621,12 @@ async def fetch_info(symbol: str) -> dict[str, Any]:
         YFinanceIncompleteInfoError: If response missing fundamental data
         ValueError: If symbol is invalid
     """
+    normalized = symbol.upper().strip()
+    cached = info_cache.get(normalized)
+    if cached is not None:
+        return cached
     info, _, _ = await _fetch_info_with_singleflight(symbol)
+    info_cache.set(normalized, info, get_ttl(DataType.FUNDAMENTALS))
     return info
 
 
@@ -628,7 +648,7 @@ async def fetch_info_with_provenance(symbol: str) -> tuple[dict[str, Any], dict[
 
 async def fetch_ticker(symbol: str) -> yf.Ticker:
     """
-    Get yfinance Ticker object with retry logic.
+    Get yfinance Ticker object with TTL cache and retry logic.
 
     Args:
         symbol: Stock ticker symbol
@@ -644,6 +664,9 @@ async def fetch_ticker(symbol: str) -> yf.Ticker:
         raise ServerShuttingDownError("Server is shutting down")
 
     normalized_symbol = symbol.upper().strip()
+    cached = ticker_cache.get(normalized_symbol)
+    if cached is not None:
+        return cached
 
     def _fetch() -> yf.Ticker:
         return yf.Ticker(normalized_symbol)
@@ -653,7 +676,9 @@ async def fetch_ticker(symbol: str) -> yf.Ticker:
             f"fetch_ticker({normalized_symbol})",
             _fetch,
         )
-        return retry_result.result
+        ticker_obj = retry_result.result
+        ticker_cache.set(normalized_symbol, ticker_obj, get_ttl(DataType.TICKER))
+        return ticker_obj
 
 
 def get_market_state(tz: str = "America/New_York") -> dict[str, str]:
