@@ -82,7 +82,7 @@ flowchart LR
 
 Color legend: `blue=client`, `green=entry`, `orange=engine`, `purple=data`, `red=output`.
 
-Node map: `S=src/stock_mcp/server.py`, `O=src/stock_mcp/tools/analyze/orchestrator.py`, `D=src/stock_mcp/data/`.
+Node map: `S=src/stock_analysis/server.py`, `O=src/stock_analysis/tools/analyze/orchestrator.py`, `D=src/stock_analysis/data/`.
 
 Output shape details are documented in `Usage -> Full Analysis (Recommended)`.
 
@@ -115,39 +115,16 @@ sequenceDiagram
 
 ## Quick Start
 
-### Prerequisites
+### Claude Code
 
 ```bash
-# Clone the repository
-git clone https://github.com/nickzren/stock-analysis-mcp.git
-cd stock-analysis-mcp
-
-# Install dependencies
-uv pip install -e .
+claude mcp add stock-analysis -- uvx --from git+https://github.com/nickzren/stock-analysis-mcp stock-analysis
 ```
 
-### Claude Code (VS Code)
-
-Ask Claude Code to add the server:
-
-> "Add the stock-analysis MCP server from this directory"
-
-Or run manually:
+### Codex
 
 ```bash
-claude mcp add stock-analysis -- uv --directory /path/to/stock-analysis-mcp run stock-mcp
-```
-
-### Codex (VS Code)
-
-Ask Codex to add the server:
-
-> "Add the stock-analysis MCP server from this directory"
-
-Or run manually:
-
-```bash
-codex mcp add stock-analysis -- uv --directory /path/to/stock-analysis-mcp run stock-mcp
+codex mcp add stock-analysis -- uvx --from git+https://github.com/nickzren/stock-analysis-mcp stock-analysis
 ```
 
 ## Usage
