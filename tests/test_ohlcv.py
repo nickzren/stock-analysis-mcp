@@ -2,7 +2,7 @@
 
 import pandas as pd
 
-from stock_mcp.utils.ohlcv import df_to_csv, df_to_rows, standardize_ohlcv
+from stock_analysis.utils.ohlcv import df_to_csv, df_to_rows, standardize_ohlcv
 
 
 class TestStandardizeOhlcv:

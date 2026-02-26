@@ -2,7 +2,7 @@
 
 import math
 
-from stock_mcp.data.yfinance_client import (
+from stock_analysis.data.yfinance_client import (
     INFO_CORE_FUND_SENTINELS,
     INFO_FUND_SENTINELS,
     YFinanceIncompleteInfoError,

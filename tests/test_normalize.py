@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from stock_mcp.utils.normalize import (
+from stock_analysis.utils.normalize import (
     SNAPSHOT_VERSION,
     build_watchlist_snapshot,
     canonical_dumps,

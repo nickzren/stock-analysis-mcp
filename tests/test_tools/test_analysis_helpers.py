@@ -3,8 +3,8 @@
 import numpy as np
 import pandas as pd
 
-from stock_mcp.tools.analyze.decision_context import build_relative_performance
-from stock_mcp.tools.fundamentals import _compute_valuation_history
+from stock_analysis.tools.analyze.decision_context import build_relative_performance
+from stock_analysis.tools.fundamentals import _compute_valuation_history
 
 
 class _FakeTicker:

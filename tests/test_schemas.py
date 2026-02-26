@@ -1,8 +1,8 @@
 """Tests for response schemas."""
 
 
-from stock_mcp import SCHEMA_VERSION, SERVER_VERSION
-from stock_mcp.utils.provenance import build_error_response, build_meta, build_provenance
+from stock_analysis import SCHEMA_VERSION, SERVER_VERSION
+from stock_analysis.utils.provenance import build_error_response, build_meta, build_provenance
 
 
 class TestBuildMeta:

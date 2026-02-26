@@ -4,7 +4,7 @@ import operator
 
 import pytest
 
-from stock_mcp.utils.validators import (
+from stock_analysis.utils.validators import (
     VALID_INTERVALS,
     VALID_PERIODS,
     FetchParams,

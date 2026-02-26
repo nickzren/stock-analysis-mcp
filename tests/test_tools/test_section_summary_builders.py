@@ -5,7 +5,7 @@ Tests focus on: returns a string/None as expected, includes key signals,
 and doesn't crash on missing/None inputs.
 """
 
-from stock_mcp.tools.analyze.summaries import (
+from stock_analysis.tools.analyze.summaries import (
     build_analyst_summary_text,
     build_dip_summary_text,
     build_fundamentals_summary_text,

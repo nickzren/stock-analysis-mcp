@@ -1,7 +1,7 @@
 """Tests for URI canonicalization."""
 
 
-from stock_mcp.utils.validators import FetchParams
+from stock_analysis.utils.validators import FetchParams
 
 
 class TestURICanonicalization:

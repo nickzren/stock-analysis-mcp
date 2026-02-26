@@ -1,7 +1,7 @@
 """Tests for text sanitization."""
 
 
-from stock_mcp.utils.sanitize import sanitize_text
+from stock_analysis.utils.sanitize import sanitize_text
 
 
 class TestSanitizeText:

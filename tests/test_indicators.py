@@ -4,7 +4,7 @@ import math
 
 import pandas as pd
 
-from stock_mcp.utils.indicators import (
+from stock_analysis.utils.indicators import (
     calculate_atr,
     calculate_beta,
     calculate_current_drawdown,

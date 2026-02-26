@@ -1,1 +1,1 @@
-"""Tests for stock-mcp."""
+"""Tests for stock-analysis."""
