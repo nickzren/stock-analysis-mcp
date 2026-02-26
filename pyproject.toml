@@ -9,7 +9,7 @@ authors = [{ name = "Stock Analysis MCP" }]
 keywords = ["mcp", "stock", "analysis", "claude", "fastmcp"]
 
 dependencies = [
-    "fastmcp>=2.0.0,<3",
+    "fastmcp>=3.0.2,<4",
     "yfinance>=0.2.40",
     "pandas>=2.0.0",
     "numpy>=1.24.0",
