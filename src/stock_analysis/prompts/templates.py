@@ -54,90 +54,24 @@ def get_prompt(name: str, arguments: dict[str, str]) -> dict[str, Any] | None:
             "messages": [
                 {
                     "role": "user",
-                    "content": f"""Analyze {symbol}.
+                    "content": f"""Analyze {symbol} with the single `analyze` tool first.
 
-Execute these tools in order:
-1. get_stock_summary("{symbol}")
-2. get_news("{symbol}")
-3. get_technicals("{symbol}")
-4. get_fundamentals("{symbol}")
-5. get_events("{symbol}")
+Use `analyze("{symbol}")` by default.
+If the user gives an account size, include it:
+`analyze("{symbol}", account_size=<value>)`
 
-Then return your analysis as a JSON object with this exact structure:
+Do not manually reconstruct the report from secondary tools unless `analyze` fails.
 
-```json
-{{
-  "symbol": "{symbol}",
-  "analysis_date": "YYYY-MM-DD",
-  "company": {{
-    "name": "...",
-    "sector": "...",
-    "industry": "...",
-    "market_cap": "...",
-    "description": "1-2 sentence summary"
-  }},
-  "price": {{
-    "current": 0.00,
-    "change_1d": 0.00,
-    "change_1m": 0.00,
-    "change_ytd": 0.00,
-    "vs_52w_high": 0.00,
-    "vs_52w_low": 0.00
-  }},
-  "news_summary": {{
-    "sentiment": "positive|neutral|negative|mixed",
-    "key_themes": ["theme1", "theme2"],
-    "notable_events": ["event1", "event2"]
-  }},
-  "technicals": {{
-    "trend": "bullish|bearish|neutral",
-    "signals": {{
-      "bullish": ["signal1", "signal2"],
-      "bearish": ["signal1", "signal2"]
-    }},
-    "support_levels": [0.00, 0.00],
-    "resistance_levels": [0.00, 0.00]
-  }},
-  "fundamentals": {{
-    "valuation": "undervalued|fair|overvalued",
-    "pe_ratio": 0.00,
-    "peg_ratio": 0.00,
-    "profit_margin": 0.00,
-    "revenue_growth": 0.00,
-    "debt_to_equity": 0.00
-  }},
-  "risk": {{
-    "level": "low|medium|high",
-    "volatility_annual": 0.00,
-    "beta": 0.00,
-    "max_drawdown": 0.00,
-    "var_95": 0.00
-  }},
-  "events": {{
-    "next_earnings": "YYYY-MM-DD or null",
-    "days_to_earnings": 0,
-    "dividend_yield": 0.00
-  }},
-  "thesis": {{
-    "summary": "2-3 sentence investment thesis",
-    "bull_case": "Key reason to be bullish",
-    "bear_case": "Key reason to be bearish",
-    "catalysts": ["catalyst1", "catalyst2"]
-  }},
-  "verdict": {{
-    "action": "BUY|HOLD|SELL|WATCH",
-    "confidence": "high|medium|low",
-    "reasoning": "1-2 sentence justification"
-  }}
-}}
-```
+When you present the result, lead with:
+1. `executive_summary`
+2. `dislocation_framework`
+3. `policy_action`
+4. `decision_modes.core`
+5. `decision_modes.balanced`
+6. `decision_modes.speculative`
+7. `verdict`, `action_zones`, `dip_assessment`, and the catalyst-rich `news_summary`
 
-IMPORTANT:
-- Use null for any unavailable data
-- Round numbers to 2 decimal places
-- Keep text fields concise
-- The JSON must be valid and parseable
-- Do not add any fields not in the schema above""",
+Keep the response decision-focused and use the exact fields from the tool output instead of inventing a new schema.""",
                 }
             ]
         }
@@ -150,13 +84,11 @@ IMPORTANT:
                     "role": "user",
                     "content": f"""Analyze {symbol} as a growth investment.
 
-Use these tools in order:
-1. get_stock_summary("{symbol}")
-2. analyze("{symbol}")
+Use `analyze("{symbol}")` first. Only call secondary tools if something critical is missing.
 
 Then provide:
 1. **Thesis** (2-3 sentences): Why this is/isn't a good growth investment
-2. **Key Metrics**: Revenue growth, EPS growth, momentum signals
+2. **Key Metrics**: Revenue growth, EPS growth, momentum signals, next catalyst
 3. **Risks**: Top 3 risks
 4. **Action**: Buy / Wait / Pass with specific reasoning
 
@@ -173,9 +105,7 @@ Be direct. No hedging.""",
                     "role": "user",
                     "content": f"""Analyze {symbol} as a value investment.
 
-Use these tools in order:
-1. get_stock_summary("{symbol}")
-2. analyze("{symbol}")
+Use `analyze("{symbol}")` first. Only call secondary tools if valuation support is unclear.
 
 Then provide:
 1. **Thesis** (2-3 sentences): Why this is/isn't undervalued

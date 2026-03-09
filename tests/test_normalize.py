@@ -204,7 +204,7 @@ class TestBuildWatchlistSnapshot:
             },
             "risk_summary": {
                 "risk_regime": {"classification": "medium"},
-                "volatility_ann": 0.25,
+                "annualized_volatility": 0.25,
             },
             "events_summary": {
                 "next_catalyst": {
@@ -232,7 +232,22 @@ class TestBuildWatchlistSnapshot:
         assert snapshot["action_long_term"] == "accumulate"
         assert snapshot["valuation_gate"] == "neutral"
         assert snapshot["risk_regime"] == "medium"
+        assert snapshot["volatility_ann"] == 0.25
         assert snapshot["next_catalyst"]["status"] == "available"
+
+    def test_prefers_new_risk_summary_volatility_field(self):
+        """Should read annualized_volatility while preserving backward compatibility."""
+        raw = {
+            "symbol": "AAPL",
+            "risk_summary": {
+                "risk_regime": {"classification": "high"},
+                "annualized_volatility": 0.42,
+            },
+        }
+
+        snapshot = build_watchlist_snapshot(raw)
+
+        assert snapshot["volatility_ann"] == 0.42
 
     def test_handles_missing_fields(self):
         """Should handle missing optional fields gracefully."""

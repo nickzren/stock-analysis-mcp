@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from time import perf_counter
 from typing import Any
 
-from stock_analysis.data.yfinance_client import fetch_ticker
+from stock_analysis.data.yfinance_client import fetch_info, fetch_ticker
 from stock_analysis.utils.helpers import safe_float, safe_round
 from stock_analysis.utils.provenance import build_error_response, build_meta, build_provenance
 
@@ -31,9 +31,8 @@ async def options_signals(symbol: str) -> dict[str, Any]:
             symbol=normalized_symbol,
         )
 
-    # Get current price
     try:
-        info = ticker.info
+        info = await fetch_info(symbol)
     except Exception:
         info = {}
 
@@ -132,10 +131,9 @@ def _pick_expiration(expirations: tuple[str, ...] | list[str]) -> str | None:
             exp_date = datetime.strptime(exp_str, "%Y-%m-%d").date()
         except ValueError:
             continue
-        if min_date <= exp_date <= max_date:
-            if best_dt is None or exp_date < best_dt:
-                best = exp_str
-                best_dt = exp_date
+        if min_date <= exp_date <= max_date and (best_dt is None or exp_date < best_dt):
+            best = exp_str
+            best_dt = exp_date
 
     return best
 

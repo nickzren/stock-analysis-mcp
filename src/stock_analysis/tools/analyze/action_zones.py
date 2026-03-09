@@ -7,6 +7,109 @@ from stock_analysis.utils.helpers import (
 )
 
 
+def build_position_sizing_range(
+    current_price: float | None,
+    stop_calculation: dict[str, Any] | None,
+    regime_classification: str | None,
+    investor_profile: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build a position sizing range from risk regime and profile inputs."""
+    normalized_regime = "medium" if regime_classification == "moderate" else regime_classification
+    investor_profile = investor_profile or {}
+    account_size = investor_profile.get("account_size")
+    starter_position_pct = investor_profile.get("starter_position_pct")
+    profile_max_position_pct = investor_profile.get("max_position_pct")
+    risk_per_trade_pct = investor_profile.get("risk_per_trade_pct") or 1.0
+
+    position_sizing_range: dict[str, Any]
+    if normalized_regime == "extreme":
+        pct_min, pct_max = 0.5, 3.0
+        position_sizing_range = {
+            "suggested_pct_range": [pct_min, pct_max],
+            "max_pct": pct_max,
+            "rationale": "extreme_risk_requires_minimal_exposure",
+        }
+    elif normalized_regime == "high":
+        pct_min, pct_max = 2.0, 6.0
+        position_sizing_range = {
+            "suggested_pct_range": [pct_min, pct_max],
+            "max_pct": pct_max,
+            "rationale": "high_risk_warrants_conservative_sizing",
+        }
+    elif normalized_regime == "medium":
+        pct_min, pct_max = 3.0, 8.0
+        position_sizing_range = {
+            "suggested_pct_range": [pct_min, pct_max],
+            "max_pct": pct_max,
+            "rationale": "moderate_risk_standard_sizing",
+        }
+    else:
+        pct_min, pct_max = 3.0, 10.0
+        position_sizing_range = {
+            "suggested_pct_range": [pct_min, pct_max],
+            "max_pct": pct_max,
+            "rationale": "low_risk_allows_larger_positions",
+        }
+
+    if starter_position_pct is not None:
+        pct_min = round(min(pct_min, starter_position_pct), 1)
+    if profile_max_position_pct is not None:
+        pct_max = round(min(pct_max, profile_max_position_pct), 1)
+    if pct_max < pct_min:
+        pct_min = pct_max
+
+    position_sizing_range["suggested_pct_range"] = [pct_min, pct_max]
+    position_sizing_range["max_pct"] = pct_max
+    position_sizing_range["starter_pct"] = pct_min
+    position_sizing_range["risk_per_trade_pct"] = round(float(risk_per_trade_pct), 2)
+    position_sizing_range["profile_cap_pct"] = profile_max_position_pct
+
+    dollar_min: float | None = None
+    dollar_max: float | None = None
+    if account_size is not None:
+        dollar_min = round(account_size * pct_min / 100, 2)
+        dollar_max = round(account_size * pct_max / 100, 2)
+        position_sizing_range["dollars_for_account"] = {
+            "min": dollar_min,
+            "max": dollar_max,
+            "portfolio_assumption": account_size,
+        }
+    else:
+        position_sizing_range["dollars_for_account"] = None
+
+    if current_price and current_price > 0 and dollar_min is not None and dollar_max is not None:
+        shares_min = int(dollar_min / current_price)
+        shares_max = int(dollar_max / current_price)
+        position_sizing_range["shares_range"] = {
+            "min": shares_min,
+            "max": shares_max,
+            "at_price": current_price,
+        }
+    else:
+        position_sizing_range["shares_range"] = None
+
+    stop_distance = stop_calculation.get("stop_distance_pct") if stop_calculation else None
+    if stop_distance and stop_distance > 0:
+        stop_implied_pct = round(float(risk_per_trade_pct) / stop_distance, 1)
+        if stop_implied_pct > pct_max:
+            stop_implied_pct = pct_max
+        stop_implied_dollars = (
+            round(account_size * stop_implied_pct / 100, 2)
+            if account_size is not None
+            else None
+        )
+        position_sizing_range["stop_implied_max"] = {
+            "pct": stop_implied_pct,
+            "dollars_for_account": stop_implied_dollars,
+            "risk_per_trade_pct": round(float(risk_per_trade_pct), 2),
+            "stop_distance_pct": round(stop_distance * 100, 1),
+        }
+    else:
+        position_sizing_range["stop_implied_max"] = None
+
+    return position_sizing_range
+
+
 def build_action_zones(
     current_price: float | None,
     tech_data: dict[str, Any],
@@ -14,6 +117,7 @@ def build_action_zones(
     fund_data: dict[str, Any],
     risk_regime: dict[str, Any] | None = None,
     signals: dict[str, list[str]] | None = None,
+    investor_profile: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Build action zones with ATR-based price levels.
@@ -332,77 +436,12 @@ def build_action_zones(
     elif is_high_regime:
         zone_warnings.append("high_risk_regime:size_conservatively")
 
-    # Position sizing range based on risk regime
-    # These are suggested ranges as % of portfolio
-    # Default portfolio value for dollar calculations
-    default_portfolio_value = 50000.0
-
-    position_sizing_range: dict[str, Any]
-    if is_extreme_regime:
-        pct_min, pct_max = 0.5, 3.0
-        position_sizing_range = {
-            "suggested_pct_range": [pct_min, pct_max],
-            "max_pct": pct_max,
-            "rationale": "extreme_risk_requires_minimal_exposure",
-        }
-    elif is_high_regime:
-        pct_min, pct_max = 2.0, 6.0
-        position_sizing_range = {
-            "suggested_pct_range": [pct_min, pct_max],
-            "max_pct": pct_max,
-            "rationale": "high_risk_warrants_conservative_sizing",
-        }
-    elif regime_classification == "medium":
-        pct_min, pct_max = 3.0, 8.0
-        position_sizing_range = {
-            "suggested_pct_range": [pct_min, pct_max],
-            "max_pct": pct_max,
-            "rationale": "moderate_risk_standard_sizing",
-        }
-    else:
-        # low risk or unknown
-        pct_min, pct_max = 3.0, 10.0
-        position_sizing_range = {
-            "suggested_pct_range": [pct_min, pct_max],
-            "max_pct": pct_max,
-            "rationale": "low_risk_allows_larger_positions",
-        }
-
-    # Add dollar amounts for default portfolio size
-    dollar_min = round(default_portfolio_value * pct_min / 100, 0)
-    dollar_max = round(default_portfolio_value * pct_max / 100, 0)
-    position_sizing_range["dollars_for_50k"] = {
-        "min": dollar_min,
-        "max": dollar_max,
-        "portfolio_assumption": default_portfolio_value,
-    }
-
-    # Add shares range at current price
-    if current_price and current_price > 0:
-        shares_min = int(dollar_min / current_price)
-        shares_max = int(dollar_max / current_price)
-        position_sizing_range["shares_range"] = {
-            "min": shares_min,
-            "max": shares_max,
-            "at_price": current_price,
-        }
-
-    # Add stop-implied max size (risk 1% of portfolio per trade)
-    stop_distance = stop_calculation.get("stop_distance_pct") if stop_calculation else None
-    if stop_distance and stop_distance > 0:
-        # 1% risk rule: max_position = (portfolio * 0.01) / stop_distance
-        risk_pct = 1.0  # Risk 1% of portfolio on a single trade
-        stop_implied_pct = round((risk_pct / stop_distance) * 100, 1)
-        # Cap at the max_pct from risk regime
-        if stop_implied_pct > pct_max:
-            stop_implied_pct = pct_max
-        stop_implied_dollars = round(default_portfolio_value * stop_implied_pct / 100, 0)
-        position_sizing_range["stop_implied_max"] = {
-            "pct": stop_implied_pct,
-            "dollars_for_50k": stop_implied_dollars,
-            "risk_per_trade_pct": risk_pct,
-            "stop_distance_pct": round(stop_distance * 100, 1),
-        }
+    position_sizing_range = build_position_sizing_range(
+        current_price=current_price,
+        stop_calculation=stop_calculation,
+        regime_classification=regime_classification,
+        investor_profile=investor_profile,
+    )
 
     return {
         "current_zone": current_zone,
@@ -442,11 +481,10 @@ def apply_dip_gates_to_action_zones(
 
     if dip_type == "falling_knife":
         _cap_zone("zone_capped_falling_knife")
-    elif dip_type == "extended_decline":
-        if current_zone == "strong_buy":
-            current_zone = "accumulate"
-            if "zone_capped_extended_decline" not in zone_warnings:
-                zone_warnings.append("zone_capped_extended_decline")
+    elif dip_type == "extended_decline" and current_zone == "strong_buy":
+        current_zone = "accumulate"
+        if "zone_capped_extended_decline" not in zone_warnings:
+            zone_warnings.append("zone_capped_extended_decline")
 
     if risk_label == "extreme":
         _cap_zone("zone_capped_extreme_risk")

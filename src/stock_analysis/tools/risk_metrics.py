@@ -1,6 +1,7 @@
 """Risk metrics tool."""
 
 import operator
+from contextlib import suppress
 from datetime import datetime
 from time import perf_counter
 from typing import Any
@@ -24,8 +25,8 @@ from stock_analysis.utils.validators import FetchParams, check_rule
 async def risk_metrics(
     symbol: str,
     benchmark: str = "SPY",
-    portfolio_value: float = 50000,
-    risk_per_trade: float = 0.02,
+    portfolio_value: float | None = None,
+    risk_per_trade: float | None = None,
 ) -> dict[str, Any]:
     """
     Calculate risk metrics for a symbol.
@@ -33,8 +34,8 @@ async def risk_metrics(
     Args:
         symbol: Stock ticker symbol
         benchmark: Benchmark symbol for beta calculation (default: SPY)
-        portfolio_value: Portfolio value for position sizing (default: 50000)
-        risk_per_trade: Risk per trade as decimal (default: 0.02 = 2%)
+        portfolio_value: Portfolio value for position sizing
+        risk_per_trade: Risk per trade as decimal (e.g. 0.01 = 1%)
 
     Returns:
         Dict with volatility, beta, drawdown, VaR, ATR, liquidity, position sizing
@@ -87,10 +88,8 @@ async def risk_metrics(
         "return_1y": None,
     }
 
-    try:
+    with suppress(Exception):
         benchmark_df = await fetch_history(benchmark_params)
-    except Exception:
-        pass  # Beta will show warning
 
     # Extract price series
     close = pd.to_numeric(df["close"], errors="coerce")
@@ -291,8 +290,8 @@ def _build_stop_suggestions(
 
 
 def _build_position_sizing(
-    portfolio_value: float,
-    risk_per_trade: float,
+    portfolio_value: float | None,
+    risk_per_trade: float | None,
     current_price: float | None,
     avg_dollar_volume: float | None,
     stop_suggestions: dict[str, dict[str, float | None]],
@@ -306,18 +305,22 @@ def _build_position_sizing(
     }
 
     # Constraints
-    max_by_concentration = portfolio_value * max_concentration
+    max_by_concentration = (
+        portfolio_value * max_concentration
+        if portfolio_value is not None and portfolio_value > 0
+        else None
+    )
     max_by_liquidity = (
         avg_dollar_volume * 0.01 if avg_dollar_volume and avg_dollar_volume > 0 else None
     )
 
     constraints = {
-        "max_by_concentration": round(max_by_concentration, 2),
+        "max_by_concentration": round(max_by_concentration, 2) if max_by_concentration else None,
         "max_by_liquidity": round(max_by_liquidity, 2) if max_by_liquidity else None,
     }
 
     # Position size by stop level
-    by_stop_level: dict[str, dict[str, float | int]] = {}
+    by_stop_level: dict[str, dict[str, float | int | str | None]] = {}
     recommended: dict[str, Any] = {
         "stop_level": None,
         "position_dollars": 0,
@@ -338,15 +341,22 @@ def _build_position_sizing(
             by_stop_level[stop_level] = {"position_dollars": 0, "shares": 0}
             continue
 
+        if portfolio_value is None or portfolio_value <= 0 or risk_per_trade is None or risk_per_trade <= 0:
+            by_stop_level[stop_level] = {
+                "position_dollars": None,
+                "shares": None,
+                "binding_constraint": "account_size_or_risk_budget_missing",
+            }
+            continue
+
         # stop_distance is negative (e.g., -0.05 for 5% below)
         risk_amount = portfolio_value * risk_per_trade
         position_by_risk = risk_amount / abs(stop_distance)
 
         # Apply constraints (fixed priority order for tie-breaking)
-        constraint_list = [
-            ("risk_budget", position_by_risk),
-            ("concentration", max_by_concentration),
-        ]
+        constraint_list = [("risk_budget", position_by_risk)]
+        if max_by_concentration is not None:
+            constraint_list.append(("concentration", max_by_concentration))
         if max_by_liquidity is not None:
             constraint_list.append(("liquidity", max_by_liquidity))
 
@@ -472,10 +482,8 @@ def _build_market_context(benchmark_df: pd.DataFrame | None) -> dict[str, Any]:
     # Check for invalid/suspicious SPY price
     if current_spy <= 0:
         sanity_warnings.append("spy_price_invalid")
-    elif current_spy > 1000:
-        # SPY has never been above $600 historically as of 2024
-        # Flag if > 1000 as potentially suspicious (though could be valid in future)
-        sanity_warnings.append("spy_price_unusually_high")
+    elif sma_200_val is not None and current_spy > sma_200_val * 3:
+        sanity_warnings.append("spy_price_outlier_vs_sma200")
 
     # Check for missing SMAs
     if sma_200_val is None:

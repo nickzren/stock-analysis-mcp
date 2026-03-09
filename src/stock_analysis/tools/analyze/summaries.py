@@ -270,10 +270,7 @@ def build_valuation_context_summary_text(valuation_context: dict[str, Any]) -> s
     if not parts:
         return None
     summary = "; ".join(parts)
-    if status_reason:
-        summary = f"{summary}. History unavailable."
-    else:
-        summary = f"{summary}."
+    summary = f"{summary}. History unavailable." if status_reason else f"{summary}."
     return summary
 
 
@@ -283,10 +280,21 @@ def build_news_summary_text(news_summary: dict[str, Any]) -> str | None:
     article_count = news_summary.get("article_count")
     sentiment = (news_summary.get("sentiment") or {}).get("overall")
     confidence = (news_summary.get("sentiment") or {}).get("confidence")
+    catalyst_intelligence = news_summary.get("catalyst_intelligence") or {}
+    bullish_catalysts = catalyst_intelligence.get("bullish") or []
+    bearish_catalysts = catalyst_intelligence.get("bearish") or []
 
     parts: list[str] = []
     if article_count is not None:
         parts.append(f"{article_count} recent headlines")
+    if bullish_catalysts:
+        top = ", ".join(item.get("tag", "").replace("_", " ") for item in bullish_catalysts[:2] if item.get("tag"))
+        if top:
+            parts.append(f"bullish catalysts {top}")
+    if bearish_catalysts:
+        top = ", ".join(item.get("tag", "").replace("_", " ") for item in bearish_catalysts[:2] if item.get("tag"))
+        if top:
+            parts.append(f"risks {top}")
     if sentiment:
         if confidence is not None:
             if isinstance(confidence, (int, float)) and not isinstance(confidence, bool):

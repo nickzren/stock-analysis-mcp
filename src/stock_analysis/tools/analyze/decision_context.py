@@ -163,6 +163,17 @@ def build_decision_context(
             return comp_score * weight  # No rounding - preserve full precision
         return None
 
+    def _aligned_score_delta(category: str, direction: str) -> float | None:
+        """Only keep scoring drivers whose sign matches the trigger direction."""
+        score_delta = _calc_score_delta(category)
+        if score_delta is None:
+            return None
+        if direction == "bearish" and score_delta >= 0:
+            return None
+        if direction == "bullish" and score_delta <= 0:
+            return None
+        return score_delta
+
     # Get component scores for display
     risk_component = components.get("risk")
     fund_component = components.get("fundamentals")
@@ -171,7 +182,7 @@ def build_decision_context(
     # Add bearish triggers first (most important for risk awareness)
     # Collapse risk regime with supporting details to avoid double-counting
     if risk_label in ("high", "extreme"):
-        score_delta = _calc_score_delta("risk")
+        score_delta = _aligned_score_delta("risk", "bearish")
         # Build detailed reason with supporting factors
         risk_summary = verdict.get("inputs_used", {})
         vol_val = risk_summary.get("annualized_vol")
@@ -198,7 +209,7 @@ def build_decision_context(
         if fcf is not None and fcf < 0:
             reason_parts.append("negative_fcf")
         reason = " and ".join(reason_parts) if reason_parts else f"business_quality={business_quality}"
-        score_delta = _calc_score_delta("fundamentals")
+        score_delta = _aligned_score_delta("fundamentals", "bearish")
         trigger: dict[str, Any] = {
             "id": "weak_business_quality",
             "category": "fundamentals",
@@ -228,7 +239,7 @@ def build_decision_context(
         else:
             reason = "valuation_stretched"
         # Valuation uses fundamentals component
-        score_delta = _calc_score_delta("fundamentals")
+        score_delta = _aligned_score_delta("fundamentals", "bearish")
         top_triggers.append({
             "id": "valuation_headwind",
             "category": "valuation",
@@ -241,7 +252,7 @@ def build_decision_context(
 
     # Revenue decline trigger (severe decline is a major bearish signal)
     if revenue_yoy is not None and revenue_yoy < -0.20:
-        score_delta = _calc_score_delta("fundamentals")
+        score_delta = _aligned_score_delta("fundamentals", "bearish")
         rev_trigger: dict[str, Any] = {
             "id": "severe_revenue_decline",
             "category": "fundamentals",
@@ -264,7 +275,7 @@ def build_decision_context(
             dilution_level = dilution_analysis.get("dilution_risk_level")
             if dilution_pct is not None:
                 dilution_reason += f" - {dilution_pct*100:.0f}% dilution if raised ({dilution_level})"
-        score_delta = _calc_score_delta("fundamentals")
+        score_delta = _aligned_score_delta("fundamentals", "bearish")
         top_triggers.append({
             "id": "dilution_risk",
             "category": "fundamentals",
@@ -276,7 +287,7 @@ def build_decision_context(
         })
 
     if setup_label in ("weak", "poor"):
-        score_delta = _calc_score_delta("technicals")
+        score_delta = _aligned_score_delta("technicals", "bearish")
         top_triggers.append({
             "id": "weak_technical_setup",
             "category": "technicals",
@@ -291,7 +302,7 @@ def build_decision_context(
     bullish_triggers: list[dict[str, Any]] = []
 
     if business_quality == "strong":
-        score_delta = _calc_score_delta("fundamentals")
+        score_delta = _aligned_score_delta("fundamentals", "bullish")
         reason = "profitable"
         if fcf_label:
             reason = f"{reason}, {fcf_label}"
@@ -308,7 +319,7 @@ def build_decision_context(
             bullish_fund_trigger["next_update"] = {"event": "earnings", "date": next_earnings_date}
         bullish_triggers.append(bullish_fund_trigger)
     elif business_quality == "moderate":
-        score_delta = _calc_score_delta("fundamentals")
+        score_delta = _aligned_score_delta("fundamentals", "bullish")
         bullish_fund_trigger = {
             "id": "moderate_business_quality",
             "category": "fundamentals",
@@ -347,7 +358,7 @@ def build_decision_context(
                 reason = f"pe_trailing={pe_trailing:.1f}x"
             else:
                 reason = "valuation_attractive"
-        score_delta = _calc_score_delta("fundamentals")
+        score_delta = _aligned_score_delta("fundamentals", "bullish")
         bullish_triggers.append({
             "id": "attractive_valuation",
             "category": "valuation",
@@ -359,7 +370,7 @@ def build_decision_context(
         })
 
     if setup_label == "strong":
-        score_delta = _calc_score_delta("technicals")
+        score_delta = _aligned_score_delta("technicals", "bullish")
         bullish_triggers.append({
             "id": "strong_technical_setup",
             "category": "technicals",
@@ -370,7 +381,7 @@ def build_decision_context(
             "score_delta": score_delta,
         })
     elif setup_label == "moderate":
-        score_delta = _calc_score_delta("technicals")
+        score_delta = _aligned_score_delta("technicals", "bullish")
         bullish_triggers.append({
             "id": "moderate_technical_setup",
             "category": "technicals",
@@ -382,7 +393,7 @@ def build_decision_context(
         })
 
     if risk_label == "low":
-        score_delta = _calc_score_delta("risk")
+        score_delta = _aligned_score_delta("risk", "bullish")
         bullish_triggers.append({
             "id": "favorable_risk_regime",
             "category": "risk",
@@ -393,7 +404,7 @@ def build_decision_context(
             "score_delta": score_delta,
         })
     elif risk_label == "moderate":
-        score_delta = _calc_score_delta("risk")
+        score_delta = _aligned_score_delta("risk", "bullish")
         bullish_triggers.append({
             "id": "acceptable_risk_regime",
             "category": "risk",
@@ -428,7 +439,7 @@ def build_decision_context(
                 "reason": f"volatility={annualized_vol*100:.0f}% (>60%)",
                 "component_score": risk_component,
                 "weight_used": weights_used.get("risk"),
-                "score_delta": _calc_score_delta("risk"),
+                "score_delta": _aligned_score_delta("risk", "bearish"),
             })
         elif "high_volatility" in bearish_list and annualized_vol is not None:
             fallback_triggers.append({
@@ -438,7 +449,7 @@ def build_decision_context(
                 "reason": f"volatility={annualized_vol*100:.0f}% (>40%)",
                 "component_score": risk_component,
                 "weight_used": weights_used.get("risk"),
-                "score_delta": _calc_score_delta("risk"),
+                "score_delta": _aligned_score_delta("risk", "bearish"),
             })
 
         if "deep_drawdown" in bearish_list and max_drawdown is not None:
@@ -449,7 +460,7 @@ def build_decision_context(
                 "reason": f"drawdown={max_drawdown*100:.0f}% (>35%)",
                 "component_score": risk_component,
                 "weight_used": weights_used.get("risk"),
-                "score_delta": _calc_score_delta("risk"),
+                "score_delta": _aligned_score_delta("risk", "bearish"),
             })
 
     # Burn metrics missing sub-trigger (for unprofitable companies) - always valuable
@@ -462,22 +473,24 @@ def build_decision_context(
             "reason": f"burn_metrics unavailable ({burn_metrics.get('status_reason', 'unknown')})",
             "component_score": fund_component,
             "weight_used": weights_used.get("fundamentals"),
-            "score_delta": _calc_score_delta("fundamentals"),
+            "score_delta": _aligned_score_delta("fundamentals", "bearish"),
         })
 
     # Severe revenue decline - always a distinct concern worth showing
-    if revenue_yoy is not None and revenue_yoy < -0.20:
-        # Only add if not already in top_triggers
-        if not any(t.get("id") == "severe_revenue_decline" for t in top_triggers):
-            fallback_triggers.append({
-                "id": "severe_revenue_decline",
-                "category": "fundamentals",
-                "direction": "bearish",
-                "reason": f"revenue_yoy={revenue_yoy*100:.0f}% (severe decline)",
-                "component_score": fund_component,
-                "weight_used": weights_used.get("fundamentals"),
-                "score_delta": _calc_score_delta("fundamentals"),
-            })
+    if (
+        revenue_yoy is not None
+        and revenue_yoy < -0.20
+        and not any(t.get("id") == "severe_revenue_decline" for t in top_triggers)
+    ):
+        fallback_triggers.append({
+            "id": "severe_revenue_decline",
+            "category": "fundamentals",
+            "direction": "bearish",
+            "reason": f"revenue_yoy={revenue_yoy*100:.0f}% (severe decline)",
+            "component_score": fund_component,
+            "weight_used": weights_used.get("fundamentals"),
+            "score_delta": _aligned_score_delta("fundamentals", "bearish"),
+        })
 
     # === BALANCE TRIGGERS BASED ON TILT ===
     # OPTION A: Only include triggers with actual score contribution
@@ -791,26 +804,18 @@ def build_decision_context(
             })
 
     # === NEWS CATEGORY ===
+    catalyst_intelligence = news_data.get("catalyst_intelligence") or {}
     news_triggers: dict[str, Any] = {
         "headline_triggers": {
             "bullish": [
-                "beat expectations",
-                "raises guidance",
-                "buyback",
-                "upgrade",
-                "new product",
-                "partnership",
-                "expansion",
+                item.get("tag")
+                for item in catalyst_intelligence.get("bullish", [])[:5]
+                if item.get("tag")
             ],
             "bearish": [
-                "misses expectations",
-                "lowers guidance",
-                "downgrade",
-                "investigation",
-                "lawsuit",
-                "recall",
-                "layoffs",
-                "restructuring",
+                item.get("tag")
+                for item in catalyst_intelligence.get("bearish", [])[:5]
+                if item.get("tag")
             ],
         },
     }
@@ -820,6 +825,8 @@ def build_decision_context(
     if sentiment:
         news_triggers["current_sentiment"] = sentiment.get("overall")
         news_triggers["sentiment_confidence"] = sentiment.get("confidence")
+    if catalyst_intelligence:
+        news_triggers["catalyst_method"] = catalyst_intelligence.get("method")
 
     # === RISK CATEGORY ===
     risk_bullish: list[dict[str, Any]] = []
@@ -1081,15 +1088,14 @@ def build_decision_context(
             })
 
     # Mid-term horizon drivers
-    if horizon_fit.get("mid_term") in ("caution", "avoid"):
-        if risk_label == "extreme":
-            horizon_drivers.append({
-                "horizon": "mid_term",
-                "direction": "bearish",
-                "gate": "extreme_risk",
-                "reason": "extreme risk requires minimal position size",
-                "current": f"risk_regime={risk_label}",
-            })
+    if horizon_fit.get("mid_term") in ("caution", "avoid") and risk_label == "extreme":
+        horizon_drivers.append({
+            "horizon": "mid_term",
+            "direction": "bearish",
+            "gate": "extreme_risk",
+            "reason": "extreme risk requires minimal position size",
+            "current": f"risk_regime={risk_label}",
+        })
 
     return {
         "top_triggers": top_triggers or [],

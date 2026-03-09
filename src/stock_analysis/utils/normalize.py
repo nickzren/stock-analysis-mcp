@@ -482,7 +482,7 @@ def build_watchlist_snapshot(raw: dict[str, Any]) -> dict[str, Any]:
         "is_unprofitable": policy.get("is_unprofitable"),
         # Key risk
         "risk_regime": risk.get("risk_regime", {}).get("classification"),
-        "volatility_ann": risk.get("volatility_ann"),
+        "volatility_ann": risk.get("annualized_volatility", risk.get("volatility_ann")),
         # Next catalyst
         "next_catalyst": events.get("next_catalyst"),
         # Data freshness - single time anchor for diffs

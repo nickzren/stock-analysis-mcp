@@ -42,6 +42,34 @@ NEGATIVE_BIGRAMS = {
     "profit warning", "going concern",
 }
 
+_BULLISH_CATALYSTS = {
+    "earnings_beat": {"earnings beat", "beat expectations", "beat estimates", "revenue beat"},
+    "guidance_raise": {"raised guidance", "raises guidance", "positive outlook", "higher outlook"},
+    "analyst_upgrade": {"upgrade", "upgraded", "price target raised", "buy rating", "outperform rating"},
+    "product_launch": {"new product", "launch", "rollout", "commercial launch"},
+    "partnership_or_contract": {"partnership", "partnered", "contract", "deal", "award", "agreement"},
+    "regulatory_approval": {"approval", "approved", "clearance", "authorized"},
+    "buyback_or_dividend": {"share buyback", "buyback", "raised dividend", "special dividend"},
+    "insider_buying": {"insider buy", "director buy", "ceo buy"},
+}
+
+_BEARISH_CATALYSTS = {
+    "earnings_miss": {"earnings miss", "missed expectations", "missed estimates", "revenue miss"},
+    "guidance_cut": {"lowered guidance", "guidance cut", "cuts guidance", "profit warning"},
+    "offering_or_dilution": {"share dilution", "offering", "secondary offering", "atm program", "capital raise"},
+    "analyst_downgrade": {"downgrade", "downgraded", "price target cut", "underperform rating", "sell rating"},
+    "litigation_or_investigation": {"lawsuit", "investigation", "probe", "sec inquiry", "doj inquiry"},
+    "regulatory_setback": {"complete response letter", "rejected", "clinical hold", "warning letter", "recall"},
+    "restructuring_or_layoffs": {"layoffs", "restructuring", "job cuts", "cost cuts"},
+    "going_concern_or_distress": {"going concern", "bankruptcy", "default", "liquidity crunch"},
+    "insider_selling": {"insider sell", "director sell", "ceo sell"},
+}
+
+_NEUTRAL_CATALYSTS = {
+    "conference_or_presentation": {"conference", "presentation", "fireside chat", "investor day"},
+    "split_or_index_change": {"stock split", "reverse split", "index inclusion", "index rebalance"},
+}
+
 
 async def stock_news(symbol: str, days: int = 7) -> dict[str, Any]:
     """
@@ -114,6 +142,7 @@ async def stock_news(symbol: str, days: int = 7) -> dict[str, Any]:
 
         sentiment_result = _score_sentiment(title, summary)
         sentiment = sentiment_result["label"]
+        catalyst_tags = _extract_catalysts(title, summary)
         articles.append({
             "date": pub_date_naive.strftime("%Y-%m-%d"),
             "title": title,
@@ -123,6 +152,7 @@ async def stock_news(symbol: str, days: int = 7) -> dict[str, Any]:
             "sentiment": sentiment,
             "matched_positive": sentiment_result["matched_positive"] or None,
             "matched_negative": sentiment_result["matched_negative"] or None,
+            "catalyst_tags": catalyst_tags,
         })
 
     # Sort by date descending
@@ -226,11 +256,21 @@ async def stock_news(symbol: str, days: int = 7) -> dict[str, Any]:
     # Aggregate unique triggers across all articles
     all_positive_triggers: set[str] = set()
     all_negative_triggers: set[str] = set()
+    bullish_catalyst_counts: dict[str, int] = {}
+    bearish_catalyst_counts: dict[str, int] = {}
+    neutral_catalyst_counts: dict[str, int] = {}
     for a in articles:
         if a.get("matched_positive"):
             all_positive_triggers.update(a["matched_positive"])
         if a.get("matched_negative"):
             all_negative_triggers.update(a["matched_negative"])
+        catalyst_tags = a.get("catalyst_tags") or {}
+        for tag in catalyst_tags.get("bullish", []) or []:
+            bullish_catalyst_counts[tag] = bullish_catalyst_counts.get(tag, 0) + 1
+        for tag in catalyst_tags.get("bearish", []) or []:
+            bearish_catalyst_counts[tag] = bearish_catalyst_counts.get(tag, 0) + 1
+        for tag in catalyst_tags.get("neutral", []) or []:
+            neutral_catalyst_counts[tag] = neutral_catalyst_counts.get(tag, 0) + 1
 
     headline_triggers = {
         "positive": sorted(all_positive_triggers)[:10],
@@ -250,6 +290,14 @@ async def stock_news(symbol: str, days: int = 7) -> dict[str, Any]:
         "sentiment_30d": sentiment_30d,
         "sample_size_30d": sample_size_30d,
         "confidence_30d": _derive_confidence(sample_size_30d),
+    }
+
+    catalyst_intelligence = {
+        "bullish": _sorted_catalyst_counts(bullish_catalyst_counts),
+        "bearish": _sorted_catalyst_counts(bearish_catalyst_counts),
+        "neutral": _sorted_catalyst_counts(neutral_catalyst_counts),
+        "sample_size": len(articles),
+        "method": "keyword_catalyst_v1",
     }
 
     # Build warnings
@@ -272,12 +320,10 @@ async def stock_news(symbol: str, days: int = 7) -> dict[str, Any]:
         "article_count": len(articles),
         "articles": articles,
         "sentiment": sentiment_summary,
+        "catalyst_intelligence": catalyst_intelligence,
         "recent_earnings": recent_earnings,
         "warnings": warnings if warnings else None,
     }
-
-
-
 
 def _score_sentiment(title: str, summary: str = "") -> dict[str, Any]:
     """
@@ -324,6 +370,31 @@ def _score_sentiment(title: str, summary: str = "") -> dict[str, Any]:
 
     return {
         "label": sentiment,
-        "matched_positive": list(set(matched_positive))[:5],
-        "matched_negative": list(set(matched_negative))[:5],
+        "matched_positive": sorted(set(matched_positive))[:5],
+        "matched_negative": sorted(set(matched_negative))[:5],
     }
+
+
+def _extract_catalysts(title: str, summary: str = "") -> dict[str, list[str]]:
+    """Extract catalyst tags for investor-facing news summaries."""
+    text = f"{title} {summary}".lower()
+    return {
+        "bullish": _match_catalyst_bucket(text, _BULLISH_CATALYSTS),
+        "bearish": _match_catalyst_bucket(text, _BEARISH_CATALYSTS),
+        "neutral": _match_catalyst_bucket(text, _NEUTRAL_CATALYSTS),
+    }
+
+
+def _match_catalyst_bucket(text: str, patterns: dict[str, set[str]]) -> list[str]:
+    matches = []
+    for tag, phrases in patterns.items():
+        if any(phrase in text for phrase in phrases):
+            matches.append(tag)
+    return matches
+
+
+def _sorted_catalyst_counts(counts: dict[str, int]) -> list[dict[str, Any]]:
+    return [
+        {"tag": tag, "count": count}
+        for tag, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+    ]

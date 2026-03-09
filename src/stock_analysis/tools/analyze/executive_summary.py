@@ -2,6 +2,9 @@
 
 from typing import Any
 
+from stock_analysis.tools.analyze.dislocation_framework import (
+    classify_dislocation_opportunity,
+)
 from stock_analysis.tools.analyze.signals import VOLATILITY_REGIME_THRESHOLDS
 from stock_analysis.utils.helpers import format_fcf_label
 
@@ -13,10 +16,12 @@ _ACTION_HUMANIZE: dict[str, str] = {
     "strong_buy": "strong buy",
     # Mid-term actions
     "wait_for_entry": "wait for a better entry",
+    "speculative_small_position": "small starter position",
     "consider_entry": "consider entry",
     "hold": "hold",
     "reduce": "reduce",
     "exit": "exit",
+    "small_position_with_stops": "small starter position",
 }
 
 # Gate ordering (fixed order for diff stability)
@@ -375,6 +380,8 @@ def build_policy_action(
     decomposed: dict[str, Any] | None = None,
     risk_regime: dict[str, Any] | None = None,
     dip_assessment: dict[str, Any] | None = None,
+    fundamentals_summary: dict[str, Any] | None = None,
+    investor_profile: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Build policy_action - the primary "what to do" decision output.
@@ -401,11 +408,19 @@ def build_policy_action(
     dip_type = None
     if dip_assessment:
         dip_type = (dip_assessment.get("dip_classification") or {}).get("type")
+    fundamentals_summary = fundamentals_summary or {}
 
     # Get decomposed scores for conditions
     business_quality = decomposed.get("business_quality") if decomposed else None
     business_quality_status = decomposed.get("business_quality_status") if decomposed else None
     risk_label = decomposed.get("risk") if decomposed else None
+    dislocation_signals = classify_dislocation_opportunity(
+        verdict=verdict,
+        action_zones=action_zones,
+        fundamentals_summary=fundamentals_summary,
+        dip_assessment=dip_assessment,
+    )
+    is_dislocation_candidate = dislocation_signals["is_dislocation_candidate"]
 
     # Rationale accumulator - structured for auditability
     rationale: list[str] = []
@@ -419,6 +434,9 @@ def build_policy_action(
         if tilt == "bullish":
             mid_term_action = "speculative_small_position"
             rationale.append("mid_term_fit=caution, tilt=bullish")
+        elif is_dislocation_candidate:
+            mid_term_action = "speculative_small_position"
+            rationale.append("mid_term_fit=caution, dislocation=price_broken_more_than_business")
         else:
             mid_term_action = "wait_for_entry"
             rationale.append(f"mid_term_fit=caution, tilt={tilt}")
@@ -439,9 +457,11 @@ def build_policy_action(
         mid_term_action = "insufficient_data"
         rationale.append("mid_term_fit=unknown")
 
-    if dip_type == "falling_knife":
+    if dip_type == "falling_knife" and not is_dislocation_candidate:
         mid_term_action = "wait_for_entry"
         rationale.append("dip_type=falling_knife")
+    elif dip_type == "falling_knife" and is_dislocation_candidate:
+        rationale.append("dip_type=falling_knife_but_dislocation_candidate")
 
     # === LONG-TERM ACTION (1-5 years) ===
     long_term_action: str
@@ -457,9 +477,12 @@ def build_policy_action(
                 long_term_action = "speculative_only"
                 rationale.append("long_term=caution, unprofitable")
         else:
-            if tilt == "bullish":
+            if tilt == "bullish" or is_dislocation_candidate:
                 long_term_action = "small_position_with_stops"
-                rationale.append("long_term=caution, tilt=bullish")
+                if is_dislocation_candidate and tilt != "bullish":
+                    rationale.append("long_term=caution, dislocation=price_broken_more_than_business")
+                else:
+                    rationale.append("long_term=caution, tilt=bullish")
             else:
                 long_term_action = "wait_or_avoid"
                 rationale.append(f"long_term=caution, tilt={tilt}")
@@ -471,10 +494,7 @@ def build_policy_action(
             long_term_action = "hold_size_conservatively"
             rationale.append("long_term=ok, valuation=headwind")
         else:
-            if tilt == "bullish":
-                long_term_action = "hold_or_add"
-            else:
-                long_term_action = "hold"
+            long_term_action = "hold_or_add" if tilt == "bullish" else "hold"
             rationale.append(f"long_term=ok, tilt={tilt}, zone={zone}")
     else:  # unknown
         long_term_action = "insufficient_data"
@@ -487,6 +507,12 @@ def build_policy_action(
         sizing_guidance["min_pct"] = pct_range[0]
         sizing_guidance["max_pct"] = pct_range[1]
         sizing_guidance["note"] = f"{pct_range[0]:.1f}%-{pct_range[1]:.1f}% of portfolio"
+    if position_sizing.get("starter_pct") is not None:
+        sizing_guidance["starter_pct"] = position_sizing.get("starter_pct")
+    if position_sizing.get("risk_per_trade_pct") is not None:
+        sizing_guidance["risk_per_trade_pct"] = position_sizing.get("risk_per_trade_pct")
+    if position_sizing.get("dollars_for_account") is not None:
+        sizing_guidance["dollars_for_account"] = position_sizing.get("dollars_for_account")
 
     # === CONDITIONS TO UPGRADE ===
     # What would need to change for a better assessment?

@@ -442,10 +442,13 @@ def build_dip_assessment(
         bounce_factors.append("falling_knife_risk")
 
     # Near support
-    if support_levels and abs(support_levels[0]["distance_pct"]) < 0.03:
-        if support_levels[0]["strength"] in ("strong", "critical"):
-            bounce_score += 1
-            bounce_factors.append(f"near_{support_levels[0]['type']}")
+    if (
+        support_levels
+        and abs(support_levels[0]["distance_pct"]) < 0.03
+        and support_levels[0]["strength"] in ("strong", "critical")
+    ):
+        bounce_score += 1
+        bounce_factors.append(f"near_{support_levels[0]['type']}")
 
     # Capitulation volume
     if volume_signal == "potential_capitulation":
@@ -689,3 +692,45 @@ def build_dip_assessment(
         },
         "method": "dip_assessment_v2",
     }
+
+
+def align_dip_assessment_with_action(
+    dip_assessment: dict[str, Any] | None,
+    mismatch_status: str | None,
+    can_start_now: bool,
+    add_only_if: list[str] | None = None,
+) -> dict[str, Any] | None:
+    """Reframe dip guidance when a dislocation starter is acceptable now.
+
+    The dip block is an entry-timing lens, not the master action decision.
+    If the broader analysis says a small starter is acceptable now, avoid
+    rendering a flat contradiction like "do not catch falling knife".
+    """
+    if not dip_assessment:
+        return dip_assessment
+    if mismatch_status != "price_broken_more_than_business" or not can_start_now:
+        return dip_assessment
+
+    assessment = dip_assessment.get("assessment")
+    if not isinstance(assessment, dict):
+        return dip_assessment
+
+    recommendation = assessment.get("recommendation")
+    if recommendation not in {
+        "do_not_catch_falling_knife",
+        "wait_for_better_setup",
+    }:
+        assessment["scope"] = "entry_timing_only"
+        assessment["timing_only"] = True
+        return dip_assessment
+
+    assessment["scope"] = "entry_timing_only"
+    assessment["timing_only"] = True
+    assessment["dip_quality"] = "starter_only"
+    assessment["recommendation"] = "starter_only_wait_for_stabilization"
+    assessment["rationale"] = (
+        "Starter position acceptable for a price-vs-business dislocation, "
+        "but trend is still broken. Wait for stabilization before adding."
+    )
+    assessment["add_only_if"] = list(add_only_if or [])[:4]
+    return dip_assessment

@@ -27,6 +27,7 @@ from stock_analysis.tools import (
     technicals,
     what_changed,
 )
+from stock_analysis.utils.provenance import build_error_response
 
 log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(level=getattr(logging, log_level, logging.INFO))
@@ -178,13 +179,20 @@ async def get_news(symbol: str, days: int = 7) -> str:
 
 
 @mcp.tool
-async def analyze(symbol: str) -> str:
+async def analyze(
+    symbol: str,
+    profile: str = "balanced",
+    account_size: float | None = None,
+    risk_per_trade_pct: float | None = None,
+    max_position_pct: float | None = None,
+) -> str:
     """
-    Comprehensive stock analysis for mid/long-term investors.
+    Comprehensive stock analysis with default decision modes and optional sizing inputs.
 
     Runs technicals, fundamentals, risk metrics, events, and news analysis
     in parallel. Returns verdict with decomposed scores, horizon fit assessment,
-    valuation-aware action zones, and multi-factor decision context.
+    valuation-aware action zones, multi-factor decision context, and separate
+    Core / Balanced / Speculative decision blocks.
 
     IMPORTANT RENDERING INSTRUCTIONS - Present analysis in this order:
 
@@ -198,19 +206,39 @@ async def analyze(symbol: str) -> str:
        - Example: "Moderna shows strong technicals (golden cross, above SMAs, +40% in 1 month)
          but faces severe fundamental headwinds..."
 
-    3. VERDICT SUMMARY:
+    3. DISLOCATION FRAMEWORK (from dislocation_framework):
+       - Render this as six plain-English answers:
+         1. Is it down enough?
+         2. Is the business still good?
+         3. Is the balance sheet safe?
+         4. Is the long-term thesis intact?
+         5. Has price broken more than business?
+         6. What should I do now?
+       - Use:
+         - `setup.status`, `setup.drawdown_label`, `setup.summary`
+         - `business_integrity.status`, `business_integrity.summary`, `business_integrity.checks`
+         - `balance_sheet_safety.status`, `balance_sheet_safety.summary`
+         - `thesis_integrity.status`, `thesis_integrity.hold_thesis`, `thesis_integrity.what_must_remain_true`
+         - `mismatch_verdict.status`, `mismatch_verdict.summary`
+         - `action.core`, `action.balanced`, `action.speculative`
+         - If `action.can_start_now` is true, say a small starter is acceptable now and render `action.add_only_if`
+         - Otherwise render `action.buy_only_if`
+         - Always render `action.sell_without_attachment_if`
+       - This section should explicitly answer the "broken price vs broken business" question before the rest of the report.
+
+    4. VERDICT SUMMARY:
        - Tilt (bullish/neutral/bearish) + confidence level
        - Decomposed scores: setup (technicals), business_quality, risk regime
        - Horizon fit: mid_term + long_term assessments with reasons
 
-    4. HORIZON DRIVERS (from decision_context.horizon_drivers):
+    5. HORIZON DRIVERS (from decision_context.horizon_drivers):
        - Render ONLY if non-empty
        - These are policy gates (not score-based) that affect horizon fit
        - Format: "[long_term] gate: reason" or "[mid_term] gate: reason"
        - Example: "[long_term] burn_metrics_missing: unprofitable with runway unknown"
        - Example: "[mid_term] extreme_risk: volatility > 60%"
 
-    5. SCORE MATH (always render with CONSISTENT 6-decimal precision):
+    6. SCORE MATH (always render with CONSISTENT 6-decimal precision):
        - Use score_display.formula for pre-formatted output
        - Use score_display.component_breakdown for audit trail
        - Example: "Score: 0.050000 = 0.090909 × 0.550000"
@@ -228,12 +256,12 @@ async def analyze(symbol: str) -> str:
            - fundamentals_key_inputs_missing: coverage=true but margin/EPS/PE all null
            - no_fundamental_signals_fired: data available but no thresholds triggered
 
-    6. CONFIDENCE PATH (from verdict.confidence_path):
+    7. CONFIDENCE PATH (from verdict.confidence_path):
        - Current blockers: list what's preventing higher confidence
        - Upgrade if: list only UNMET conditions (omit any already satisfied)
        - Downgrade if: what would decrease confidence (guidance cut, etc.)
 
-    7. TOP DRIVERS (from decision_context.top_triggers):
+    8. TOP DRIVERS (from decision_context.top_triggers):
        - Show each trigger with category, direction, reason, and score_delta
        - score_delta = actual contribution to final score (not just weight)
        - BALANCE RULE: If tilt=neutral, show top 2 bearish + top 1 bullish
@@ -241,23 +269,23 @@ async def analyze(symbol: str) -> str:
        - Include next_update dates for fundamental triggers
        - DEDUPE: Only show one trigger per category (don't show both risk_regime_extreme AND very_high_volatility)
 
-    8. SIGNALS: Bullish (pros) and Bearish (cons) lists
+    9. SIGNALS: Bullish (pros) and Bearish (cons) lists
 
-    9. KEY METRICS TABLE with audit fields:
+    10. KEY METRICS TABLE with audit fields:
        - P/E or P/S: show value + source (e.g., "6.2x (computed from mcap/rev)")
        - FCF: use fundamentals_summary.cash_flow.free_cash_flow_label (omit if unavailable)
        - Cash runway: show quarters + basis (e.g., "9.1q (min_fcf_ocf)")
        - Quarterly burn: FCF $X, OCF $Y (from burn_metrics)
        - Beta, volatility, drawdown
 
-    10. ACTION ZONES:
+    11. ACTION ZONES:
         - Current zone + valuation_assessment.gate
         - Price levels with distances (use action_zones.distance_labels; fallback to price_vs_levels)
         - For stop loss, prefer action_zones.level_vs_current_labels.stop_loss ("X% below current")
         - For unprofitable companies, show P/S-based valuation gate
         - If valuation_gate="unknown", add warning: "(valuation confidence reduced)"
 
-    11. DIP ASSESSMENT (from dip_assessment) - FOR BUY-THE-DIP INVESTORS:
+    12. DIP ASSESSMENT (from dip_assessment) - FOR BUY-THE-DIP INVESTORS:
         This section helps dip buyers assess entry timing. Render as follows:
 
         a) DIP CLASSIFICATION:
@@ -332,19 +360,22 @@ async def analyze(symbol: str) -> str:
 
         i) OVERALL ASSESSMENT (render prominently):
            ```
+           Scope: {assessment.scope} (render ONLY if present)
            Dip Quality: {assessment.dip_quality}
            Recommendation: {assessment.recommendation}
            {assessment.rationale}
            ```
            Recommendations: strong_buy_the_dip, buy_the_dip, cautious_accumulation,
-                           small_speculative_position, do_not_catch_falling_knife, wait_for_better_setup
+                           small_speculative_position, do_not_catch_falling_knife, wait_for_better_setup,
+                           starter_only_wait_for_stabilization
+           If `assessment.add_only_if` is non-empty, render: `Add only if: ...`
 
-    12. POSITION SIZING (from action_zones.position_sizing_range):
+    13. POSITION SIZING (from action_zones.position_sizing_range):
         - Show range as percentage AND dollars (e.g., "0.5%-3% = $250-$1,500")
         - Show shares range at current price (e.g., "~7-42 shares @ $35.66")
         - Show stop-implied max size if stop distance available
 
-    13. DECISION CONTEXT - Render BY CATEGORY with EXPLICIT status fields:
+    14. DECISION CONTEXT - Render BY CATEGORY with EXPLICIT status fields:
         Render each category as a separate block (not combined) for scanability.
 
         a) Fundamentals (include business_quality_evidence for transparency):
@@ -391,12 +422,12 @@ async def analyze(symbol: str) -> str:
 
         f) Next catalyst: earnings date with days countdown
 
-    14. MARKET CONTEXT (from market_context):
+    15. MARKET CONTEXT (from market_context):
         - SPY trend: above/below 200d SMA
         - Provenance: "SPY as_of={as_of} source={source} adjustment={price_adjustment}"
         - If sanity_warnings is non-empty, show: "Warnings: {sanity_warnings}"
 
-    15. NEWS: Recent headlines if available
+    16. NEWS: Recent headlines if available
 
     For UNPROFITABLE companies specifically:
     - Show P/S instead of P/E in metrics
@@ -405,12 +436,25 @@ async def analyze(symbol: str) -> str:
     - Emphasize path-to-profitability triggers in fundamentals
 
     Args:
-        symbol: Stock ticker symbol
+        symbol: Stock ticker symbol or company name query
 
     Returns:
         JSON with complete analysis - render ALL sections per instructions above
     """
-    result = await analyze_stock(symbol=symbol)
+    try:
+        result = await analyze_stock(
+            symbol=symbol,
+            profile=profile,
+            account_size=account_size,
+            risk_per_trade_pct=risk_per_trade_pct,
+            max_position_pct=max_position_pct,
+        )
+    except ValueError as e:
+        result = build_error_response(
+            error_type="invalid_parameters",
+            message=str(e),
+            symbol=symbol,
+        )
     return json.dumps(result, indent=2, default=str)
 
 
@@ -609,7 +653,7 @@ def full_analysis(symbol: str) -> str:
     result = get_prompt("full_analysis", {"symbol": symbol})
     if result:
         return result["messages"][0]["content"]
-    return f"Analyze {symbol} using all available tools."
+    return f"Analyze {symbol} using the analyze tool."
 
 
 @mcp.prompt

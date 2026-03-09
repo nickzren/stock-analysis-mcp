@@ -6,7 +6,7 @@ from typing import Any
 
 import pandas as pd
 
-from stock_analysis.data.yfinance_client import fetch_ticker
+from stock_analysis.data.yfinance_client import fetch_info, fetch_ticker
 from stock_analysis.utils.helpers import safe_float, safe_round
 from stock_analysis.utils.provenance import build_error_response, build_meta, build_provenance
 
@@ -33,9 +33,8 @@ async def events_calendar(symbol: str) -> dict[str, Any]:
             symbol=symbol,
         )
 
-    # Fetch ticker.info once for reuse (avoids duplicate API calls)
     try:
-        info = ticker.info
+        info = await fetch_info(symbol)
     except Exception:
         info = {}
 
@@ -303,5 +302,4 @@ def _format_date(value: Any) -> str | None:
             return value
 
     return None
-
 

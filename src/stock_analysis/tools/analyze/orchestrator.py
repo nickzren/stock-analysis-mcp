@@ -6,13 +6,29 @@ from time import perf_counter
 from typing import Any
 
 from stock_analysis.reference_data import build_sector_comparison
-from stock_analysis.tools.analyze.action_zones import apply_dip_gates_to_action_zones, build_action_zones
+from stock_analysis.tools.analyze.action_zones import (
+    apply_dip_gates_to_action_zones,
+    build_action_zones,
+)
 from stock_analysis.tools.analyze.decision_context import (
     build_decision_context,
     build_relative_performance,
 )
-from stock_analysis.tools.analyze.dip_assessment import build_dip_assessment
-from stock_analysis.tools.analyze.executive_summary import build_executive_summary, build_policy_action
+from stock_analysis.tools.analyze.dip_assessment import (
+    align_dip_assessment_with_action,
+    build_dip_assessment,
+)
+from stock_analysis.tools.analyze.dislocation_framework import (
+    build_dislocation_framework,
+)
+from stock_analysis.tools.analyze.executive_summary import (
+    build_executive_summary,
+    build_policy_action,
+)
+from stock_analysis.tools.analyze.investor_profile import (
+    build_decision_modes,
+    resolve_investor_profile,
+)
 from stock_analysis.tools.analyze.signals import (
     TIMEOUT_SECONDS,
     classify_risk_regime,
@@ -39,13 +55,58 @@ from stock_analysis.tools.options_signals import options_signals
 from stock_analysis.tools.ownership import ownership_analysis
 from stock_analysis.tools.risk_metrics import risk_metrics
 from stock_analysis.tools.stock_summary import stock_summary
+from stock_analysis.tools.symbol_search import symbol_search
 from stock_analysis.tools.technicals import technicals
 from stock_analysis.utils.helpers import first_sentences, format_fcf_label, round_or_none
 from stock_analysis.utils.normalize import build_watchlist_snapshot
 from stock_analysis.utils.provenance import build_meta
 
 
-async def analyze_stock(symbol: str) -> dict[str, Any]:
+def _needs_symbol_resolution(raw_symbol: str) -> bool:
+    """Return True when the input looks like a company name instead of a ticker."""
+    candidate = raw_symbol.strip()
+    if not candidate:
+        raise ValueError("symbol must not be empty")
+
+    normalized = candidate.upper()
+    ticker_like = normalized.replace(".", "").replace("-", "")
+    if any(ch.isspace() for ch in candidate):
+        return True
+    if not ticker_like.isalnum():
+        return True
+    return len(ticker_like) > 5
+
+
+async def _resolve_symbol_for_analysis(raw_symbol: str) -> str:
+    """Resolve company-name style input to a tradable symbol when needed."""
+    normalized = raw_symbol.upper().strip()
+    if not _needs_symbol_resolution(raw_symbol):
+        return normalized
+
+    search_result = await symbol_search(query=raw_symbol, limit=5)
+    exact_match = search_result.get("exact_match")
+    if isinstance(exact_match, str) and exact_match:
+        return exact_match.upper().strip()
+
+    for item in search_result.get("results") or []:
+        if not isinstance(item, dict):
+            continue
+        candidate = item.get("symbol")
+        if isinstance(candidate, str) and candidate and item.get("is_valid", True):
+            return candidate.upper().strip()
+
+    raise ValueError(
+        f"Unable to resolve symbol '{raw_symbol}'. Use a tradable ticker or call search_symbol first."
+    )
+
+
+async def analyze_stock(
+    symbol: str,
+    profile: str = "balanced",
+    account_size: float | None = None,
+    risk_per_trade_pct: float | None = None,
+    max_position_pct: float | None = None,
+) -> dict[str, Any]:
     """
     Aggregate analysis from multiple tools with parallel execution.
 
@@ -56,13 +117,26 @@ async def analyze_stock(symbol: str) -> dict[str, Any]:
         Comprehensive analysis with data from all tools
     """
     start_time = perf_counter()
-    normalized_symbol = symbol.upper().strip()
+    normalized_symbol = await _resolve_symbol_for_analysis(symbol)
+    investor_profile = resolve_investor_profile(
+        profile=profile,
+        account_size=account_size,
+        risk_per_trade_pct=risk_per_trade_pct,
+        max_position_pct=max_position_pct,
+    )
 
     tool_specs = [
         ("stock_summary", stock_summary(normalized_symbol)),
         ("technicals", technicals(normalized_symbol)),
         ("fundamentals_snapshot", fundamentals_snapshot(normalized_symbol)),
-        ("risk_metrics", risk_metrics(normalized_symbol)),
+        (
+            "risk_metrics",
+            risk_metrics(
+                normalized_symbol,
+                portfolio_value=investor_profile.get("account_size"),
+                risk_per_trade=investor_profile.get("risk_per_trade_decimal") or 0.01,
+            ),
+        ),
         ("events_calendar", events_calendar(normalized_symbol)),
         ("stock_news", stock_news(normalized_symbol)),
         ("ownership_analysis", ownership_analysis(normalized_symbol)),
@@ -359,10 +433,13 @@ async def analyze_stock(symbol: str) -> dict[str, Any]:
             "warnings": burn_warnings or [],
         }
 
-        if cash_runway_quarters is not None and cash_runway_quarters < 8:
-            if "dilution_risk_elevated" not in valuation_warnings:
-                valuation_warnings.append("dilution_risk_elevated")
-                valuation_summary["warnings"] = valuation_warnings
+        if (
+            cash_runway_quarters is not None
+            and cash_runway_quarters < 8
+            and "dilution_risk_elevated" not in valuation_warnings
+        ):
+            valuation_warnings.append("dilution_risk_elevated")
+            valuation_summary["warnings"] = valuation_warnings
 
     gross_margin = profit.get("gross_margin")
     fcf_value = cf.get("free_cash_flow_ttm")
@@ -498,6 +575,7 @@ async def analyze_stock(symbol: str) -> dict[str, Any]:
         "article_count": len(articles),
         "headlines": headlines,
         "sentiment": sentiment_summary,
+        "catalyst_intelligence": news_data.get("catalyst_intelligence"),
         "recent_earnings": earnings_highlight,
     }
     news_summary["summary"] = build_news_summary_text(news_summary)
@@ -568,6 +646,7 @@ async def analyze_stock(symbol: str) -> dict[str, Any]:
         fund_data=fund_data,
         risk_regime=risk_regime,
         signals=signals,
+        investor_profile=investor_profile,
     )
 
     relative_performance = build_relative_performance(
@@ -746,6 +825,8 @@ async def analyze_stock(symbol: str) -> dict[str, Any]:
         decomposed=verdict.get("decomposed"),
         risk_regime=risk_regime,
         dip_assessment=dip_assessment,
+        fundamentals_summary=fundamentals_summary,
+        investor_profile=investor_profile,
     )
 
     executive_summary = build_executive_summary(
@@ -759,6 +840,35 @@ async def analyze_stock(symbol: str) -> dict[str, Any]:
         policy_action=policy_action,
         news_summary=news_summary,
     )
+
+    decision_modes = build_decision_modes(
+        summary=summary,
+        verdict=verdict,
+        policy_action=policy_action,
+        action_zones=action_zones,
+        dip_assessment=dip_assessment,
+        decision_context=decision_context,
+        news_summary=news_summary,
+        fundamentals_summary=fundamentals_summary,
+        events_summary=events_summary,
+        account_size=investor_profile.get("account_size"),
+    )
+    dislocation_framework = build_dislocation_framework(
+        verdict=verdict,
+        action_zones=action_zones,
+        fundamentals_summary=fundamentals_summary,
+        dip_assessment=dip_assessment,
+        decision_context=decision_context,
+        decision_modes=decision_modes,
+        policy_action=policy_action,
+    )
+    dip_assessment = align_dip_assessment_with_action(
+        dip_assessment=dip_assessment,
+        mismatch_status=(dislocation_framework.get("mismatch_verdict") or {}).get("status"),
+        can_start_now=bool((dislocation_framework.get("action") or {}).get("can_start_now")),
+        add_only_if=(dislocation_framework.get("action") or {}).get("add_only_if"),
+    )
+    section_summaries["dislocation"] = dislocation_framework.get("summary")
 
     # Top-level error signaling for invalid/unanalyzable symbols.
     # Keep partial payload for diagnostics, but mark as error for callers.
@@ -823,8 +933,10 @@ async def analyze_stock(symbol: str) -> dict[str, Any]:
         "news_summary": news_summary,
         "signals": signals,
         "verdict": verdict,
+        "dislocation_framework": dislocation_framework,
         "action_zones": action_zones,
         "policy_action": policy_action,
+        "decision_modes": decision_modes,
         "relative_performance": relative_performance,
         "market_context": market_context,
         "dip_assessment": dip_assessment,
