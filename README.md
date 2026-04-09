@@ -119,7 +119,7 @@ sequenceDiagram
 ### Claude Code
 
 ```bash
-claude mcp add stock-analysis -- uvx --from git+https://github.com/nickzren/stock-analysis-mcp stock-analysis
+claude mcp add -s user stock-analysis -- uvx --from git+https://github.com/nickzren/stock-analysis-mcp stock-analysis
 ```
 
 ### Codex
