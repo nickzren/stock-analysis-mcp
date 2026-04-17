@@ -203,6 +203,8 @@ If `account_size` is omitted, the analysis still returns the default `core` / `b
 | `get_ownership` | Insider transactions and institutional ownership trends |
 | `get_options_signals` | Options-derived signals (IV, put/call, unusual activity) |
 
+`get_price_history` returns a `price://...` resource URI backed by an in-memory, process-local cache. Read that resource during the same server session; it does not survive restarts.
+
 ### Portfolio & Utilities
 
 | Tool | Description |

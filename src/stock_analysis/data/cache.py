@@ -1,12 +1,13 @@
-"""Resource caching for price data."""
+"""In-memory resource caching for price data."""
 
 import gzip
 import hashlib
 import os
+import threading
+import time
 from datetime import datetime
 from typing import Any
 
-import diskcache
 import pandas as pd
 
 from stock_analysis.utils.ohlcv import df_to_csv
@@ -17,14 +18,15 @@ class PriceCache:
     """
     Cache stores exact CSV text for O(1) deterministic serving.
 
-    Resources only serve cached data. Never fetch live.
+    Resources only serve cached data for the life of the current process.
+    Never fetch live from a resource read.
     """
 
     def __init__(self, cache_dir: str | None = None):
-        if cache_dir is None:
-            cache_dir = os.environ.get("CACHE_DIR", ".cache/prices")
-        self.cache: diskcache.Cache = diskcache.Cache(cache_dir)
+        self._cache_dir = cache_dir
+        self._entries: dict[str, tuple[dict[str, Any], float]] = {}
         self._default_ttl = int(os.environ.get("CACHE_TTL", "300"))  # 5 minutes
+        self._lock = threading.Lock()
 
     def store(
         self,
@@ -63,7 +65,9 @@ class PriceCache:
         }
 
         expire = ttl if ttl is not None else self._default_ttl
-        self.cache.set(uri, entry, expire=expire)
+        expires_at = time.monotonic() + expire
+        with self._lock:
+            self._entries[uri] = (entry, expires_at)
 
         return uri
 
@@ -77,7 +81,17 @@ class PriceCache:
         Returns:
             Cache entry dict or None if not found
         """
-        return self.cache.get(uri)
+        with self._lock:
+            item = self._entries.get(uri)
+            if item is None:
+                return None
+
+            entry, expires_at = item
+            if time.monotonic() > expires_at:
+                del self._entries[uri]
+                return None
+
+            return entry
 
     def get_csv(self, uri: str) -> str | None:
         """
@@ -117,11 +131,12 @@ class PriceCache:
 
     def exists(self, uri: str) -> bool:
         """Check if URI exists in cache."""
-        return uri in self.cache
+        return self.get(uri) is not None
 
     def clear(self) -> None:
         """Clear all cached data."""
-        self.cache.clear()
+        with self._lock:
+            self._entries.clear()
 
 
 # Global instance
