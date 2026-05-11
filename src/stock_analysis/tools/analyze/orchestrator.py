@@ -32,6 +32,7 @@ from stock_analysis.tools.analyze.investor_profile import (
 from stock_analysis.tools.analyze.signals import (
     TIMEOUT_SECONDS,
     classify_risk_regime,
+    classify_unprofitability,
     generate_signals,
     get_rule_triggered,
 )
@@ -459,9 +460,13 @@ async def analyze_stock(
     pe_trailing = val.get("pe_trailing")
     trailing_eps = val.get("trailing_eps")
     net_margin = profit.get("net_margin")
+    # Orchestrator uses margin/EPS only (drift documented in classify_unprofitability docstring).
+    _unprofitable = classify_unprofitability(
+        net_margin=net_margin,
+        trailing_eps=trailing_eps,
+    )
     is_unprofitable_company = fundamentals_fetched and (
-        (net_margin is not None and net_margin < 0)
-        or (trailing_eps is not None and trailing_eps <= 0)
+        _unprofitable.by_margin or _unprofitable.by_eps
     )
 
     valuation_summary: dict[str, Any] = {

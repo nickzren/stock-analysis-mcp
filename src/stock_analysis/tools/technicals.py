@@ -103,11 +103,11 @@ async def technicals(symbol: str) -> dict[str, Any]:
     sma_200_slope = _calc_sma_slope_pct_per_day(sma_200, slope_window=20)
 
     moving_averages = {
-        "sma_20": round(sma_20_val, 2) if sma_20_val else None,
-        "sma_50": round(sma_50_val, 2) if sma_50_val else None,
-        "sma_200": round(sma_200_val, 2) if sma_200_val else None,
-        "ema_12": round(ema_12_val, 2) if ema_12_val else None,
-        "ema_26": round(ema_26_val, 2) if ema_26_val else None,
+        "sma_20": safe_round(sma_20_val, 2),
+        "sma_50": safe_round(sma_50_val, 2),
+        "sma_200": safe_round(sma_200_val, 2),
+        "ema_12": safe_round(ema_12_val, 2),
+        "ema_26": safe_round(ema_26_val, 2),
         "sma_200_slope_pct_per_day": safe_round(sma_200_slope, 6),
         "price_vs_sma20": round(price_vs_sma20, 4) if price_vs_sma20 is not None else None,
         "price_vs_sma50": round(price_vs_sma50, 4) if price_vs_sma50 is not None else None,
@@ -199,11 +199,13 @@ async def technicals(symbol: str) -> dict[str, Any]:
     # ATR
     atr_series = calculate_atr(high, low, close, 14)
     atr_val = safe_last_float(atr_series)
-    atr_pct = atr_val / current_price if atr_val and current_price else None
+    atr_pct: float | None = None
+    if atr_val is not None and current_price is not None and current_price > 0:
+        atr_pct = atr_val / current_price
 
     atr = {
-        "value": round(atr_val, 2) if atr_val is not None else None,
-        "value_pct": round(atr_pct, 4) if atr_pct is not None else None,
+        "value": safe_round(atr_val, 2),
+        "value_pct": safe_round(atr_pct, 4),
         "period": 14,
     }
 
@@ -280,14 +282,14 @@ async def technicals(symbol: str) -> dict[str, Any]:
     # Volume
     current_volume = int(volume.iloc[-1]) if not pd.isna(volume.iloc[-1]) else None
     avg_volume_20d = float(volume.tail(20).mean()) if len(volume) >= 20 else None
-    volume_ratio = (
-        current_volume / avg_volume_20d if current_volume and avg_volume_20d else None
-    )
+    volume_ratio: float | None = None
+    if current_volume is not None and avg_volume_20d is not None and avg_volume_20d > 0:
+        volume_ratio = current_volume / avg_volume_20d
 
     volume_data = {
         "current": current_volume,
-        "avg_20d": int(avg_volume_20d) if avg_volume_20d else None,
-        "ratio": round(volume_ratio, 2) if volume_ratio else None,
+        "avg_20d": int(avg_volume_20d) if avg_volume_20d is not None else None,
+        "ratio": safe_round(volume_ratio, 2),
     }
 
     # Bollinger Bands
@@ -349,7 +351,7 @@ async def technicals(symbol: str) -> dict[str, Any]:
             ),
         },
         "symbol": params.symbol,
-        "current_price": round(current_price, 2) if current_price else None,
+        "current_price": safe_round(current_price, 2),
         "moving_averages": moving_averages,
         "rsi": rsi,
         "macd": macd,

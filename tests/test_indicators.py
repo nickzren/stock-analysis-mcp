@@ -7,6 +7,7 @@ import pandas as pd
 from stock_analysis.utils.indicators import (
     calculate_atr,
     calculate_beta,
+    calculate_bollinger_bands,
     calculate_current_drawdown,
     calculate_ema,
     calculate_macd,
@@ -308,3 +309,35 @@ class TestPairwiseCorrelations:
 
         # Should detect high correlation even though it's negative
         assert len(result["high_correlation_pairs"]) == 1
+
+
+class TestBollingerBands:
+    """Tests for Bollinger Bands calculation."""
+
+    def test_bollinger_bands_constant_price_returns_zero_bandwidth(self) -> None:
+        """A constant price series collapses the bands; bandwidth should be 0.0, not None.
+
+        Regression: prior code used `round(bandwidth, 4) if bandwidth else None`,
+        which silently turned a legitimate 0.0 bandwidth into None.
+        """
+        prices = pd.Series([100.0] * 25)
+
+        bb = calculate_bollinger_bands(prices, period=20)
+
+        assert bb["bandwidth"] == 0.0
+        assert bb["upper"] == 100.0
+        assert bb["middle"] == 100.0
+        assert bb["lower"] == 100.0
+
+    def test_bollinger_bands_normal_series_has_positive_bandwidth(self) -> None:
+        """Sanity check: non-constant series produces non-zero bandwidth + middle."""
+        prices = pd.Series(
+            [100.0, 101.0, 99.0, 102.0, 98.0] * 5
+        )
+
+        bb = calculate_bollinger_bands(prices, period=20)
+
+        assert bb["bandwidth"] is not None
+        assert bb["bandwidth"] > 0.0
+        assert bb["middle"] is not None
+        assert bb["middle"] > 0.0

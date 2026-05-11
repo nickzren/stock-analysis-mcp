@@ -2,8 +2,10 @@
 
 from typing import Any
 
+from stock_analysis.tools.analyze.signals import classify_unprofitability
 from stock_analysis.utils.helpers import (
     format_level_distance_label,
+    safe_round,
 )
 
 
@@ -210,7 +212,7 @@ def build_action_zones(
         stop_calculation = {
             "stop_price": stop_price,
             "stop_distance_pct": stop_distance_pct,
-            "atr_pct": round(atr_pct, 4) if atr_pct else None,
+            "atr_pct": safe_round(atr_pct, 4),
             "stop_multiple_used": stop_multiple_used,
             "min_multiple_required": stop_min_multiple_required,
         }
@@ -285,27 +287,24 @@ def build_action_zones(
     net_margin = profit.get("net_margin")
 
     # Determine if company is unprofitable (use P/S instead of P/E)
-    # Use multiple signals for robust detection when data is sparse
+    # Use multiple signals for robust detection when data is sparse.
+    # Drift note (see classify_unprofitability): action_zones uses the no-PE +
+    # negative-FCF inference but does NOT look at pe_not_meaningful.
     bearish_signals = signals.get("bearish", []) if signals else []
-    is_signaled_unprofitable = "unprofitable" in bearish_signals
-    has_negative_fcf = "negative_free_cash_flow" in bearish_signals
-
-    # Detect unprofitability from EXPLICIT negative signals only
-    # Never classify as unprofitable purely from missing data (that's "fundamentals_missing")
-    # 1. Negative net margin (explicit)
-    # 2. Signal system detected "unprofitable" (based on EPS or other metrics)
-    # 3. Negative trailing EPS (explicit)
-    # 4. No P/E + negative FCF (strong inference: negative earnings + burning cash)
     trailing_eps = val.get("trailing_eps")
-    is_unprofitable = False
-    if (net_margin is not None and net_margin < 0) or is_signaled_unprofitable:
-        is_unprofitable = True
-    elif trailing_eps is not None and trailing_eps <= 0:
-        # Explicit negative or zero EPS
-        is_unprofitable = True
-    elif pe is None and has_negative_fcf:
-        # No P/E (likely negative earnings) + negative FCF = strong inference
-        is_unprofitable = True
+    _unprofitable = classify_unprofitability(
+        net_margin=net_margin,
+        trailing_eps=trailing_eps,
+        signaled_unprofitable="unprofitable" in bearish_signals,
+        pe_trailing=pe,
+        has_negative_fcf_signal="negative_free_cash_flow" in bearish_signals,
+    )
+    is_unprofitable = (
+        _unprofitable.by_margin
+        or _unprofitable.by_eps
+        or _unprofitable.by_signal
+        or _unprofitable.by_no_pe_with_negative_fcf
+    )
     # NOTE: If pe=None and net_margin=None and trailing_eps=None, we DON'T assume unprofitable
     # That's a data gap, not evidence of losses. Let fundamentals_missing handle it.
 

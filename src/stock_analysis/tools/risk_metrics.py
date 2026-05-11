@@ -8,7 +8,7 @@ from typing import Any
 import pandas as pd
 
 from stock_analysis.data.yfinance_client import fetch_history
-from stock_analysis.utils.helpers import safe_last_float
+from stock_analysis.utils.helpers import safe_last_float, safe_round
 from stock_analysis.utils.indicators import (
     calculate_atr,
     calculate_beta,
@@ -177,19 +177,23 @@ async def risk_metrics(
     # ATR
     atr_series = calculate_atr(high, low, close, 14)
     atr_val = safe_last_float(atr_series)
-    atr_pct = atr_val / current_price if atr_val and current_price else None
+    atr_pct: float | None = None
+    if atr_val is not None and current_price is not None and current_price > 0:
+        atr_pct = atr_val / current_price
 
     atr = {
-        "value": round(atr_val, 2) if atr_val is not None else None,
-        "as_pct_of_price": round(atr_pct, 4) if atr_pct is not None else None,
+        "value": safe_round(atr_val, 2),
+        "as_pct_of_price": safe_round(atr_pct, 4),
     }
 
     # Liquidity
     avg_volume = float(volume.mean()) if not volume.isna().all() else None
-    avg_dollar_volume = avg_volume * current_price if avg_volume and current_price else None
+    avg_dollar_volume: float | None = None
+    if avg_volume is not None and current_price is not None:
+        avg_dollar_volume = avg_volume * current_price
 
     liquidity = {
-        "avg_dollar_volume": round(avg_dollar_volume, 2) if avg_dollar_volume else None,
+        "avg_dollar_volume": safe_round(avg_dollar_volume, 2),
         "rules": {
             "liquid": {
                 "triggered": check_rule(avg_dollar_volume, 10_000_000, operator.gt),
@@ -312,8 +316,8 @@ def _build_position_sizing(
     )
 
     constraints = {
-        "max_by_concentration": round(max_by_concentration, 2) if max_by_concentration else None,
-        "max_by_liquidity": round(max_by_liquidity, 2) if max_by_liquidity else None,
+        "max_by_concentration": safe_round(max_by_concentration, 2),
+        "max_by_liquidity": safe_round(max_by_liquidity, 2),
     }
 
     # Position size by stop level
@@ -493,8 +497,8 @@ def _build_market_context(benchmark_df: pd.DataFrame | None) -> dict[str, Any]:
         "spy_above_200d": above_200d,
         "spy_above_50d": above_50d,
         "spy_price": round(current_spy, 2),
-        "spy_sma_200": round(sma_200_val, 2) if sma_200_val else None,
-        "spy_sma_50": round(sma_50_val, 2) if sma_50_val else None,
+        "spy_sma_200": safe_round(sma_200_val, 2),
+        "spy_sma_50": safe_round(sma_50_val, 2),
         "spy_distance_to_200d": distance_200d,
         "spy_distance_to_50d": distance_50d,
         # Provenance fields for auditability

@@ -1,8 +1,86 @@
 """Signal generation and risk regime classification."""
 
+from dataclasses import dataclass, field
 from typing import Any
 
 TIMEOUT_SECONDS = 10.0
+
+
+@dataclass(frozen=True)
+class UnprofitabilityResult:
+    """Structured unprofitability classification.
+
+    Centralizes the per-trigger reasons so each caller can decide which subset of
+    triggers it cares about. This pins down the (intentional) drift between
+    orchestrator/action_zones/verdict in one place rather than scattered conditionals.
+
+    Each call site historically uses a different combination:
+      - orchestrator: by_margin | by_eps
+      - action_zones: by_margin | by_eps | by_signal | by_no_pe_with_negative_fcf
+      - verdict (business quality): by_margin | by_eps | by_signal | by_pe_not_meaningful
+    """
+
+    triggers: frozenset[str] = field(default_factory=frozenset)
+
+    @property
+    def by_margin(self) -> bool:
+        return "net_margin_negative" in self.triggers
+
+    @property
+    def by_eps(self) -> bool:
+        return "trailing_eps_nonpositive" in self.triggers
+
+    @property
+    def by_signal(self) -> bool:
+        return "unprofitable_signal" in self.triggers
+
+    @property
+    def by_pe_not_meaningful(self) -> bool:
+        return "pe_not_meaningful" in self.triggers
+
+    @property
+    def by_no_pe_with_negative_fcf(self) -> bool:
+        return "no_pe_with_negative_fcf" in self.triggers
+
+    @property
+    def any(self) -> bool:
+        """True if any trigger fired (most permissive view)."""
+        return bool(self.triggers)
+
+
+def classify_unprofitability(
+    *,
+    net_margin: float | None = None,
+    trailing_eps: float | None = None,
+    signaled_unprofitable: bool = False,
+    pe_not_meaningful: bool = False,
+    pe_trailing: float | None = None,
+    has_negative_fcf_signal: bool = False,
+) -> UnprofitabilityResult:
+    """Classify whether a company exhibits unprofitability signals.
+
+    All inputs are optional; pass only what's available. The result lets each call
+    site read a specific subset of triggers via `by_*` properties.
+
+    Triggers:
+      - net_margin_negative: net_margin is not None and net_margin < 0
+      - trailing_eps_nonpositive: trailing_eps is not None and trailing_eps <= 0
+      - unprofitable_signal: caller passed signaled_unprofitable=True
+      - pe_not_meaningful: caller passed pe_not_meaningful=True
+      - no_pe_with_negative_fcf: pe_trailing is None and has_negative_fcf_signal=True
+    """
+    triggers: set[str] = set()
+    if net_margin is not None and net_margin < 0:
+        triggers.add("net_margin_negative")
+    if trailing_eps is not None and trailing_eps <= 0:
+        triggers.add("trailing_eps_nonpositive")
+    if signaled_unprofitable:
+        triggers.add("unprofitable_signal")
+    if pe_not_meaningful:
+        triggers.add("pe_not_meaningful")
+    if pe_trailing is None and has_negative_fcf_signal:
+        triggers.add("no_pe_with_negative_fcf")
+    return UnprofitabilityResult(triggers=frozenset(triggers))
 
 
 # Volatility regime thresholds

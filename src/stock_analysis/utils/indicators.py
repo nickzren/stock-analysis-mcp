@@ -5,7 +5,7 @@ import math
 import numpy as np
 import pandas as pd
 
-from stock_analysis.utils.helpers import safe_last_float
+from stock_analysis.utils.helpers import safe_last_float, safe_round
 
 
 def calculate_sma(prices: pd.Series, period: int) -> pd.Series:
@@ -378,14 +378,23 @@ def calculate_bollinger_bands(
     upper_val = safe_last_float(upper)
     lower_val = safe_last_float(lower)
     middle_val = safe_last_float(sma)
-    bandwidth = (upper_val - lower_val) / middle_val if upper_val and lower_val and middle_val else None
-    pct_b = (current_price - lower_val) / (upper_val - lower_val) if upper_val and lower_val and upper_val != lower_val else None
+    bandwidth: float | None = None
+    if (
+        upper_val is not None
+        and lower_val is not None
+        and middle_val is not None
+        and middle_val != 0
+    ):
+        bandwidth = (upper_val - lower_val) / middle_val
+    pct_b: float | None = None
+    if upper_val is not None and lower_val is not None and upper_val != lower_val:
+        pct_b = (current_price - lower_val) / (upper_val - lower_val)
     return {
-        "upper": round(upper_val, 2) if upper_val else None,
-        "middle": round(middle_val, 2) if middle_val else None,
-        "lower": round(lower_val, 2) if lower_val else None,
-        "bandwidth": round(bandwidth, 4) if bandwidth else None,
-        "pct_b": round(pct_b, 4) if pct_b is not None else None,
+        "upper": safe_round(upper_val, 2),
+        "middle": safe_round(middle_val, 2),
+        "lower": safe_round(lower_val, 2),
+        "bandwidth": safe_round(bandwidth, 4),
+        "pct_b": safe_round(pct_b, 4),
     }
 
 

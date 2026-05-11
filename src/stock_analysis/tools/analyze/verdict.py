@@ -4,6 +4,7 @@ import logging
 from typing import Any
 
 from stock_analysis.tools.analyze.signals import (
+    classify_unprofitability,
     vol_threshold_for_improvement,
 )
 from stock_analysis.utils.helpers import fcf_label_from_cashflow
@@ -188,28 +189,30 @@ def build_verdict(
     valuation_data = fundamentals_data.get("valuation", {})
     pe_trailing = valuation_data.get("pe_trailing")
 
-    # Check for unprofitability signals from signals list
+    # Check for unprofitability signals from signals list. `has_negative_fcf_signal`
+    # is used separately below in the mixed/weak classification — verdict's main
+    # predicate does NOT incorporate the no-PE + negative-FCF inference.
     bearish_signals = signals.get("bearish", [])
     is_signaled_unprofitable = "unprofitable" in bearish_signals
     has_negative_fcf_signal = "negative_free_cash_flow" in bearish_signals
 
-    # Check valuation_note from fundamentals_summary (set in analyze.py)
-    # This catches cases where PE is not meaningful due to losses
+    # Check valuation_note from fundamentals_summary (set in analyze.py).
+    # This catches cases where PE is not meaningful due to losses.
     valuation_note = fundamentals_summary.get("valuation", {}).get("valuation_note")
     pe_not_meaningful = valuation_note == "pe_not_meaningful"
-
-    # Get trailing EPS for explicit unprofitability check
     trailing_eps = valuation_data.get("trailing_eps")
 
-    # Require explicit signals for "unprofitable" label:
-    # 1. trailing_eps <= 0
-    # 2. net_margin < 0
-    # 3. free_cash_flow_ttm < 0 (only if other signals confirm)
+    _unprofitable = classify_unprofitability(
+        net_margin=net_margin,
+        trailing_eps=trailing_eps,
+        signaled_unprofitable=is_signaled_unprofitable,
+        pe_not_meaningful=pe_not_meaningful,
+    )
     has_explicit_unprofitable_signal = (
-        (net_margin is not None and net_margin < 0)
-        or (trailing_eps is not None and trailing_eps <= 0)
-        or is_signaled_unprofitable  # From fundamentals rules
-        or pe_not_meaningful  # valuation_note indicates PE not meaningful
+        _unprofitable.by_margin
+        or _unprofitable.by_eps
+        or _unprofitable.by_signal
+        or _unprofitable.by_pe_not_meaningful
     )
 
     if not coverage.get("fundamentals", False):
