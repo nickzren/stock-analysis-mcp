@@ -4,12 +4,12 @@ import gzip
 import hashlib
 import os
 import threading
-import time
 from datetime import UTC, datetime
 from typing import Any
 
 import pandas as pd
 
+from stock_analysis.data.cache_manager import TTLCache
 from stock_analysis.utils.ohlcv import df_to_csv
 from stock_analysis.utils.validators import FetchParams
 
@@ -24,7 +24,7 @@ class PriceCache:
 
     def __init__(self, cache_dir: str | None = None):
         self._cache_dir = cache_dir
-        self._entries: dict[str, tuple[dict[str, Any], float]] = {}
+        self._inner: TTLCache = TTLCache()
         self._default_ttl = int(os.environ.get("CACHE_TTL", "300"))  # 5 minutes
         self._lock = threading.Lock()
 
@@ -64,34 +64,14 @@ class PriceCache:
             "stored_at": datetime.now(UTC).replace(tzinfo=None).isoformat(),
         }
 
-        expire = ttl if ttl is not None else self._default_ttl
-        expires_at = time.monotonic() + expire
         with self._lock:
-            self._entries[uri] = (entry, expires_at)
-
+            self._inner.set(uri, entry, ttl if ttl is not None else self._default_ttl)
         return uri
 
     def get(self, uri: str) -> dict[str, Any] | None:
-        """
-        Get cache entry by URI.
-
-        Args:
-            uri: Canonical URI
-
-        Returns:
-            Cache entry dict or None if not found
-        """
+        """Get cache entry by URI, or None if missing/expired."""
         with self._lock:
-            item = self._entries.get(uri)
-            if item is None:
-                return None
-
-            entry, expires_at = item
-            if time.monotonic() > expires_at:
-                del self._entries[uri]
-                return None
-
-            return entry
+            return self._inner.get(uri)
 
     def get_csv(self, uri: str) -> str | None:
         """
@@ -136,7 +116,7 @@ class PriceCache:
     def clear(self) -> None:
         """Clear all cached data."""
         with self._lock:
-            self._entries.clear()
+            self._inner.clear()
 
 
 # Global instance

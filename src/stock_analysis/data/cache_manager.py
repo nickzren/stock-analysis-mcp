@@ -28,14 +28,30 @@ _TTL_CONFIG: dict[DataType, tuple[int, int]] = {
 }
 
 
+def classify_session(now: datetime) -> str:
+    """Classify a US-equities trading session for the given (tz-aware) datetime.
+
+    Returns one of: "closed", "pre_market", "regular", "after_hours".
+    Clock-based only — does not account for holidays.
+    """
+    if now.weekday() >= 5:
+        return "closed"
+    minutes = now.hour * 60 + now.minute
+    if minutes < 4 * 60:
+        return "closed"
+    if minutes < 9 * 60 + 30:
+        return "pre_market"
+    if minutes < 16 * 60:
+        return "regular"
+    if minutes < 20 * 60:
+        return "after_hours"
+    return "closed"
+
+
 def is_market_hours() -> bool:
     """Check if US equity markets are currently in regular trading hours."""
     eastern = pytz.timezone("America/New_York")
-    now = datetime.now(eastern)
-    if now.weekday() >= 5:
-        return False
-    minutes = now.hour * 60 + now.minute
-    return 9 * 60 + 30 <= minutes < 16 * 60
+    return classify_session(datetime.now(eastern)) == "regular"
 
 
 def get_ttl(data_type: DataType) -> int:

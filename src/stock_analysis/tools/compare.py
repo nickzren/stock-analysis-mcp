@@ -30,6 +30,36 @@ _HIGHER_IS_BETTER = {
 
 _ALL_METRICS = _LOWER_IS_BETTER | _HIGHER_IS_BETTER
 
+# Map each comparable metric to (root, section, source_key) where:
+#   root: "fund" or "tech" (selects fund_data or tech_data)
+#   section: top-level section key inside that root
+#   source_key: field name within the section
+_METRIC_SOURCES: dict[str, tuple[str, str, str]] = {
+    # Valuation
+    "pe_trailing": ("fund", "valuation", "pe_trailing"),
+    "ps_trailing": ("fund", "valuation", "ps_trailing"),
+    "peg_ratio": ("fund", "valuation", "peg_ratio"),
+    # Growth
+    "revenue_yoy": ("fund", "growth", "revenue_yoy"),
+    "eps_yoy": ("fund", "growth", "eps_yoy"),
+    # Profitability
+    "net_margin": ("fund", "profitability", "net_margin"),
+    "gross_margin": ("fund", "profitability", "gross_margin"),
+    "roe": ("fund", "profitability", "roe"),
+    # Health
+    "debt_to_equity": ("fund", "financial_health", "debt_to_equity"),
+    # Risk
+    "position_in_52w_range": ("tech", "price_position", "position_in_range"),
+    # Technicals
+    "return_1m": ("tech", "returns", "return_1m"),
+    "return_3m": ("tech", "returns", "return_3m"),
+    "return_1y": ("tech", "returns", "return_1y"),
+    "rsi": ("tech", "rsi", "value"),
+    # Yield
+    "dividend_yield": ("fund", "yield_metrics", "dividend_yield"),
+    "fcf_yield": ("fund", "yield_metrics", "fcf_yield"),
+}
+
 
 async def compare_stocks(symbols: list[str]) -> dict[str, Any]:
     """
@@ -170,40 +200,12 @@ def _extract_metrics(
     tech: dict[str, Any],
 ) -> dict[str, float | None]:
     """Extract comparable metrics from fundamentals and technicals results."""
-    valuation = fund.get("valuation", {})
-    growth = fund.get("growth", {})
-    profitability = fund.get("profitability", {})
-    health = fund.get("financial_health", {})
-    yield_metrics = fund.get("yield_metrics", {})
-    price_position = tech.get("price_position", {})
-    returns = tech.get("returns", {})
-    rsi = tech.get("rsi", {})
-
-    return {
-        # Valuation
-        "pe_trailing": safe_float(valuation.get("pe_trailing")),
-        "ps_trailing": safe_float(valuation.get("ps_trailing")),
-        "peg_ratio": safe_float(valuation.get("peg_ratio")),
-        # Growth
-        "revenue_yoy": safe_float(growth.get("revenue_yoy")),
-        "eps_yoy": safe_float(growth.get("eps_yoy")),
-        # Profitability
-        "net_margin": safe_float(profitability.get("net_margin")),
-        "gross_margin": safe_float(profitability.get("gross_margin")),
-        "roe": safe_float(profitability.get("roe")),
-        # Health
-        "debt_to_equity": safe_float(health.get("debt_to_equity")),
-        # Risk
-        "position_in_52w_range": safe_float(price_position.get("position_in_range")),
-        # Technicals
-        "return_1m": safe_float(returns.get("return_1m")),
-        "return_3m": safe_float(returns.get("return_3m")),
-        "return_1y": safe_float(returns.get("return_1y")),
-        "rsi": safe_float(rsi.get("value")),
-        # Yield
-        "dividend_yield": safe_float(yield_metrics.get("dividend_yield")),
-        "fcf_yield": safe_float(yield_metrics.get("fcf_yield")),
-    }
+    roots = {"fund": fund, "tech": tech}
+    out: dict[str, float | None] = {}
+    for metric, (root, section, key) in _METRIC_SOURCES.items():
+        section_data = roots[root].get(section, {})
+        out[metric] = safe_float(section_data.get(key))
+    return out
 
 
 def _rank_metric(

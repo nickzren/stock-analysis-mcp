@@ -15,7 +15,13 @@ import pytz
 import yfinance as yf
 from requests.exceptions import HTTPError
 
-from stock_analysis.data.cache_manager import DataType, get_ttl, info_cache, ticker_cache
+from stock_analysis.data.cache_manager import (
+    DataType,
+    classify_session,
+    get_ttl,
+    info_cache,
+    ticker_cache,
+)
 from stock_analysis.utils.ohlcv import standardize_ohlcv
 from stock_analysis.utils.validators import FetchParams
 
@@ -674,29 +680,9 @@ def get_market_state(tz: str = "America/New_York") -> dict[str, str]:
     Returns:
         Dict with state, method, and checked_at timestamp
     """
-    eastern = pytz.timezone(tz)
-    now = datetime.now(eastern)
-
-    # Weekends
-    if now.weekday() >= 5:
-        state = "closed"
-    else:
-        hour, minute = now.hour, now.minute
-        time_minutes = hour * 60 + minute
-
-        if time_minutes < 4 * 60:  # Before 4 AM
-            state = "closed"
-        elif time_minutes < 9 * 60 + 30:  # 4 AM - 9:30 AM
-            state = "pre_market"
-        elif time_minutes < 16 * 60:  # 9:30 AM - 4 PM
-            state = "regular"
-        elif time_minutes < 20 * 60:  # 4 PM - 8 PM
-            state = "after_hours"
-        else:
-            state = "closed"
-
+    now = datetime.now(pytz.timezone(tz))
     return {
-        "state": state,
+        "state": classify_session(now),
         "method": "clock_only_no_holidays",
         "checked_at": now.isoformat(),
     }
