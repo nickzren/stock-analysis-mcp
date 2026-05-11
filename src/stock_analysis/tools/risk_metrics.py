@@ -109,8 +109,8 @@ async def risk_metrics(
     annualized_vol = calculate_volatility(returns, annualize=True)
 
     volatility = {
-        "daily_std": round(daily_std, 6) if daily_std is not None else None,
-        "annualized": round(annualized_vol, 4) if annualized_vol is not None else None,
+        "daily_std": safe_round(daily_std, 6),
+        "annualized": safe_round(annualized_vol, 4),
         "rules": {
             "high_volatility": {
                 "triggered": check_rule(annualized_vol, 0.40, operator.gt),
@@ -160,8 +160,8 @@ async def risk_metrics(
     current_dd, days_since_high = calculate_current_drawdown(close)
 
     drawdown = {
-        "max_1y": round(max_dd, 4) if max_dd is not None else None,
-        "current": round(current_dd, 4) if current_dd is not None else None,
+        "max_1y": safe_round(max_dd, 4),
+        "current": safe_round(current_dd, 4),
         "days_since_high": days_since_high,
     }
 
@@ -170,8 +170,8 @@ async def risk_metrics(
     var_99 = calculate_var(returns, 0.99)
 
     var = {
-        "daily_95": round(var_95, 4) if var_95 is not None else None,
-        "daily_99": round(var_99, 4) if var_99 is not None else None,
+        "daily_95": safe_round(var_95, 4),
+        "daily_99": safe_round(var_99, 4),
     }
 
     # ATR
@@ -269,23 +269,15 @@ def _build_stop_suggestions(
         for label in ["atr_1x", "atr_1_5x", "atr_2x"]:
             suggestions[label] = {"price": None, "distance": None}
 
-    if current_price and sma_50_val:
-        distance = (sma_50_val - current_price) / current_price
-        suggestions["sma_50"] = {
-            "price": round(sma_50_val, 2),
-            "distance": round(distance, 4),
-        }
-    else:
-        suggestions["sma_50"] = {"price": None, "distance": None}
-
-    if current_price and sma_200_val:
-        distance = (sma_200_val - current_price) / current_price
-        suggestions["sma_200"] = {
-            "price": round(sma_200_val, 2),
-            "distance": round(distance, 4),
-        }
-    else:
-        suggestions["sma_200"] = {"price": None, "distance": None}
+    for label, sma_val in (("sma_50", sma_50_val), ("sma_200", sma_200_val)):
+        if current_price and sma_val:
+            distance = (sma_val - current_price) / current_price
+            suggestions[label] = {
+                "price": round(sma_val, 2),
+                "distance": round(distance, 4),
+            }
+        else:
+            suggestions[label] = {"price": None, "distance": None}
 
     return suggestions
 

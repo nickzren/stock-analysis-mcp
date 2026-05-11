@@ -7,11 +7,12 @@ from typing import Any
 import pandas as pd
 
 from stock_analysis.data.yfinance_client import fetch_info, fetch_ticker
-from stock_analysis.utils.helpers import safe_float, safe_round
+from stock_analysis.utils.helpers import current_price_from_info, safe_float, safe_round
 from stock_analysis.utils.provenance import (
-    build_error_response,
+    FetchError,
     build_meta,
     build_provenance,
+    fetch_or_error,
     utcnow_isoformat_z,
 )
 
@@ -30,13 +31,9 @@ async def events_calendar(symbol: str) -> dict[str, Any]:
     normalized_symbol = symbol.upper().strip()
 
     try:
-        ticker = await fetch_ticker(symbol)
-    except Exception as e:
-        return build_error_response(
-            error_type="data_unavailable",
-            message=f"Failed to fetch data: {e}",
-            symbol=symbol,
-        )
+        ticker = await fetch_or_error(fetch_ticker(symbol), symbol)
+    except FetchError as fe:
+        return fe.response
 
     try:
         info = await fetch_info(symbol)
@@ -49,14 +46,17 @@ async def events_calendar(symbol: str) -> dict[str, Any]:
     except Exception:
         calendar = {}
 
+    try:
+        earnings_dates = ticker.earnings_dates
+    except Exception:
+        earnings_dates = None
+
     # Get earnings history
     earnings_history: list[dict[str, Any]] = []
     beat_count = 0
     total_with_data = 0
 
     try:
-        # Get earnings dates with estimates/actuals
-        earnings_dates = ticker.earnings_dates
         if earnings_dates is not None and len(earnings_dates) > 0:
             # earnings_dates is a DataFrame with columns like 'EPS Estimate', 'Reported EPS', etc.
             for date, row in earnings_dates.head(8).iterrows():
@@ -118,7 +118,6 @@ async def events_calendar(symbol: str) -> dict[str, Any]:
     # Source 2: Fallback to earnings_dates (future dates)
     if next_earnings_date is None:
         try:
-            earnings_dates = ticker.earnings_dates
             if earnings_dates is not None and len(earnings_dates) > 0:
                 now = datetime.now()
                 for date, _row in earnings_dates.iterrows():
@@ -235,9 +234,9 @@ async def events_calendar(symbol: str) -> dict[str, Any]:
         "recommendation": None,
         "num_analysts": None,
     }
-    analyst_warnings: list[str] = []
+    analyst_warning: str | None = None
 
-    current_price = safe_float(info.get("regularMarketPrice")) or safe_float(info.get("currentPrice"))
+    current_price = current_price_from_info(info)
 
     target_mean = safe_float(info.get("targetMeanPrice"))
     target_low = safe_float(info.get("targetLowPrice"))
@@ -264,10 +263,10 @@ async def events_calendar(symbol: str) -> dict[str, Any]:
 
     # Only warn if info was empty (fetch failed earlier)
     if not info:
-        analyst_warnings.append("analyst_data_unavailable")
+        analyst_warning = "analyst_data_unavailable"
 
-    if analyst_warnings:
-        analyst["warnings"] = analyst_warnings
+    if analyst_warning:
+        analyst["warnings"] = [analyst_warning]
 
     duration_ms = (perf_counter() - start_time) * 1000
 
@@ -307,4 +306,3 @@ def _format_date(value: Any) -> str | None:
             return value
 
     return None
-

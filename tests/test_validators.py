@@ -58,16 +58,15 @@ class TestFetchParams:
             params = FetchParams(symbol="AAPL", period="1y", interval=interval, adjusted=True)
             assert params.interval == interval
 
-    def test_to_uri_canonical(self) -> None:
+    def test_to_uri_canonical(self, default_fetch_params: FetchParams) -> None:
         """Test URI generation is canonical."""
-        params = FetchParams(symbol="NVDA", period="1y", interval="1d", adjusted=True)
-        uri = params.to_uri()
+        uri = default_fetch_params.to_uri()
 
         # URI should be deterministic
-        assert uri == params.to_uri()
+        assert uri == default_fetch_params.to_uri()
 
         # Should contain symbol, period, interval, adjusted
-        assert "NVDA" in uri
+        assert "AAPL" in uri
         assert "1y" in uri
         assert "1d" in uri
         assert uri.endswith("/adjusted")
@@ -84,10 +83,9 @@ class TestFetchParams:
         # URIs should be identical
         assert params1.to_uri() == params2.to_uri()
 
-    def test_to_yf_kwargs(self) -> None:
+    def test_to_yf_kwargs(self, default_fetch_params: FetchParams) -> None:
         """Test yfinance kwargs generation."""
-        params = FetchParams(symbol="AAPL", period="1y", interval="1d", adjusted=True)
-        kwargs = params.to_yf_kwargs()
+        kwargs = default_fetch_params.to_yf_kwargs()
 
         assert kwargs["tickers"] == "AAPL"
         assert kwargs["period"] == "1y"
@@ -95,12 +93,10 @@ class TestFetchParams:
         assert kwargs["auto_adjust"] is True
         assert kwargs["progress"] is False
 
-    def test_immutable(self) -> None:
+    def test_immutable(self, default_fetch_params: FetchParams) -> None:
         """Test FetchParams is immutable."""
-        params = FetchParams(symbol="AAPL", period="1y", interval="1d", adjusted=True)
-
         with pytest.raises(AttributeError):
-            params.symbol = "NVDA"
+            default_fetch_params.symbol = "NVDA"
 
 
 class TestCheckRule:

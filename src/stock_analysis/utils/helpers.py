@@ -38,6 +38,14 @@ def safe_last_float(series: pd.Series) -> float | None:
     return float(last)
 
 
+def current_price_from_info(info: dict[str, Any]) -> float | None:
+    """Return the preferred current price field from a yfinance info dict."""
+    regular_price = safe_float(info.get("regularMarketPrice"))
+    if regular_price is not None:
+        return regular_price
+    return safe_float(info.get("currentPrice"))
+
+
 def safe_int(value: Any) -> int | None:
     """Convert to int or return None."""
     if value is None:
@@ -59,6 +67,19 @@ def safe_str(value: Any) -> str | None:
 # --- Numeric formatting helpers ---
 
 
+def _scale_with_unit(abs_value: float, *, trillions: bool = True) -> tuple[float, str]:
+    """Return the divisor and suffix for compact number formatting."""
+    if trillions and abs_value >= 1e12:
+        return 1e12, "T"
+    if abs_value >= 1e9:
+        return 1e9, "B"
+    if abs_value >= 1e6:
+        return 1e6, "M"
+    if abs_value >= 1e3:
+        return 1e3, "K"
+    return 1.0, ""
+
+
 def round_or_none(x: float | None, ndigits: int = 0) -> float | None:
     """Round to ndigits or return None. Handles 0 correctly (unlike truthiness)."""
     if x is None:
@@ -78,15 +99,9 @@ def format_compact_number(value: float | int | None) -> str | None:
     if value is None:
         return None
     abs_val = abs(float(value))
-    if abs_val >= 1e12:
-        return f"{value / 1e12:.1f}T"
-    if abs_val >= 1e9:
-        return f"{value / 1e9:.1f}B"
-    if abs_val >= 1e6:
-        return f"{value / 1e6:.1f}M"
-    if abs_val >= 1e3:
-        return f"{value / 1e3:.1f}K"
-    return f"{value:.0f}"
+    scale, unit = _scale_with_unit(abs_val)
+    decimals = 1 if unit else 0
+    return f"{value / scale:.{decimals}f}{unit}"
 
 
 def format_price(value: float | None, currency: str | None = None) -> str | None:
@@ -105,22 +120,14 @@ def format_cashflow_value(value: float | None, currency: str | None = None) -> s
         return None
     sign = "+" if value > 0 else "-" if value < 0 else ""
     abs_val = abs(value)
+    scale, unit = _scale_with_unit(abs_val, trillions=False)
+    scaled = abs_val / scale
 
-    if abs_val >= 1e9:
-        scaled = abs_val / 1e9
-        unit = "B"
+    if unit == "B" or unit == "T":
         decimals = 1
-    elif abs_val >= 1e6:
-        scaled = abs_val / 1e6
-        unit = "M"
+    elif unit == "M":
         decimals = 0 if abs_val >= 1e8 else 1
-    elif abs_val >= 1e3:
-        scaled = abs_val / 1e3
-        unit = "K"
-        decimals = 0
     else:
-        scaled = abs_val
-        unit = ""
         decimals = 0
 
     number = f"{scaled:.{decimals}f}{unit}"

@@ -96,6 +96,152 @@ def _limit_list(items: list[dict[str, Any]], max_items: int) -> list[dict[str, A
     return items[:max_items]
 
 
+def _simple_condition(
+    condition: str,
+    threshold: str,
+    next_update: str | None,
+) -> dict[str, Any]:
+    """Build a legacy condition dict without machine-checkable fields."""
+    return {
+        "condition": condition,
+        "threshold": threshold,
+        "next_update": next_update,
+    }
+
+
+def _build_fundamental_conditions(
+    *,
+    is_unprofitable: bool,
+    net_margin: float | None,
+    fcf: float | None,
+    revenue_yoy: float | None,
+    next_earnings_date: str | None,
+    bullish_list: list[str],
+    bearish_list: list[str],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Build fundamentals bullish/bearish monitor conditions."""
+    fundamentals_bullish: list[dict[str, Any]] = []
+    fundamentals_bearish: list[dict[str, Any]] = []
+
+    if is_unprofitable:
+        fundamentals_bullish.extend(
+            [
+                _make_condition(
+                    id="returns_to_profitability",
+                    condition="returns_to_profitability",
+                    data_source="yfinance.info.profitMargins",
+                    operator=">",
+                    target_value=0.0,
+                    current_value=net_margin,
+                    threshold_str="net_margin > 0 for 2 consecutive quarters",
+                    current_str=(
+                        f"net_margin = {net_margin*100:.1f}%"
+                        if net_margin is not None
+                        else "net_margin = unknown"
+                    ),
+                    next_update=next_earnings_date,
+                    priority="critical",
+                ),
+                _make_condition(
+                    id="fcf_turns_positive",
+                    condition="fcf_turns_positive",
+                    data_source="yfinance.info.freeCashflow",
+                    operator=">",
+                    target_value=0.0,
+                    current_value=fcf,
+                    threshold_str="FCF > 0 for 2 consecutive quarters",
+                    current_str=f"FCF = ${fcf/1e6:.0f}M" if fcf is not None else "FCF = unknown",
+                    next_update=next_earnings_date,
+                    priority="high",
+                ),
+                _make_condition(
+                    id="revenue_stabilizes",
+                    condition="revenue_stabilizes",
+                    data_source="yfinance.info.revenueGrowth",
+                    operator=">",
+                    target_value=-0.10,
+                    current_value=revenue_yoy,
+                    threshold_str="revenue_yoy > -10%",
+                    current_str=(
+                        f"revenue_yoy = {revenue_yoy*100:.0f}%"
+                        if revenue_yoy is not None
+                        else "revenue_yoy = unknown"
+                    ),
+                    next_update=next_earnings_date,
+                    priority="medium",
+                ),
+            ]
+        )
+        fundamentals_bearish.append(
+            _make_condition(
+                id="revenue_collapses",
+                condition="revenue_collapses",
+                data_source="yfinance.info.revenueGrowth",
+                operator="<",
+                target_value=-0.30,
+                current_value=revenue_yoy,
+                threshold_str="revenue_yoy < -30%",
+                current_str=(
+                    f"revenue_yoy = {revenue_yoy*100:.0f}%"
+                    if revenue_yoy is not None
+                    else "revenue_yoy = unknown"
+                ),
+                next_update=next_earnings_date,
+            )
+        )
+        return fundamentals_bullish, fundamentals_bearish
+
+    profitable_rules = (
+        (
+            bearish_list,
+            fundamentals_bullish,
+            "unprofitable",
+            "returns_to_profitability",
+            "net_margin > 0 for 2 consecutive quarters",
+        ),
+        (
+            bullish_list,
+            fundamentals_bearish,
+            "profitable",
+            "earnings_turn_negative",
+            "net_margin < 0",
+        ),
+        (
+            bearish_list,
+            fundamentals_bullish,
+            "negative_free_cash_flow",
+            "fcf_turns_positive",
+            "FCF > 0 for 2 consecutive quarters",
+        ),
+        (
+            bullish_list,
+            fundamentals_bearish,
+            "positive_free_cash_flow",
+            "fcf_turns_negative",
+            "FCF < 0",
+        ),
+        (
+            bullish_list,
+            fundamentals_bearish,
+            "high_growth",
+            "growth_decelerates",
+            "revenue_yoy < 15%",
+        ),
+        (
+            bearish_list,
+            fundamentals_bullish,
+            "declining_growth",
+            "growth_accelerates",
+            "revenue_yoy > 10%",
+        ),
+    )
+    for signal_list, output, signal, condition, threshold in profitable_rules:
+        if signal in signal_list:
+            output.append(_simple_condition(condition, threshold, next_earnings_date))
+
+    return fundamentals_bullish, fundamentals_bearish
+
+
 def build_decision_context(
     signals: dict[str, list[str]],
     tech_data: dict[str, Any],
@@ -556,103 +702,15 @@ def build_decision_context(
     # - current: human-readable current value
     # - next_update: when to check again
 
-    # For unprofitable companies, ALWAYS include path-to-profitability checkpoints
-    # These are thesis-critical and should never be "N/A"
-    fundamentals_bullish: list[dict[str, Any]] = []
-    fundamentals_bearish: list[dict[str, Any]] = []
-
-    if is_unprofitable:
-        # ALWAYS include profitability checkpoint for unprofitable companies
-        fundamentals_bullish.append(_make_condition(
-            id="returns_to_profitability",
-            condition="returns_to_profitability",
-            data_source="yfinance.info.profitMargins",
-            operator=">",
-            target_value=0.0,
-            current_value=net_margin,
-            threshold_str="net_margin > 0 for 2 consecutive quarters",
-            current_str=f"net_margin = {net_margin*100:.1f}%" if net_margin is not None else "net_margin = unknown",
-            next_update=next_earnings_date,
-            priority="critical",
-        ))
-        # ALWAYS include FCF checkpoint for unprofitable companies
-        fundamentals_bullish.append(_make_condition(
-            id="fcf_turns_positive",
-            condition="fcf_turns_positive",
-            data_source="yfinance.info.freeCashflow",
-            operator=">",
-            target_value=0.0,
-            current_value=fcf,
-            threshold_str="FCF > 0 for 2 consecutive quarters",
-            current_str=f"FCF = ${fcf/1e6:.0f}M" if fcf is not None else "FCF = unknown",
-            next_update=next_earnings_date,
-            priority="high",
-        ))
-        # ALWAYS include revenue growth checkpoint for unprofitable companies
-        fundamentals_bullish.append(_make_condition(
-            id="revenue_stabilizes",
-            condition="revenue_stabilizes",
-            data_source="yfinance.info.revenueGrowth",
-            operator=">",
-            target_value=-0.10,
-            current_value=revenue_yoy,
-            threshold_str="revenue_yoy > -10%",
-            current_str=f"revenue_yoy = {revenue_yoy*100:.0f}%" if revenue_yoy is not None else "revenue_yoy = unknown",
-            next_update=next_earnings_date,
-            priority="medium",
-        ))
-        # Add bearish conditions
-        fundamentals_bearish.append(_make_condition(
-            id="revenue_collapses",
-            condition="revenue_collapses",
-            data_source="yfinance.info.revenueGrowth",
-            operator="<",
-            target_value=-0.30,
-            current_value=revenue_yoy,
-            threshold_str="revenue_yoy < -30%",
-            current_str=f"revenue_yoy = {revenue_yoy*100:.0f}%" if revenue_yoy is not None else "revenue_yoy = unknown",
-            next_update=next_earnings_date,
-        ))
-    else:
-        # Profitable company checkpoints
-        if "unprofitable" in bearish_list:
-            fundamentals_bullish.append({
-                "condition": "returns_to_profitability",
-                "threshold": "net_margin > 0 for 2 consecutive quarters",
-                "next_update": next_earnings_date,
-            })
-        if "profitable" in bullish_list:
-            fundamentals_bearish.append({
-                "condition": "earnings_turn_negative",
-                "threshold": "net_margin < 0",
-                "next_update": next_earnings_date,
-            })
-
-        if "negative_free_cash_flow" in bearish_list:
-            fundamentals_bullish.append({
-                "condition": "fcf_turns_positive",
-                "threshold": "FCF > 0 for 2 consecutive quarters",
-                "next_update": next_earnings_date,
-            })
-        if "positive_free_cash_flow" in bullish_list:
-            fundamentals_bearish.append({
-                "condition": "fcf_turns_negative",
-                "threshold": "FCF < 0",
-                "next_update": next_earnings_date,
-            })
-
-        if "high_growth" in bullish_list:
-            fundamentals_bearish.append({
-                "condition": "growth_decelerates",
-                "threshold": "revenue_yoy < 15%",
-                "next_update": next_earnings_date,
-            })
-        if "declining_growth" in bearish_list:
-            fundamentals_bullish.append({
-                "condition": "growth_accelerates",
-                "threshold": "revenue_yoy > 10%",
-                "next_update": next_earnings_date,
-            })
+    fundamentals_bullish, fundamentals_bearish = _build_fundamental_conditions(
+        is_unprofitable=is_unprofitable,
+        net_margin=net_margin,
+        fcf=fcf,
+        revenue_yoy=revenue_yoy,
+        next_earnings_date=next_earnings_date,
+        bullish_list=bullish_list,
+        bearish_list=bearish_list,
+    )
 
     # === VALUATION CATEGORY ===
     valuation_bullish: list[dict[str, Any]] = []

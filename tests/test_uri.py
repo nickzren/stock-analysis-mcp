@@ -35,10 +35,9 @@ class TestURICanonicalization:
         assert "/1d/" in uri
         assert uri.endswith("/adjusted")
 
-    def test_uri_adjusted_true(self) -> None:
+    def test_uri_adjusted_true(self, default_fetch_params: FetchParams) -> None:
         """Test URI with adjusted=true."""
-        params = FetchParams(symbol="AAPL", period="1y", interval="1d", adjusted=True)
-        uri = params.to_uri()
+        uri = default_fetch_params.to_uri()
 
         assert uri.endswith("/adjusted")
 
@@ -49,9 +48,9 @@ class TestURICanonicalization:
 
         assert uri.endswith("/unadjusted")
 
-    def test_uri_different_params_different_uri(self) -> None:
+    def test_uri_different_params_different_uri(self, default_fetch_params: FetchParams) -> None:
         """Test different params produce different URIs."""
-        params1 = FetchParams(symbol="AAPL", period="1y", interval="1d", adjusted=True)
+        params1 = default_fetch_params
         params2 = FetchParams(symbol="NVDA", period="1y", interval="1d", adjusted=True)
         params3 = FetchParams(symbol="AAPL", period="6mo", interval="1d", adjusted=True)
         params4 = FetchParams(symbol="AAPL", period="1y", interval="1h", adjusted=True)
@@ -62,16 +61,16 @@ class TestURICanonicalization:
         # All URIs should be unique
         assert len(uris) == 5
 
-    def test_uri_case_normalized(self) -> None:
+    def test_uri_case_normalized(self, default_fetch_params: FetchParams) -> None:
         """Test URI is case-normalized."""
         params_lower = FetchParams(symbol="aapl", period="1y", interval="1d", adjusted=True)
-        params_upper = FetchParams(symbol="AAPL", period="1y", interval="1d", adjusted=True)
+        params_upper = default_fetch_params
 
         assert params_lower.to_uri() == params_upper.to_uri()
 
-    def test_uri_whitespace_normalized(self) -> None:
+    def test_uri_whitespace_normalized(self, default_fetch_params: FetchParams) -> None:
         """Test URI handles whitespace in symbol."""
-        params1 = FetchParams(symbol="AAPL", period="1y", interval="1d", adjusted=True)
+        params1 = default_fetch_params
         params2 = FetchParams(symbol="  AAPL  ", period="1y", interval="1d", adjusted=True)
 
         assert params1.to_uri() == params2.to_uri()

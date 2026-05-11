@@ -402,15 +402,9 @@ def calculate_obv(close: pd.Series, volume: pd.Series) -> pd.Series | None:
     """Calculate On-Balance Volume."""
     if close is None or volume is None or len(close) < 2:
         return None
-    obv = pd.Series(0.0, index=close.index)
-    for i in range(1, len(close)):
-        if close.iloc[i] > close.iloc[i - 1]:
-            obv.iloc[i] = obv.iloc[i - 1] + volume.iloc[i]
-        elif close.iloc[i] < close.iloc[i - 1]:
-            obv.iloc[i] = obv.iloc[i - 1] - volume.iloc[i]
-        else:
-            obv.iloc[i] = obv.iloc[i - 1]
-    return obv
+    delta = close.diff().fillna(0)
+    direction = (delta > 0).astype(float) - (delta < 0).astype(float)
+    return (direction * volume).cumsum()
 
 
 def calculate_fibonacci_levels(

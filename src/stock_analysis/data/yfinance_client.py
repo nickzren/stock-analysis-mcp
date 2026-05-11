@@ -95,26 +95,6 @@ class InfoCompleteness:
     sentinel_values_present: int
 
 
-# Sentinel keys that indicate a complete fundamental response
-# These are very unlikely to be absent in a real full response,
-# but will be absent in crumb-broken partial responses
-INFO_FUND_SENTINELS: tuple[str, ...] = (
-    "totalRevenue",
-    "revenueGrowth",
-    "profitMargins",
-    "grossMargins",
-    "operatingCashflow",
-    "freeCashflow",
-    "totalCash",
-    "cashAndShortTermInvestments",
-    "ebitda",
-    "enterpriseValue",
-    "sharesOutstanding",
-    "trailingEps",
-    "trailingPE",
-    "priceToSalesTrailing12Months",
-)
-
 # Core financial statement sentinels - true fundamentals that crumb-broken payloads reliably lack
 # These are more reliable than market metadata fields (enterpriseValue, sharesOutstanding)
 # which may appear in partial payloads
@@ -127,6 +107,19 @@ INFO_CORE_FUND_SENTINELS: tuple[str, ...] = (
     "freeCashflow",
     "totalCash",
     "cashAndShortTermInvestments",
+)
+
+# Sentinel keys that indicate a complete fundamental response
+# These are very unlikely to be absent in a real full response,
+# but will be absent in crumb-broken partial responses
+INFO_FUND_SENTINELS: tuple[str, ...] = (
+    *INFO_CORE_FUND_SENTINELS,
+    "ebitda",
+    "enterpriseValue",
+    "sharesOutstanding",
+    "trailingEps",
+    "trailingPE",
+    "priceToSalesTrailing12Months",
 )
 
 # Thresholds for completeness
@@ -154,7 +147,7 @@ _info_singleflight: dict[str, "asyncio.Task[tuple[dict[str, Any], RetryResult]]"
 _info_singleflight_lock = asyncio.Lock()
 
 
-def assess_info_completeness(info: dict[str, Any]) -> InfoCompleteness:
+def assess_info_completeness(info: dict[str, Any] | None) -> InfoCompleteness:
     """
     Assess whether info dict has complete fundamental data.
 
@@ -503,7 +496,7 @@ async def _fetch_info_raw(symbol: str) -> tuple[dict[str, Any], RetryResult]:
     """
     normalized_symbol = symbol.upper().strip()
 
-    def _fetch() -> dict[str, Any]:
+    def _fetch() -> tuple[dict[str, Any], InfoCompleteness]:
         ticker = yf.Ticker(normalized_symbol)
         info = ticker.info
         if not info:
@@ -520,7 +513,7 @@ async def _fetch_info_raw(symbol: str) -> tuple[dict[str, Any], RetryResult]:
                 sentinel_keys_present=completeness.sentinel_keys_present,
                 sentinel_values_present=completeness.sentinel_values_present,
             )
-        return info
+        return info, completeness
 
     async with _fetch_semaphore:
         retry_result = await _retry_with_backoff(
@@ -529,8 +522,8 @@ async def _fetch_info_raw(symbol: str) -> tuple[dict[str, Any], RetryResult]:
         )
 
         # Add completeness info to result
-        info = retry_result.result
-        completeness = assess_info_completeness(info)
+        info, completeness = retry_result.result
+        retry_result.result = info
         retry_result.info_completeness = completeness
 
         return info, retry_result

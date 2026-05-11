@@ -10,9 +10,11 @@ import pandas as pd
 from stock_analysis.data.yfinance_client import fetch_ticker
 from stock_analysis.utils.helpers import safe_float, safe_round
 from stock_analysis.utils.provenance import (
+    FetchError,
     build_error_response,
     build_meta,
     build_provenance,
+    fetch_or_error,
     utcnow_isoformat_z,
 )
 from stock_analysis.utils.sanitize import sanitize_text
@@ -92,13 +94,9 @@ async def stock_news(symbol: str, days: int = 7) -> dict[str, Any]:
     normalized_symbol = symbol.upper().strip()
 
     try:
-        ticker = await fetch_ticker(symbol)
-    except Exception as e:
-        return build_error_response(
-            error_type="data_unavailable",
-            message=f"Failed to fetch data: {e}",
-            symbol=symbol,
-        )
+        ticker = await fetch_or_error(fetch_ticker(symbol), symbol)
+    except FetchError as fe:
+        return fe.response
 
     # Get news
     try:
@@ -259,21 +257,20 @@ async def stock_news(symbol: str, days: int = 7) -> dict[str, Any]:
     # Aggregate unique triggers across all articles
     all_positive_triggers: set[str] = set()
     all_negative_triggers: set[str] = set()
-    bullish_catalyst_counts: dict[str, int] = {}
-    bearish_catalyst_counts: dict[str, int] = {}
-    neutral_catalyst_counts: dict[str, int] = {}
+    catalyst_counts: dict[str, dict[str, int]] = {
+        "bullish": {},
+        "bearish": {},
+        "neutral": {},
+    }
     for a in articles:
         if a.get("matched_positive"):
             all_positive_triggers.update(a["matched_positive"])
         if a.get("matched_negative"):
             all_negative_triggers.update(a["matched_negative"])
         catalyst_tags = a.get("catalyst_tags") or {}
-        for tag in catalyst_tags.get("bullish", []) or []:
-            bullish_catalyst_counts[tag] = bullish_catalyst_counts.get(tag, 0) + 1
-        for tag in catalyst_tags.get("bearish", []) or []:
-            bearish_catalyst_counts[tag] = bearish_catalyst_counts.get(tag, 0) + 1
-        for tag in catalyst_tags.get("neutral", []) or []:
-            neutral_catalyst_counts[tag] = neutral_catalyst_counts.get(tag, 0) + 1
+        for polarity, counts in catalyst_counts.items():
+            for tag in catalyst_tags.get(polarity, []) or []:
+                counts[tag] = counts.get(tag, 0) + 1
 
     headline_triggers = {
         "positive": sorted(all_positive_triggers)[:10],
@@ -296,9 +293,9 @@ async def stock_news(symbol: str, days: int = 7) -> dict[str, Any]:
     }
 
     catalyst_intelligence = {
-        "bullish": _sorted_catalyst_counts(bullish_catalyst_counts),
-        "bearish": _sorted_catalyst_counts(bearish_catalyst_counts),
-        "neutral": _sorted_catalyst_counts(neutral_catalyst_counts),
+        "bullish": _sorted_catalyst_counts(catalyst_counts["bullish"]),
+        "bearish": _sorted_catalyst_counts(catalyst_counts["bearish"]),
+        "neutral": _sorted_catalyst_counts(catalyst_counts["neutral"]),
         "sample_size": len(articles),
         "method": "keyword_catalyst_v1",
     }

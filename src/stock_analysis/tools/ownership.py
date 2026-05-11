@@ -9,9 +9,10 @@ import pandas as pd
 from stock_analysis.data.yfinance_client import fetch_ticker
 from stock_analysis.utils.helpers import safe_float, safe_round
 from stock_analysis.utils.provenance import (
-    build_error_response,
+    FetchError,
     build_meta,
     build_provenance,
+    fetch_or_error,
     utcnow_isoformat_z,
 )
 from stock_analysis.utils.sanitize import sanitize_text
@@ -32,13 +33,9 @@ async def ownership_analysis(symbol: str) -> dict[str, Any]:
     warnings: list[str] = []
 
     try:
-        ticker = await fetch_ticker(symbol)
-    except Exception as e:
-        return build_error_response(
-            error_type="data_unavailable",
-            message=f"Failed to fetch data: {e}",
-            symbol=symbol,
-        )
+        ticker = await fetch_or_error(fetch_ticker(symbol), symbol)
+    except FetchError as fe:
+        return fe.response
 
     # --- Insider activity ---
     insider_activity = _build_insider_activity(ticker, warnings)

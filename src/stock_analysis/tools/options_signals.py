@@ -5,11 +5,13 @@ from time import perf_counter
 from typing import Any
 
 from stock_analysis.data.yfinance_client import fetch_info, fetch_ticker
-from stock_analysis.utils.helpers import safe_float, safe_round
+from stock_analysis.utils.helpers import current_price_from_info, safe_float, safe_round
 from stock_analysis.utils.provenance import (
+    FetchError,
     build_error_response,
     build_meta,
     build_provenance,
+    fetch_or_error,
     utcnow_isoformat_z,
 )
 
@@ -28,22 +30,16 @@ async def options_signals(symbol: str) -> dict[str, Any]:
     normalized_symbol = symbol.upper().strip()
 
     try:
-        ticker = await fetch_ticker(symbol)
-    except Exception as e:
-        return build_error_response(
-            error_type="data_unavailable",
-            message=f"Failed to fetch ticker: {e}",
-            symbol=normalized_symbol,
-        )
+        ticker = await fetch_or_error(fetch_ticker(symbol), normalized_symbol)
+    except FetchError as fe:
+        return fe.response
 
     try:
         info = await fetch_info(symbol)
     except Exception:
         info = {}
 
-    current_price = safe_float(info.get("regularMarketPrice")) or safe_float(
-        info.get("currentPrice")
-    )
+    current_price = current_price_from_info(info)
     if current_price is None or current_price <= 0:
         return build_error_response(
             error_type="data_unavailable",
@@ -95,7 +91,7 @@ async def options_signals(symbol: str) -> dict[str, Any]:
     warnings: list[str] = []
 
     # Implied volatility
-    iv_data = _compute_iv(calls, puts, current_price, info, warnings)
+    iv_data = _compute_iv(calls, puts, current_price)
 
     # Put/call ratio
     pc_data = _compute_put_call_ratio(calls, puts, warnings)
@@ -147,8 +143,6 @@ def _compute_iv(
     calls: Any,
     puts: Any,
     current_price: float,
-    info: dict[str, Any],
-    warnings: list[str],
 ) -> dict[str, Any]:
     """Compute ATM implied volatility."""
     lower = current_price * 0.95

@@ -36,11 +36,10 @@ def test_price_cache_roundtrip() -> None:
     assert metadata["columns"] == ["date", "open", "high", "low", "close", "volume"]
 
 
-def test_price_cache_ttl_expiry() -> None:
+def test_price_cache_ttl_expiry(default_fetch_params: FetchParams) -> None:
     cache = PriceCache()
-    params = FetchParams(symbol="AAPL", period="1y", interval="1d", adjusted=False)
 
-    uri = cache.store(params, _frame(), ttl=0)
+    uri = cache.store(default_fetch_params, _frame(), ttl=0)
     time.sleep(0.01)
 
     assert cache.exists(uri) is False

@@ -109,9 +109,9 @@ async def technicals(symbol: str) -> dict[str, Any]:
         "ema_12": safe_round(ema_12_val, 2),
         "ema_26": safe_round(ema_26_val, 2),
         "sma_200_slope_pct_per_day": safe_round(sma_200_slope, 6),
-        "price_vs_sma20": round(price_vs_sma20, 4) if price_vs_sma20 is not None else None,
-        "price_vs_sma50": round(price_vs_sma50, 4) if price_vs_sma50 is not None else None,
-        "price_vs_sma200": round(price_vs_sma200, 4) if price_vs_sma200 is not None else None,
+        "price_vs_sma20": safe_round(price_vs_sma20, 4),
+        "price_vs_sma50": safe_round(price_vs_sma50, 4),
+        "price_vs_sma200": safe_round(price_vs_sma200, 4),
         "rules": {
             "above_sma20": {
                 "triggered": check_rule_expr(current_price, sma_20_val, operator.gt),
@@ -148,7 +148,7 @@ async def technicals(symbol: str) -> dict[str, Any]:
     )
 
     rsi = {
-        "value": round(rsi_val, 1) if rsi_val is not None else None,
+        "value": safe_round(rsi_val, 1),
         "period": 14,
         "bullish_divergence": bullish_divergence,
         "divergence_lookback": 60,
@@ -179,9 +179,9 @@ async def technicals(symbol: str) -> dict[str, Any]:
         )
 
     macd = {
-        "macd_line": round(macd_line_val, 4) if macd_line_val is not None else None,
-        "signal_line": round(signal_line_val, 4) if signal_line_val is not None else None,
-        "histogram": round(histogram_val, 4) if histogram_val is not None else None,
+        "macd_line": safe_round(macd_line_val, 4),
+        "signal_line": safe_round(signal_line_val, 4),
+        "histogram": safe_round(histogram_val, 4),
         "histogram_rising_3d": hist_rising_3d,
         "settings": {"fast": 12, "slow": 26, "signal": 9},
         "rules": {
@@ -250,16 +250,16 @@ async def technicals(symbol: str) -> dict[str, Any]:
     days_since_52w_low = _days_since_extreme(low, kind="low")
 
     price_position = {
-        "week_52_high": round(week_52_high, 2) if week_52_high else None,
-        "week_52_low": round(week_52_low, 2) if week_52_low else None,
-        "low_1m": round(low_1m, 2) if low_1m else None,
-        "from_52w_high": round(from_52w_high, 4) if from_52w_high is not None else None,
-        "from_52w_low": round(from_52w_low, 4) if from_52w_low is not None else None,
-        "from_3m_high": round(from_3m_high, 4) if from_3m_high is not None else None,
-        "from_6m_high": round(from_6m_high, 4) if from_6m_high is not None else None,
+        "week_52_high": safe_round(week_52_high, 2),
+        "week_52_low": safe_round(week_52_low, 2),
+        "low_1m": safe_round(low_1m, 2),
+        "from_52w_high": safe_round(from_52w_high, 4),
+        "from_52w_low": safe_round(from_52w_low, 4),
+        "from_3m_high": safe_round(from_3m_high, 4),
+        "from_6m_high": safe_round(from_6m_high, 4),
         "days_since_52w_high": days_since_52w_high,
         "days_since_52w_low": days_since_52w_low,
-        "position_in_range": round(position_in_range, 4) if position_in_range is not None else None,
+        "position_in_range": safe_round(position_in_range, 4),
     }
 
     # Returns

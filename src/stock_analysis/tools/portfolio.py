@@ -6,6 +6,7 @@ from typing import Any
 import pandas as pd
 
 from stock_analysis.data.yfinance_client import fetch_history, fetch_info
+from stock_analysis.utils.helpers import current_price_from_info
 from stock_analysis.utils.indicators import calculate_pairwise_correlations
 from stock_analysis.utils.provenance import (
     build_error_response,
@@ -70,7 +71,7 @@ async def portfolio_exposure(
         sector = info.get("sector")
 
         # Consider concentrated if > 20% of portfolio
-        is_concentrated = weight > 0.20 if weight is not None else None
+        is_concentrated = weight > 0.20
 
         position_details.append(
             {
@@ -106,7 +107,7 @@ async def portfolio_exposure(
     sector_exposure = []
     for sector, weight in sorted(sector_weights.items(), key=lambda x: -x[1]):
         # Consider overweight if > 30%
-        is_overweight = weight > 0.30 if weight is not None else None
+        is_overweight = weight > 0.30
         sector_exposure.append(
             {
                 "sector": sector,
@@ -163,7 +164,7 @@ async def portfolio_exposure(
     for p in normalized_positions:
         info = symbol_info.get(p["symbol"], {})
         avg_volume = info.get("averageVolume")
-        current_price = info.get("regularMarketPrice") or info.get("currentPrice")
+        current_price = current_price_from_info(info)
 
         if avg_volume and current_price:
             avg_dollar_volume = avg_volume * current_price

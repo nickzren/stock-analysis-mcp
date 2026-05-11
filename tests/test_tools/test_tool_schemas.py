@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import importlib
 from collections.abc import Awaitable, Callable
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, tzinfo
 
 import pandas as pd
 import pytest
@@ -18,6 +18,7 @@ from stock_analysis.tools.analyze.dip_assessment import (
 from stock_analysis.tools.analyze.executive_summary import build_policy_action
 from stock_analysis.tools.analyze.investor_profile import build_decision_modes
 from stock_analysis.tools.analyze.orchestrator import analyze_stock
+from stock_analysis.tools.events import events_calendar
 from stock_analysis.tools.fundamentals import fundamentals_snapshot
 from stock_analysis.tools.news import stock_news
 from stock_analysis.tools.price_history import price_history
@@ -26,6 +27,7 @@ from stock_analysis.tools.technicals import technicals
 from stock_analysis.utils.provenance import build_error_response
 
 orchestrator_module = importlib.import_module("stock_analysis.tools.analyze.orchestrator")
+events_module = importlib.import_module("stock_analysis.tools.events")
 fundamentals_module = importlib.import_module("stock_analysis.tools.fundamentals")
 news_module = importlib.import_module("stock_analysis.tools.news")
 price_history_module = importlib.import_module("stock_analysis.tools.price_history")
@@ -79,10 +81,20 @@ def _install_analyze_mocks(
     monkeypatch.setattr(orchestrator_module, "options_signals", options)
 
 
+_NEWS_TEST_NOW = datetime(2026, 1, 15)
+
+
+class _FixedNewsDateTime(datetime):
+    @classmethod
+    def now(cls, tz: tzinfo | None = None) -> datetime:
+        if tz is not None:
+            return _NEWS_TEST_NOW.replace(tzinfo=tz)
+        return _NEWS_TEST_NOW
+
+
 class _FakeNewsTicker:
     def __init__(self) -> None:
-        now = datetime.now(UTC).replace(tzinfo=None)
-        recent = (now - timedelta(days=2)).isoformat() + "Z"
+        recent = (_NEWS_TEST_NOW - timedelta(days=2)).isoformat() + "Z"
         self.news = [
             {
                 "content": {
@@ -94,13 +106,31 @@ class _FakeNewsTicker:
                 }
             }
         ]
-        earnings_date = now - timedelta(days=5)
+        earnings_date = _NEWS_TEST_NOW - timedelta(days=5)
         self.earnings_dates = pd.DataFrame(
             {
                 "EPS Estimate": [1.0],
                 "Reported EPS": [1.1],
             },
             index=[earnings_date],
+        )
+
+
+class _FakeEventsTicker:
+    def __init__(self) -> None:
+        self.earnings_dates_access_count = 0
+        self.calendar: dict[str, object] = {}
+        self.splits = pd.Series(dtype=float)
+
+    @property
+    def earnings_dates(self) -> pd.DataFrame:
+        self.earnings_dates_access_count += 1
+        return pd.DataFrame(
+            {
+                "EPS Estimate": [1.0, 1.1],
+                "Reported EPS": [1.2, None],
+            },
+            index=[pd.Timestamp("2025-01-01"), pd.Timestamp("2099-01-01")],
         )
 
 
@@ -1013,11 +1043,33 @@ class TestToolResponseSchemas:
         assert result["assessment"]["add_only_if"] == ["risk_regime <= high (volatility < 60%)"]
 
     @pytest.mark.asyncio
+    async def test_events_calendar_reuses_earnings_dates(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        ticker = _FakeEventsTicker()
+
+        async def fake_fetch_ticker(symbol: str) -> _FakeEventsTicker:
+            return ticker
+
+        async def fake_fetch_info(symbol: str) -> dict[str, object]:
+            return {}
+
+        monkeypatch.setattr(events_module, "fetch_ticker", fake_fetch_ticker)
+        monkeypatch.setattr(events_module, "fetch_info", fake_fetch_info)
+
+        result = await events_calendar("TEST")
+
+        assert result["earnings"]["next_date"] == "2099-01-01"
+        assert ticker.earnings_dates_access_count == 1
+
+    @pytest.mark.asyncio
     async def test_stock_news_schema(self, monkeypatch: pytest.MonkeyPatch) -> None:
         async def fake_fetch_ticker(symbol: str) -> _FakeNewsTicker:
             return _FakeNewsTicker()
 
         monkeypatch.setattr(news_module, "fetch_ticker", fake_fetch_ticker)
+        monkeypatch.setattr(news_module, "datetime", _FixedNewsDateTime)
 
         result = await stock_news("TEST", days=7)
 
@@ -1040,7 +1092,7 @@ class TestToolResponseSchemas:
         assert "meta" in error
 
 
-class TestVerdictInvariants:
+class TestVerdictScoreMath:
     """Tests for verdict scoring invariants."""
 
     def test_component_score_bounds(self) -> None:
@@ -1073,42 +1125,6 @@ class TestVerdictInvariants:
             assert abs(calculated - expected) < 0.01, (
                 f"score_delta mismatch: {calculated:.3f} != {expected:.3f}"
             )
-
-    def test_score_delta_sum_approximates_score_raw(self) -> None:
-        """Sum of all component score_deltas should approximate score_raw."""
-        components = {
-            "technicals": 0.75,
-            "fundamentals": -0.33,
-            "risk": -0.67,
-        }
-        weights = {
-            "technicals": 0.30,
-            "fundamentals": 0.45,
-            "risk": 0.25,
-        }
-
-        weighted_sum = sum(components[k] * weights[k] for k in components)
-        total_weight = sum(weights.values())
-        score_raw = weighted_sum / total_weight
-
-        renormalized_weights = {k: w / total_weight for k, w in weights.items()}
-        score_delta_sum = sum(components[k] * renormalized_weights[k] for k in components)
-
-        assert abs(score_raw - score_delta_sum) < 0.001, (
-            f"score_raw ({score_raw:.4f}) != sum(score_delta) ({score_delta_sum:.4f})"
-        )
-
-    def test_top_triggers_balance_rules(self) -> None:
-        """Top triggers must follow balance rules based on tilt."""
-        balance_rules = {
-            "neutral": {"bearish": 2, "bullish": 1},
-            "bullish": {"bearish": 1, "bullish": 2},
-            "bearish": {"bearish": 2, "bullish": 1},
-        }
-
-        for tilt, expected_counts in balance_rules.items():
-            total_expected = sum(expected_counts.values())
-            assert total_expected == 3, f"Tilt {tilt} should show 3 triggers"
 
     def test_score_delta_sum_equals_score_raw_exactly(self) -> None:
         """Score deltas must sum to score_raw with negligible tolerance."""

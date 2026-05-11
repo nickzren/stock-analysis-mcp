@@ -10,7 +10,13 @@ from typing import Any
 import pandas as pd
 
 from stock_analysis.data.yfinance_client import fetch_info, fetch_ticker
-from stock_analysis.utils.helpers import safe_float, safe_int, safe_round, safe_str
+from stock_analysis.utils.helpers import (
+    current_price_from_info,
+    safe_float,
+    safe_int,
+    safe_round,
+    safe_str,
+)
 from stock_analysis.utils.provenance import (
     FetchError,
     build_meta,
@@ -258,7 +264,7 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
         return fe.response
 
     normalized_symbol = symbol.upper().strip()
-    current_price = safe_float(info.get("regularMarketPrice") or info.get("currentPrice"))
+    current_price = current_price_from_info(info)
 
     # Fiscal period label (used for cash flow period metadata)
     fiscal_year_end = info.get("lastFiscalYearEnd")
@@ -281,75 +287,15 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
     financial_currency = info.get("financialCurrency")
     price_currency = info.get("currency")
 
-    fcf_period: str | None = None
-    fcf_period_end: str | None = None
-    fcf_source: str | None = None
-
-    # Prefer cash flow statements when available (info.freeCashflow can be stale/incorrect)
     try:
-        ticker = await fetch_ticker(symbol)
-        quarterly_cf = _get_cashflow_df(ticker, freq="quarterly")
-        yearly_cf = _get_cashflow_df(ticker, freq=None)
+        ticker_obj = await fetch_ticker(symbol)
+    except Exception as e:
+        logger.debug("fundamentals ticker fetch failed: %s", e)
+        ticker_obj = None
 
-        quarterly_cols = _sorted_cashflow_columns(quarterly_cf.columns) if quarterly_cf is not None else []
-        yearly_cols = _sorted_cashflow_columns(yearly_cf.columns) if yearly_cf is not None else []
-        quarterly_period_end = _period_end_from_columns(quarterly_cols)
-        yearly_period_end = _period_end_from_columns(yearly_cols)
-
-        fcf_quarterly = _sum_recent_periods(
-            _select_cashflow_series(quarterly_cf, _FCF_LABELS),
-            quarterly_cols,
-            periods=4,
-        )
-        ocf_quarterly = _sum_recent_periods(
-            _select_cashflow_series(quarterly_cf, _OCF_LABELS),
-            quarterly_cols,
-            periods=4,
-        )
-        capex_quarterly = _sum_recent_periods(
-            _select_cashflow_series(quarterly_cf, _CAPEX_LABELS),
-            quarterly_cols,
-            periods=4,
-        )
-        if fcf_quarterly is None and ocf_quarterly is not None and capex_quarterly is not None:
-            fcf_quarterly = ocf_quarterly + capex_quarterly
-
-        fcf_yearly = _latest_period_value(
-            _select_cashflow_series(yearly_cf, _FCF_LABELS),
-            yearly_cols,
-        )
-        ocf_yearly = _latest_period_value(
-            _select_cashflow_series(yearly_cf, _OCF_LABELS),
-            yearly_cols,
-        )
-        capex_yearly = _latest_period_value(
-            _select_cashflow_series(yearly_cf, _CAPEX_LABELS),
-            yearly_cols,
-        )
-        if fcf_yearly is None and ocf_yearly is not None and capex_yearly is not None:
-            fcf_yearly = ocf_yearly + capex_yearly
-
-        if fcf_quarterly is not None:
-            free_cash_flow = fcf_quarterly
-            fcf_period = "TTM"
-            fcf_period_end = quarterly_period_end
-            fcf_source = "cashflow_quarterly"
-        elif fcf_yearly is not None:
-            free_cash_flow = fcf_yearly
-            fcf_period = fiscal_period or "FY"
-            fcf_period_end = yearly_period_end
-            fcf_source = "cashflow_yearly"
-
-        if ocf_quarterly is not None:
-            operating_cf = ocf_quarterly
-        elif ocf_yearly is not None:
-            operating_cf = ocf_yearly
-    except Exception:
-        pass
-
-    if fcf_period is None and free_cash_flow is not None:
-        fcf_period = "TTM"
-        fcf_source = fcf_source or "info"
+    operating_cf, free_cash_flow, fcf_period, fcf_period_end, fcf_source = (
+        _resolve_cashflow_ttm(ticker_obj, operating_cf, free_cash_flow, fiscal_period)
+    )
     market_cap = safe_float(info.get("marketCap"))
     revenue = safe_float(info.get("totalRevenue"))
 
@@ -375,94 +321,14 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
         },
     }
 
-    # Yield metrics
-    currency_mismatch = (
-        financial_currency is not None
-        and price_currency is not None
-        and financial_currency != price_currency
+    yield_metrics = _build_yield_metrics(
+        info,
+        valuation,
+        free_cash_flow,
+        market_cap,
+        financial_currency,
+        price_currency,
     )
-    fcf_yield = (
-        free_cash_flow / market_cap
-        if (
-            free_cash_flow is not None
-            and market_cap is not None
-            and market_cap > 0
-            and not currency_mismatch
-        )
-        else None
-    )
-    pe_trailing = valuation.get("pe_trailing")
-    earnings_yield = (
-        1 / pe_trailing
-        if pe_trailing is not None and pe_trailing > 0
-        else None
-    )
-    dividend_yield = safe_float(info.get("dividendYield"))
-
-    # Dividend sustainability
-    dividend_rate = safe_float(info.get("dividendRate"))
-    trailing_eps = valuation.get("trailing_eps")
-    payout_ratio = (
-        dividend_rate / trailing_eps
-        if dividend_rate is not None and trailing_eps is not None and trailing_eps > 0
-        else None
-    )
-    shares_outstanding = safe_float(info.get("sharesOutstanding"))
-    fcf_payout = (
-        (dividend_rate * shares_outstanding) / free_cash_flow
-        if (
-            dividend_rate is not None
-            and shares_outstanding is not None
-            and free_cash_flow is not None
-            and free_cash_flow > 0
-            and not currency_mismatch
-        )
-        else None
-    )
-
-    # Build yield metrics warnings
-    yield_warnings: list[str] = []
-
-    # FCF yield: still compute if negative, but mark and don't trigger "attractive"
-    is_fcf_negative = free_cash_flow is not None and free_cash_flow <= 0
-    if currency_mismatch:
-        yield_warnings.append("currency_mismatch")
-    if is_fcf_negative:
-        yield_warnings.append("negative_fcf")
-
-    # Earnings yield: if EPS <= 0, yield is meaningless
-    is_eps_negative = trailing_eps is not None and trailing_eps <= 0
-    if is_eps_negative:
-        yield_warnings.append("negative_eps")
-
-    # Attractive FCF yield rule: None if FCF is negative (not False)
-    attractive_fcf_triggered: bool | None = None
-    if fcf_yield is not None and not is_fcf_negative:
-        attractive_fcf_triggered = check_rule(fcf_yield, 0.05, operator.gt)
-
-    # Sustainable dividend: None if EPS <= 0 (payout ratio meaningless)
-    sustainable_div_triggered: bool | None = None
-    if payout_ratio is not None and not is_eps_negative:
-        sustainable_div_triggered = check_rule(payout_ratio, 0.75, operator.lt)
-
-    yield_metrics = {
-        "fcf_yield": safe_round(fcf_yield, 4),
-        "earnings_yield": safe_round(earnings_yield, 4) if not is_eps_negative else None,
-        "dividend_yield": safe_round(dividend_yield, 4),
-        "dividend_payout_ratio": safe_round(payout_ratio, 4) if not is_eps_negative else None,
-        "fcf_payout_ratio": safe_round(fcf_payout, 4) if not is_fcf_negative else None,
-        "rules": {
-            "attractive_fcf_yield": {
-                "triggered": attractive_fcf_triggered,
-                "threshold": 0.05,
-            },
-            "sustainable_dividend": {
-                "triggered": sustainable_div_triggered,
-                "threshold": 0.75,
-            },
-        },
-        "warnings": yield_warnings if yield_warnings else None,
-    }
 
     analyst_coverage = _build_analyst_coverage(info, current_price)
     short_interest = _build_short_interest(info)
@@ -489,12 +355,6 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
         warnings.append("using_trailing_data")
 
     # Enrichment: valuation history, trends, estimates, dividend analysis
-    # These use the ticker object for additional data
-    try:
-        ticker_obj = await fetch_ticker(symbol)
-    except Exception:
-        ticker_obj = None
-
     valuation_history = _compute_valuation_history(ticker_obj, info) if ticker_obj else None
     fundamental_trends = _compute_fundamental_trends(ticker_obj) if ticker_obj else None
     analyst_estimates = _fetch_earnings_estimates(ticker_obj) if ticker_obj else None
@@ -545,6 +405,184 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
     }
 
 
+def _resolve_cashflow_ttm(
+    ticker: Any | None,
+    operating_cf: float | None,
+    free_cash_flow: float | None,
+    fiscal_period: str | None,
+) -> tuple[float | None, float | None, str | None, str | None, str | None]:
+    """Resolve preferred cash flow TTM values from statements, falling back to info."""
+    fcf_period: str | None = None
+    fcf_period_end: str | None = None
+    fcf_source: str | None = None
+
+    if ticker is not None:
+        try:
+            quarterly_cf = _get_cashflow_df(ticker, freq="quarterly")
+            yearly_cf = _get_cashflow_df(ticker, freq=None)
+
+            quarterly_cols = (
+                _sorted_cashflow_columns(quarterly_cf.columns)
+                if quarterly_cf is not None
+                else []
+            )
+            yearly_cols = (
+                _sorted_cashflow_columns(yearly_cf.columns)
+                if yearly_cf is not None
+                else []
+            )
+            quarterly_period_end = _period_end_from_columns(quarterly_cols)
+            yearly_period_end = _period_end_from_columns(yearly_cols)
+
+            fcf_quarterly = _sum_recent_periods(
+                _select_cashflow_series(quarterly_cf, _FCF_LABELS),
+                quarterly_cols,
+                periods=4,
+            )
+            ocf_quarterly = _sum_recent_periods(
+                _select_cashflow_series(quarterly_cf, _OCF_LABELS),
+                quarterly_cols,
+                periods=4,
+            )
+            capex_quarterly = _sum_recent_periods(
+                _select_cashflow_series(quarterly_cf, _CAPEX_LABELS),
+                quarterly_cols,
+                periods=4,
+            )
+            if fcf_quarterly is None and ocf_quarterly is not None and capex_quarterly is not None:
+                fcf_quarterly = ocf_quarterly + capex_quarterly
+
+            fcf_yearly = _latest_period_value(
+                _select_cashflow_series(yearly_cf, _FCF_LABELS),
+                yearly_cols,
+            )
+            ocf_yearly = _latest_period_value(
+                _select_cashflow_series(yearly_cf, _OCF_LABELS),
+                yearly_cols,
+            )
+            capex_yearly = _latest_period_value(
+                _select_cashflow_series(yearly_cf, _CAPEX_LABELS),
+                yearly_cols,
+            )
+            if fcf_yearly is None and ocf_yearly is not None and capex_yearly is not None:
+                fcf_yearly = ocf_yearly + capex_yearly
+
+            if fcf_quarterly is not None:
+                free_cash_flow = fcf_quarterly
+                fcf_period = "TTM"
+                fcf_period_end = quarterly_period_end
+                fcf_source = "cashflow_quarterly"
+            elif fcf_yearly is not None:
+                free_cash_flow = fcf_yearly
+                fcf_period = fiscal_period or "FY"
+                fcf_period_end = yearly_period_end
+                fcf_source = "cashflow_yearly"
+
+            if ocf_quarterly is not None:
+                operating_cf = ocf_quarterly
+            elif ocf_yearly is not None:
+                operating_cf = ocf_yearly
+        except Exception as e:
+            logger.debug("cashflow statement fetch failed: %s", e)
+
+    if fcf_period is None and free_cash_flow is not None:
+        fcf_period = "TTM"
+        fcf_source = fcf_source or "info"
+
+    return operating_cf, free_cash_flow, fcf_period, fcf_period_end, fcf_source
+
+
+def _build_yield_metrics(
+    info: dict[str, Any],
+    valuation: dict[str, Any],
+    free_cash_flow: float | None,
+    market_cap: float | None,
+    financial_currency: str | None,
+    price_currency: str | None,
+) -> dict[str, Any]:
+    """Build yield and dividend sustainability metrics."""
+    currency_mismatch = (
+        financial_currency is not None
+        and price_currency is not None
+        and financial_currency != price_currency
+    )
+    fcf_yield = (
+        free_cash_flow / market_cap
+        if (
+            free_cash_flow is not None
+            and market_cap is not None
+            and market_cap > 0
+            and not currency_mismatch
+        )
+        else None
+    )
+    pe_trailing = valuation.get("pe_trailing")
+    earnings_yield = (
+        1 / pe_trailing
+        if pe_trailing is not None and pe_trailing > 0
+        else None
+    )
+    dividend_yield = safe_float(info.get("dividendYield"))
+
+    dividend_rate = safe_float(info.get("dividendRate"))
+    trailing_eps = valuation.get("trailing_eps")
+    payout_ratio = (
+        dividend_rate / trailing_eps
+        if dividend_rate is not None and trailing_eps is not None and trailing_eps > 0
+        else None
+    )
+    shares_outstanding = safe_float(info.get("sharesOutstanding"))
+    fcf_payout = (
+        (dividend_rate * shares_outstanding) / free_cash_flow
+        if (
+            dividend_rate is not None
+            and shares_outstanding is not None
+            and free_cash_flow is not None
+            and free_cash_flow > 0
+            and not currency_mismatch
+        )
+        else None
+    )
+
+    yield_warnings: list[str] = []
+    is_fcf_negative = free_cash_flow is not None and free_cash_flow <= 0
+    if currency_mismatch:
+        yield_warnings.append("currency_mismatch")
+    if is_fcf_negative:
+        yield_warnings.append("negative_fcf")
+
+    is_eps_negative = trailing_eps is not None and trailing_eps <= 0
+    if is_eps_negative:
+        yield_warnings.append("negative_eps")
+
+    attractive_fcf_triggered: bool | None = None
+    if fcf_yield is not None and not is_fcf_negative:
+        attractive_fcf_triggered = check_rule(fcf_yield, 0.05, operator.gt)
+
+    sustainable_div_triggered: bool | None = None
+    if payout_ratio is not None and not is_eps_negative:
+        sustainable_div_triggered = check_rule(payout_ratio, 0.75, operator.lt)
+
+    return {
+        "fcf_yield": safe_round(fcf_yield, 4),
+        "earnings_yield": safe_round(earnings_yield, 4) if not is_eps_negative else None,
+        "dividend_yield": safe_round(dividend_yield, 4),
+        "dividend_payout_ratio": safe_round(payout_ratio, 4) if not is_eps_negative else None,
+        "fcf_payout_ratio": safe_round(fcf_payout, 4) if not is_fcf_negative else None,
+        "rules": {
+            "attractive_fcf_yield": {
+                "triggered": attractive_fcf_triggered,
+                "threshold": 0.05,
+            },
+            "sustainable_dividend": {
+                "triggered": sustainable_div_triggered,
+                "threshold": 0.75,
+            },
+        },
+        "warnings": yield_warnings if yield_warnings else None,
+    }
+
+
 
 
 def _compute_valuation_history(ticker: Any, info: dict[str, Any]) -> dict[str, Any] | None:
@@ -574,11 +612,7 @@ def _compute_valuation_history(ticker: Any, info: dict[str, Any]) -> dict[str, A
     if getattr(close_series.index, "tz", None) is not None:
         close_series.index = close_series.index.tz_localize(None)
 
-    # Normalize index for matching
-    normalized_idx = {
-        "".join(ch for ch in str(idx).lower() if ch.isalnum()): idx
-        for idx in income_stmt.index
-    }
+    normalized_idx = _build_normalized_index(income_stmt)
 
     net_income_label = normalized_idx.get("netincome")
     revenue_label = normalized_idx.get("totalrevenue") or normalized_idx.get("operatingrevenue")
@@ -669,10 +703,7 @@ def _compute_fundamental_trends(ticker: Any) -> dict[str, Any] | None:
     if income_stmt is None or income_stmt.empty:
         return None
 
-    normalized_idx = {
-        "".join(ch for ch in str(idx).lower() if ch.isalnum()): idx
-        for idx in income_stmt.index
-    }
+    normalized_idx = _build_normalized_index(income_stmt)
 
     metric_keys = {
         "total_revenue": normalized_idx.get("totalrevenue") or normalized_idx.get("operatingrevenue"),
@@ -840,9 +871,7 @@ def _fetch_earnings_estimates(ticker: Any) -> dict[str, Any] | None:
             and shares_out is not None
             and shares_out > 0
         ):
-            current_price = safe_float(
-                info_attr.get("regularMarketPrice") or info_attr.get("currentPrice")
-            )
+            current_price = current_price_from_info(info_attr)
             if current_price is not None and current_price > 0:
                 forward_pe = safe_round(current_price / next_year_eps, 2)
 
@@ -998,6 +1027,11 @@ def _normalize_cashflow_label(label: str) -> str:
     return "".join(ch for ch in str(label).lower() if ch.isalnum())
 
 
+def _build_normalized_index(df: pd.DataFrame) -> dict[str, Any]:
+    """Map normalized row labels to their original dataframe index labels."""
+    return {_normalize_cashflow_label(idx): idx for idx in df.index}
+
+
 def _select_cashflow_series(
     df: pd.DataFrame | None,
     candidates: tuple[str, ...],
@@ -1005,10 +1039,7 @@ def _select_cashflow_series(
     """Return the first matching cashflow series by normalized label."""
     if df is None or df.empty:
         return None
-    normalized_index = {
-        _normalize_cashflow_label(idx): idx
-        for idx in df.index
-    }
+    normalized_index = _build_normalized_index(df)
     for candidate in candidates:
         idx = normalized_index.get(candidate)
         if idx is not None:

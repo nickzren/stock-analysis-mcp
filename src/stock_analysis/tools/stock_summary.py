@@ -4,7 +4,7 @@ from time import perf_counter
 from typing import Any
 
 from stock_analysis.data.yfinance_client import fetch_info
-from stock_analysis.utils.helpers import safe_float, safe_int, safe_round
+from stock_analysis.utils.helpers import current_price_from_info, safe_float, safe_int, safe_round
 from stock_analysis.utils.provenance import (
     FetchError,
     build_meta,
@@ -36,7 +36,7 @@ async def stock_summary(symbol: str) -> dict[str, Any]:
     normalized_symbol = symbol.upper().strip()
 
     # Prices
-    current_price = info.get("regularMarketPrice") or info.get("currentPrice")
+    current_price = current_price_from_info(info)
     previous_close = info.get("previousClose") or info.get("regularMarketPreviousClose")
 
     # Volume
@@ -64,7 +64,7 @@ async def stock_summary(symbol: str) -> dict[str, Any]:
         "industry": sanitize_text(info.get("industry")),
         "exchange": info.get("exchange"),
         "currency": info.get("currency", "USD"),
-        "current_price": safe_float(current_price),
+        "current_price": current_price,
         "previous_close": safe_float(previous_close),
         "market_cap": safe_int(info.get("marketCap")),
         "avg_volume_30d": safe_int(avg_volume),
@@ -74,4 +74,3 @@ async def stock_summary(symbol: str) -> dict[str, Any]:
         "website": sanitize_text(info.get("website")),
         "description": sanitize_text(info.get("longBusinessSummary"), max_length=500),
     }
-

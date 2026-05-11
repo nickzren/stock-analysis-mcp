@@ -86,8 +86,7 @@ class TestAssessInfoCompleteness:
 
     def test_none_input(self):
         """None input should be handled (as empty dict)."""
-        # Type checker won't allow None, but test runtime behavior
-        c = assess_info_completeness({})  # type: ignore
+        c = assess_info_completeness(None)
         assert c.is_incomplete is True
 
     def test_sentinel_keys_vs_values(self):

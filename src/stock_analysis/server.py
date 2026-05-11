@@ -38,6 +38,11 @@ mcp = FastMCP(
 )
 
 
+def _json_response(result: dict[str, Any]) -> str:
+    """Serialize a tool result using the server's JSON response format."""
+    return json.dumps(result, indent=2, default=str)
+
+
 # ============================================================================
 # TOOLS
 # ============================================================================
@@ -56,7 +61,7 @@ async def search_symbol(query: str, limit: int = 10) -> str:
         JSON with search results and exact match info
     """
     result = await symbol_search(query=query, limit=limit)
-    return json.dumps(result, indent=2, default=str)
+    return _json_response(result)
 
 
 @mcp.tool
@@ -71,7 +76,7 @@ async def get_stock_summary(symbol: str) -> str:
         JSON with company info, current price, market cap, and dividend yield
     """
     result = await stock_summary(symbol=symbol)
-    return json.dumps(result, indent=2, default=str)
+    return _json_response(result)
 
 
 @mcp.tool
@@ -102,7 +107,7 @@ async def get_price_history(
         adjusted=adjusted,
         include_preview=include_preview,
     )
-    return json.dumps(result, indent=2, default=str)
+    return _json_response(result)
 
 
 @mcp.tool
@@ -120,7 +125,7 @@ async def get_technicals(symbol: str) -> str:
         JSON with technical indicators and rule-based signals
     """
     result = await technicals(symbol=symbol)
-    return json.dumps(result, indent=2, default=str)
+    return _json_response(result)
 
 
 @mcp.tool
@@ -138,7 +143,7 @@ async def get_fundamentals(symbol: str) -> str:
         JSON with fundamental metrics and rule-based signals
     """
     result = await fundamentals_snapshot(symbol=symbol)
-    return json.dumps(result, indent=2, default=str)
+    return _json_response(result)
 
 
 @mcp.tool
@@ -156,7 +161,7 @@ async def get_events(symbol: str) -> str:
         JSON with earnings, dividends, and splits information
     """
     result = await events_calendar(symbol=symbol)
-    return json.dumps(result, indent=2, default=str)
+    return _json_response(result)
 
 
 @mcp.tool
@@ -175,7 +180,7 @@ async def get_news(symbol: str, days: int = 7) -> str:
         JSON with news articles and recent earnings (if any within period)
     """
     result = await stock_news(symbol=symbol, days=days)
-    return json.dumps(result, indent=2, default=str)
+    return _json_response(result)
 
 
 @mcp.tool
@@ -455,7 +460,7 @@ async def analyze(
             message=str(e),
             symbol=symbol,
         )
-    return json.dumps(result, indent=2, default=str)
+    return _json_response(result)
 
 
 @mcp.tool
@@ -486,7 +491,7 @@ async def analyze_my_position(
         purchase_date=purchase_date,
         shares=shares,
     )
-    return json.dumps(result, indent=2, default=str)
+    return _json_response(result)
 
 
 @mcp.tool
@@ -502,7 +507,7 @@ async def analyze_portfolio(positions: list[dict[str, Any]]) -> str:
         JSON with concentration metrics, sector breakdown, correlation matrix, and liquidity analysis
     """
     result = await portfolio_exposure(positions=positions)
-    return json.dumps(result, indent=2, default=str)
+    return _json_response(result)
 
 
 @mcp.tool
@@ -520,7 +525,7 @@ async def get_ownership(symbol: str) -> str:
         JSON with insider activity, institutional holders, and ownership summary
     """
     result = await ownership_analysis(symbol=symbol)
-    return json.dumps(result, indent=2, default=str)
+    return _json_response(result)
 
 
 @mcp.tool
@@ -538,7 +543,7 @@ async def get_options_signals(symbol: str) -> str:
         JSON with implied volatility, put/call ratios, and unusual activity flags
     """
     result = await options_signals(symbol=symbol)
-    return json.dumps(result, indent=2, default=str)
+    return _json_response(result)
 
 
 @mcp.tool
@@ -556,7 +561,7 @@ async def compare(symbols: list[str]) -> str:
         JSON with comparison table, rankings, and per-symbol summaries
     """
     result = await compare_stocks(symbols=symbols)
-    return json.dumps(result, indent=2, default=str)
+    return _json_response(result)
 
 
 @mcp.tool
@@ -579,7 +584,7 @@ async def detect_changes(
         JSON with changes summary, key_changes list, and investment impact narrative
     """
     result = await what_changed(symbol=symbol, previous_snapshot=previous_snapshot)
-    return json.dumps(result, indent=2, default=str)
+    return _json_response(result)
 
 
 @mcp.tool
@@ -596,7 +601,7 @@ async def check_data_quality(symbols: list[str]) -> str:
         JSON with per-symbol data quality and summary statistics
     """
     result = await data_quality_report(symbols=symbols)
-    return json.dumps(result, indent=2, default=str)
+    return _json_response(result)
 
 
 # ============================================================================

@@ -12,6 +12,7 @@ from stock_analysis.utils.indicators import (
     calculate_ema,
     calculate_macd,
     calculate_max_drawdown,
+    calculate_obv,
     calculate_pairwise_correlations,
     calculate_returns,
     calculate_rsi,
@@ -341,3 +342,17 @@ class TestBollingerBands:
         assert bb["bandwidth"] > 0.0
         assert bb["middle"] is not None
         assert bb["middle"] > 0.0
+
+
+class TestOBV:
+    """Tests for On-Balance Volume."""
+
+    def test_obv_matches_stepwise_definition(self) -> None:
+        """OBV should add volume on up days, subtract on down days, and carry flat days."""
+        close = pd.Series([10.0, 11.0, 10.5, 10.5, 12.0])
+        volume = pd.Series([100, 200, 300, 400, 500])
+
+        obv = calculate_obv(close, volume)
+
+        assert obv is not None
+        assert obv.tolist() == [0, 200, -100, -100, 400]
