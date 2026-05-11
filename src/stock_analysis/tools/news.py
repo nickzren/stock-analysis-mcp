@@ -1,5 +1,6 @@
 """Stock news tool."""
 
+from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from time import perf_counter
 from typing import Any
@@ -204,28 +205,25 @@ async def stock_news(symbol: str, days: int = 7) -> dict[str, Any]:
     except Exception:
         pass
 
-    # Aggregate sentiment by time windows
-    cutoff_7d = now - timedelta(days=7)
-    cutoff_30d = now - timedelta(days=30)
-
-    # Total counts (over full period)
-    sentiment_counts = {"positive": 0, "negative": 0, "neutral": 0}
-    # 7-day window counts
-    sentiment_counts_7d = {"positive": 0, "negative": 0, "neutral": 0}
-    # 30-day window counts
-    sentiment_counts_30d = {"positive": 0, "negative": 0, "neutral": 0}
+    # Aggregate sentiment by time windows. cutoff=None means "all articles".
+    sentiment_windows: dict[str, tuple[datetime | None, dict[str, int]]] = {
+        "all": (None, {"positive": 0, "negative": 0, "neutral": 0}),
+        "7d": (now - timedelta(days=7), {"positive": 0, "negative": 0, "neutral": 0}),
+        "30d": (now - timedelta(days=30), {"positive": 0, "negative": 0, "neutral": 0}),
+    }
 
     for a in articles:
-        sentiment_counts[a["sentiment"]] += 1
-        # Parse article date for window checks
-        try:
+        sentiment = a["sentiment"]
+        article_date: datetime | None = None
+        with suppress(ValueError, KeyError):
             article_date = datetime.strptime(a["date"], "%Y-%m-%d")
-            if article_date >= cutoff_7d:
-                sentiment_counts_7d[a["sentiment"]] += 1
-            if article_date >= cutoff_30d:
-                sentiment_counts_30d[a["sentiment"]] += 1
-        except (ValueError, KeyError):
-            pass
+        for cutoff, counts in sentiment_windows.values():
+            if cutoff is None or (article_date is not None and article_date >= cutoff):
+                counts[sentiment] += 1
+
+    sentiment_counts = sentiment_windows["all"][1]
+    sentiment_counts_7d = sentiment_windows["7d"][1]
+    sentiment_counts_30d = sentiment_windows["30d"][1]
 
     def _derive_sentiment(counts: dict[str, int]) -> str | None:
         """Derive overall sentiment from counts."""

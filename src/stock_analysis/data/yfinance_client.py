@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import math
 import os
 import random
 from collections.abc import Callable
@@ -140,8 +141,6 @@ def _has_value(v: Any) -> bool:
     yfinance often uses float("nan") for missing numerics, which passes
     `is not None` but should be treated as missing.
     """
-    import math
-
     if v is None:
         return False
     if isinstance(v, float) and math.isnan(v):
