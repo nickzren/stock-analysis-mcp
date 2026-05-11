@@ -25,6 +25,218 @@ _OCF_LABELS: tuple[str, ...] = ("operatingcashflow",)
 _CAPEX_LABELS: tuple[str, ...] = ("capitalexpenditure", "capitalexpenditures")
 
 
+def _build_valuation(info: dict[str, Any]) -> dict[str, Any]:
+    """Build the valuation section from yfinance info."""
+    # P/S: try direct field first, then compute from market_cap / revenue
+    ps_trailing = safe_float(info.get("priceToSalesTrailing12Months"))
+    ps_source: str | None = None
+    if ps_trailing is not None:
+        ps_source = "direct"
+    else:
+        market_cap_val = safe_float(info.get("marketCap"))
+        revenue_ttm = safe_float(info.get("totalRevenue"))
+        if market_cap_val is not None and revenue_ttm is not None and revenue_ttm > 0:
+            ps_trailing = market_cap_val / revenue_ttm
+            ps_source = "computed"
+
+    ps_explanation: str | None = None
+    if ps_source == "computed":
+        ps_explanation = "P/S computed from market_cap / revenue_ttm (priceToSalesTrailing12Months unavailable)"
+
+    # EV/Sales: compute from enterpriseValue / totalRevenue
+    enterprise_value = safe_float(info.get("enterpriseValue"))
+    revenue_ttm = safe_float(info.get("totalRevenue"))
+    ev_to_sales: float | None = None
+    ev_to_sales_source: str | None = None
+    if enterprise_value is not None and revenue_ttm is not None and revenue_ttm > 0:
+        ev_to_sales = enterprise_value / revenue_ttm
+        ev_to_sales_source = "computed"
+
+    return {
+        "pe_trailing": safe_float(info.get("trailingPE")),
+        "pe_forward": safe_float(info.get("forwardPE")),
+        "trailing_eps": safe_float(info.get("trailingEps")),
+        "ps_trailing": safe_round(ps_trailing, 2),
+        "ps_source": ps_source,
+        "ps_explanation": ps_explanation,
+        "pb_ratio": safe_float(info.get("priceToBook")),
+        "peg_ratio": safe_float(info.get("pegRatio")),
+        "ev_to_ebitda": safe_float(info.get("enterpriseToEbitda")),
+        "ev_to_sales": safe_round(ev_to_sales, 2),
+        "ev_to_sales_source": ev_to_sales_source,
+    }
+
+
+def _build_growth(info: dict[str, Any]) -> dict[str, Any]:
+    """Build the growth section from yfinance info."""
+    revenue_growth = safe_float(info.get("revenueGrowth"))
+    earnings_growth = safe_float(info.get("earningsGrowth"))
+    return {
+        "revenue_yoy": revenue_growth,
+        "revenue_3y_cagr": None,  # Not available from yfinance directly
+        "eps_yoy": earnings_growth,
+        "eps_3y_cagr": None,  # Not available from yfinance directly
+        "rules": {
+            "positive_revenue_growth": {
+                "triggered": check_rule(revenue_growth, 0, operator.gt),
+                "threshold": 0,
+            },
+            "high_growth": {
+                "triggered": check_rule(revenue_growth, 0.20, operator.gt),
+                "threshold": 0.20,
+            },
+        },
+    }
+
+
+def _build_profitability(info: dict[str, Any]) -> dict[str, Any]:
+    """Build the profitability section from yfinance info."""
+    net_margin = safe_float(info.get("profitMargins"))
+    return {
+        "gross_margin": safe_float(info.get("grossMargins")),
+        "operating_margin": safe_float(info.get("operatingMargins")),
+        "net_margin": net_margin,
+        "roe": safe_float(info.get("returnOnEquity")),
+        "roa": safe_float(info.get("returnOnAssets")),
+        "rules": {
+            "profitable": {
+                "triggered": check_rule(net_margin, 0, operator.gt),
+                "threshold": "net_margin > 0",
+            },
+            "high_margin": {
+                "triggered": check_rule(net_margin, 0.15, operator.gt),
+                "threshold": 0.15,
+            },
+        },
+    }
+
+
+def _build_financial_health(info: dict[str, Any]) -> dict[str, Any]:
+    """Build the financial_health section from yfinance info."""
+    total_cash = safe_float(info.get("totalCash"))
+    # Cash + short-term investments (more accurate liquidity for burn calculations)
+    cash_and_st_investments = safe_float(info.get("cashAndShortTermInvestments"))
+    if cash_and_st_investments is None:
+        cash_and_st_investments = total_cash  # Fallback to total cash
+
+    total_debt = safe_float(info.get("totalDebt"))
+    net_cash = (
+        total_cash - total_debt
+        if total_cash is not None and total_debt is not None
+        else None
+    )
+    current_ratio = safe_float(info.get("currentRatio"))
+    debt_to_equity = safe_float(info.get("debtToEquity"))
+    # Convert D/E from percentage to ratio if needed (yfinance returns as percentage)
+    if debt_to_equity is not None and debt_to_equity > 10:
+        debt_to_equity = debt_to_equity / 100
+
+    return {
+        "total_cash": total_cash,
+        "cash_and_st_investments": cash_and_st_investments,
+        "total_debt": total_debt,
+        "net_cash": net_cash,
+        "current_ratio": current_ratio,
+        "debt_to_equity": debt_to_equity,
+        "interest_coverage": None,  # Not directly available
+        "rules": {
+            "net_cash_positive": {
+                "triggered": check_rule(net_cash, 0, operator.gt),
+                "threshold": 0,
+            },
+            "low_debt": {
+                "triggered": check_rule(debt_to_equity, 0.5, operator.lt),
+                "threshold": 0.5,
+            },
+            "adequate_liquidity": {
+                "triggered": check_rule(current_ratio, 1.0, operator.gt),
+                "threshold": 1.0,
+            },
+        },
+    }
+
+
+def _build_analyst_coverage(info: dict[str, Any], current_price: float | None) -> dict[str, Any]:
+    """Build the analyst_coverage section from yfinance info."""
+    target_low = safe_float(info.get("targetLowPrice"))
+    target_mean = safe_float(info.get("targetMeanPrice"))
+    target_high = safe_float(info.get("targetHighPrice"))
+    target_median = safe_float(info.get("targetMedianPrice"))
+
+    upside_to_mean_target = (
+        (target_mean - current_price) / current_price
+        if target_mean is not None and current_price is not None and current_price > 0
+        else None
+    )
+    upside_to_median_target = (
+        (target_median - current_price) / current_price
+        if target_median is not None and current_price is not None and current_price > 0
+        else None
+    )
+
+    return {
+        "rating": safe_str(info.get("recommendationKey")),
+        "rating_score": safe_float(info.get("recommendationMean")),
+        "num_analysts": safe_int(info.get("numberOfAnalystOpinions")),
+        "price_target_low": target_low,
+        "price_target_mean": target_mean,
+        "price_target_high": target_high,
+        "price_target_median": target_median,
+        "upside_to_mean_target": safe_round(upside_to_mean_target, 4),
+        "upside_to_median_target": safe_round(upside_to_median_target, 4),
+    }
+
+
+def _build_short_interest(info: dict[str, Any]) -> dict[str, Any]:
+    """Build the short_interest section from yfinance info."""
+    shares_short = safe_int(info.get("sharesShort"))
+    shares_short_prior = safe_int(info.get("sharesShortPriorMonth"))
+    short_change_mom = (
+        (shares_short - shares_short_prior) / shares_short_prior
+        if shares_short is not None and shares_short_prior
+        else None
+    )
+    return {
+        "shares_short": shares_short,
+        "short_pct_of_float": safe_float(info.get("shortPercentOfFloat")),
+        "days_to_cover": safe_float(info.get("shortRatio")),
+        "short_change_mom": safe_round(short_change_mom, 4),
+        "as_of_date": _format_date_string(info.get("dateShortInterest")),
+    }
+
+
+def _build_ownership(info: dict[str, Any]) -> dict[str, Any]:
+    """Build the ownership section from yfinance info."""
+    return {
+        "insider_pct": safe_float(info.get("heldPercentInsiders")),
+        "institutional_pct": safe_float(info.get("heldPercentInstitutions")),
+        "float_shares": safe_int(info.get("floatShares")),
+    }
+
+
+def _build_governance(info: dict[str, Any]) -> dict[str, Any]:
+    """Build the governance section from yfinance info."""
+    return {
+        "audit_risk": safe_int(info.get("auditRisk")),
+        "board_risk": safe_int(info.get("boardRisk")),
+        "compensation_risk": safe_int(info.get("compensationRisk")),
+        "shareholder_rights_risk": safe_int(info.get("shareHolderRightsRisk")),
+        "overall_risk": safe_int(info.get("overallRisk")),
+    }
+
+
+def _build_quality(info: dict[str, Any]) -> dict[str, Any]:
+    """Build the quality section from yfinance info."""
+    return {
+        "roic": safe_float(info.get("returnOnInvestedCapital") or info.get("returnOnCapitalEmployed")),
+        "gross_profit": safe_float(info.get("grossProfits")),
+        "ebitda": safe_float(info.get("ebitda")),
+        "ebitda_margin": safe_float(info.get("ebitdaMargins")),
+        "revenue_per_share": safe_float(info.get("revenuePerShare")),
+        "quick_ratio": safe_float(info.get("quickRatio")),
+    }
+
+
 async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
     """
     Get fundamental financial data for a symbol.
@@ -55,139 +267,10 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
         except (ValueError, TypeError, OSError):
             pass
 
-    # Valuation
-    # P/S: try direct field first, then compute from market_cap / revenue
-    ps_trailing = safe_float(info.get("priceToSalesTrailing12Months"))
-    ps_source: str | None = None
-    if ps_trailing is not None:
-        ps_source = "direct"
-    else:
-        # Fallback: compute P/S from market_cap / revenue_ttm
-        market_cap_val = safe_float(info.get("marketCap"))
-        revenue_ttm = safe_float(info.get("totalRevenue"))
-        if market_cap_val is not None and revenue_ttm is not None and revenue_ttm > 0:
-            ps_trailing = market_cap_val / revenue_ttm
-            ps_source = "computed"
-
-    # Build ps_explanation for auditability when computed
-    ps_explanation: str | None = None
-    if ps_source == "computed":
-        ps_explanation = "P/S computed from market_cap / revenue_ttm (priceToSalesTrailing12Months unavailable)"
-
-    # EV/Sales: compute from enterpriseValue / totalRevenue
-    # Better than P/S when debt/cash position is material
-    enterprise_value = safe_float(info.get("enterpriseValue"))
-    revenue_ttm = safe_float(info.get("totalRevenue"))
-    ev_to_sales: float | None = None
-    ev_to_sales_source: str | None = None
-    if enterprise_value is not None and revenue_ttm is not None and revenue_ttm > 0:
-        ev_to_sales = enterprise_value / revenue_ttm
-        ev_to_sales_source = "computed"
-
-    valuation = {
-        "pe_trailing": safe_float(info.get("trailingPE")),
-        "pe_forward": safe_float(info.get("forwardPE")),
-        "trailing_eps": safe_float(info.get("trailingEps")),
-        "ps_trailing": safe_round(ps_trailing, 2),
-        "ps_source": ps_source,  # "direct" or "computed" or None
-        "ps_explanation": ps_explanation,  # Only present when ps_source="computed"
-        "pb_ratio": safe_float(info.get("priceToBook")),
-        "peg_ratio": safe_float(info.get("pegRatio")),
-        "ev_to_ebitda": safe_float(info.get("enterpriseToEbitda")),
-        "ev_to_sales": safe_round(ev_to_sales, 2),
-        "ev_to_sales_source": ev_to_sales_source,
-    }
-
-    # Growth
-    revenue_growth = safe_float(info.get("revenueGrowth"))
-    earnings_growth = safe_float(info.get("earningsGrowth"))
-
-    growth = {
-        "revenue_yoy": revenue_growth,
-        "revenue_3y_cagr": None,  # Not available from yfinance directly
-        "eps_yoy": earnings_growth,
-        "eps_3y_cagr": None,  # Not available from yfinance directly
-        "rules": {
-            "positive_revenue_growth": {
-                "triggered": check_rule(revenue_growth, 0, operator.gt),
-                "threshold": 0,
-            },
-            "high_growth": {
-                "triggered": check_rule(revenue_growth, 0.20, operator.gt),
-                "threshold": 0.20,
-            },
-        },
-    }
-
-    # Profitability
-    gross_margin = safe_float(info.get("grossMargins"))
-    operating_margin = safe_float(info.get("operatingMargins"))
-    net_margin = safe_float(info.get("profitMargins"))
-    roe = safe_float(info.get("returnOnEquity"))
-    roa = safe_float(info.get("returnOnAssets"))
-
-    profitability = {
-        "gross_margin": gross_margin,
-        "operating_margin": operating_margin,
-        "net_margin": net_margin,
-        "roe": roe,
-        "roa": roa,
-        "rules": {
-            "profitable": {
-                "triggered": check_rule(net_margin, 0, operator.gt),
-                "threshold": "net_margin > 0",
-            },
-            "high_margin": {
-                "triggered": check_rule(net_margin, 0.15, operator.gt),
-                "threshold": 0.15,
-            },
-        },
-    }
-
-    # Financial Health
-    total_cash = safe_float(info.get("totalCash"))
-    # Cash + short-term investments (more accurate liquidity for burn calculations)
-    # yfinance doesn't always have this separately, but we can use total cash as proxy
-    # Some tickers have cashAndShortTermInvestments
-    cash_and_st_investments = safe_float(info.get("cashAndShortTermInvestments"))
-    if cash_and_st_investments is None:
-        cash_and_st_investments = total_cash  # Fallback to total cash
-
-    total_debt = safe_float(info.get("totalDebt"))
-    net_cash = (
-        total_cash - total_debt
-        if total_cash is not None and total_debt is not None
-        else None
-    )
-    current_ratio = safe_float(info.get("currentRatio"))
-    debt_to_equity = safe_float(info.get("debtToEquity"))
-    # Convert D/E from percentage to ratio if needed (yfinance returns as percentage)
-    if debt_to_equity is not None and debt_to_equity > 10:
-        debt_to_equity = debt_to_equity / 100
-
-    financial_health = {
-        "total_cash": total_cash,
-        "cash_and_st_investments": cash_and_st_investments,
-        "total_debt": total_debt,
-        "net_cash": net_cash,
-        "current_ratio": current_ratio,
-        "debt_to_equity": debt_to_equity,
-        "interest_coverage": None,  # Not directly available
-        "rules": {
-            "net_cash_positive": {
-                "triggered": check_rule(net_cash, 0, operator.gt),
-                "threshold": 0,
-            },
-            "low_debt": {
-                "triggered": check_rule(debt_to_equity, 0.5, operator.lt),
-                "threshold": 0.5,
-            },
-            "adequate_liquidity": {
-                "triggered": check_rule(current_ratio, 1.0, operator.gt),
-                "threshold": 1.0,
-            },
-        },
-    }
+    valuation = _build_valuation(info)
+    growth = _build_growth(info)
+    profitability = _build_profitability(info)
+    financial_health = _build_financial_health(info)
 
     # Cash Flow
     operating_cf = safe_float(info.get("operatingCashflow"))
@@ -305,7 +388,7 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
         )
         else None
     )
-    pe_trailing = safe_float(info.get("trailingPE"))
+    pe_trailing = valuation.get("pe_trailing")
     earnings_yield = (
         1 / pe_trailing
         if pe_trailing is not None and pe_trailing > 0
@@ -315,7 +398,7 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
 
     # Dividend sustainability
     dividend_rate = safe_float(info.get("dividendRate"))
-    trailing_eps = safe_float(info.get("trailingEps"))
+    trailing_eps = valuation.get("trailing_eps")
     payout_ratio = (
         dividend_rate / trailing_eps
         if dividend_rate is not None and trailing_eps is not None and trailing_eps > 0
@@ -378,72 +461,11 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
         "warnings": yield_warnings if yield_warnings else None,
     }
 
-    target_low = safe_float(info.get("targetLowPrice"))
-    target_mean = safe_float(info.get("targetMeanPrice"))
-    target_high = safe_float(info.get("targetHighPrice"))
-    target_median = safe_float(info.get("targetMedianPrice"))
-
-    upside_to_mean_target = (
-        (target_mean - current_price) / current_price
-        if target_mean is not None and current_price is not None and current_price > 0
-        else None
-    )
-    upside_to_median_target = (
-        (target_median - current_price) / current_price
-        if target_median is not None and current_price is not None and current_price > 0
-        else None
-    )
-
-    analyst_coverage = {
-        "rating": safe_str(info.get("recommendationKey")),
-        "rating_score": safe_float(info.get("recommendationMean")),
-        "num_analysts": safe_int(info.get("numberOfAnalystOpinions")),
-        "price_target_low": target_low,
-        "price_target_mean": target_mean,
-        "price_target_high": target_high,
-        "price_target_median": target_median,
-        "upside_to_mean_target": safe_round(upside_to_mean_target, 4),
-        "upside_to_median_target": safe_round(upside_to_median_target, 4),
-    }
-
-    shares_short = safe_int(info.get("sharesShort"))
-    shares_short_prior = safe_int(info.get("sharesShortPriorMonth"))
-    short_change_mom = (
-        (shares_short - shares_short_prior) / shares_short_prior
-        if shares_short is not None and shares_short_prior
-        else None
-    )
-
-    short_interest = {
-        "shares_short": shares_short,
-        "short_pct_of_float": safe_float(info.get("shortPercentOfFloat")),
-        "days_to_cover": safe_float(info.get("shortRatio")),
-        "short_change_mom": safe_round(short_change_mom, 4),
-        "as_of_date": _format_date_string(info.get("dateShortInterest")),
-    }
-
-    ownership = {
-        "insider_pct": safe_float(info.get("heldPercentInsiders")),
-        "institutional_pct": safe_float(info.get("heldPercentInstitutions")),
-        "float_shares": safe_int(info.get("floatShares")),
-    }
-
-    governance = {
-        "audit_risk": safe_int(info.get("auditRisk")),
-        "board_risk": safe_int(info.get("boardRisk")),
-        "compensation_risk": safe_int(info.get("compensationRisk")),
-        "shareholder_rights_risk": safe_int(info.get("shareHolderRightsRisk")),
-        "overall_risk": safe_int(info.get("overallRisk")),
-    }
-
-    quality = {
-        "roic": safe_float(info.get("returnOnInvestedCapital") or info.get("returnOnCapitalEmployed")),
-        "gross_profit": safe_float(info.get("grossProfits")),
-        "ebitda": safe_float(info.get("ebitda")),
-        "ebitda_margin": safe_float(info.get("ebitdaMargins")),
-        "revenue_per_share": safe_float(info.get("revenuePerShare")),
-        "quick_ratio": safe_float(info.get("quickRatio")),
-    }
+    analyst_coverage = _build_analyst_coverage(info, current_price)
+    short_interest = _build_short_interest(info)
+    ownership = _build_ownership(info)
+    governance = _build_governance(info)
+    quality = _build_quality(info)
 
     pe_current = valuation.get("pe_trailing")
     ps_current = valuation.get("ps_trailing")
