@@ -44,11 +44,11 @@ def canonical_dumps(obj: Any) -> str:
     )
 
 
-# List normalization rules: path -> behavior
+# List normalization registry: path -> behavior
 # "set": sort lexicographically (order not semantic)
 # "ranked": preserve order, stable tie-break by id field
 # "ordered": preserve order exactly (semantic meaning)
-LIST_NORMALIZATION_RULES: dict[tuple[str, ...], str] = {
+LIST_PATH_RULES: dict[tuple[str, ...], str] = {
     # Set-like lists (sort)
     ("signals", "bullish"): "set",
     ("signals", "bearish"): "set",
@@ -57,7 +57,9 @@ LIST_NORMALIZATION_RULES: dict[tuple[str, ...], str] = {
     ("data_quality", "missing_critical"): "set",
     ("data_quality", "data_gaps"): "set",
     ("data_quality", "staleness_warnings"): "set",
+    ("data_quality", "tool_failures"): "set",
     ("data_quality", "warnings"): "set",
+    ("market_context", "sanity_warnings"): "set",
     ("relative_performance", "warnings"): "set",
     ("decision_context", "news", "headline_triggers", "bullish"): "set",
     ("decision_context", "news", "headline_triggers", "bearish"): "set",
@@ -83,28 +85,10 @@ LIST_NORMALIZATION_RULES: dict[tuple[str, ...], str] = {
     ("dip_assessment", "dip_confidence", "missing"): "set",
 }
 
+LIST_NORMALIZATION_RULES: dict[tuple[str, ...], str] = dict(LIST_PATH_RULES)
+
 # Paths where null should become [] for stability
-NULL_TO_EMPTY_LIST_PATHS: set[tuple[str, ...]] = {
-    ("signals", "bullish"),
-    ("signals", "bearish"),
-    ("signals", "neutral"),
-    ("action_zones", "zone_warnings"),
-    ("data_quality", "missing_critical"),
-    ("data_quality", "data_gaps"),
-    ("data_quality", "staleness_warnings"),
-    ("data_quality", "tool_failures"),
-    ("data_quality", "warnings"),
-    ("relative_performance", "warnings"),
-    ("market_context", "sanity_warnings"),
-    ("policy_action", "rationale"),
-    ("policy_action", "conditions_to_upgrade"),
-    ("policy_action", "conditions_to_downgrade"),
-    ("verdict", "pros"),
-    ("verdict", "cons"),
-    ("decision_context", "horizon_drivers"),
-    ("decision_context", "top_triggers"),
-    ("dip_assessment", "dip_confidence", "missing"),
-}
+NULL_TO_EMPTY_LIST_PATHS: set[tuple[str, ...]] = set(LIST_PATH_RULES)
 
 # Money fields to coerce to int (avoid .0 noise)
 MONEY_FIELD_PATHS: list[tuple[str, ...]] = [

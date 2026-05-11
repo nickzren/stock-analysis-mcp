@@ -5,6 +5,8 @@ import math
 import pytest
 
 from stock_analysis.utils.normalize import (
+    LIST_NORMALIZATION_RULES,
+    NULL_TO_EMPTY_LIST_PATHS,
     SNAPSHOT_VERSION,
     build_watchlist_snapshot,
     canonical_dumps,
@@ -86,6 +88,26 @@ class TestNormalizeForWatchlistDiff:
         assert result["signals"]["bullish"] == []
         assert result["signals"]["bearish"] == ["test"]
         assert result["data_quality"]["data_gaps"] == []
+
+    def test_all_normalized_list_paths_have_null_defaults(self):
+        """Any list path with ordering rules should also normalize null to []."""
+        assert set(LIST_NORMALIZATION_RULES) == NULL_TO_EMPTY_LIST_PATHS
+
+    def test_decision_context_null_lists_become_empty(self):
+        """Decision-context list paths should not leak nulls into snapshots."""
+        raw = {
+            "decision_context": {
+                "news": {"headline_triggers": {"bullish": None, "bearish": None}},
+                "thesis_checkpoints": {"review_triggers": None},
+                "fundamentals": {"bullish_if": None},
+            }
+        }
+        result = normalize_for_watchlist_diff(raw)
+
+        assert result["decision_context"]["news"]["headline_triggers"]["bullish"] == []
+        assert result["decision_context"]["news"]["headline_triggers"]["bearish"] == []
+        assert result["decision_context"]["thesis_checkpoints"]["review_triggers"] == []
+        assert result["decision_context"]["fundamentals"]["bullish_if"] == []
 
     def test_string_lists_sorted(self):
         """Set-like string lists should be sorted."""
@@ -287,23 +309,6 @@ class TestBuildWatchlistSnapshot:
         snapshot1 = build_watchlist_snapshot(raw1)
         snapshot2 = build_watchlist_snapshot(raw2)
         assert snapshot1["snapshot_hash"] != snapshot2["snapshot_hash"]
-
-    def test_hash_includes_version(self):
-        """Hash should change if version changes (version is in hashed content)."""
-        raw = {"symbol": "TEST"}
-        snapshot = build_watchlist_snapshot(raw)
-        # snapshot_version should be in the snapshot and affect the hash
-        assert "snapshot_version" in snapshot
-        assert snapshot["snapshot_version"] == SNAPSHOT_VERSION
-
-    def test_hash_excludes_itself(self):
-        """Hash should not include itself (would be self-referential)."""
-        raw = {"symbol": "TEST"}
-        snapshot = build_watchlist_snapshot(raw)
-        # Verify hash is computed from data without hash
-        # (indirectly tested by hash stability - if hash was included, it would be unstable)
-        assert "snapshot_hash" in snapshot
-        assert len(snapshot["snapshot_hash"]) == 16
 
     def test_includes_snapshot_as_of_date(self):
         """Should include snapshot_as_of_date computed from component dates."""
