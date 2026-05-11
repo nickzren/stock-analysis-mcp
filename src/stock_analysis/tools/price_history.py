@@ -62,27 +62,7 @@ async def price_history(
     # Store in cache (df is already standardized)
     uri = price_cache.store(params, df)
 
-    # Build summary
-    close_prices = df["close"].dropna()
-    if len(close_prices) >= 2:
-        start_price = float(close_prices.iloc[0])
-        end_price = float(close_prices.iloc[-1])
-        total_return = (end_price - start_price) / start_price if start_price != 0 else None
-    else:
-        start_price = float(close_prices.iloc[0]) if len(close_prices) > 0 else None
-        end_price = float(close_prices.iloc[-1]) if len(close_prices) > 0 else None
-        total_return = None
-
-    summary = {
-        "data_points": len(df),
-        "start_date": df["date"].iloc[0] if len(df) > 0 else None,
-        "end_date": df["date"].iloc[-1] if len(df) > 0 else None,
-        "start_price": start_price,
-        "end_price": end_price,
-        "period_high": float(df["high"].max()) if not df["high"].isna().all() else None,
-        "period_low": float(df["low"].min()) if not df["low"].isna().all() else None,
-        "total_return": round(total_return, 4) if total_return is not None else None,
-    }
+    summary = _build_summary(df)
 
     # Get market state
     market_state = get_market_state(params.tz)
@@ -118,3 +98,27 @@ async def price_history(
         response["preview"] = df_to_rows(df.tail(5))
 
     return response
+
+
+def _build_summary(df: Any) -> dict[str, Any]:
+    """Build price-history summary fields."""
+    close_prices = df["close"].dropna()
+    if len(close_prices) >= 2:
+        start_price = float(close_prices.iloc[0])
+        end_price = float(close_prices.iloc[-1])
+        total_return = (end_price - start_price) / start_price if start_price != 0 else None
+    else:
+        start_price = float(close_prices.iloc[0]) if len(close_prices) > 0 else None
+        end_price = float(close_prices.iloc[-1]) if len(close_prices) > 0 else None
+        total_return = None
+
+    return {
+        "data_points": len(df),
+        "start_date": df["date"].iloc[0] if len(df) > 0 else None,
+        "end_date": df["date"].iloc[-1] if len(df) > 0 else None,
+        "start_price": start_price,
+        "end_price": end_price,
+        "period_high": float(df["high"].max()) if not df["high"].isna().all() else None,
+        "period_low": float(df["low"].min()) if not df["low"].isna().all() else None,
+        "total_return": round(total_return, 4) if total_return is not None else None,
+    }

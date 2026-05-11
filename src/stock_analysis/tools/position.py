@@ -54,62 +54,16 @@ async def analyze_position(
             symbol=symbol,
         )
 
-    # Position calculations
-    gain_loss = (current_price - cost_basis) / cost_basis if cost_basis != 0 else None
-    gain_loss_dollars = (
-        (current_price - cost_basis) * shares if shares is not None else None
+    position = _build_position(
+        current_price=current_price,
+        cost_basis=cost_basis,
+        shares=shares,
     )
-    current_value = current_price * shares if shares is not None else None
-
-    position = {
-        "cost_basis": cost_basis,
-        "current_price": current_price,
-        "shares": shares,
-        "current_value": safe_round(current_value, 2),
-        "gain_loss": safe_round(gain_loss, 4),
-        "gain_loss_dollars": safe_round(gain_loss_dollars, 2),
-    }
-
-    # Holding period calculations
-    now = datetime.now()
-    days_held = (now - purchase_dt).days
-    is_long_term = days_held >= 365
-
-    days_to_long_term = None
-    if not is_long_term:
-        days_to_long_term = 365 - days_held
-
-    holding = {
-        "purchase_date": purchase_date,
-        "days_held": days_held,
-        "is_long_term": is_long_term,
-        "days_to_long_term": days_to_long_term,
-    }
-
-    # Tax calculations (simplified US tax rates)
-    short_term_rate = 0.37  # Top marginal rate
-    long_term_rate = 0.20  # Long-term capital gains rate
-
-    tax_type = "long_term" if is_long_term else "short_term"
-    rate_now = long_term_rate if is_long_term else short_term_rate
-
-    tax_on_gain_now = None
-    tax_if_waited = None
-    potential_savings = None
-
-    if gain_loss_dollars is not None and gain_loss_dollars > 0:
-        tax_on_gain_now = gain_loss_dollars * rate_now
-        tax_if_waited = gain_loss_dollars * long_term_rate
-        potential_savings = tax_on_gain_now - tax_if_waited if not is_long_term else 0
-
-    tax = {
-        "type": tax_type,
-        "rate_if_sold_now": rate_now,
-        "rate_if_long_term": long_term_rate,
-        "tax_on_gain_now": safe_round(tax_on_gain_now, 2),
-        "tax_if_waited": safe_round(tax_if_waited, 2),
-        "potential_savings": safe_round(potential_savings, 2),
-    }
+    holding = _build_holding(purchase_date=purchase_date, purchase_dt=purchase_dt)
+    tax = _build_tax(
+        gain_loss_dollars=position["gain_loss_dollars"],
+        is_long_term=holding["is_long_term"],
+    )
 
     # Extract current signals from technicals
     ma = tech_result.get("moving_averages", {})
@@ -117,86 +71,12 @@ async def analyze_position(
     macd = tech_result.get("macd", {})
     returns = tech_result.get("returns", {})
 
-    bullish: list[str] = []
-    bearish: list[str] = []
-
-    # Bullish signals
-    if _get_rule_triggered(ma, "above_sma50") is True:
-        bullish.append("above_sma50")
-    if _get_rule_triggered(ma, "above_sma200") is True:
-        bullish.append("above_sma200")
-    if _get_rule_triggered(ma, "golden_cross") is True:
-        bullish.append("golden_cross")
-    if _get_rule_triggered(rsi, "oversold") is True:
-        bullish.append("rsi_oversold")
-    if _get_rule_triggered(macd, "bullish_cross") is True:
-        bullish.append("macd_bullish")
-
-    ret_1m = returns.get("return_1m")
-    if ret_1m is not None and ret_1m > 0.05:
-        bullish.append("positive_1m_momentum")
-
-    # Bearish signals
-    if _get_rule_triggered(ma, "above_sma50") is False:
-        bearish.append("below_sma50")
-    if _get_rule_triggered(ma, "above_sma200") is False:
-        bearish.append("below_sma200")
-    if _get_rule_triggered(ma, "death_cross") is True:
-        bearish.append("death_cross")
-    if _get_rule_triggered(rsi, "overbought") is True:
-        bearish.append("rsi_overbought")
-    if _get_rule_triggered(macd, "bearish_cross") is True:
-        bearish.append("macd_bearish")
-
-    if ret_1m is not None and ret_1m < -0.05:
-        bearish.append("negative_1m_momentum")
-
-    current_signals = {
-        "bullish": bullish,
-        "bearish": bearish,
-    }
-
-    # Sell signals (specific triggers)
-    # Use _invert_nullable to flip True/False while preserving None
-    above_sma50 = _get_rule_triggered(ma, "above_sma50")
-    above_sma200 = _get_rule_triggered(ma, "above_sma200")
-    broke_sma50 = _invert_nullable(above_sma50)  # True if below, None if unknown
-    broke_sma200 = _invert_nullable(above_sma200)  # True if below, None if unknown
-    death_cross = _get_rule_triggered(ma, "death_cross")
-    rsi_overbought = _get_rule_triggered(rsi, "overbought")
-    macd_bearish = _get_rule_triggered(macd, "bearish_cross")
-
-    # Count active sell signals (only count True, not None)
-    sell_signal_values = [broke_sma50, broke_sma200, death_cross, rsi_overbought, macd_bearish]
-    active_count = sum(1 for v in sell_signal_values if v is True)
-
-    sell_signals = {
-        "broke_sma50": broke_sma50,
-        "broke_sma200": broke_sma200,
-        "death_cross": death_cross,
-        "rsi_overbought": rsi_overbought,
-        "macd_bearish": macd_bearish,
-        "active_count": active_count,
-    }
-
-    # Support levels
-    sma_50 = ma.get("sma_50")
-    sma_200 = ma.get("sma_200")
-
-    atr = tech_result.get("atr", {})
-    atr_val = atr.get("value")
-    atr_1x_below = current_price - atr_val if atr_val else None
-
-    # Get recent low (1 month)
-    price_pos = tech_result.get("price_position", {})
-    recent_low_1m = price_pos.get("low_1m")
-
-    support_levels = {
-        "sma_50": sma_50,
-        "sma_200": sma_200,
-        "atr_1x_below": safe_round(atr_1x_below, 2),
-        "recent_low_1m": recent_low_1m,
-    }
+    current_signals = _build_current_signals(ma=ma, rsi=rsi, macd=macd, returns=returns)
+    sell_signals = _build_sell_signals(ma=ma, rsi=rsi, macd=macd)
+    support_levels = _build_support_levels(
+        current_price=current_price,
+        tech_result=tech_result,
+    )
 
     duration_ms = (perf_counter() - start_time) * 1000
 
@@ -213,6 +93,156 @@ async def analyze_position(
     }
 
 
+def _build_position(
+    current_price: float,
+    cost_basis: float,
+    shares: float | None,
+) -> dict[str, Any]:
+    """Build position value and gain/loss fields."""
+    gain_loss = (current_price - cost_basis) / cost_basis if cost_basis != 0 else None
+    gain_loss_dollars = (
+        (current_price - cost_basis) * shares if shares is not None else None
+    )
+    current_value = current_price * shares if shares is not None else None
+
+    return {
+        "cost_basis": cost_basis,
+        "current_price": current_price,
+        "shares": shares,
+        "current_value": safe_round(current_value, 2),
+        "gain_loss": safe_round(gain_loss, 4),
+        "gain_loss_dollars": safe_round(gain_loss_dollars, 2),
+    }
+
+
+def _build_holding(purchase_date: str, purchase_dt: datetime) -> dict[str, Any]:
+    """Build holding-period fields."""
+    days_held = (datetime.now() - purchase_dt).days
+    is_long_term = days_held >= 365
+    days_to_long_term = None if is_long_term else 365 - days_held
+
+    return {
+        "purchase_date": purchase_date,
+        "days_held": days_held,
+        "is_long_term": is_long_term,
+        "days_to_long_term": days_to_long_term,
+    }
+
+
+def _build_tax(gain_loss_dollars: float | None, is_long_term: bool) -> dict[str, Any]:
+    """Build simplified tax fields."""
+    short_term_rate = 0.37
+    long_term_rate = 0.20
+
+    tax_type = "long_term" if is_long_term else "short_term"
+    rate_now = long_term_rate if is_long_term else short_term_rate
+
+    tax_on_gain_now = None
+    tax_if_waited = None
+    potential_savings = None
+
+    if gain_loss_dollars is not None and gain_loss_dollars > 0:
+        tax_on_gain_now = gain_loss_dollars * rate_now
+        tax_if_waited = gain_loss_dollars * long_term_rate
+        potential_savings = tax_on_gain_now - tax_if_waited if not is_long_term else 0
+
+    return {
+        "type": tax_type,
+        "rate_if_sold_now": rate_now,
+        "rate_if_long_term": long_term_rate,
+        "tax_on_gain_now": safe_round(tax_on_gain_now, 2),
+        "tax_if_waited": safe_round(tax_if_waited, 2),
+        "potential_savings": safe_round(potential_savings, 2),
+    }
+
+
+def _build_current_signals(
+    ma: dict[str, Any],
+    rsi: dict[str, Any],
+    macd: dict[str, Any],
+    returns: dict[str, Any],
+) -> dict[str, list[str]]:
+    """Build bullish and bearish signal labels from technical rule flags."""
+    bullish: list[str] = []
+    bearish: list[str] = []
+
+    if _get_rule_triggered(ma, "above_sma50") is True:
+        bullish.append("above_sma50")
+    if _get_rule_triggered(ma, "above_sma200") is True:
+        bullish.append("above_sma200")
+    if _get_rule_triggered(ma, "golden_cross") is True:
+        bullish.append("golden_cross")
+    if _get_rule_triggered(rsi, "oversold") is True:
+        bullish.append("rsi_oversold")
+    if _get_rule_triggered(macd, "bullish_cross") is True:
+        bullish.append("macd_bullish")
+
+    ret_1m = returns.get("return_1m")
+    if ret_1m is not None and ret_1m > 0.05:
+        bullish.append("positive_1m_momentum")
+
+    if _get_rule_triggered(ma, "above_sma50") is False:
+        bearish.append("below_sma50")
+    if _get_rule_triggered(ma, "above_sma200") is False:
+        bearish.append("below_sma200")
+    if _get_rule_triggered(ma, "death_cross") is True:
+        bearish.append("death_cross")
+    if _get_rule_triggered(rsi, "overbought") is True:
+        bearish.append("rsi_overbought")
+    if _get_rule_triggered(macd, "bearish_cross") is True:
+        bearish.append("macd_bearish")
+
+    if ret_1m is not None and ret_1m < -0.05:
+        bearish.append("negative_1m_momentum")
+
+    return {"bullish": bullish, "bearish": bearish}
+
+
+def _build_sell_signals(
+    ma: dict[str, Any],
+    rsi: dict[str, Any],
+    macd: dict[str, Any],
+) -> dict[str, bool | int | None]:
+    """Build specific sell-signal flags and active count."""
+    broke_sma50 = _invert_nullable(_get_rule_triggered(ma, "above_sma50"))
+    broke_sma200 = _invert_nullable(_get_rule_triggered(ma, "above_sma200"))
+    death_cross = _get_rule_triggered(ma, "death_cross")
+    rsi_overbought = _get_rule_triggered(rsi, "overbought")
+    macd_bearish = _get_rule_triggered(macd, "bearish_cross")
+
+    sell_signal_values = [broke_sma50, broke_sma200, death_cross, rsi_overbought, macd_bearish]
+    active_count = sum(1 for value in sell_signal_values if value is True)
+
+    return {
+        "broke_sma50": broke_sma50,
+        "broke_sma200": broke_sma200,
+        "death_cross": death_cross,
+        "rsi_overbought": rsi_overbought,
+        "macd_bearish": macd_bearish,
+        "active_count": active_count,
+    }
+
+
+def _build_support_levels(
+    current_price: float,
+    tech_result: dict[str, Any],
+) -> dict[str, float | None]:
+    """Build support levels from technical data."""
+    ma = tech_result.get("moving_averages", {})
+    atr = tech_result.get("atr", {})
+    price_pos = tech_result.get("price_position", {})
+
+    atr_val = atr.get("value")
+    atr_1x_below = current_price - atr_val if atr_val else None
+
+    return {
+        "sma_50": ma.get("sma_50"),
+        "sma_200": ma.get("sma_200"),
+        "atr_1x_below": safe_round(atr_1x_below, 2),
+        "recent_low_1m": price_pos.get("low_1m"),
+    }
+
+
 def _get_rule_triggered(data: dict[str, Any], rule_name: str) -> bool | None:
     """Extract triggered value from a rules dict."""
     rules = data.get("rules", {})
@@ -225,4 +255,3 @@ def _invert_nullable(value: bool | None) -> bool | None:
     if value is None:
         return None
     return not value
-

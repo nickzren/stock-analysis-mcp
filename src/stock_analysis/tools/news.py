@@ -112,193 +112,12 @@ async def stock_news(symbol: str, days: int = 7) -> dict[str, Any]:
     if not news_data:
         news_data = []
 
-    # Filter by date range
     now = datetime.now(UTC).replace(tzinfo=None)
     cutoff_date = now - timedelta(days=days)
-    articles: list[dict[str, Any]] = []
-
-    for item in news_data:
-        content = item.get("content", {})
-        pub_date_str = content.get("pubDate")
-
-        if not pub_date_str:
-            continue
-
-        # Parse date
-        try:
-            pub_date = datetime.fromisoformat(pub_date_str.replace("Z", "+00:00"))
-            pub_date_naive = pub_date.replace(tzinfo=None)
-        except (ValueError, AttributeError):
-            continue
-
-        # Skip if older than cutoff
-        if pub_date_naive < cutoff_date:
-            continue
-
-        title = sanitize_text(content.get("title", ""), max_length=200)
-        summary = sanitize_text(content.get("summary", ""), max_length=500)
-        provider = sanitize_text(content.get("provider", {}).get("displayName", "Unknown"), max_length=50)
-
-        # Get URL
-        url = None
-        canonical = content.get("canonicalUrl", {})
-        if canonical:
-            url = canonical.get("url")
-
-        sentiment_result = _score_sentiment(title, summary)
-        sentiment = sentiment_result["label"]
-        catalyst_tags = _extract_catalysts(title, summary)
-        articles.append({
-            "date": pub_date_naive.strftime("%Y-%m-%d"),
-            "title": title,
-            "summary": summary,
-            "provider": provider,
-            "url": url,
-            "sentiment": sentiment,
-            "matched_positive": sentiment_result["matched_positive"] or None,
-            "matched_negative": sentiment_result["matched_negative"] or None,
-            "catalyst_tags": catalyst_tags,
-        })
-
-    # Sort by date descending
-    articles.sort(key=lambda x: x["date"], reverse=True)
-
-    # Get recent earnings report if within the lookback period
-    recent_earnings: dict[str, Any] | None = None
-    try:
-        earnings_dates = ticker.earnings_dates
-        if earnings_dates is not None and len(earnings_dates) > 0:
-            for date, row in earnings_dates.iterrows():
-                # Convert to datetime for comparison
-                if isinstance(date, pd.Timestamp):
-                    earnings_date = date.to_pydatetime().replace(tzinfo=None)
-                else:
-                    earnings_date = datetime.strptime(str(date)[:10], "%Y-%m-%d")
-
-                # Check if this earnings is within our lookback period and in the past
-                if cutoff_date <= earnings_date <= now:
-                    estimate = safe_float(row.get("EPS Estimate"))
-                    actual = safe_float(row.get("Reported EPS"))
-
-                    # Only include if we have actual reported earnings (not future)
-                    if actual is not None:
-                        surprise = None
-                        surprise_pct = None
-                        beat_miss = None
-
-                        if estimate is not None and estimate != 0:
-                            surprise = actual - estimate
-                            surprise_pct = surprise / abs(estimate)
-                            beat_miss = "beat" if surprise > 0 else "miss" if surprise < 0 else "inline"
-
-                        recent_earnings = {
-                            "date": earnings_date.strftime("%Y-%m-%d"),
-                            "eps_estimate": estimate,
-                            "eps_actual": actual,
-                            "surprise": safe_round(surprise, 4),
-                            "surprise_pct": safe_round(surprise_pct, 4),
-                            "beat_miss": beat_miss,
-                        }
-                        break  # Only get the most recent one
-    except Exception:
-        pass
-
-    # Aggregate sentiment by time windows. cutoff=None means "all articles".
-    sentiment_windows: dict[str, tuple[datetime | None, dict[str, int]]] = {
-        "all": (None, {"positive": 0, "negative": 0, "neutral": 0}),
-        "7d": (now - timedelta(days=7), {"positive": 0, "negative": 0, "neutral": 0}),
-        "30d": (now - timedelta(days=30), {"positive": 0, "negative": 0, "neutral": 0}),
-    }
-
-    for a in articles:
-        sentiment = a["sentiment"]
-        article_date: datetime | None = None
-        with suppress(ValueError, KeyError):
-            article_date = datetime.strptime(a["date"], "%Y-%m-%d")
-        for cutoff, counts in sentiment_windows.values():
-            if cutoff is None or (article_date is not None and article_date >= cutoff):
-                counts[sentiment] += 1
-
-    sentiment_counts = sentiment_windows["all"][1]
-    sentiment_counts_7d = sentiment_windows["7d"][1]
-    sentiment_counts_30d = sentiment_windows["30d"][1]
-
-    def _derive_sentiment(counts: dict[str, int]) -> str | None:
-        """Derive overall sentiment from counts."""
-        total = sum(counts.values())
-        if total == 0:
-            return None
-        if counts["positive"] > counts["negative"]:
-            return "positive"
-        elif counts["negative"] > counts["positive"]:
-            return "negative"
-        return "neutral"
-
-    def _derive_confidence(count: int) -> str:
-        """Derive confidence from sample size."""
-        if count >= 10:
-            return "high"
-        elif count >= 5:
-            return "moderate"
-        elif count >= 1:
-            return "low"
-        return "none"
-
-    overall_sentiment = _derive_sentiment(sentiment_counts)
-    sentiment_7d = _derive_sentiment(sentiment_counts_7d)
-    sentiment_30d = _derive_sentiment(sentiment_counts_30d)
-
-    sample_size_7d = sum(sentiment_counts_7d.values())
-    sample_size_30d = sum(sentiment_counts_30d.values())
-
-    # Sentiment confidence based on sample size (using 7d window for primary)
-    sentiment_confidence = _derive_confidence(sample_size_7d)
-
-    # Aggregate unique triggers across all articles
-    all_positive_triggers: set[str] = set()
-    all_negative_triggers: set[str] = set()
-    catalyst_counts: dict[str, dict[str, int]] = {
-        "bullish": {},
-        "bearish": {},
-        "neutral": {},
-    }
-    for a in articles:
-        if a.get("matched_positive"):
-            all_positive_triggers.update(a["matched_positive"])
-        if a.get("matched_negative"):
-            all_negative_triggers.update(a["matched_negative"])
-        catalyst_tags = a.get("catalyst_tags") or {}
-        for polarity, counts in catalyst_counts.items():
-            for tag in catalyst_tags.get(polarity, []) or []:
-                counts[tag] = counts.get(tag, 0) + 1
-
-    headline_triggers = {
-        "positive": sorted(all_positive_triggers)[:10],
-        "negative": sorted(all_negative_triggers)[:10],
-    } if all_positive_triggers or all_negative_triggers else None
-
-    sentiment_summary = {
-        "overall": overall_sentiment,
-        "confidence": sentiment_confidence,
-        "counts": sentiment_counts,
-        "method": "keyword_v2",
-        "headline_triggers": headline_triggers,
-        # Recency windows for investors to weight recent news more heavily
-        "sentiment_7d": sentiment_7d,
-        "sample_size_7d": sample_size_7d,
-        "confidence_7d": _derive_confidence(sample_size_7d),
-        "sentiment_30d": sentiment_30d,
-        "sample_size_30d": sample_size_30d,
-        "confidence_30d": _derive_confidence(sample_size_30d),
-    }
-
-    catalyst_intelligence = {
-        "bullish": _sorted_catalyst_counts(catalyst_counts["bullish"]),
-        "bearish": _sorted_catalyst_counts(catalyst_counts["bearish"]),
-        "neutral": _sorted_catalyst_counts(catalyst_counts["neutral"]),
-        "sample_size": len(articles),
-        "method": "keyword_catalyst_v1",
-    }
+    articles = _parse_articles(news_data, cutoff_date)
+    recent_earnings = _build_recent_earnings(ticker, cutoff_date, now)
+    sentiment_summary = _build_sentiment_summary(articles, now)
+    catalyst_intelligence = _build_catalyst_intelligence(articles)
 
     # Build warnings
     warnings: list[str] = []
@@ -324,6 +143,210 @@ async def stock_news(symbol: str, days: int = 7) -> dict[str, Any]:
         "recent_earnings": recent_earnings,
         "warnings": warnings if warnings else None,
     }
+
+
+def _parse_articles(news_data: list[dict[str, Any]], cutoff_date: datetime) -> list[dict[str, Any]]:
+    """Parse, sanitize, score, and sort news articles."""
+    articles: list[dict[str, Any]] = []
+
+    for item in news_data:
+        content = item.get("content", {})
+        pub_date_str = content.get("pubDate")
+        if not pub_date_str:
+            continue
+
+        try:
+            pub_date = datetime.fromisoformat(pub_date_str.replace("Z", "+00:00"))
+            pub_date_naive = pub_date.replace(tzinfo=None)
+        except (ValueError, AttributeError):
+            continue
+
+        if pub_date_naive < cutoff_date:
+            continue
+
+        title = sanitize_text(content.get("title", ""), max_length=200)
+        summary = sanitize_text(content.get("summary", ""), max_length=500)
+        provider = sanitize_text(
+            content.get("provider", {}).get("displayName", "Unknown"),
+            max_length=50,
+        )
+
+        url = None
+        canonical = content.get("canonicalUrl", {})
+        if canonical:
+            url = canonical.get("url")
+
+        sentiment_result = _score_sentiment(title, summary)
+        articles.append({
+            "date": pub_date_naive.strftime("%Y-%m-%d"),
+            "title": title,
+            "summary": summary,
+            "provider": provider,
+            "url": url,
+            "sentiment": sentiment_result["label"],
+            "matched_positive": sentiment_result["matched_positive"] or None,
+            "matched_negative": sentiment_result["matched_negative"] or None,
+            "catalyst_tags": _extract_catalysts(title, summary),
+        })
+
+    articles.sort(key=lambda x: x["date"], reverse=True)
+    return articles
+
+
+def _build_recent_earnings(
+    ticker: Any,
+    cutoff_date: datetime,
+    now: datetime,
+) -> dict[str, Any] | None:
+    """Build the recent earnings report if it falls within the lookback window."""
+    with suppress(Exception):
+        earnings_dates = ticker.earnings_dates
+        if earnings_dates is None or len(earnings_dates) == 0:
+            return None
+
+        for date, row in earnings_dates.iterrows():
+            if isinstance(date, pd.Timestamp):
+                earnings_date = date.to_pydatetime().replace(tzinfo=None)
+            else:
+                earnings_date = datetime.strptime(str(date)[:10], "%Y-%m-%d")
+
+            if not cutoff_date <= earnings_date <= now:
+                continue
+
+            estimate = safe_float(row.get("EPS Estimate"))
+            actual = safe_float(row.get("Reported EPS"))
+            if actual is None:
+                continue
+
+            surprise = None
+            surprise_pct = None
+            beat_miss = None
+
+            if estimate is not None and estimate != 0:
+                surprise = actual - estimate
+                surprise_pct = surprise / abs(estimate)
+                beat_miss = "beat" if surprise > 0 else "miss" if surprise < 0 else "inline"
+
+            return {
+                "date": earnings_date.strftime("%Y-%m-%d"),
+                "eps_estimate": estimate,
+                "eps_actual": actual,
+                "surprise": safe_round(surprise, 4),
+                "surprise_pct": safe_round(surprise_pct, 4),
+                "beat_miss": beat_miss,
+            }
+
+    return None
+
+
+def _build_sentiment_summary(
+    articles: list[dict[str, Any]],
+    now: datetime,
+) -> dict[str, Any]:
+    """Build sentiment summary and recency windows."""
+    sentiment_windows: dict[str, tuple[datetime | None, dict[str, int]]] = {
+        "all": (None, {"positive": 0, "negative": 0, "neutral": 0}),
+        "7d": (now - timedelta(days=7), {"positive": 0, "negative": 0, "neutral": 0}),
+        "30d": (now - timedelta(days=30), {"positive": 0, "negative": 0, "neutral": 0}),
+    }
+
+    for a in articles:
+        sentiment = a["sentiment"]
+        article_date: datetime | None = None
+        with suppress(ValueError, KeyError):
+            article_date = datetime.strptime(a["date"], "%Y-%m-%d")
+        for cutoff, counts in sentiment_windows.values():
+            if cutoff is None or (article_date is not None and article_date >= cutoff):
+                counts[sentiment] += 1
+
+    sentiment_counts = sentiment_windows["all"][1]
+    sentiment_counts_7d = sentiment_windows["7d"][1]
+    sentiment_counts_30d = sentiment_windows["30d"][1]
+
+    sentiment_7d = _derive_sentiment(sentiment_counts_7d)
+    sentiment_30d = _derive_sentiment(sentiment_counts_30d)
+    sample_size_7d = sum(sentiment_counts_7d.values())
+    sample_size_30d = sum(sentiment_counts_30d.values())
+
+    return {
+        "overall": _derive_sentiment(sentiment_counts),
+        "confidence": _derive_confidence(sample_size_7d),
+        "counts": sentiment_counts,
+        "method": "keyword_v2",
+        "headline_triggers": _build_headline_triggers(articles),
+        "sentiment_7d": sentiment_7d,
+        "sample_size_7d": sample_size_7d,
+        "confidence_7d": _derive_confidence(sample_size_7d),
+        "sentiment_30d": sentiment_30d,
+        "sample_size_30d": sample_size_30d,
+        "confidence_30d": _derive_confidence(sample_size_30d),
+    }
+
+
+def _build_headline_triggers(articles: list[dict[str, Any]]) -> dict[str, list[str]] | None:
+    """Aggregate unique headline sentiment triggers."""
+    all_positive_triggers: set[str] = set()
+    all_negative_triggers: set[str] = set()
+
+    for a in articles:
+        if a.get("matched_positive"):
+            all_positive_triggers.update(a["matched_positive"])
+        if a.get("matched_negative"):
+            all_negative_triggers.update(a["matched_negative"])
+
+    if not all_positive_triggers and not all_negative_triggers:
+        return None
+
+    return {
+        "positive": sorted(all_positive_triggers)[:10],
+        "negative": sorted(all_negative_triggers)[:10],
+    }
+
+
+def _build_catalyst_intelligence(articles: list[dict[str, Any]]) -> dict[str, Any]:
+    """Aggregate catalyst tag counts."""
+    catalyst_counts: dict[str, dict[str, int]] = {
+        "bullish": {},
+        "bearish": {},
+        "neutral": {},
+    }
+    for a in articles:
+        catalyst_tags = a.get("catalyst_tags") or {}
+        for polarity, counts in catalyst_counts.items():
+            for tag in catalyst_tags.get(polarity, []) or []:
+                counts[tag] = counts.get(tag, 0) + 1
+
+    return {
+        "bullish": _sorted_catalyst_counts(catalyst_counts["bullish"]),
+        "bearish": _sorted_catalyst_counts(catalyst_counts["bearish"]),
+        "neutral": _sorted_catalyst_counts(catalyst_counts["neutral"]),
+        "sample_size": len(articles),
+        "method": "keyword_catalyst_v1",
+    }
+
+
+def _derive_sentiment(counts: dict[str, int]) -> str | None:
+    """Derive overall sentiment from counts."""
+    total = sum(counts.values())
+    if total == 0:
+        return None
+    if counts["positive"] > counts["negative"]:
+        return "positive"
+    if counts["negative"] > counts["positive"]:
+        return "negative"
+    return "neutral"
+
+
+def _derive_confidence(count: int) -> str:
+    """Derive confidence from sample size."""
+    if count >= 10:
+        return "high"
+    if count >= 5:
+        return "moderate"
+    if count >= 1:
+        return "low"
+    return "none"
+
 
 def _score_sentiment(title: str, summary: str = "") -> dict[str, Any]:
     """
