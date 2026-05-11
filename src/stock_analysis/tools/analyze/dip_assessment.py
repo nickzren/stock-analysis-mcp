@@ -4,6 +4,35 @@ from typing import Any
 
 from stock_analysis.utils.helpers import round_or_none
 
+# Static dip-type / recommendation lookups used by build_dip_assessment.
+_DIP_TYPE_EXPLANATIONS: dict[str, str] = {
+    "falling_knife": "Severe decline with broken trends - high risk of further downside",
+    "extended_decline": "Prolonged weakness but not in freefall",
+    "healthy_pullback": "Normal retracement in an uptrend - favorable for dip buying",
+    "mixed_signals": "Conflicting trend signals - proceed with caution",
+    "undetermined": "Insufficient data to classify",
+}
+
+_BUY_RECOMMENDATION_RATIONALES: dict[str, str] = {
+    "strong_buy_the_dip": "Oversold pullback in uptrend - high probability bounce",
+    "buy_the_dip": "Good entry point in established trend",
+    "cautious_accumulation": "Acceptable entry but use smaller position size",
+    "small_speculative_position": "High risk but extremely oversold - small position only",
+    "do_not_catch_falling_knife": "Trend is broken - wait for stabilization",
+    "wait_for_better_setup": "Conditions not favorable for dip buying yet",
+}
+
+
+def _support_status(distance_pct: float | None) -> str | None:
+    """Classify a support level by its percent-distance from current price."""
+    if distance_pct is None:
+        return None
+    if distance_pct > 0:
+        return "breached" if distance_pct <= 0.01 else "broken"
+    if abs(distance_pct) <= 0.01:
+        return "tested"
+    return "above"
+
 
 def _build_oversold_composite(
     rsi: float | None,
@@ -147,6 +176,162 @@ def _build_dip_depth(
     }
 
 
+def _classify_dip(
+    bullish_signals: list[str],
+    bearish_signals: list[str],
+    return_3m: float | None,
+    position_in_range: float | None,
+    sma_200_slope: float | None,
+    days_since_52w_high: int | None,
+    sma_50: float | None,
+    sma_200: float | None,
+    current_price: float | None,
+    from_3m_high: float | None,
+) -> tuple[str, list[str]]:
+    """Classify the current decline as pullback, falling-knife, etc."""
+    dip_signals: list[str] = []
+
+    falling_knife_score = 0
+    if "death_cross" in bearish_signals:
+        falling_knife_score += 2
+        dip_signals.append("death_cross_active")
+    if "price_below_sma200" in bearish_signals:
+        falling_knife_score += 1
+        dip_signals.append("below_sma200")
+    if return_3m is not None and return_3m < -0.30:
+        falling_knife_score += 2
+        dip_signals.append("severe_3m_decline")
+    elif return_3m is not None and return_3m < -0.20:
+        falling_knife_score += 1
+        dip_signals.append("significant_3m_decline")
+    if position_in_range is not None and position_in_range < 0.10:
+        falling_knife_score += 1
+        dip_signals.append("near_52w_low")
+    if sma_200_slope is not None and sma_200_slope < 0:
+        falling_knife_score += 1
+        dip_signals.append("sma200_downtrend")
+    if days_since_52w_high is not None and days_since_52w_high > 180:
+        falling_knife_score += 1
+        dip_signals.append("stale_52w_high")
+
+    pullback_score = 0
+    if "golden_cross" in bullish_signals or (sma_50 and sma_200 and sma_50 > sma_200):
+        pullback_score += 2
+        dip_signals.append("uptrend_intact")
+    if sma_200_slope is not None and sma_200_slope > 0:
+        pullback_score += 1
+        dip_signals.append("sma200_uptrend")
+    if sma_200 and current_price and current_price > sma_200:
+        pullback_score += 1
+        dip_signals.append("above_sma200")
+    if return_3m is not None and return_3m > 0:
+        pullback_score += 1
+        dip_signals.append("positive_3m_trend")
+    if from_3m_high is not None and from_3m_high > -0.15:
+        pullback_score += 1
+        dip_signals.append("near_3m_high")
+
+    if falling_knife_score >= 4:
+        dip_type = "falling_knife"
+    elif falling_knife_score >= 2 and pullback_score < 2:
+        dip_type = "extended_decline"
+    elif pullback_score >= 2 and falling_knife_score <= 1:
+        dip_type = "healthy_pullback"
+    elif pullback_score >= 1:
+        dip_type = "mixed_signals"
+    else:
+        dip_type = "undetermined"
+
+    return dip_type, dip_signals
+
+
+def _analyze_volume(
+    volume_ratio: float | None,
+    return_1w: float | None,
+) -> tuple[str, str | None]:
+    """Interpret recent volume relative to the 30-day average."""
+    if volume_ratio is None:
+        return "neutral", None
+    if volume_ratio > 2.0:
+        if return_1w is not None and return_1w < -0.05:
+            return (
+                "potential_capitulation",
+                "High volume on decline may indicate capitulation selling",
+            )
+        if return_1w is not None and return_1w > 0.03:
+            return (
+                "accumulation",
+                "High volume on advance suggests institutional buying",
+            )
+        return "elevated", "Elevated volume - watch for directional confirmation"
+    if volume_ratio > 1.5:
+        return "above_average", "Above average interest"
+    if volume_ratio >= 0.9:
+        return "normal", "Normal volume"
+    if volume_ratio >= 0.5:
+        return "below_average", "Below average interest"
+    return "low_conviction", "Low volume - moves may lack conviction"
+
+
+def _build_support_levels(
+    current_price: float | None,
+    low_1m: float | None,
+    sma_50: float | None,
+    sma_200: float | None,
+    week_52_low: float | None,
+) -> list[dict[str, Any]]:
+    """Build candidate support levels with distances and statuses; sorted closest first."""
+    price_basis = "close"
+    support_levels: list[dict[str, Any]] = []
+
+    if low_1m and current_price:
+        distance = (low_1m - current_price) / current_price
+        support_levels.append({
+            "level": round(low_1m, 2),
+            "type": "1m_low",
+            "distance_pct": round(distance, 4),
+            "strength": "weak",
+            "status": _support_status(distance),
+            "price_basis": price_basis,
+        })
+
+    if sma_50 and current_price and current_price > sma_50:
+        distance = (sma_50 - current_price) / current_price
+        support_levels.append({
+            "level": round(sma_50, 2),
+            "type": "sma_50",
+            "distance_pct": round(distance, 4),
+            "strength": "medium",
+            "status": _support_status(distance),
+            "price_basis": price_basis,
+        })
+
+    if sma_200 and current_price:
+        distance = (sma_200 - current_price) / current_price
+        support_levels.append({
+            "level": round(sma_200, 2),
+            "type": "sma_200",
+            "distance_pct": round(distance, 4),
+            "strength": "strong",
+            "status": _support_status(distance),
+            "price_basis": price_basis,
+        })
+
+    if week_52_low and current_price:
+        distance = (week_52_low - current_price) / current_price
+        support_levels.append({
+            "level": round(week_52_low, 2),
+            "type": "52w_low",
+            "distance_pct": round(distance, 4),
+            "strength": "critical",
+            "status": _support_status(distance),
+            "price_basis": price_basis,
+        })
+
+    support_levels.sort(key=lambda x: abs(x["distance_pct"]))
+    return support_levels
+
+
 def build_dip_assessment(
     tech_data: dict[str, Any],
     risk_data: dict[str, Any],
@@ -200,63 +385,18 @@ def build_dip_assessment(
     bearish_signals = signals.get("bearish", [])
 
     # --- DIP CLASSIFICATION ---
-    # Determine if this is a healthy pullback vs falling knife
-    dip_type: str = "undetermined"
-    dip_signals: list[str] = []
-
-    # Falling knife indicators
-    falling_knife_score = 0
-    if "death_cross" in bearish_signals:
-        falling_knife_score += 2
-        dip_signals.append("death_cross_active")
-    if "price_below_sma200" in bearish_signals:
-        falling_knife_score += 1
-        dip_signals.append("below_sma200")
-    if return_3m is not None and return_3m < -0.30:
-        falling_knife_score += 2
-        dip_signals.append("severe_3m_decline")
-    elif return_3m is not None and return_3m < -0.20:
-        falling_knife_score += 1
-        dip_signals.append("significant_3m_decline")
-    if position_in_range is not None and position_in_range < 0.10:
-        falling_knife_score += 1
-        dip_signals.append("near_52w_low")
-    if sma_200_slope is not None and sma_200_slope < 0:
-        falling_knife_score += 1
-        dip_signals.append("sma200_downtrend")
-    if days_since_52w_high is not None and days_since_52w_high > 180:
-        falling_knife_score += 1
-        dip_signals.append("stale_52w_high")
-
-    # Healthy pullback indicators
-    pullback_score = 0
-    if "golden_cross" in bullish_signals or (sma_50 and sma_200 and sma_50 > sma_200):
-        pullback_score += 2
-        dip_signals.append("uptrend_intact")
-    if sma_200_slope is not None and sma_200_slope > 0:
-        pullback_score += 1
-        dip_signals.append("sma200_uptrend")
-    if sma_200 and current_price and current_price > sma_200:
-        pullback_score += 1
-        dip_signals.append("above_sma200")
-    if return_3m is not None and return_3m > 0:
-        pullback_score += 1
-        dip_signals.append("positive_3m_trend")
-    if from_3m_high is not None and from_3m_high > -0.15:
-        pullback_score += 1
-        dip_signals.append("near_3m_high")
-
-    # Classify dip
-    if falling_knife_score >= 4:
-        dip_type = "falling_knife"
-    elif falling_knife_score >= 2 and pullback_score < 2:
-        dip_type = "extended_decline"
-    elif pullback_score >= 2 and falling_knife_score <= 1:
-        dip_type = "healthy_pullback"
-    elif pullback_score >= 1:
-        dip_type = "mixed_signals"
-    else:
-        dip_type = "undetermined"
+    dip_type, dip_signals = _classify_dip(
+        bullish_signals=bullish_signals,
+        bearish_signals=bearish_signals,
+        return_3m=return_3m,
+        position_in_range=position_in_range,
+        sma_200_slope=sma_200_slope,
+        days_since_52w_high=days_since_52w_high,
+        sma_50=sma_50,
+        sma_200=sma_200,
+        current_price=current_price,
+        from_3m_high=from_3m_high,
+    )
 
     # --- OVERSOLD METRICS ---
     oversold_indicators: list[str] = []
@@ -328,97 +468,16 @@ def build_dip_assessment(
     oversold_composite_level = oversold_composite["level"]
 
     # --- SUPPORT LEVELS ---
-    support_levels: list[dict[str, Any]] = []
-    price_basis = "close"
-
-    def _support_status(distance_pct: float | None) -> str | None:
-        if distance_pct is None:
-            return None
-        if distance_pct > 0:
-            return "breached" if distance_pct <= 0.01 else "broken"
-        if abs(distance_pct) <= 0.01:
-            return "tested"
-        return "above"
-
-    # 1-month low as immediate support
-    if low_1m and current_price:
-        distance = (low_1m - current_price) / current_price
-        support_levels.append({
-            "level": round(low_1m, 2),
-            "type": "1m_low",
-            "distance_pct": round(distance, 4),
-            "strength": "weak",
-            "status": _support_status(distance),
-            "price_basis": price_basis,
-        })
-
-    # SMA 50 as support (if above it)
-    if sma_50 and current_price and current_price > sma_50:
-        distance = (sma_50 - current_price) / current_price
-        support_levels.append({
-            "level": round(sma_50, 2),
-            "type": "sma_50",
-            "distance_pct": round(distance, 4),
-            "strength": "medium",
-            "status": _support_status(distance),
-            "price_basis": price_basis,
-        })
-
-    # SMA 200 as major support
-    if sma_200 and current_price:
-        distance = (sma_200 - current_price) / current_price
-        support_levels.append({
-            "level": round(sma_200, 2),
-            "type": "sma_200",
-            "distance_pct": round(distance, 4),
-            "strength": "strong",
-            "status": _support_status(distance),
-            "price_basis": price_basis,
-        })
-
-    # 52-week low as ultimate support
-    if week_52_low and current_price:
-        distance = (week_52_low - current_price) / current_price
-        support_levels.append({
-            "level": round(week_52_low, 2),
-            "type": "52w_low",
-            "distance_pct": round(distance, 4),
-            "strength": "critical",
-            "status": _support_status(distance),
-            "price_basis": price_basis,
-        })
-
-    # Sort by distance (closest first)
-    support_levels.sort(key=lambda x: abs(x["distance_pct"]))
+    support_levels = _build_support_levels(
+        current_price=current_price,
+        low_1m=low_1m,
+        sma_50=sma_50,
+        sma_200=sma_200,
+        week_52_low=week_52_low,
+    )
 
     # --- VOLUME ANALYSIS ---
-    volume_signal: str = "neutral"
-    volume_interpretation: str | None = None
-
-    if volume_ratio is not None:
-        if volume_ratio > 2.0:
-            # High volume - could be capitulation or breakout
-            if return_1w is not None and return_1w < -0.05:
-                volume_signal = "potential_capitulation"
-                volume_interpretation = "High volume on decline may indicate capitulation selling"
-            elif return_1w is not None and return_1w > 0.03:
-                volume_signal = "accumulation"
-                volume_interpretation = "High volume on advance suggests institutional buying"
-            else:
-                volume_signal = "elevated"
-                volume_interpretation = "Elevated volume - watch for directional confirmation"
-        elif volume_ratio > 1.5:
-            volume_signal = "above_average"
-            volume_interpretation = "Above average interest"
-        elif volume_ratio >= 0.9:
-            volume_signal = "normal"
-            volume_interpretation = "Normal volume"
-        elif volume_ratio >= 0.5:
-            volume_signal = "below_average"
-            volume_interpretation = "Below average interest"
-        else:
-            volume_signal = "low_conviction"
-            volume_interpretation = "Low volume - moves may lack conviction"
+    volume_signal, volume_interpretation = _analyze_volume(volume_ratio, return_1w)
 
     # --- BOUNCE POTENTIAL ---
     # Calculate likelihood of a bounce based on combined factors
@@ -626,13 +685,7 @@ def build_dip_assessment(
         "dip_classification": {
             "type": dip_type,
             "signals": dip_signals,
-            "explanation": {
-                "falling_knife": "Severe decline with broken trends - high risk of further downside",
-                "extended_decline": "Prolonged weakness but not in freefall",
-                "healthy_pullback": "Normal retracement in an uptrend - favorable for dip buying",
-                "mixed_signals": "Conflicting trend signals - proceed with caution",
-                "undetermined": "Insufficient data to classify",
-            }.get(dip_type, ""),
+            "explanation": _DIP_TYPE_EXPLANATIONS.get(dip_type, ""),
         },
         "dip_depth": _build_dip_depth(
             from_52w_high,
@@ -681,14 +734,7 @@ def build_dip_assessment(
         "assessment": {
             "dip_quality": dip_quality,
             "recommendation": buy_recommendation,
-            "rationale": {
-                "strong_buy_the_dip": "Oversold pullback in uptrend - high probability bounce",
-                "buy_the_dip": "Good entry point in established trend",
-                "cautious_accumulation": "Acceptable entry but use smaller position size",
-                "small_speculative_position": "High risk but extremely oversold - small position only",
-                "do_not_catch_falling_knife": "Trend is broken - wait for stabilization",
-                "wait_for_better_setup": "Conditions not favorable for dip buying yet",
-            }.get(buy_recommendation, ""),
+            "rationale": _BUY_RECOMMENDATION_RATIONALES.get(buy_recommendation, ""),
         },
         "method": "dip_assessment_v2",
     }
