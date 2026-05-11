@@ -40,18 +40,78 @@ async def events_calendar(symbol: str) -> dict[str, Any]:
     except Exception:
         info = {}
 
-    # Get calendar data
-    try:
-        calendar = ticker.calendar
-    except Exception:
-        calendar = {}
+    calendar = _fetch_calendar(ticker)
+    earnings_dates = _fetch_earnings_dates(ticker)
 
-    try:
-        earnings_dates = ticker.earnings_dates
-    except Exception:
-        earnings_dates = None
+    earnings = _build_earnings(calendar, earnings_dates, info)
+    dividends = _build_dividends(calendar, info)
+    splits_info = _build_splits(ticker)
+    analyst = _build_analyst(info)
 
-    # Get earnings history
+    duration_ms = (perf_counter() - start_time) * 1000
+
+    return {
+        "meta": build_meta("events_calendar", duration_ms),
+        "data_provenance": {
+            "events": build_provenance(
+                source="yfinance",
+                as_of=utcnow_isoformat_z(),
+            ),
+        },
+        "symbol": normalized_symbol,
+        "earnings": earnings,
+        "dividends": dividends,
+        "splits": splits_info,
+        "analyst": analyst,
+    }
+
+
+def _fetch_calendar(ticker: Any) -> Any:
+    """Fetch yfinance calendar data, returning an empty dict when unavailable."""
+    try:
+        return ticker.calendar
+    except Exception:
+        return {}
+
+
+def _fetch_earnings_dates(ticker: Any) -> Any:
+    """Fetch yfinance earnings dates, returning None when unavailable."""
+    try:
+        return ticker.earnings_dates
+    except Exception:
+        return None
+
+
+def _build_earnings(
+    calendar: Any,
+    earnings_dates: Any,
+    info: dict[str, Any],
+) -> dict[str, Any]:
+    """Build earnings history and next-earnings metadata."""
+    earnings_history, beat_count, total_with_data = _build_earnings_history(earnings_dates)
+    next_earnings_date, days_until_earnings, earnings_date_source, earnings_date_status = (
+        _resolve_next_earnings_date(calendar, earnings_dates, info)
+    )
+
+    earnings_date_status_reason = None
+    if next_earnings_date is None:
+        earnings_date_status_reason = "calendar_missing_and_no_future_earnings_dates"
+
+    beat_rate = beat_count / total_with_data if total_with_data > 0 else None
+
+    return {
+        "next_date": next_earnings_date,
+        "next_date_source": earnings_date_source,
+        "next_date_status": earnings_date_status,
+        "next_date_status_reason": earnings_date_status_reason if earnings_date_status == "unavailable" else None,
+        "days_until": days_until_earnings,
+        "history": earnings_history,
+        "beat_rate": safe_round(beat_rate, 2),
+    }
+
+
+def _build_earnings_history(earnings_dates: Any) -> tuple[list[dict[str, Any]], int, int]:
+    """Build recent earnings history plus beat-rate counters."""
     earnings_history: list[dict[str, Any]] = []
     beat_count = 0
     total_with_data = 0
@@ -87,12 +147,19 @@ async def events_calendar(symbol: str) -> dict[str, Any]:
     except Exception:
         pass
 
-    # Get next earnings date with multiple fallback sources
+    return earnings_history, beat_count, total_with_data
+
+
+def _resolve_next_earnings_date(
+    calendar: Any,
+    earnings_dates: Any,
+    info: dict[str, Any],
+) -> tuple[str | None, int | None, str | None, str]:
+    """Resolve the next earnings date from calendar, earnings dates, then info."""
     next_earnings_date = None
     days_until_earnings = None
     earnings_date_source: str | None = None
     earnings_date_status: str = "unavailable"
-    earnings_date_status_reason: str | None = None
 
     # Source 1: Calendar (most reliable when present)
     if isinstance(calendar, dict):
@@ -159,29 +226,14 @@ async def events_calendar(symbol: str) -> dict[str, Any]:
             days_until_earnings = (earnings_dt - datetime.now()).days
         except (ValueError, TypeError):
             pass
-    else:
-        # Provide structured reason for unavailability
-        earnings_date_status_reason = "calendar_missing_and_no_future_earnings_dates"
 
-    # Calculate beat rate
-    beat_rate = beat_count / total_with_data if total_with_data > 0 else None
+    return next_earnings_date, days_until_earnings, earnings_date_source, earnings_date_status
 
-    earnings = {
-        "next_date": next_earnings_date,
-        "next_date_source": earnings_date_source,  # calendar/earnings_dates/info_timestamp
-        "next_date_status": earnings_date_status,  # available/unavailable
-        "next_date_status_reason": earnings_date_status_reason if earnings_date_status == "unavailable" else None,
-        "days_until": days_until_earnings,
-        "history": earnings_history,
-        "beat_rate": safe_round(beat_rate, 2),
-    }
 
-    # Dividends
+def _build_dividends(calendar: Any, info: dict[str, Any]) -> dict[str, Any]:
+    """Build dividend dates and yield fields."""
     ex_date = None
     pay_date = None
-    dividend_amount = None
-    annual_dividend = None
-    dividend_yield = None
 
     if isinstance(calendar, dict):
         ex_date = _format_date(calendar.get("Ex-Dividend Date"))
@@ -197,7 +249,7 @@ async def events_calendar(symbol: str) -> dict[str, Any]:
     if dividend_yield is not None and dividend_yield > 1:
         dividend_yield = dividend_yield / 100
 
-    dividends = {
+    return {
         "ex_date": ex_date,
         "pay_date": pay_date,
         "amount": dividend_amount,
@@ -205,7 +257,9 @@ async def events_calendar(symbol: str) -> dict[str, Any]:
         "yield": safe_round(dividend_yield, 4),
     }
 
-    # Splits
+
+def _build_splits(ticker: Any) -> dict[str, str | None]:
+    """Build last split metadata."""
     last_split_date = None
     last_split_ratio = None
 
@@ -227,8 +281,11 @@ async def events_calendar(symbol: str) -> dict[str, Any]:
         "last_date": last_split_date,
         "last_ratio": last_split_ratio,
     }
+    return splits_info
 
-    # Analyst estimates (using pre-fetched info)
+
+def _build_analyst(info: dict[str, Any]) -> dict[str, Any]:
+    """Build analyst estimates from prefetched info."""
     analyst: dict[str, Any] = {
         "price_target": None,
         "recommendation": None,
@@ -268,22 +325,7 @@ async def events_calendar(symbol: str) -> dict[str, Any]:
     if analyst_warning:
         analyst["warnings"] = [analyst_warning]
 
-    duration_ms = (perf_counter() - start_time) * 1000
-
-    return {
-        "meta": build_meta("events_calendar", duration_ms),
-        "data_provenance": {
-            "events": build_provenance(
-                source="yfinance",
-                as_of=utcnow_isoformat_z(),
-            ),
-        },
-        "symbol": normalized_symbol,
-        "earnings": earnings,
-        "dividends": dividends,
-        "splits": splits_info,
-        "analyst": analyst,
-    }
+    return analyst
 
 
 def _format_date(value: Any) -> str | None:

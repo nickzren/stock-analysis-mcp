@@ -112,6 +112,65 @@ def build_position_sizing_range(
     return position_sizing_range
 
 
+def _build_level_distance_views(
+    current_price: float,
+    levels: dict[str, float | None],
+) -> tuple[
+    dict[str, float | None],
+    dict[str, float | None],
+    dict[str, str | None],
+    dict[str, str | None],
+]:
+    """Build distance and display views for action-zone levels."""
+    distance_to_levels: dict[str, float | None] = {}
+    price_vs_levels: dict[str, float | None] = {}
+
+    for level_name, level_price in levels.items():
+        if level_price is not None and current_price > 0:
+            distance_to_levels[level_name] = round(
+                (level_price - current_price) / current_price, 4
+            )
+        else:
+            distance_to_levels[level_name] = None
+
+        if level_price is not None and level_price != 0:
+            price_vs_levels[level_name] = round(
+                (current_price / level_price) - 1, 4
+            )
+        else:
+            price_vs_levels[level_name] = None
+
+    distance_labels = {
+        level_name: format_level_distance_label(pct)
+        for level_name, pct in distance_to_levels.items()
+    }
+    level_vs_current_labels = distance_labels.copy()
+    return distance_to_levels, price_vs_levels, distance_labels, level_vs_current_labels
+
+
+def _classify_current_zone(
+    current_price: float,
+    levels: dict[str, float | None],
+    sma_50: float | None,
+    sma_200: float | None,
+) -> str:
+    """Classify the current price into an action zone."""
+    strong_buy_level = levels.get("strong_buy_below")
+    reduce_level = levels.get("reduce_above")
+
+    if strong_buy_level is not None and current_price <= strong_buy_level:
+        return "strong_buy"
+    if sma_200 and current_price < sma_200:
+        return "accumulate"
+    if reduce_level is not None and current_price >= reduce_level:
+        return "reduce"
+    if sma_50 and current_price > sma_50:
+        return "hold_bullish"
+    if sma_50 and current_price <= sma_50:
+        return "hold_neutral"
+    return "undetermined"
+
+
 def build_action_zones(
     current_price: float | None,
     tech_data: dict[str, Any],
@@ -220,52 +279,19 @@ def build_action_zones(
         levels["stop_loss"] = None
         basis["stop_loss"] = None
 
-    # Calculate distances as percentages from current price
-    distance_to_levels: dict[str, float | None] = {}
-    for level_name, level_price in levels.items():
-        if level_price is not None and current_price > 0:
-            distance_to_levels[level_name] = round(
-                (level_price - current_price) / current_price, 4
-            )
-        else:
-            distance_to_levels[level_name] = None
+    (
+        distance_to_levels,
+        price_vs_levels,
+        distance_labels,
+        level_vs_current_labels,
+    ) = _build_level_distance_views(current_price, levels)
 
-    # Calculate price vs level (negative means price below level)
-    price_vs_levels: dict[str, float | None] = {}
-    for level_name, level_price in levels.items():
-        if level_price is not None and level_price != 0:
-            price_vs_levels[level_name] = round(
-                (current_price / level_price) - 1, 4
-            )
-        else:
-            price_vs_levels[level_name] = None
-
-    # Preformatted distance labels for clearer display (level vs current)
-    distance_labels = {
-        level_name: format_level_distance_label(pct)
-        for level_name, pct in distance_to_levels.items()
-    }
-
-    # Separate field for renderer semantics (stop loss vs other levels)
-    level_vs_current_labels = distance_labels.copy()
-
-    # Determine current zone
-    current_zone: str | None = None
-    strong_buy_level = levels.get("strong_buy_below")
-    reduce_level = levels.get("reduce_above")
-
-    if strong_buy_level is not None and current_price <= strong_buy_level:
-        current_zone = "strong_buy"
-    elif sma_200 and current_price < sma_200:
-        current_zone = "accumulate"
-    elif reduce_level is not None and current_price >= reduce_level:
-        current_zone = "reduce"
-    elif sma_50 and current_price > sma_50:
-        current_zone = "hold_bullish"
-    elif sma_50 and current_price <= sma_50:
-        current_zone = "hold_neutral"
-    else:
-        current_zone = "undetermined"
+    current_zone: str | None = _classify_current_zone(
+        current_price=current_price,
+        levels=levels,
+        sma_50=sma_50,
+        sma_200=sma_200,
+    )
 
     # Apply regime-aware zone capping
     # In extreme risk regime, cap "strong_buy" to "accumulate" - be more cautious
