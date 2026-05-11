@@ -10,7 +10,13 @@ import pandas as pd
 
 from stock_analysis.data.yfinance_client import fetch_info, fetch_ticker
 from stock_analysis.utils.helpers import safe_float, safe_int, safe_round, safe_str
-from stock_analysis.utils.provenance import build_error_response, build_meta, build_provenance
+from stock_analysis.utils.provenance import (
+    FetchError,
+    build_meta,
+    build_provenance,
+    fetch_or_error,
+    utcnow_isoformat_z,
+)
 from stock_analysis.utils.validators import check_rule
 
 
@@ -27,19 +33,9 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
     start_time = perf_counter()
 
     try:
-        info = await fetch_info(symbol)
-    except ValueError as e:
-        return build_error_response(
-            error_type="invalid_symbol",
-            message=str(e),
-            symbol=symbol,
-        )
-    except Exception as e:
-        return build_error_response(
-            error_type="data_unavailable",
-            message=f"Failed to fetch data: {e}",
-            symbol=symbol,
-        )
+        info = await fetch_or_error(fetch_info(symbol), symbol)
+    except FetchError as fe:
+        return fe.response
 
     normalized_symbol = symbol.upper().strip()
     current_price = safe_float(info.get("regularMarketPrice") or info.get("currentPrice"))
@@ -494,7 +490,7 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
         "data_provenance": {
             "fundamentals": build_provenance(
                 source="yfinance",
-                as_of=datetime.utcnow().isoformat() + "Z",
+                as_of=utcnow_isoformat_z(),
                 fiscal_period=fiscal_period,
                 warnings=warnings,
             ),
@@ -991,7 +987,7 @@ def _sorted_cashflow_columns(columns: pd.Index) -> list[Any]:
     except Exception:
         return cols
     if parsed.notna().all():
-        return [c for _, c in sorted(zip(parsed, cols), reverse=True)]
+        return [c for _, c in sorted(zip(parsed, cols, strict=True), reverse=True)]
     return cols
 
 

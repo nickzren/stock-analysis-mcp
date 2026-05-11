@@ -1,14 +1,13 @@
 """Technical analysis tool."""
 
 import operator
-from datetime import datetime
 from time import perf_counter
 from typing import Any
 
 import pandas as pd
 
 from stock_analysis.data.yfinance_client import fetch_history
-from stock_analysis.utils.helpers import safe_round
+from stock_analysis.utils.helpers import safe_last_float, safe_round
 from stock_analysis.utils.indicators import (
     calculate_atr,
     calculate_bollinger_bands,
@@ -20,7 +19,14 @@ from stock_analysis.utils.indicators import (
     calculate_rsi,
     calculate_sma,
 )
-from stock_analysis.utils.provenance import build_error_response, build_meta, build_provenance
+from stock_analysis.utils.provenance import (
+    FetchError,
+    build_error_response,
+    build_meta,
+    build_provenance,
+    fetch_or_error,
+    utcnow_isoformat_z,
+)
 from stock_analysis.utils.validators import FetchParams, check_rule, check_rule_expr
 
 
@@ -45,19 +51,9 @@ async def technicals(symbol: str) -> dict[str, Any]:
     )
 
     try:
-        df = await fetch_history(params)
-    except ValueError as e:
-        return build_error_response(
-            error_type="invalid_symbol",
-            message=str(e),
-            symbol=symbol,
-        )
-    except Exception as e:
-        return build_error_response(
-            error_type="data_unavailable",
-            message=f"Failed to fetch data: {e}",
-            symbol=symbol,
-        )
+        df = await fetch_or_error(fetch_history(params), symbol)
+    except FetchError as fe:
+        return fe.response
 
     if len(df) < 20:
         return build_error_response(
@@ -72,7 +68,7 @@ async def technicals(symbol: str) -> dict[str, Any]:
     low = pd.to_numeric(df["low"], errors="coerce")
     volume = pd.to_numeric(df["volume"], errors="coerce")
 
-    current_price = float(close.iloc[-1]) if not pd.isna(close.iloc[-1]) else None
+    current_price = safe_last_float(close)
 
     # Moving Averages
     sma_20 = calculate_sma(close, 20)
@@ -81,11 +77,11 @@ async def technicals(symbol: str) -> dict[str, Any]:
     ema_12 = calculate_ema(close, 12)
     ema_26 = calculate_ema(close, 26)
 
-    sma_20_val = float(sma_20.iloc[-1]) if not pd.isna(sma_20.iloc[-1]) else None
-    sma_50_val = float(sma_50.iloc[-1]) if not pd.isna(sma_50.iloc[-1]) else None
-    sma_200_val = float(sma_200.iloc[-1]) if not pd.isna(sma_200.iloc[-1]) else None
-    ema_12_val = float(ema_12.iloc[-1]) if not pd.isna(ema_12.iloc[-1]) else None
-    ema_26_val = float(ema_26.iloc[-1]) if not pd.isna(ema_26.iloc[-1]) else None
+    sma_20_val = safe_last_float(sma_20)
+    sma_50_val = safe_last_float(sma_50)
+    sma_200_val = safe_last_float(sma_200)
+    ema_12_val = safe_last_float(ema_12)
+    ema_26_val = safe_last_float(ema_26)
 
     # Price vs SMA ratios
     price_vs_sma20 = (
@@ -142,7 +138,7 @@ async def technicals(symbol: str) -> dict[str, Any]:
 
     # RSI
     rsi_series = calculate_rsi(close, 14)
-    rsi_val = float(rsi_series.iloc[-1]) if not pd.isna(rsi_series.iloc[-1]) else None
+    rsi_val = safe_last_float(rsi_series)
 
     bullish_divergence = _detect_bullish_rsi_divergence(
         close=close,
@@ -171,21 +167,9 @@ async def technicals(symbol: str) -> dict[str, Any]:
 
     # MACD
     macd_data = calculate_macd(close, 12, 26, 9)
-    macd_line_val = (
-        float(macd_data["macd_line"].iloc[-1])
-        if not pd.isna(macd_data["macd_line"].iloc[-1])
-        else None
-    )
-    signal_line_val = (
-        float(macd_data["signal_line"].iloc[-1])
-        if not pd.isna(macd_data["signal_line"].iloc[-1])
-        else None
-    )
-    histogram_val = (
-        float(macd_data["histogram"].iloc[-1])
-        if not pd.isna(macd_data["histogram"].iloc[-1])
-        else None
-    )
+    macd_line_val = safe_last_float(macd_data["macd_line"])
+    signal_line_val = safe_last_float(macd_data["signal_line"])
+    histogram_val = safe_last_float(macd_data["histogram"])
 
     hist_series = macd_data["histogram"].dropna()
     hist_rising_3d = None
@@ -214,7 +198,7 @@ async def technicals(symbol: str) -> dict[str, Any]:
 
     # ATR
     atr_series = calculate_atr(high, low, close, 14)
-    atr_val = float(atr_series.iloc[-1]) if not pd.isna(atr_series.iloc[-1]) else None
+    atr_val = safe_last_float(atr_series)
     atr_pct = atr_val / current_price if atr_val and current_price else None
 
     atr = {
@@ -360,7 +344,7 @@ async def technicals(symbol: str) -> dict[str, Any]:
         "data_provenance": {
             "price": build_provenance(
                 source="yfinance",
-                as_of=datetime.utcnow().isoformat() + "Z",
+                as_of=utcnow_isoformat_z(),
                 last_bar_date=df["date"].iloc[-1] if len(df) > 0 else None,
             ),
         },
@@ -445,10 +429,7 @@ def _days_since_extreme(series: pd.Series, *, kind: str) -> int | None:
     clean = series.dropna().reset_index(drop=True)
     if len(clean) == 0:
         return None
-    if kind == "high":
-        idx = int(clean.idxmax())
-    else:
-        idx = int(clean.idxmin())
+    idx = int(clean.idxmax()) if kind == "high" else int(clean.idxmin())
     return int(len(clean) - 1 - idx)
 
 

@@ -1,13 +1,19 @@
 """Price history tool."""
 
-from datetime import datetime
 from time import perf_counter
 from typing import Any
 
 from stock_analysis.data.cache import price_cache
 from stock_analysis.data.yfinance_client import fetch_history, get_market_state
 from stock_analysis.utils.ohlcv import df_to_rows
-from stock_analysis.utils.provenance import build_error_response, build_meta, build_provenance
+from stock_analysis.utils.provenance import (
+    FetchError,
+    build_error_response,
+    build_meta,
+    build_provenance,
+    fetch_or_error,
+    utcnow_isoformat_z,
+)
 from stock_analysis.utils.validators import FetchParams
 
 
@@ -49,19 +55,9 @@ async def price_history(
 
     try:
         # Fetch and standardize (standardization happens in fetch_history)
-        df = await fetch_history(params)
-    except ValueError as e:
-        return build_error_response(
-            error_type="invalid_symbol",
-            message=str(e),
-            symbol=symbol,
-        )
-    except Exception as e:
-        return build_error_response(
-            error_type="data_unavailable",
-            message=f"Failed to fetch data: {e}",
-            symbol=symbol,
-        )
+        df = await fetch_or_error(fetch_history(params), symbol)
+    except FetchError as fe:
+        return fe.response
 
     # Store in cache (df is already standardized)
     uri = price_cache.store(params, df)
@@ -101,7 +97,7 @@ async def price_history(
         "data_provenance": {
             "price": build_provenance(
                 source="yfinance",
-                as_of=datetime.utcnow().isoformat() + "Z",
+                as_of=utcnow_isoformat_z(),
                 bar_timezone=params.tz,
                 price_adjustment="auto_adjust_true" if adjusted else "auto_adjust_false",
                 market_state=market_state["state"],

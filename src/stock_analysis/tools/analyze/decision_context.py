@@ -5,7 +5,7 @@ from typing import Any
 from stock_analysis.tools.analyze.signals import (
     vol_threshold_for_improvement,
 )
-from stock_analysis.utils.helpers import format_fcf_label, safe_float
+from stock_analysis.utils.helpers import fcf_label_from_cashflow, safe_float
 
 
 def build_relative_performance(
@@ -129,15 +129,7 @@ def build_decision_context(
     pe_trailing = val.get("pe_trailing")
     net_margin = profit.get("net_margin")
     fcf = cf.get("free_cash_flow_ttm")
-    fcf_period = cf.get("free_cash_flow_period")
-    fcf_currency = cf.get("currency")
-    fcf_period_end = cf.get("free_cash_flow_period_end")
-    fcf_label = format_fcf_label(
-        fcf,
-        fcf_period,
-        fcf_currency,
-        fcf_period_end,
-    )
+    fcf_label = fcf_label_from_cashflow(cf)
     revenue_yoy = growth.get("revenue_yoy")
 
     # Get burn_metrics from fundamentals_summary (already computed with liquidity)

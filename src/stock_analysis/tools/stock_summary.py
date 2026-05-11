@@ -1,12 +1,17 @@
 """Stock summary tool."""
 
-from datetime import datetime
 from time import perf_counter
 from typing import Any
 
 from stock_analysis.data.yfinance_client import fetch_info
 from stock_analysis.utils.helpers import safe_float, safe_int, safe_round
-from stock_analysis.utils.provenance import build_error_response, build_meta, build_provenance
+from stock_analysis.utils.provenance import (
+    FetchError,
+    build_meta,
+    build_provenance,
+    fetch_or_error,
+    utcnow_isoformat_z,
+)
 from stock_analysis.utils.sanitize import sanitize_text
 
 
@@ -23,19 +28,9 @@ async def stock_summary(symbol: str) -> dict[str, Any]:
     start_time = perf_counter()
 
     try:
-        info = await fetch_info(symbol)
-    except ValueError as e:
-        return build_error_response(
-            error_type="invalid_symbol",
-            message=str(e),
-            symbol=symbol,
-        )
-    except Exception as e:
-        return build_error_response(
-            error_type="data_unavailable",
-            message=f"Failed to fetch data: {e}",
-            symbol=symbol,
-        )
+        info = await fetch_or_error(fetch_info(symbol), symbol)
+    except FetchError as fe:
+        return fe.response
 
     # Extract and sanitize fields
     normalized_symbol = symbol.upper().strip()
@@ -49,10 +44,9 @@ async def stock_summary(symbol: str) -> dict[str, Any]:
 
     # Dividend yield (convert to decimal if present)
     div_yield = info.get("dividendYield")
-    if div_yield is not None:
-        # yfinance sometimes returns as decimal, sometimes as percent
-        if div_yield > 1:  # Likely a percentage
-            div_yield = div_yield / 100
+    # yfinance sometimes returns as decimal, sometimes as percent
+    if div_yield is not None and div_yield > 1:
+        div_yield = div_yield / 100
 
     duration_ms = (perf_counter() - start_time) * 1000
 
@@ -61,7 +55,7 @@ async def stock_summary(symbol: str) -> dict[str, Any]:
         "data_provenance": {
             "fundamentals": build_provenance(
                 source="yfinance",
-                as_of=datetime.utcnow().isoformat() + "Z",
+                as_of=utcnow_isoformat_z(),
             ),
         },
         "symbol": normalized_symbol,
@@ -80,5 +74,4 @@ async def stock_summary(symbol: str) -> dict[str, Any]:
         "website": sanitize_text(info.get("website")),
         "description": sanitize_text(info.get("longBusinessSummary"), max_length=500),
     }
-
 

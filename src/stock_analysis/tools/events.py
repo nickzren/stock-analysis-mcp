@@ -8,7 +8,12 @@ import pandas as pd
 
 from stock_analysis.data.yfinance_client import fetch_info, fetch_ticker
 from stock_analysis.utils.helpers import safe_float, safe_round
-from stock_analysis.utils.provenance import build_error_response, build_meta, build_provenance
+from stock_analysis.utils.provenance import (
+    build_error_response,
+    build_meta,
+    build_provenance,
+    utcnow_isoformat_z,
+)
 
 
 async def events_calendar(symbol: str) -> dict[str, Any]:
@@ -271,7 +276,7 @@ async def events_calendar(symbol: str) -> dict[str, Any]:
         "data_provenance": {
             "events": build_provenance(
                 source="yfinance",
-                as_of=datetime.utcnow().isoformat() + "Z",
+                as_of=utcnow_isoformat_z(),
             ),
         },
         "symbol": normalized_symbol,

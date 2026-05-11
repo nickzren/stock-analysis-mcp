@@ -6,7 +6,7 @@ from stock_analysis.tools.analyze.dislocation_framework import (
     classify_dislocation_opportunity,
 )
 from stock_analysis.tools.analyze.signals import VOLATILITY_REGIME_THRESHOLDS
-from stock_analysis.utils.helpers import format_fcf_label
+from stock_analysis.utils.helpers import fcf_label_from_cashflow
 
 _ACTION_HUMANIZE: dict[str, str] = {
     # Long-term actions
@@ -219,16 +219,7 @@ def build_executive_summary(
     if net_margin is not None:
         fund_parts.append(f"net_margin {net_margin * 100:.1f}%")
 
-    fcf_value = cash_flow_summary.get("free_cash_flow_ttm")
-    fcf_period = cash_flow_summary.get("free_cash_flow_period")
-    fcf_currency = cash_flow_summary.get("currency")
-    fcf_period_end = cash_flow_summary.get("free_cash_flow_period_end")
-    fcf_label = format_fcf_label(
-        fcf_value,
-        fcf_period,
-        fcf_currency,
-        fcf_period_end,
-    )
+    fcf_label = fcf_label_from_cashflow(cash_flow_summary)
     if fcf_label:
         fund_parts.append(fcf_label)
     quarterly_burn = burn_metrics.get("quarterly_fcf_burn")

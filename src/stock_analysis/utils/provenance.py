@@ -1,9 +1,17 @@
 """Data provenance and metadata utilities."""
 
-from datetime import datetime
-from typing import Any
+from collections.abc import Awaitable
+from datetime import UTC, datetime
+from typing import Any, TypeVar
 
 from stock_analysis import SCHEMA_VERSION, SERVER_VERSION
+
+T = TypeVar("T")
+
+
+def utcnow_isoformat_z() -> str:
+    """Return current UTC time as ISO-8601 string with trailing 'Z'."""
+    return datetime.now(UTC).replace(tzinfo=None).isoformat() + "Z"
 
 
 def build_meta(tool: str, duration_ms: float | None = None) -> dict[str, Any]:
@@ -93,3 +101,37 @@ def build_error_response(
         response["retry_after_seconds"] = retry_after_seconds
 
     return response
+
+
+class FetchError(Exception):
+    """Raised by fetch_or_error when a fetch fails; carries a standard error response."""
+
+    def __init__(self, response: dict[str, Any]) -> None:
+        super().__init__(str(response.get("message", "")))
+        self.response = response
+
+
+async def fetch_or_error(coro: Awaitable[T], symbol: str) -> T:
+    """Await a fetch coroutine; raise FetchError with a standard response on failure.
+
+    ValueError maps to error_type='invalid_symbol'; other exceptions map to
+    'data_unavailable'.
+    """
+    try:
+        return await coro
+    except ValueError as e:
+        raise FetchError(
+            build_error_response(
+                error_type="invalid_symbol",
+                message=str(e),
+                symbol=symbol,
+            )
+        ) from e
+    except Exception as e:
+        raise FetchError(
+            build_error_response(
+                error_type="data_unavailable",
+                message=f"Failed to fetch data: {e}",
+                symbol=symbol,
+            )
+        ) from e

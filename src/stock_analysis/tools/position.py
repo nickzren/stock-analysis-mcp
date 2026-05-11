@@ -87,11 +87,11 @@ async def analyze_position(
     }
 
     # Tax calculations (simplified US tax rates)
-    SHORT_TERM_RATE = 0.37  # Top marginal rate
-    LONG_TERM_RATE = 0.20  # Long-term capital gains rate
+    short_term_rate = 0.37  # Top marginal rate
+    long_term_rate = 0.20  # Long-term capital gains rate
 
     tax_type = "long_term" if is_long_term else "short_term"
-    rate_now = LONG_TERM_RATE if is_long_term else SHORT_TERM_RATE
+    rate_now = long_term_rate if is_long_term else short_term_rate
 
     tax_on_gain_now = None
     tax_if_waited = None
@@ -99,13 +99,13 @@ async def analyze_position(
 
     if gain_loss_dollars is not None and gain_loss_dollars > 0:
         tax_on_gain_now = gain_loss_dollars * rate_now
-        tax_if_waited = gain_loss_dollars * LONG_TERM_RATE
+        tax_if_waited = gain_loss_dollars * long_term_rate
         potential_savings = tax_on_gain_now - tax_if_waited if not is_long_term else 0
 
     tax = {
         "type": tax_type,
         "rate_if_sold_now": rate_now,
-        "rate_if_long_term": LONG_TERM_RATE,
+        "rate_if_long_term": long_term_rate,
         "tax_on_gain_now": safe_round(tax_on_gain_now, 2),
         "tax_if_waited": safe_round(tax_if_waited, 2),
         "potential_savings": safe_round(potential_savings, 2),
@@ -225,5 +225,4 @@ def _invert_nullable(value: bool | None) -> bool | None:
     if value is None:
         return None
     return not value
-
 

@@ -1,11 +1,11 @@
 """Data quality report tool."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from time import perf_counter
 from typing import Any
 
 from stock_analysis.data.yfinance_client import fetch_history, fetch_info
-from stock_analysis.utils.provenance import build_meta, build_provenance
+from stock_analysis.utils.provenance import build_meta, build_provenance, utcnow_isoformat_z
 from stock_analysis.utils.validators import FetchParams
 
 
@@ -67,7 +67,7 @@ async def data_quality_report(symbols: list[str]) -> dict[str, Any]:
         "data_provenance": {
             "check": build_provenance(
                 source="yfinance",
-                as_of=datetime.utcnow().isoformat() + "Z",
+                as_of=utcnow_isoformat_z(),
             ),
         },
         "symbols": symbol_reports,
@@ -147,7 +147,7 @@ async def _check_symbol(symbol: str) -> dict[str, Any]:
             earnings_date = info.get("earningsDate")
             if earnings_date:
                 report["availability"]["events"] = True
-                report["staleness"]["events_last_update"] = datetime.utcnow().strftime(
+                report["staleness"]["events_last_update"] = datetime.now(UTC).strftime(
                     "%Y-%m-%d"
                 )
     except Exception:

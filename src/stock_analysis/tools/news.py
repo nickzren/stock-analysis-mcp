@@ -1,6 +1,6 @@
 """Stock news tool."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from time import perf_counter
 from typing import Any
 
@@ -8,7 +8,12 @@ import pandas as pd
 
 from stock_analysis.data.yfinance_client import fetch_ticker
 from stock_analysis.utils.helpers import safe_float, safe_round
-from stock_analysis.utils.provenance import build_error_response, build_meta, build_provenance
+from stock_analysis.utils.provenance import (
+    build_error_response,
+    build_meta,
+    build_provenance,
+    utcnow_isoformat_z,
+)
 from stock_analysis.utils.sanitize import sanitize_text
 
 POSITIVE_KEYWORDS = {
@@ -109,7 +114,8 @@ async def stock_news(symbol: str, days: int = 7) -> dict[str, Any]:
         news_data = []
 
     # Filter by date range
-    cutoff_date = datetime.utcnow() - timedelta(days=days)
+    now = datetime.now(UTC).replace(tzinfo=None)
+    cutoff_date = now - timedelta(days=days)
     articles: list[dict[str, Any]] = []
 
     for item in news_data:
@@ -171,7 +177,7 @@ async def stock_news(symbol: str, days: int = 7) -> dict[str, Any]:
                     earnings_date = datetime.strptime(str(date)[:10], "%Y-%m-%d")
 
                 # Check if this earnings is within our lookback period and in the past
-                if cutoff_date <= earnings_date <= datetime.utcnow():
+                if cutoff_date <= earnings_date <= now:
                     estimate = safe_float(row.get("EPS Estimate"))
                     actual = safe_float(row.get("Reported EPS"))
 
@@ -199,7 +205,6 @@ async def stock_news(symbol: str, days: int = 7) -> dict[str, Any]:
         pass
 
     # Aggregate sentiment by time windows
-    now = datetime.utcnow()
     cutoff_7d = now - timedelta(days=7)
     cutoff_30d = now - timedelta(days=30)
 
@@ -312,7 +317,7 @@ async def stock_news(symbol: str, days: int = 7) -> dict[str, Any]:
         "data_provenance": {
             "news": build_provenance(
                 source="yfinance",
-                as_of=datetime.utcnow().isoformat() + "Z",
+                as_of=utcnow_isoformat_z(),
             ),
         },
         "symbol": normalized_symbol,

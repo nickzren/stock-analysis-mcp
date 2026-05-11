@@ -140,9 +140,7 @@ def _has_value(v: Any) -> bool:
         return False
     if isinstance(v, float) and math.isnan(v):
         return False
-    if isinstance(v, str) and v.strip() == "":
-        return False
-    return True
+    return not (isinstance(v, str) and v.strip() == "")
 
 # Singleflight cache for deduplicating concurrent fetch_info calls
 # Key: symbol (uppercase), Value: asyncio.Task returning (info, RetryResult)
@@ -431,23 +429,8 @@ async def _retry_with_backoff(
     )
 
 
-async def fetch_history(params: FetchParams) -> pd.DataFrame:
-    """
-    Fetch price history with bounded concurrency, retry logic, and proper timeout support.
-
-    Standardization happens here (single place) before both preview and cache.
-
-    Args:
-        params: Fetch parameters
-
-    Returns:
-        Standardized DataFrame with OHLCV data
-
-    Raises:
-        ServerShuttingDownError: If server is shutting down
-        YFinanceRetryError: If all retries exhausted for retryable errors
-        ValueError: If symbol is invalid or no data returned
-    """
+async def _fetch_history_retry(params: FetchParams) -> RetryResult:
+    """Shared retry-wrapped history fetch used by both public fetch_history* helpers."""
     if shutdown_event.is_set():
         raise ServerShuttingDownError("Server is shutting down")
 
@@ -466,11 +449,31 @@ async def fetch_history(params: FetchParams) -> pd.DataFrame:
         return standardize_ohlcv(df, params.adjusted)
 
     async with _fetch_semaphore:
-        retry_result = await _retry_with_backoff(
+        return await _retry_with_backoff(
             f"fetch_history({params.symbol})",
             _fetch,
         )
-        return retry_result.result
+
+
+async def fetch_history(params: FetchParams) -> pd.DataFrame:
+    """
+    Fetch price history with bounded concurrency, retry logic, and proper timeout support.
+
+    Standardization happens here (single place) before both preview and cache.
+
+    Args:
+        params: Fetch parameters
+
+    Returns:
+        Standardized DataFrame with OHLCV data
+
+    Raises:
+        ServerShuttingDownError: If server is shutting down
+        YFinanceRetryError: If all retries exhausted for retryable errors
+        ValueError: If symbol is invalid or no data returned
+    """
+    retry_result = await _fetch_history_retry(params)
+    return retry_result.result
 
 
 async def fetch_history_with_provenance(params: FetchParams) -> tuple[pd.DataFrame, dict[str, Any]]:
@@ -482,28 +485,8 @@ async def fetch_history_with_provenance(params: FetchParams) -> tuple[pd.DataFra
     Returns:
         Tuple of (DataFrame, provenance_dict)
     """
-    if shutdown_event.is_set():
-        raise ServerShuttingDownError("Server is shutting down")
-
-    def _fetch() -> pd.DataFrame:
-        # Use per-symbol history instead of yf.download to avoid cross-symbol
-        # contamination when multiple symbols are fetched concurrently.
-        ticker = yf.Ticker(params.symbol)
-        df = ticker.history(
-            period=params.period,
-            interval=params.interval,
-            auto_adjust=params.adjusted,
-        )
-        if df.empty:
-            raise ValueError(f"No data returned for {params.symbol}")
-        return standardize_ohlcv(df, params.adjusted)
-
-    async with _fetch_semaphore:
-        retry_result = await _retry_with_backoff(
-            f"fetch_history({params.symbol})",
-            _fetch,
-        )
-        return retry_result.result, retry_result.to_provenance()
+    retry_result = await _fetch_history_retry(params)
+    return retry_result.result, retry_result.to_provenance()
 
 
 async def _fetch_info_raw(symbol: str) -> tuple[dict[str, Any], RetryResult]:

@@ -2,13 +2,13 @@
 
 import operator
 from contextlib import suppress
-from datetime import datetime
 from time import perf_counter
 from typing import Any
 
 import pandas as pd
 
 from stock_analysis.data.yfinance_client import fetch_history
+from stock_analysis.utils.helpers import safe_last_float
 from stock_analysis.utils.indicators import (
     calculate_atr,
     calculate_beta,
@@ -18,7 +18,14 @@ from stock_analysis.utils.indicators import (
     calculate_var,
     calculate_volatility,
 )
-from stock_analysis.utils.provenance import build_error_response, build_meta, build_provenance
+from stock_analysis.utils.provenance import (
+    FetchError,
+    build_error_response,
+    build_meta,
+    build_provenance,
+    fetch_or_error,
+    utcnow_isoformat_z,
+)
 from stock_analysis.utils.validators import FetchParams, check_rule
 
 
@@ -51,19 +58,9 @@ async def risk_metrics(
     )
 
     try:
-        df = await fetch_history(params)
-    except ValueError as e:
-        return build_error_response(
-            error_type="invalid_symbol",
-            message=str(e),
-            symbol=symbol,
-        )
-    except Exception as e:
-        return build_error_response(
-            error_type="data_unavailable",
-            message=f"Failed to fetch data: {e}",
-            symbol=symbol,
-        )
+        df = await fetch_or_error(fetch_history(params), symbol)
+    except FetchError as fe:
+        return fe.response
 
     if len(df) < 50:
         return build_error_response(
@@ -102,7 +99,7 @@ async def risk_metrics(
     df_indexed["date"] = pd.to_datetime(df_indexed["date"])
     df_indexed = df_indexed.set_index("date")
 
-    current_price = float(close.iloc[-1]) if not pd.isna(close.iloc[-1]) else None
+    current_price = safe_last_float(close)
 
     # Calculate daily returns
     returns = close.pct_change().dropna()
@@ -179,7 +176,7 @@ async def risk_metrics(
 
     # ATR
     atr_series = calculate_atr(high, low, close, 14)
-    atr_val = float(atr_series.iloc[-1]) if not pd.isna(atr_series.iloc[-1]) else None
+    atr_val = safe_last_float(atr_series)
     atr_pct = atr_val / current_price if atr_val and current_price else None
 
     atr = {
@@ -204,8 +201,8 @@ async def risk_metrics(
     # Stop suggestions
     sma_50 = calculate_sma(close, 50)
     sma_200 = calculate_sma(close, 200)
-    sma_50_val = float(sma_50.iloc[-1]) if not pd.isna(sma_50.iloc[-1]) else None
-    sma_200_val = float(sma_200.iloc[-1]) if not pd.isna(sma_200.iloc[-1]) else None
+    sma_50_val = safe_last_float(sma_50)
+    sma_200_val = safe_last_float(sma_200)
 
     stop_suggestions = _build_stop_suggestions(current_price, atr_val, sma_50_val, sma_200_val)
 
@@ -228,7 +225,7 @@ async def risk_metrics(
         "data_provenance": {
             "price": build_provenance(
                 source="yfinance",
-                as_of=datetime.utcnow().isoformat() + "Z",
+                as_of=utcnow_isoformat_z(),
                 last_bar_date=df["date"].iloc[-1] if len(df) > 0 else None,
             ),
         },
@@ -440,8 +437,8 @@ def _build_market_context(benchmark_df: pd.DataFrame | None) -> dict[str, Any]:
     spy_sma_50 = calculate_sma(spy_close, 50)
     spy_sma_200 = calculate_sma(spy_close, 200)
 
-    sma_50_val = float(spy_sma_50.iloc[-1]) if not pd.isna(spy_sma_50.iloc[-1]) else None
-    sma_200_val = float(spy_sma_200.iloc[-1]) if not pd.isna(spy_sma_200.iloc[-1]) else None
+    sma_50_val = safe_last_float(spy_sma_50)
+    sma_200_val = safe_last_float(spy_sma_200)
 
     # Determine trend
     above_200d = current_spy > sma_200_val if sma_200_val else None

@@ -5,7 +5,7 @@ from typing import Any
 from stock_analysis.tools.analyze.signals import (
     vol_threshold_for_improvement,
 )
-from stock_analysis.utils.helpers import format_fcf_label
+from stock_analysis.utils.helpers import fcf_label_from_cashflow
 
 # Weights for verdict scoring (mid/long-term investor bias)
 # fundamentals > technicals > risk
@@ -86,17 +86,13 @@ def build_verdict(
 
     cash_flow = fundamentals_data.get("cash_flow", {})
     fcf_value = cash_flow.get("free_cash_flow_ttm")
-    fcf_period = cash_flow.get("free_cash_flow_period")
-    fcf_period_end = cash_flow.get("free_cash_flow_period_end")
-    fcf_currency = cash_flow.get("currency")
-    fcf_label = format_fcf_label(fcf_value, fcf_period, fcf_currency, fcf_period_end)
+    fcf_label = fcf_label_from_cashflow(cash_flow)
     if fcf_label:
         if fcf_value is not None and fcf_value > 0:
             if fcf_label not in pros:
                 pros.append(fcf_label)
-        elif fcf_value is not None and fcf_value < 0:
-            if fcf_label not in cons:
-                cons.append(fcf_label)
+        elif fcf_value is not None and fcf_value < 0 and fcf_label not in cons:
+            cons.append(fcf_label)
 
     # Add fundamental-specific context (beyond signals)
     val = fundamentals_data.get("valuation", {})
@@ -105,15 +101,17 @@ def build_verdict(
         if peg < 1.0:
             if "PEG ratio suggests undervaluation" not in pros:
                 pros.append("PEG ratio suggests undervaluation")
-        elif peg > 2.5:
-            if "PEG ratio suggests overvaluation" not in cons:
-                cons.append("PEG ratio suggests overvaluation")
+        elif peg > 2.5 and "PEG ratio suggests overvaluation" not in cons:
+            cons.append("PEG ratio suggests overvaluation")
 
     health = fundamentals_data.get("financial_health", {})
     debt_to_equity = health.get("debt_to_equity")
-    if debt_to_equity is not None and debt_to_equity > 1.5:
-        if "High debt levels (D/E > 1.5)" not in cons:
-            cons.append("High debt levels (D/E > 1.5)")
+    if (
+        debt_to_equity is not None
+        and debt_to_equity > 1.5
+        and "High debt levels (D/E > 1.5)" not in cons
+    ):
+        cons.append("High debt levels (D/E > 1.5)")
 
     # Calculate component scores
     # Each category: (pros - cons) / max(total, 1) scaled to weight
@@ -173,15 +171,7 @@ def build_verdict(
     net_margin = profit.get("net_margin")
     fcf_positive = cf.get("rules", {}).get("positive_fcf", {}).get("triggered")
     fcf_value = cf.get("free_cash_flow_ttm")
-    fcf_period = cf.get("free_cash_flow_period")
-    fcf_period_end = cf.get("free_cash_flow_period_end")
-    fcf_currency = cf.get("currency")
-    fcf_value_label = format_fcf_label(
-        fcf_value,
-        fcf_period,
-        fcf_currency,
-        fcf_period_end,
-    )
+    fcf_value_label = fcf_label_from_cashflow(cf)
     low_debt = health.get("rules", {}).get("low_debt", {}).get("triggered")
 
     # Check if we can assess business quality
@@ -227,10 +217,7 @@ def build_verdict(
         # Negative FCF confirmed by both value and signal
         # If profitability is positive, call this "mixed" (profitability strong, cash conversion weak)
         business_quality_status = "available"
-        if net_margin is not None and net_margin > 0:
-            business_quality_label = "mixed"
-        else:
-            business_quality_label = "weak"
+        business_quality_label = "mixed" if net_margin is not None and net_margin > 0 else "weak"
     elif net_margin is None and pe_trailing is None and trailing_eps is None:
         # Insufficient data to assess profitability
         business_quality_status = "data_missing"
@@ -502,22 +489,18 @@ def build_verdict(
             confidence = "low"
 
         # Cap confidence if critical data missing or company has red flags
-        if not fundamentals_available:
+        if not fundamentals_available and confidence == "high":
             # Can't be high confidence without fundamentals
-            if confidence == "high":
-                confidence = "moderate"
-        if not risk_available:
+            confidence = "moderate"
+        if not risk_available and confidence == "high":
             # Can't be high confidence without risk data
-            if confidence == "high":
-                confidence = "moderate"
-        if is_unprofitable or has_negative_fcf:
+            confidence = "moderate"
+        if (is_unprofitable or has_negative_fcf) and tilt == "bullish" and confidence == "high":
             # Unprofitable companies should not get high confidence bullish
-            if tilt == "bullish" and confidence == "high":
-                confidence = "moderate"
-        if has_extreme_risk:
+            confidence = "moderate"
+        if has_extreme_risk and confidence == "high":
             # Extreme risk caps confidence
-            if confidence == "high":
-                confidence = "moderate"
+            confidence = "moderate"
 
     # Get additional data for condition-based confidence path
     risk_regime_class = risk_regime.get("classification") if risk_regime else None

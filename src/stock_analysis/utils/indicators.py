@@ -5,6 +5,8 @@ import math
 import numpy as np
 import pandas as pd
 
+from stock_analysis.utils.helpers import safe_last_float
+
 
 def calculate_sma(prices: pd.Series, period: int) -> pd.Series:
     """
@@ -373,9 +375,9 @@ def calculate_bollinger_bands(
     upper = sma + std_dev * std
     lower = sma - std_dev * std
     current_price = float(prices.iloc[-1])
-    upper_val = float(upper.iloc[-1]) if not pd.isna(upper.iloc[-1]) else None
-    lower_val = float(lower.iloc[-1]) if not pd.isna(lower.iloc[-1]) else None
-    middle_val = float(sma.iloc[-1]) if not pd.isna(sma.iloc[-1]) else None
+    upper_val = safe_last_float(upper)
+    lower_val = safe_last_float(lower)
+    middle_val = safe_last_float(sma)
     bandwidth = (upper_val - lower_val) / middle_val if upper_val and lower_val and middle_val else None
     pct_b = (current_price - lower_val) / (upper_val - lower_val) if upper_val and lower_val and upper_val != lower_val else None
     return {

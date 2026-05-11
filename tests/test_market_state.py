@@ -1,8 +1,10 @@
 """Tests for market state detection."""
 
 from datetime import datetime
+from typing import Any
 from unittest.mock import patch
 
+import pytest
 import pytz
 
 from stock_analysis.data.yfinance_client import get_market_state
@@ -21,101 +23,41 @@ class TestMarketState:
         state = get_market_state()
         assert "checked_at" in state
 
+    @pytest.mark.parametrize(
+        ("mock_now", "expected_state"),
+        [
+            (datetime(2024, 1, 6, 10, 0, 0), "closed"),
+            (datetime(2024, 1, 7, 14, 0, 0), "closed"),
+            (datetime(2024, 1, 8, 7, 0, 0), "pre_market"),
+            (datetime(2024, 1, 8, 11, 0, 0), "regular"),
+            (datetime(2024, 1, 8, 17, 0, 0), "after_hours"),
+            (datetime(2024, 1, 8, 21, 0, 0), "closed"),
+            (datetime(2024, 1, 8, 3, 0, 0), "closed"),
+            (datetime(2024, 1, 8, 9, 30, 0), "regular"),
+            (datetime(2024, 1, 8, 16, 0, 0), "after_hours"),
+        ],
+        ids=[
+            "saturday_closed",
+            "sunday_closed",
+            "pre_market",
+            "regular_hours",
+            "after_hours",
+            "night_closed",
+            "early_morning_closed",
+            "open_boundary",
+            "close_boundary",
+        ],
+    )
     @patch("stock_analysis.data.yfinance_client.datetime")
-    def test_market_closed_weekend_saturday(self, mock_datetime: any) -> None:
-        """Test market is closed on Saturday."""
+    def test_market_state_by_clock(
+        self,
+        mock_datetime: Any,
+        mock_now: datetime,
+        expected_state: str,
+    ) -> None:
+        """Test market state from weekday and clock time."""
         eastern = pytz.timezone("America/New_York")
-        # Saturday at 10 AM
-        mock_now = eastern.localize(datetime(2024, 1, 6, 10, 0, 0))
-        mock_datetime.now.return_value = mock_now
+        mock_datetime.now.return_value = eastern.localize(mock_now)
 
         state = get_market_state()
-        assert state["state"] == "closed"
-
-    @patch("stock_analysis.data.yfinance_client.datetime")
-    def test_market_closed_weekend_sunday(self, mock_datetime: any) -> None:
-        """Test market is closed on Sunday."""
-        eastern = pytz.timezone("America/New_York")
-        # Sunday at 2 PM
-        mock_now = eastern.localize(datetime(2024, 1, 7, 14, 0, 0))
-        mock_datetime.now.return_value = mock_now
-
-        state = get_market_state()
-        assert state["state"] == "closed"
-
-    @patch("stock_analysis.data.yfinance_client.datetime")
-    def test_market_pre_market(self, mock_datetime: any) -> None:
-        """Test pre-market hours (4 AM - 9:30 AM)."""
-        eastern = pytz.timezone("America/New_York")
-        # Monday at 7 AM
-        mock_now = eastern.localize(datetime(2024, 1, 8, 7, 0, 0))
-        mock_datetime.now.return_value = mock_now
-
-        state = get_market_state()
-        assert state["state"] == "pre_market"
-
-    @patch("stock_analysis.data.yfinance_client.datetime")
-    def test_market_regular_hours(self, mock_datetime: any) -> None:
-        """Test regular hours (9:30 AM - 4 PM)."""
-        eastern = pytz.timezone("America/New_York")
-        # Monday at 11 AM
-        mock_now = eastern.localize(datetime(2024, 1, 8, 11, 0, 0))
-        mock_datetime.now.return_value = mock_now
-
-        state = get_market_state()
-        assert state["state"] == "regular"
-
-    @patch("stock_analysis.data.yfinance_client.datetime")
-    def test_market_after_hours(self, mock_datetime: any) -> None:
-        """Test after hours (4 PM - 8 PM)."""
-        eastern = pytz.timezone("America/New_York")
-        # Monday at 5 PM
-        mock_now = eastern.localize(datetime(2024, 1, 8, 17, 0, 0))
-        mock_datetime.now.return_value = mock_now
-
-        state = get_market_state()
-        assert state["state"] == "after_hours"
-
-    @patch("stock_analysis.data.yfinance_client.datetime")
-    def test_market_closed_night(self, mock_datetime: any) -> None:
-        """Test market is closed late night (after 8 PM)."""
-        eastern = pytz.timezone("America/New_York")
-        # Monday at 9 PM
-        mock_now = eastern.localize(datetime(2024, 1, 8, 21, 0, 0))
-        mock_datetime.now.return_value = mock_now
-
-        state = get_market_state()
-        assert state["state"] == "closed"
-
-    @patch("stock_analysis.data.yfinance_client.datetime")
-    def test_market_closed_early_morning(self, mock_datetime: any) -> None:
-        """Test market is closed early morning (before 4 AM)."""
-        eastern = pytz.timezone("America/New_York")
-        # Monday at 3 AM
-        mock_now = eastern.localize(datetime(2024, 1, 8, 3, 0, 0))
-        mock_datetime.now.return_value = mock_now
-
-        state = get_market_state()
-        assert state["state"] == "closed"
-
-    @patch("stock_analysis.data.yfinance_client.datetime")
-    def test_market_open_boundary(self, mock_datetime: any) -> None:
-        """Test market open boundary (exactly 9:30 AM)."""
-        eastern = pytz.timezone("America/New_York")
-        # Monday at exactly 9:30 AM
-        mock_now = eastern.localize(datetime(2024, 1, 8, 9, 30, 0))
-        mock_datetime.now.return_value = mock_now
-
-        state = get_market_state()
-        assert state["state"] == "regular"
-
-    @patch("stock_analysis.data.yfinance_client.datetime")
-    def test_market_close_boundary(self, mock_datetime: any) -> None:
-        """Test market close boundary (exactly 4 PM)."""
-        eastern = pytz.timezone("America/New_York")
-        # Monday at exactly 4 PM
-        mock_now = eastern.localize(datetime(2024, 1, 8, 16, 0, 0))
-        mock_datetime.now.return_value = mock_now
-
-        state = get_market_state()
-        assert state["state"] == "after_hours"
+        assert state["state"] == expected_state

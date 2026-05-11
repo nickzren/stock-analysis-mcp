@@ -36,7 +36,7 @@ class TestStandardizeOhlcv:
             ["Open", "High", "Low", "Close", "Volume"],
             ["AAPL", "AAPL", "AAPL", "AAPL", "AAPL"],
         ]
-        tuples = list(zip(*arrays))
+        tuples = list(zip(*arrays, strict=True))
         index = pd.MultiIndex.from_tuples(tuples)
 
         df = pd.DataFrame(
@@ -126,7 +126,7 @@ class TestDfToRows:
 
         assert len(rows) == 10
         for row in rows:
-            assert all(k.islower() for k in row.keys())
+            assert all(k.islower() for k in row)
             assert set(row.keys()) == {"date", "open", "high", "low", "close", "volume"}
 
 

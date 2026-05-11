@@ -2,13 +2,12 @@
 
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
 from time import perf_counter
 from typing import Any
 
 from yfinance import Search
 
-from stock_analysis.utils.provenance import build_meta, build_provenance
+from stock_analysis.utils.provenance import build_meta, build_provenance, utcnow_isoformat_z
 from stock_analysis.utils.sanitize import sanitize_text
 
 # US exchanges we support
@@ -71,7 +70,7 @@ async def symbol_search(query: str, limit: int = 10) -> dict[str, Any]:
         "data_provenance": {
             "search": build_provenance(
                 source="yfinance",
-                as_of=datetime.utcnow().isoformat() + "Z",
+                as_of=utcnow_isoformat_z(),
                 query=query,
             ),
         },

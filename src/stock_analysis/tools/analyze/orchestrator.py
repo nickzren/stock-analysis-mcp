@@ -1,7 +1,7 @@
 """Analyze stock aggregator tool."""
 
 import asyncio
-from datetime import datetime
+from datetime import UTC, datetime
 from time import perf_counter
 from typing import Any
 
@@ -752,7 +752,7 @@ async def analyze_stock(
     # Staleness tracking
     component_freshness: dict[str, dict[str, Any]] = {}
     staleness_warnings: list[str] = []
-    now = datetime.utcnow()
+    now = datetime.now(UTC).replace(tzinfo=None)
 
     def _extract_freshness(prov_key: str, component_name: str, stale_threshold_hours: int) -> None:
         prov = data_provenance.get(prov_key, {})

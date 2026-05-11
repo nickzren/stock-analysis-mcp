@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import importlib
-from datetime import datetime, timedelta
+from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime, timedelta
 
 import pandas as pd
 import pytest
@@ -31,6 +32,8 @@ price_history_module = importlib.import_module("stock_analysis.tools.price_histo
 risk_metrics_module = importlib.import_module("stock_analysis.tools.risk_metrics")
 technicals_module = importlib.import_module("stock_analysis.tools.technicals")
 
+AnalyzeMock = Callable[..., Awaitable[dict[str, object]]]
+
 
 def _make_history_frame(
     days: int = 260,
@@ -51,9 +54,35 @@ def _make_history_frame(
     )
 
 
+def _install_analyze_mocks(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    stock_summary: AnalyzeMock,
+    technicals_mock: AnalyzeMock,
+    fundamentals: AnalyzeMock,
+    risk: AnalyzeMock,
+    events: AnalyzeMock,
+    news: AnalyzeMock,
+    ownership: AnalyzeMock,
+    options: AnalyzeMock,
+    symbol_search: AnalyzeMock | None = None,
+) -> None:
+    if symbol_search is not None:
+        monkeypatch.setattr(orchestrator_module, "symbol_search", symbol_search)
+    monkeypatch.setattr(orchestrator_module, "stock_summary", stock_summary)
+    monkeypatch.setattr(orchestrator_module, "technicals", technicals_mock)
+    monkeypatch.setattr(orchestrator_module, "fundamentals_snapshot", fundamentals)
+    monkeypatch.setattr(orchestrator_module, "risk_metrics", risk)
+    monkeypatch.setattr(orchestrator_module, "events_calendar", events)
+    monkeypatch.setattr(orchestrator_module, "stock_news", news)
+    monkeypatch.setattr(orchestrator_module, "ownership_analysis", ownership)
+    monkeypatch.setattr(orchestrator_module, "options_signals", options)
+
+
 class _FakeNewsTicker:
     def __init__(self) -> None:
-        recent = (datetime.utcnow() - timedelta(days=2)).isoformat() + "Z"
+        now = datetime.now(UTC).replace(tzinfo=None)
+        recent = (now - timedelta(days=2)).isoformat() + "Z"
         self.news = [
             {
                 "content": {
@@ -65,7 +94,7 @@ class _FakeNewsTicker:
                 }
             }
         ]
-        earnings_date = datetime.utcnow() - timedelta(days=5)
+        earnings_date = now - timedelta(days=5)
         self.earnings_dates = pd.DataFrame(
             {
                 "EPS Estimate": [1.0],
@@ -515,14 +544,17 @@ class TestToolResponseSchemas:
                 "unusual_activity": {"items": []},
             }
 
-        monkeypatch.setattr(orchestrator_module, "stock_summary", fake_stock_summary)
-        monkeypatch.setattr(orchestrator_module, "technicals", fake_technicals)
-        monkeypatch.setattr(orchestrator_module, "fundamentals_snapshot", fake_fundamentals)
-        monkeypatch.setattr(orchestrator_module, "risk_metrics", fake_risk)
-        monkeypatch.setattr(orchestrator_module, "events_calendar", fake_events)
-        monkeypatch.setattr(orchestrator_module, "stock_news", fake_news)
-        monkeypatch.setattr(orchestrator_module, "ownership_analysis", fake_ownership)
-        monkeypatch.setattr(orchestrator_module, "options_signals", fake_options)
+        _install_analyze_mocks(
+            monkeypatch,
+            stock_summary=fake_stock_summary,
+            technicals_mock=fake_technicals,
+            fundamentals=fake_fundamentals,
+            risk=fake_risk,
+            events=fake_events,
+            news=fake_news,
+            ownership=fake_ownership,
+            options=fake_options,
+        )
 
         result = await analyze_stock(
             "TEST",
@@ -789,15 +821,18 @@ class TestToolResponseSchemas:
                 "unusual_activity": {"items": []},
             }
 
-        monkeypatch.setattr(orchestrator_module, "symbol_search", fake_symbol_search)
-        monkeypatch.setattr(orchestrator_module, "stock_summary", fake_stock_summary)
-        monkeypatch.setattr(orchestrator_module, "technicals", fake_technicals)
-        monkeypatch.setattr(orchestrator_module, "fundamentals_snapshot", fake_fundamentals)
-        monkeypatch.setattr(orchestrator_module, "risk_metrics", fake_risk)
-        monkeypatch.setattr(orchestrator_module, "events_calendar", fake_events)
-        monkeypatch.setattr(orchestrator_module, "stock_news", fake_news)
-        monkeypatch.setattr(orchestrator_module, "ownership_analysis", fake_ownership)
-        monkeypatch.setattr(orchestrator_module, "options_signals", fake_options)
+        _install_analyze_mocks(
+            monkeypatch,
+            symbol_search=fake_symbol_search,
+            stock_summary=fake_stock_summary,
+            technicals_mock=fake_technicals,
+            fundamentals=fake_fundamentals,
+            risk=fake_risk,
+            events=fake_events,
+            news=fake_news,
+            ownership=fake_ownership,
+            options=fake_options,
+        )
 
         result = await analyze_stock("Circle")
 

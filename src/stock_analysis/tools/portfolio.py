@@ -1,6 +1,5 @@
 """Portfolio exposure tool."""
 
-from datetime import datetime
 from time import perf_counter
 from typing import Any
 
@@ -8,7 +7,12 @@ import pandas as pd
 
 from stock_analysis.data.yfinance_client import fetch_history, fetch_info
 from stock_analysis.utils.indicators import calculate_pairwise_correlations
-from stock_analysis.utils.provenance import build_error_response, build_meta, build_provenance
+from stock_analysis.utils.provenance import (
+    build_error_response,
+    build_meta,
+    build_provenance,
+    utcnow_isoformat_z,
+)
 from stock_analysis.utils.validators import FetchParams
 
 
@@ -185,11 +189,11 @@ async def portfolio_exposure(
         "data_provenance": {
             "fundamentals": build_provenance(
                 source="yfinance",
-                as_of=datetime.utcnow().isoformat() + "Z",
+                as_of=utcnow_isoformat_z(),
             ),
             "price": build_provenance(
                 source="yfinance",
-                as_of=datetime.utcnow().isoformat() + "Z",
+                as_of=utcnow_isoformat_z(),
             ),
         },
         "total_value": total_value,

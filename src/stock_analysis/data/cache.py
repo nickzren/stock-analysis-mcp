@@ -5,7 +5,7 @@ import hashlib
 import os
 import threading
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import pandas as pd
@@ -61,7 +61,7 @@ class PriceCache:
             "rows": len(df),
             "columns": list(df.columns),
             "hash": hashlib.sha256(csv_bytes).hexdigest()[:16],
-            "stored_at": datetime.utcnow().isoformat(),
+            "stored_at": datetime.now(UTC).replace(tzinfo=None).isoformat(),
         }
 
         expire = ttl if ttl is not None else self._default_ttl

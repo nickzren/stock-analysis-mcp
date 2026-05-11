@@ -28,6 +28,16 @@ def safe_round(value: float | None, decimals: int) -> float | None:
     return round(value, decimals)
 
 
+def safe_last_float(series: pd.Series) -> float | None:
+    """Return the last value of a pandas Series as float, or None if empty/NaN."""
+    if len(series) == 0:
+        return None
+    last = series.iloc[-1]
+    if pd.isna(last):
+        return None
+    return float(last)
+
+
 def safe_int(value: Any) -> int | None:
     """Convert to int or return None."""
     if value is None:
@@ -132,6 +142,18 @@ def format_fcf_label(
     period_label = period or "TTM"
     end_label = f" (end {period_end})" if period_end else ""
     return f"FCF ({period_label}): {value_str}{end_label}"
+
+
+def fcf_label_from_cashflow(cash_flow: dict[str, Any] | None) -> str | None:
+    """Format the FCF label from a cash_flow section dict."""
+    if not cash_flow:
+        return None
+    return format_fcf_label(
+        cash_flow.get("free_cash_flow_ttm"),
+        cash_flow.get("free_cash_flow_period"),
+        cash_flow.get("currency"),
+        cash_flow.get("free_cash_flow_period_end"),
+    )
 
 
 def format_level_distance_label(pct: float | None) -> str | None:
