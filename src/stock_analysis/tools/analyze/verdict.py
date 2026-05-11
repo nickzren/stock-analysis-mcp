@@ -1,11 +1,14 @@
 """Verdict computation: scoring, confidence, and horizon fit."""
 
+import logging
 from typing import Any
 
 from stock_analysis.tools.analyze.signals import (
     vol_threshold_for_improvement,
 )
 from stock_analysis.utils.helpers import fcf_label_from_cashflow
+
+logger = logging.getLogger(__name__)
 
 # Weights for verdict scoring (mid/long-term investor bias)
 # fundamentals > technicals > risk
@@ -15,6 +18,51 @@ VERDICT_WEIGHTS = {
     "technicals": 0.30,
     "risk": 0.25,
 }
+
+# Map signals to human-readable pros/cons (used by build_verdict)
+_SIGNAL_PROSE = {
+    "price_above_sma200": "Trading above 200-day moving average (uptrend)",
+    "golden_cross": "Golden cross pattern (bullish trend)",
+    "rsi_oversold": "RSI indicates oversold conditions",
+    "macd_bullish": "MACD showing bullish momentum",
+    "strong_3m_momentum": "Strong 3-month price momentum",
+    "high_revenue_growth": "High revenue growth (>20% YoY)",
+    "net_cash_positive": "Net cash positive balance sheet",
+    "low_debt": "Low debt-to-equity ratio",
+    "profitable": "Currently profitable",
+    "price_below_sma200": "Trading below 200-day moving average (downtrend)",
+    "death_cross": "Death cross pattern (bearish trend)",
+    "rsi_overbought": "RSI indicates overbought conditions",
+    "macd_bearish": "MACD showing bearish momentum",
+    "weak_3m_momentum": "Weak 3-month price momentum",
+    "negative_revenue_growth": "Negative revenue growth",
+    "unprofitable": "Currently unprofitable",
+    "high_volatility": "High price volatility",
+    "very_high_volatility": "Very high volatility (>60% annualized)",
+    "deep_drawdown": "Deep drawdown (>50% from peak)",
+    "insider_buying": "Insider buying activity (net positive 3M)",
+    "insider_selling": "Insider selling activity (net negative 3M)",
+    "high_put_call_ratio": "Elevated put/call ratio (>1.5, bearish options sentiment)",
+    "elevated_implied_volatility": "Elevated implied volatility (>50%)",
+    "below_bollinger_lower": "Price below lower Bollinger Band (oversold)",
+    "above_bollinger_upper": "Price above upper Bollinger Band (overbought)",
+    "bollinger_squeeze": "Bollinger Band squeeze (low volatility, breakout pending)",
+}
+
+# Signals grouped by scoring category
+_TECH_SIGNALS = [
+    "price_above_sma200", "price_below_sma200", "golden_cross",
+    "death_cross", "rsi_oversold", "rsi_overbought",
+    "macd_bullish", "macd_bearish", "strong_3m_momentum",
+    "weak_3m_momentum",
+]
+_FUND_SIGNALS = [
+    "high_revenue_growth", "negative_revenue_growth",
+    "net_cash_positive", "low_debt", "profitable",
+    "unprofitable", "positive_free_cash_flow",
+    "negative_free_cash_flow",
+]
+_RISK_SIGNALS = ["high_volatility", "very_high_volatility", "deep_drawdown"]
 
 
 def build_verdict(
@@ -38,41 +86,11 @@ def build_verdict(
     pros: list[str] = []
     cons: list[str] = []
 
-    # Map signals to human-readable pros/cons
-    signal_prose = {
-        "price_above_sma200": "Trading above 200-day moving average (uptrend)",
-        "golden_cross": "Golden cross pattern (bullish trend)",
-        "rsi_oversold": "RSI indicates oversold conditions",
-        "macd_bullish": "MACD showing bullish momentum",
-        "strong_3m_momentum": "Strong 3-month price momentum",
-        "high_revenue_growth": "High revenue growth (>20% YoY)",
-        "net_cash_positive": "Net cash positive balance sheet",
-        "low_debt": "Low debt-to-equity ratio",
-        "profitable": "Currently profitable",
-        "price_below_sma200": "Trading below 200-day moving average (downtrend)",
-        "death_cross": "Death cross pattern (bearish trend)",
-        "rsi_overbought": "RSI indicates overbought conditions",
-        "macd_bearish": "MACD showing bearish momentum",
-        "weak_3m_momentum": "Weak 3-month price momentum",
-        "negative_revenue_growth": "Negative revenue growth",
-        "unprofitable": "Currently unprofitable",
-        "high_volatility": "High price volatility",
-        "very_high_volatility": "Very high volatility (>60% annualized)",
-        "deep_drawdown": "Deep drawdown (>50% from peak)",
-        "insider_buying": "Insider buying activity (net positive 3M)",
-        "insider_selling": "Insider selling activity (net negative 3M)",
-        "high_put_call_ratio": "Elevated put/call ratio (>1.5, bearish options sentiment)",
-        "elevated_implied_volatility": "Elevated implied volatility (>50%)",
-        "below_bollinger_lower": "Price below lower Bollinger Band (oversold)",
-        "above_bollinger_upper": "Price above upper Bollinger Band (overbought)",
-        "bollinger_squeeze": "Bollinger Band squeeze (low volatility, breakout pending)",
-    }
-
     # Build pros from bullish signals
     for sig in signals.get("bullish", []):
         if sig in ("positive_free_cash_flow", "negative_free_cash_flow"):
             continue
-        prose = signal_prose.get(sig, sig.replace("_", " ").title())
+        prose = _SIGNAL_PROSE.get(sig, sig.replace("_", " ").title())
         if prose not in pros:  # Deduplicate
             pros.append(prose)
 
@@ -80,7 +98,7 @@ def build_verdict(
     for sig in signals.get("bearish", []):
         if sig in ("positive_free_cash_flow", "negative_free_cash_flow"):
             continue
-        prose = signal_prose.get(sig, sig.replace("_", " ").title())
+        prose = _SIGNAL_PROSE.get(sig, sig.replace("_", " ").title())
         if prose not in cons:  # Deduplicate
             cons.append(prose)
 
@@ -115,15 +133,6 @@ def build_verdict(
 
     # Calculate component scores
     # Each category: (pros - cons) / max(total, 1) scaled to weight
-    tech_signals = ["price_above_sma200", "price_below_sma200", "golden_cross",
-                    "death_cross", "rsi_oversold", "rsi_overbought",
-                    "macd_bullish", "macd_bearish", "strong_3m_momentum",
-                    "weak_3m_momentum"]
-    fund_signals = ["high_revenue_growth", "negative_revenue_growth",
-                    "net_cash_positive", "low_debt", "profitable",
-                    "unprofitable", "positive_free_cash_flow",
-                    "negative_free_cash_flow"]
-    risk_signals = ["high_volatility", "very_high_volatility", "deep_drawdown"]
 
     def calc_component_score(signal_list: list[str]) -> float | None:
         """Calculate normalized score for a signal category."""
@@ -138,9 +147,9 @@ def build_verdict(
             return None  # No signals in this category
         return (pos - neg) / total
 
-    tech_score = calc_component_score(tech_signals)
-    fund_score = calc_component_score(fund_signals)
-    risk_score = calc_component_score(risk_signals)
+    tech_score = calc_component_score(_TECH_SIGNALS)
+    fund_score = calc_component_score(_FUND_SIGNALS)
+    risk_score = calc_component_score(_RISK_SIGNALS)
 
     # Build decomposed scores for investor clarity
     # setup_score: technicals + momentum (is the chart attractive?)
@@ -192,9 +201,6 @@ def build_verdict(
     # Get trailing EPS for explicit unprofitability check
     trailing_eps = valuation_data.get("trailing_eps")
 
-    # Get FCF from cash_flow section
-    fcf_ttm_val = cf.get("free_cash_flow_ttm")
-
     # Require explicit signals for "unprofitable" label:
     # 1. trailing_eps <= 0
     # 2. net_margin < 0
@@ -213,7 +219,7 @@ def build_verdict(
         # (it's "unprofitable"), not that we couldn't evaluate it
         business_quality_status = "evaluated_unprofitable"
         business_quality_label = "unprofitable"
-    elif fcf_ttm_val is not None and fcf_ttm_val < 0 and has_negative_fcf_signal:
+    elif fcf_value is not None and fcf_value < 0 and has_negative_fcf_signal:
         # Negative FCF confirmed by both value and signal
         # If profitability is positive, call this "mixed" (profitability strong, cash conversion weak)
         business_quality_status = "available"
@@ -424,12 +430,6 @@ def build_verdict(
                 weights_used["fundamentals"] = VERDICT_WEIGHTS["fundamentals"] / total_weight
             if risk_score is not None:
                 weights_used["risk"] = VERDICT_WEIGHTS["risk"] / total_weight
-
-            # Invariant check: sum(weights_used) should ≈ 1.0
-            weights_sum = sum(weights_used.values())
-            if abs(weights_sum - 1.0) > 0.02:  # Allow small rounding error
-                # This shouldn't happen, but log it for debugging
-                pass  # weights_used sum check failed
 
     # Determine tilt and confidence
     tilt: str | None = None
@@ -652,9 +652,6 @@ def _validate_verdict_invariants(verdict: dict[str, Any]) -> None:
 
     Logs warnings for violations rather than raising (production-safe).
     """
-    import logging
-    logger = logging.getLogger(__name__)
-
     coverage = verdict.get("coverage", {})
     components = verdict.get("components", {})
     weights_used = verdict.get("weights_used") or {}

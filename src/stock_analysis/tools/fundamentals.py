@@ -19,6 +19,11 @@ from stock_analysis.utils.provenance import (
 )
 from stock_analysis.utils.validators import check_rule
 
+# Cash flow row labels (normalized for matching)
+_FCF_LABELS: tuple[str, ...] = ("freecashflow",)
+_OCF_LABELS: tuple[str, ...] = ("operatingcashflow",)
+_CAPEX_LABELS: tuple[str, ...] = ("capitalexpenditure", "capitalexpenditures")
+
 
 async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
     """
@@ -947,11 +952,6 @@ def _format_date_string(value: Any) -> str | None:
                 continue
         return raw
     return None
-
-
-_FCF_LABELS: tuple[str, ...] = ("freecashflow",)
-_OCF_LABELS: tuple[str, ...] = ("operatingcashflow",)
-_CAPEX_LABELS: tuple[str, ...] = ("capitalexpenditure", "capitalexpenditures")
 
 
 def _normalize_cashflow_label(label: str) -> str:
