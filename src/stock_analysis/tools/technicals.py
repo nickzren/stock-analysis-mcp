@@ -70,273 +70,16 @@ async def technicals(symbol: str) -> dict[str, Any]:
 
     current_price = safe_last_float(close)
 
-    # Moving Averages
-    sma_20 = calculate_sma(close, 20)
-    sma_50 = calculate_sma(close, 50)
-    sma_200 = calculate_sma(close, 200)
-    ema_12 = calculate_ema(close, 12)
-    ema_26 = calculate_ema(close, 26)
-
-    sma_20_val = safe_last_float(sma_20)
-    sma_50_val = safe_last_float(sma_50)
-    sma_200_val = safe_last_float(sma_200)
-    ema_12_val = safe_last_float(ema_12)
-    ema_26_val = safe_last_float(ema_26)
-
-    # Price vs SMA ratios
-    price_vs_sma20 = (
-        (current_price - sma_20_val) / sma_20_val
-        if current_price and sma_20_val
-        else None
-    )
-    price_vs_sma50 = (
-        (current_price - sma_50_val) / sma_50_val
-        if current_price and sma_50_val
-        else None
-    )
-    price_vs_sma200 = (
-        (current_price - sma_200_val) / sma_200_val
-        if current_price and sma_200_val
-        else None
-    )
-
-    sma_200_slope = _calc_sma_slope_pct_per_day(sma_200, slope_window=20)
-
-    moving_averages = {
-        "sma_20": safe_round(sma_20_val, 2),
-        "sma_50": safe_round(sma_50_val, 2),
-        "sma_200": safe_round(sma_200_val, 2),
-        "ema_12": safe_round(ema_12_val, 2),
-        "ema_26": safe_round(ema_26_val, 2),
-        "sma_200_slope_pct_per_day": safe_round(sma_200_slope, 6),
-        "price_vs_sma20": safe_round(price_vs_sma20, 4),
-        "price_vs_sma50": safe_round(price_vs_sma50, 4),
-        "price_vs_sma200": safe_round(price_vs_sma200, 4),
-        "rules": {
-            "above_sma20": {
-                "triggered": check_rule_expr(current_price, sma_20_val, operator.gt),
-                "threshold": "price > sma20",
-            },
-            "above_sma50": {
-                "triggered": check_rule_expr(current_price, sma_50_val, operator.gt),
-                "threshold": "price > sma50",
-            },
-            "above_sma200": {
-                "triggered": check_rule_expr(current_price, sma_200_val, operator.gt),
-                "threshold": "price > sma200",
-            },
-            "golden_cross": {
-                "triggered": check_rule_expr(sma_50_val, sma_200_val, operator.gt),
-                "threshold": "sma50 > sma200",
-            },
-            "death_cross": {
-                "triggered": check_rule_expr(sma_50_val, sma_200_val, operator.lt),
-                "threshold": "sma50 < sma200",
-            },
-        },
-    }
-
-    # RSI
-    rsi_series = calculate_rsi(close, 14)
-    rsi_val = safe_last_float(rsi_series)
-
-    bullish_divergence = _detect_bullish_rsi_divergence(
-        close=close,
-        rsi=rsi_series,
-        pivot_window=5,
-        lookback=60,
-    )
-
-    rsi = {
-        "value": safe_round(rsi_val, 1),
-        "period": 14,
-        "bullish_divergence": bullish_divergence,
-        "divergence_lookback": 60,
-        "divergence_pivot_window": 5,
-        "rules": {
-            "overbought": {
-                "triggered": check_rule(rsi_val, 70, operator.gt),
-                "threshold": 70,
-            },
-            "oversold": {
-                "triggered": check_rule(rsi_val, 30, operator.lt),
-                "threshold": 30,
-            },
-        },
-    }
-
-    # MACD
-    macd_data = calculate_macd(close, 12, 26, 9)
-    macd_line_val = safe_last_float(macd_data["macd_line"])
-    signal_line_val = safe_last_float(macd_data["signal_line"])
-    histogram_val = safe_last_float(macd_data["histogram"])
-
-    hist_series = macd_data["histogram"].dropna()
-    hist_rising_3d = None
-    if len(hist_series) >= 4:
-        hist_rising_3d = bool(
-            hist_series.iloc[-1] > hist_series.iloc[-2] > hist_series.iloc[-3]
-        )
-
-    macd = {
-        "macd_line": safe_round(macd_line_val, 4),
-        "signal_line": safe_round(signal_line_val, 4),
-        "histogram": safe_round(histogram_val, 4),
-        "histogram_rising_3d": hist_rising_3d,
-        "settings": {"fast": 12, "slow": 26, "signal": 9},
-        "rules": {
-            "bullish_cross": {
-                "triggered": check_rule_expr(macd_line_val, signal_line_val, operator.gt),
-                "threshold": "macd > signal",
-            },
-            "bearish_cross": {
-                "triggered": check_rule_expr(macd_line_val, signal_line_val, operator.lt),
-                "threshold": "macd < signal",
-            },
-        },
-    }
-
-    # ATR
-    atr_series = calculate_atr(high, low, close, 14)
-    atr_val = safe_last_float(atr_series)
-    atr_pct: float | None = None
-    if atr_val is not None and current_price is not None and current_price > 0:
-        atr_pct = atr_val / current_price
-
-    atr = {
-        "value": safe_round(atr_val, 2),
-        "value_pct": safe_round(atr_pct, 4),
-        "period": 14,
-    }
-
-    # Price Position (52-week and 1-month)
-    week_52_high = float(high.max()) if not high.isna().all() else None
-    week_52_low = float(low.min()) if not low.isna().all() else None
-
-    # 1-month low (approx 21 trading days)
-    low_1m = float(low.tail(21).min()) if len(low) >= 21 and not low.tail(21).isna().all() else None
-
-    # 3-month and 6-month highs (approx 63/126 trading days)
-    high_3m = float(high.tail(63).max()) if len(high) >= 63 and not high.tail(63).isna().all() else None
-    high_6m = float(high.tail(126).max()) if len(high) >= 126 and not high.tail(126).isna().all() else None
-
-    from_52w_high = (
-        (current_price - week_52_high) / week_52_high
-        if current_price and week_52_high
-        else None
-    )
-    from_52w_low = (
-        (current_price - week_52_low) / week_52_low
-        if current_price and week_52_low
-        else None
-    )
-    from_3m_high = (
-        (current_price - high_3m) / high_3m
-        if current_price and high_3m
-        else None
-    )
-    from_6m_high = (
-        (current_price - high_6m) / high_6m
-        if current_price and high_6m
-        else None
-    )
-    position_in_range = (
-        (current_price - week_52_low) / (week_52_high - week_52_low)
-        if current_price and week_52_high and week_52_low and week_52_high != week_52_low
-        else None
-    )
-
-    days_since_52w_high = _days_since_extreme(high, kind="high")
-    days_since_52w_low = _days_since_extreme(low, kind="low")
-
-    price_position = {
-        "week_52_high": safe_round(week_52_high, 2),
-        "week_52_low": safe_round(week_52_low, 2),
-        "low_1m": safe_round(low_1m, 2),
-        "from_52w_high": safe_round(from_52w_high, 4),
-        "from_52w_low": safe_round(from_52w_low, 4),
-        "from_3m_high": safe_round(from_3m_high, 4),
-        "from_6m_high": safe_round(from_6m_high, 4),
-        "days_since_52w_high": days_since_52w_high,
-        "days_since_52w_low": days_since_52w_low,
-        "position_in_range": safe_round(position_in_range, 4),
-    }
-
-    # Returns
-    return_1w_zscore = _zscore_weekly_return(close, lookback_weeks=104)
-    return_1y = calculate_returns(close, 252)
-    if return_1y is None and len(close) >= 200:
-        # 1y fetches can be slightly short of 252 trading days.
-        return_1y = calculate_returns(close, len(close) - 1)
-
-    returns = {
-        "return_1w": safe_round(calculate_returns(close, 5), 4),
-        "return_1w_zscore": safe_round(return_1w_zscore, 2),
-        "return_1m": safe_round(calculate_returns(close, 21), 4),
-        "return_3m": safe_round(calculate_returns(close, 63), 4),
-        "return_6m": safe_round(calculate_returns(close, 126), 4),
-        "return_ytd": _calculate_ytd_return(df),
-        "return_1y": safe_round(return_1y, 4),
-    }
-
-    # Volume
-    current_volume = int(volume.iloc[-1]) if not pd.isna(volume.iloc[-1]) else None
-    avg_volume_20d = float(volume.tail(20).mean()) if len(volume) >= 20 else None
-    volume_ratio: float | None = None
-    if current_volume is not None and avg_volume_20d is not None and avg_volume_20d > 0:
-        volume_ratio = current_volume / avg_volume_20d
-
-    volume_data = {
-        "current": current_volume,
-        "avg_20d": int(avg_volume_20d) if avg_volume_20d is not None else None,
-        "ratio": safe_round(volume_ratio, 2),
-    }
-
-    # Bollinger Bands
-    bb = calculate_bollinger_bands(close)
-    bollinger = {
-        **bb,
-        "rules": {
-            "above_upper": {
-                "triggered": current_price > bb["upper"] if bb["upper"] is not None else None,
-                "threshold": "price > upper_band",
-            },
-            "below_lower": {
-                "triggered": current_price < bb["lower"] if bb["lower"] is not None else None,
-                "threshold": "price < lower_band",
-            },
-            "squeeze": {
-                "triggered": bb["bandwidth"] is not None and bb["bandwidth"] < 0.05,
-                "threshold": "bandwidth < 0.05",
-            },
-        },
-    }
-
-    # On-Balance Volume
-    obv_series = calculate_obv(close, volume)
-    obv_data: dict[str, Any] = {"current": None, "sma_20": None, "trend": None}
-    if obv_series is not None and len(obv_series) >= 20:
-        obv_current = float(obv_series.iloc[-1])
-        obv_sma20 = float(obv_series.tail(20).mean())
-        obv_data = {
-            "current": round(obv_current, 0),
-            "sma_20": round(obv_sma20, 0),
-            "trend": "rising" if obv_current > obv_sma20 else "falling",
-        }
-
-    # Fibonacci retracement levels (52-week)
-    fib_levels: dict[str, Any] | None = None
-    w52_high = price_position.get("week_52_high")
-    w52_low = price_position.get("week_52_low")
-    if w52_high is not None and w52_low is not None and w52_high > w52_low:
-        fib_levels = calculate_fibonacci_levels(w52_high, w52_low)
-        # Find nearest support/resistance
-        fib_values = sorted(fib_levels.values())
-        nearest_support = max((v for v in fib_values if v <= current_price), default=None)
-        nearest_resistance = min((v for v in fib_values if v >= current_price), default=None)
-        fib_levels["nearest_support"] = nearest_support
-        fib_levels["nearest_resistance"] = nearest_resistance
-
+    moving_averages = _build_moving_averages(close, current_price)
+    rsi = _build_rsi(close)
+    macd = _build_macd(close)
+    atr = _build_atr(high, low, close, current_price)
+    price_position = _build_price_position(high, low, current_price)
+    returns = _build_returns(df, close)
+    volume_data = _build_volume(volume)
+    bollinger = _build_bollinger(close, current_price)
+    obv_data = _build_obv(close, volume)
+    fib_levels = _build_fibonacci(price_position, current_price)
     price_action = _build_price_action(close)
 
     duration_ms = (perf_counter() - start_time) * 1000
@@ -366,6 +109,296 @@ async def technicals(symbol: str) -> dict[str, Any]:
     }
 
 
+def _build_moving_averages(
+    close: pd.Series,
+    current_price: float | None,
+) -> dict[str, Any]:
+    """Build moving average values and rules."""
+    sma_20 = calculate_sma(close, 20)
+    sma_50 = calculate_sma(close, 50)
+    sma_200 = calculate_sma(close, 200)
+    ema_12 = calculate_ema(close, 12)
+    ema_26 = calculate_ema(close, 26)
+
+    sma_20_val = safe_last_float(sma_20)
+    sma_50_val = safe_last_float(sma_50)
+    sma_200_val = safe_last_float(sma_200)
+    ema_12_val = safe_last_float(ema_12)
+    ema_26_val = safe_last_float(ema_26)
+
+    price_vs_sma20 = (
+        (current_price - sma_20_val) / sma_20_val
+        if current_price and sma_20_val
+        else None
+    )
+    price_vs_sma50 = (
+        (current_price - sma_50_val) / sma_50_val
+        if current_price and sma_50_val
+        else None
+    )
+    price_vs_sma200 = (
+        (current_price - sma_200_val) / sma_200_val
+        if current_price and sma_200_val
+        else None
+    )
+
+    return {
+        "sma_20": safe_round(sma_20_val, 2),
+        "sma_50": safe_round(sma_50_val, 2),
+        "sma_200": safe_round(sma_200_val, 2),
+        "ema_12": safe_round(ema_12_val, 2),
+        "ema_26": safe_round(ema_26_val, 2),
+        "sma_200_slope_pct_per_day": safe_round(
+            _calc_sma_slope_pct_per_day(sma_200, slope_window=20),
+            6,
+        ),
+        "price_vs_sma20": safe_round(price_vs_sma20, 4),
+        "price_vs_sma50": safe_round(price_vs_sma50, 4),
+        "price_vs_sma200": safe_round(price_vs_sma200, 4),
+        "rules": {
+            "above_sma20": {
+                "triggered": check_rule_expr(current_price, sma_20_val, operator.gt),
+                "threshold": "price > sma20",
+            },
+            "above_sma50": {
+                "triggered": check_rule_expr(current_price, sma_50_val, operator.gt),
+                "threshold": "price > sma50",
+            },
+            "above_sma200": {
+                "triggered": check_rule_expr(current_price, sma_200_val, operator.gt),
+                "threshold": "price > sma200",
+            },
+            "golden_cross": {
+                "triggered": check_rule_expr(sma_50_val, sma_200_val, operator.gt),
+                "threshold": "sma50 > sma200",
+            },
+            "death_cross": {
+                "triggered": check_rule_expr(sma_50_val, sma_200_val, operator.lt),
+                "threshold": "sma50 < sma200",
+            },
+        },
+    }
+
+
+def _build_rsi(close: pd.Series) -> dict[str, Any]:
+    """Build RSI values, divergence, and rules."""
+    rsi_series = calculate_rsi(close, 14)
+    rsi_val = safe_last_float(rsi_series)
+    bullish_divergence = _detect_bullish_rsi_divergence(
+        close=close,
+        rsi=rsi_series,
+        pivot_window=5,
+        lookback=60,
+    )
+
+    return {
+        "value": safe_round(rsi_val, 1),
+        "period": 14,
+        "bullish_divergence": bullish_divergence,
+        "divergence_lookback": 60,
+        "divergence_pivot_window": 5,
+        "rules": {
+            "overbought": {
+                "triggered": check_rule(rsi_val, 70, operator.gt),
+                "threshold": 70,
+            },
+            "oversold": {
+                "triggered": check_rule(rsi_val, 30, operator.lt),
+                "threshold": 30,
+            },
+        },
+    }
+
+
+def _build_macd(close: pd.Series) -> dict[str, Any]:
+    """Build MACD values and rules."""
+    macd_data = calculate_macd(close, 12, 26, 9)
+    macd_line_val = safe_last_float(macd_data["macd_line"])
+    signal_line_val = safe_last_float(macd_data["signal_line"])
+    histogram_val = safe_last_float(macd_data["histogram"])
+
+    hist_series = macd_data["histogram"].dropna()
+    hist_rising_3d = None
+    if len(hist_series) >= 4:
+        hist_rising_3d = bool(
+            hist_series.iloc[-1] > hist_series.iloc[-2] > hist_series.iloc[-3]
+        )
+
+    return {
+        "macd_line": safe_round(macd_line_val, 4),
+        "signal_line": safe_round(signal_line_val, 4),
+        "histogram": safe_round(histogram_val, 4),
+        "histogram_rising_3d": hist_rising_3d,
+        "settings": {"fast": 12, "slow": 26, "signal": 9},
+        "rules": {
+            "bullish_cross": {
+                "triggered": check_rule_expr(macd_line_val, signal_line_val, operator.gt),
+                "threshold": "macd > signal",
+            },
+            "bearish_cross": {
+                "triggered": check_rule_expr(macd_line_val, signal_line_val, operator.lt),
+                "threshold": "macd < signal",
+            },
+        },
+    }
+
+
+def _build_atr(
+    high: pd.Series,
+    low: pd.Series,
+    close: pd.Series,
+    current_price: float | None,
+) -> dict[str, Any]:
+    """Build ATR values."""
+    atr_series = calculate_atr(high, low, close, 14)
+    atr_val = safe_last_float(atr_series)
+    atr_pct: float | None = None
+    if atr_val is not None and current_price is not None and current_price > 0:
+        atr_pct = atr_val / current_price
+
+    return {
+        "value": safe_round(atr_val, 2),
+        "value_pct": safe_round(atr_pct, 4),
+        "period": 14,
+    }
+
+
+def _build_price_position(
+    high: pd.Series,
+    low: pd.Series,
+    current_price: float | None,
+) -> dict[str, Any]:
+    """Build 52-week and recent high/low position fields."""
+    week_52_high = float(high.max()) if not high.isna().all() else None
+    week_52_low = float(low.min()) if not low.isna().all() else None
+    low_1m = float(low.tail(21).min()) if len(low) >= 21 and not low.tail(21).isna().all() else None
+    high_3m = float(high.tail(63).max()) if len(high) >= 63 and not high.tail(63).isna().all() else None
+    high_6m = float(high.tail(126).max()) if len(high) >= 126 and not high.tail(126).isna().all() else None
+
+    from_52w_high = (
+        (current_price - week_52_high) / week_52_high
+        if current_price and week_52_high
+        else None
+    )
+    from_52w_low = (
+        (current_price - week_52_low) / week_52_low
+        if current_price and week_52_low
+        else None
+    )
+    from_3m_high = (
+        (current_price - high_3m) / high_3m
+        if current_price and high_3m
+        else None
+    )
+    from_6m_high = (
+        (current_price - high_6m) / high_6m
+        if current_price and high_6m
+        else None
+    )
+    position_in_range = (
+        (current_price - week_52_low) / (week_52_high - week_52_low)
+        if current_price and week_52_high and week_52_low and week_52_high != week_52_low
+        else None
+    )
+
+    return {
+        "week_52_high": safe_round(week_52_high, 2),
+        "week_52_low": safe_round(week_52_low, 2),
+        "low_1m": safe_round(low_1m, 2),
+        "from_52w_high": safe_round(from_52w_high, 4),
+        "from_52w_low": safe_round(from_52w_low, 4),
+        "from_3m_high": safe_round(from_3m_high, 4),
+        "from_6m_high": safe_round(from_6m_high, 4),
+        "days_since_52w_high": _days_since_extreme(high, kind="high"),
+        "days_since_52w_low": _days_since_extreme(low, kind="low"),
+        "position_in_range": safe_round(position_in_range, 4),
+    }
+
+
+def _build_returns(df: pd.DataFrame, close: pd.Series) -> dict[str, Any]:
+    """Build trailing return fields."""
+    return_1y = calculate_returns(close, 252)
+    if return_1y is None and len(close) >= 200:
+        return_1y = calculate_returns(close, len(close) - 1)
+
+    return {
+        "return_1w": safe_round(calculate_returns(close, 5), 4),
+        "return_1w_zscore": safe_round(_zscore_weekly_return(close, lookback_weeks=104), 2),
+        "return_1m": safe_round(calculate_returns(close, 21), 4),
+        "return_3m": safe_round(calculate_returns(close, 63), 4),
+        "return_6m": safe_round(calculate_returns(close, 126), 4),
+        "return_ytd": _calculate_ytd_return(df),
+        "return_1y": safe_round(return_1y, 4),
+    }
+
+
+def _build_volume(volume: pd.Series) -> dict[str, Any]:
+    """Build volume summary fields."""
+    current_volume = int(volume.iloc[-1]) if not pd.isna(volume.iloc[-1]) else None
+    avg_volume_20d = float(volume.tail(20).mean()) if len(volume) >= 20 else None
+    volume_ratio: float | None = None
+    if current_volume is not None and avg_volume_20d is not None and avg_volume_20d > 0:
+        volume_ratio = current_volume / avg_volume_20d
+
+    return {
+        "current": current_volume,
+        "avg_20d": int(avg_volume_20d) if avg_volume_20d is not None else None,
+        "ratio": safe_round(volume_ratio, 2),
+    }
+
+
+def _build_bollinger(close: pd.Series, current_price: float | None) -> dict[str, Any]:
+    """Build Bollinger Band values and rules."""
+    bb = calculate_bollinger_bands(close)
+    return {
+        **bb,
+        "rules": {
+            "above_upper": {
+                "triggered": current_price > bb["upper"] if bb["upper"] is not None else None,
+                "threshold": "price > upper_band",
+            },
+            "below_lower": {
+                "triggered": current_price < bb["lower"] if bb["lower"] is not None else None,
+                "threshold": "price < lower_band",
+            },
+            "squeeze": {
+                "triggered": bb["bandwidth"] is not None and bb["bandwidth"] < 0.05,
+                "threshold": "bandwidth < 0.05",
+            },
+        },
+    }
+
+
+def _build_obv(close: pd.Series, volume: pd.Series) -> dict[str, Any]:
+    """Build On-Balance Volume fields."""
+    obv_series = calculate_obv(close, volume)
+    if obv_series is None or len(obv_series) < 20:
+        return {"current": None, "sma_20": None, "trend": None}
+
+    obv_current = float(obv_series.iloc[-1])
+    obv_sma20 = float(obv_series.tail(20).mean())
+    return {
+        "current": round(obv_current, 0),
+        "sma_20": round(obv_sma20, 0),
+        "trend": "rising" if obv_current > obv_sma20 else "falling",
+    }
+
+
+def _build_fibonacci(
+    price_position: dict[str, Any],
+    current_price: float | None,
+) -> dict[str, Any] | None:
+    """Build Fibonacci retracement levels from the 52-week range."""
+    w52_high = price_position.get("week_52_high")
+    w52_low = price_position.get("week_52_low")
+    if w52_high is None or w52_low is None or w52_high <= w52_low:
+        return None
+
+    fib_levels = calculate_fibonacci_levels(w52_high, w52_low)
+    fib_values = sorted(fib_levels.values())
+    fib_levels["nearest_support"] = max((v for v in fib_values if v <= current_price), default=None)
+    fib_levels["nearest_resistance"] = min((v for v in fib_values if v >= current_price), default=None)
+    return fib_levels
 
 
 def _calculate_ytd_return(df: pd.DataFrame) -> float | None:
