@@ -57,9 +57,191 @@ from stock_analysis.tools.risk_metrics import risk_metrics
 from stock_analysis.tools.stock_summary import stock_summary
 from stock_analysis.tools.symbol_search import symbol_search
 from stock_analysis.tools.technicals import technicals
-from stock_analysis.utils.helpers import first_sentences, format_fcf_label, round_or_none
+from stock_analysis.utils.helpers import fcf_label_from_cashflow, first_sentences, round_or_none
 from stock_analysis.utils.normalize import build_watchlist_snapshot
 from stock_analysis.utils.provenance import build_meta
+
+
+def _compute_burn_metrics(
+    fund_data: dict[str, Any],
+    market_cap: float | None,
+    is_unprofitable_company: bool,
+) -> tuple[dict[str, Any] | None, bool]:
+    """Compute burn_metrics dict for an unprofitable company.
+
+    Returns (burn_metrics, dilution_risk_elevated). Returns (None, False) when the company
+    is not flagged as unprofitable. The second element signals that callers should append
+    'dilution_risk_elevated' to the valuation warnings list.
+    """
+    if not is_unprofitable_company:
+        return None, False
+
+    health = fund_data.get("financial_health", {})
+    cf = fund_data.get("cash_flow", {})
+
+    liquidity = health.get("cash_and_st_investments") or health.get("total_cash")
+    fcf_ttm = cf.get("free_cash_flow_ttm")
+    operating_cf_ttm = cf.get("operating_cf_ttm")
+
+    runway_quarters_fcf: float | None = None
+    runway_quarters_ocf: float | None = None
+    quarterly_fcf_burn: float | None = None
+    quarterly_ocf_burn: float | None = None
+
+    if fcf_ttm is not None and fcf_ttm < 0:
+        quarterly_fcf_burn = abs(fcf_ttm) / 4
+        if liquidity is not None and quarterly_fcf_burn > 0:
+            runway_quarters_fcf = liquidity / quarterly_fcf_burn
+
+    if operating_cf_ttm is not None and operating_cf_ttm < 0:
+        quarterly_ocf_burn = abs(operating_cf_ttm) / 4
+        if liquidity is not None and quarterly_ocf_burn > 0:
+            runway_quarters_ocf = liquidity / quarterly_ocf_burn
+
+    # Conservative runway: min of available measures
+    cash_runway_quarters: float | None = None
+    runway_basis: str | None = None
+    if runway_quarters_fcf is not None and runway_quarters_ocf is not None:
+        cash_runway_quarters = round(min(runway_quarters_fcf, runway_quarters_ocf), 1)
+        runway_basis = "min_fcf_ocf"
+    elif runway_quarters_fcf is not None:
+        cash_runway_quarters = round(runway_quarters_fcf, 1)
+        runway_basis = "fcf_only"
+    elif runway_quarters_ocf is not None:
+        cash_runway_quarters = round(runway_quarters_ocf, 1)
+        runway_basis = "ocf_only"
+
+    burn_warnings: list[str] = []
+    burn_status: str
+    burn_status_reason: str | None = None
+
+    if liquidity is None:
+        burn_status = "unavailable"
+        burn_status_reason = "missing_liquidity_data"
+        burn_warnings.append("liquidity_missing")
+    elif fcf_ttm is None and operating_cf_ttm is None:
+        burn_status = "unavailable"
+        burn_status_reason = "missing_cash_flow_data"
+        burn_warnings.append("fcf_and_ocf_missing")
+    elif cash_runway_quarters is None:
+        # Have liquidity but no negative cash flow (company may be cash flow positive)
+        burn_status = "not_applicable"
+        burn_status_reason = "cash_flow_not_negative"
+    else:
+        burn_status = "available"
+
+    dilution_analysis: dict[str, Any] | None = None
+    target_runway_quarters = 8  # 2 years
+    quarterly_burn_for_dilution = quarterly_fcf_burn or quarterly_ocf_burn
+
+    if (
+        cash_runway_quarters is not None
+        and cash_runway_quarters < target_runway_quarters
+        and market_cap is not None
+        and market_cap > 0
+        and quarterly_burn_for_dilution is not None
+        and quarterly_burn_for_dilution > 0
+    ):
+        quarters_short = target_runway_quarters - cash_runway_quarters
+        raise_needed = quarters_short * quarterly_burn_for_dilution
+        dilution_decimal = raise_needed / market_cap
+
+        dilution_risk_level: str
+        if dilution_decimal > 0.25:
+            dilution_risk_level = "severe"
+        elif dilution_decimal > 0.15:
+            dilution_risk_level = "high"
+        elif dilution_decimal > 0.08:
+            dilution_risk_level = "moderate"
+        else:
+            dilution_risk_level = "low"
+
+        dilution_analysis = {
+            "raise_needed_for_2y_runway": round_or_none(raise_needed, 0),
+            "dilution_if_raised_today": round(dilution_decimal, 4),
+            "dilution_risk_level": dilution_risk_level,
+            "current_market_cap": market_cap,
+        }
+
+    if runway_basis == "fcf_only":
+        burn_warnings.append("using_fcf_only")
+    elif runway_basis == "ocf_only":
+        burn_warnings.append("using_ocf_only")
+
+    runway_confidence: str | None
+    if burn_status == "available":
+        has_fcf = fcf_ttm is not None and fcf_ttm < 0
+        has_ocf = operating_cf_ttm is not None and operating_cf_ttm < 0
+        has_liquidity = liquidity is not None
+
+        if has_liquidity and has_fcf and has_ocf:
+            runway_confidence = "high"
+        elif has_liquidity and (has_fcf or has_ocf):
+            runway_confidence = "moderate"
+        else:
+            runway_confidence = "low"
+    elif burn_status == "not_applicable":
+        runway_confidence = None  # Not burning cash
+    else:
+        runway_confidence = "unknown"
+
+    burn_metrics = {
+        "status": burn_status,
+        "status_reason": burn_status_reason,
+        "liquidity": round_or_none(liquidity, 0),
+        "cash_runway_quarters": cash_runway_quarters,
+        "runway_basis": runway_basis,
+        "runway_confidence": runway_confidence,
+        "quarterly_fcf_burn": round_or_none(quarterly_fcf_burn, 0),
+        "quarterly_ocf_burn": round_or_none(quarterly_ocf_burn, 0),
+        "dilution_analysis": dilution_analysis,
+        "warnings": burn_warnings or [],
+    }
+
+    dilution_risk_elevated = cash_runway_quarters is not None and cash_runway_quarters < 8
+
+    return burn_metrics, dilution_risk_elevated
+
+
+def _component_freshness_entry(
+    prov: dict[str, Any],
+    now: datetime,
+    stale_threshold_hours: int,
+) -> tuple[dict[str, Any], int | None]:
+    """Compute a component_freshness entry from a provenance dict.
+
+    Returns (entry, stale_age_hours) where stale_age_hours is non-None only when the
+    component is past its staleness threshold. The caller stores the entry and emits a
+    warning when stale_age_hours is provided.
+    """
+    as_of_str = prov.get("as_of")
+    if not as_of_str:
+        return {"as_of": None, "status": "unavailable"}, None
+    try:
+        as_of = datetime.fromisoformat(as_of_str.replace("Z", "+00:00")).replace(tzinfo=None)
+    except (ValueError, TypeError):
+        return {"as_of": as_of_str, "parse_error": True}, None
+    age_hours = (now - as_of).total_seconds() / 3600
+    is_stale = age_hours > stale_threshold_hours
+    return (
+        {
+            "as_of": as_of_str,
+            "age_hours": round(age_hours, 1),
+            "stale": is_stale,
+        },
+        int(age_hours) if is_stale else None,
+    )
+
+
+# (prov_key, component_name, stale_threshold_hours) — price/risk share the price provenance,
+# fundamentals/events get a 1-week threshold, news gets 2 weeks.
+_FRESHNESS_SPECS: tuple[tuple[str, str, int], ...] = (
+    ("price", "price", 48),
+    ("fundamentals", "fundamentals", 168),
+    ("price", "risk", 48),
+    ("news", "news", 336),
+    ("events", "events", 168),
+)
 
 
 def _needs_symbol_resolution(raw_symbol: str) -> bool:
@@ -272,40 +454,6 @@ async def analyze_stock(
     health = fund_data.get("financial_health", {})
     cf = fund_data.get("cash_flow", {})
 
-    # Cash runway (prefer cash + ST investments for liquidity)
-    liquidity = health.get("cash_and_st_investments") or health.get("total_cash")
-    fcf_ttm = cf.get("free_cash_flow_ttm")
-    operating_cf_ttm = cf.get("operating_cf_ttm")
-    market_cap = summary_data.get("market_cap")
-
-    runway_quarters_fcf: float | None = None
-    runway_quarters_ocf: float | None = None
-    quarterly_fcf_burn: float | None = None
-    quarterly_ocf_burn: float | None = None
-
-    if fcf_ttm is not None and fcf_ttm < 0:
-        quarterly_fcf_burn = abs(fcf_ttm) / 4
-        if liquidity is not None and quarterly_fcf_burn > 0:
-            runway_quarters_fcf = liquidity / quarterly_fcf_burn
-
-    if operating_cf_ttm is not None and operating_cf_ttm < 0:
-        quarterly_ocf_burn = abs(operating_cf_ttm) / 4
-        if liquidity is not None and quarterly_ocf_burn > 0:
-            runway_quarters_ocf = liquidity / quarterly_ocf_burn
-
-    # Conservative runway: min of available measures
-    cash_runway_quarters: float | None = None
-    runway_basis: str | None = None
-    if runway_quarters_fcf is not None and runway_quarters_ocf is not None:
-        cash_runway_quarters = round(min(runway_quarters_fcf, runway_quarters_ocf), 1)
-        runway_basis = "min_fcf_ocf"
-    elif runway_quarters_fcf is not None:
-        cash_runway_quarters = round(runway_quarters_fcf, 1)
-        runway_basis = "fcf_only"
-    elif runway_quarters_ocf is not None:
-        cash_runway_quarters = round(runway_quarters_ocf, 1)
-        runway_basis = "ocf_only"
-
     fundamentals_fetched = tool_results.get("fundamentals_snapshot") is not None
 
     pe_trailing = val.get("pe_trailing")
@@ -344,102 +492,14 @@ async def analyze_stock(
     if valuation_warnings:
         valuation_summary["warnings"] = valuation_warnings
 
-    burn_metrics: dict[str, Any] | None = None
-    if is_unprofitable_company:
-        burn_warnings: list[str] = []
-        burn_status: str
-        burn_status_reason: str | None = None
-
-        if liquidity is None:
-            burn_status = "unavailable"
-            burn_status_reason = "missing_liquidity_data"
-            burn_warnings.append("liquidity_missing")
-        elif fcf_ttm is None and operating_cf_ttm is None:
-            burn_status = "unavailable"
-            burn_status_reason = "missing_cash_flow_data"
-            burn_warnings.append("fcf_and_ocf_missing")
-        elif cash_runway_quarters is None:
-            # Have liquidity but no negative cash flow (company may be cash flow positive)
-            burn_status = "not_applicable"
-            burn_status_reason = "cash_flow_not_negative"
-        else:
-            burn_status = "available"
-
-        dilution_analysis: dict[str, Any] | None = None
-        target_runway_quarters = 8  # 2 years
-        quarterly_burn_for_dilution = quarterly_fcf_burn or quarterly_ocf_burn
-
-        if (
-            cash_runway_quarters is not None
-            and cash_runway_quarters < target_runway_quarters
-            and market_cap is not None
-            and market_cap > 0
-            and quarterly_burn_for_dilution is not None
-            and quarterly_burn_for_dilution > 0
-        ):
-            quarters_short = target_runway_quarters - cash_runway_quarters
-            raise_needed = quarters_short * quarterly_burn_for_dilution
-            dilution_decimal = raise_needed / market_cap
-
-            dilution_risk_level: str
-            if dilution_decimal > 0.25:
-                dilution_risk_level = "severe"
-            elif dilution_decimal > 0.15:
-                dilution_risk_level = "high"
-            elif dilution_decimal > 0.08:
-                dilution_risk_level = "moderate"
-            else:
-                dilution_risk_level = "low"
-
-            dilution_analysis = {
-                "raise_needed_for_2y_runway": round_or_none(raise_needed, 0),
-                "dilution_if_raised_today": round(dilution_decimal, 4),
-                "dilution_risk_level": dilution_risk_level,
-                "current_market_cap": market_cap,
-            }
-
-        if runway_basis == "fcf_only":
-            burn_warnings.append("using_fcf_only")
-        elif runway_basis == "ocf_only":
-            burn_warnings.append("using_ocf_only")
-
-        runway_confidence: str | None = None
-        if burn_status == "available":
-            has_fcf = fcf_ttm is not None and fcf_ttm < 0
-            has_ocf = operating_cf_ttm is not None and operating_cf_ttm < 0
-            has_liquidity = liquidity is not None
-
-            if has_liquidity and has_fcf and has_ocf:
-                runway_confidence = "high"
-            elif has_liquidity and (has_fcf or has_ocf):
-                runway_confidence = "moderate"
-            else:
-                runway_confidence = "low"
-        elif burn_status == "not_applicable":
-            runway_confidence = None  # Not burning cash
-        else:
-            runway_confidence = "unknown"
-
-        burn_metrics = {
-            "status": burn_status,
-            "status_reason": burn_status_reason,
-            "liquidity": round_or_none(liquidity, 0),
-            "cash_runway_quarters": cash_runway_quarters,
-            "runway_basis": runway_basis,
-            "runway_confidence": runway_confidence,
-            "quarterly_fcf_burn": round_or_none(quarterly_fcf_burn, 0),
-            "quarterly_ocf_burn": round_or_none(quarterly_ocf_burn, 0),
-            "dilution_analysis": dilution_analysis,
-            "warnings": burn_warnings or [],
-        }
-
-        if (
-            cash_runway_quarters is not None
-            and cash_runway_quarters < 8
-            and "dilution_risk_elevated" not in valuation_warnings
-        ):
-            valuation_warnings.append("dilution_risk_elevated")
-            valuation_summary["warnings"] = valuation_warnings
+    burn_metrics, dilution_risk_elevated = _compute_burn_metrics(
+        fund_data=fund_data,
+        market_cap=summary_data.get("market_cap"),
+        is_unprofitable_company=is_unprofitable_company,
+    )
+    if dilution_risk_elevated and "dilution_risk_elevated" not in valuation_warnings:
+        valuation_warnings.append("dilution_risk_elevated")
+        valuation_summary["warnings"] = valuation_warnings
 
     gross_margin = profit.get("gross_margin")
     fcf_value = cf.get("free_cash_flow_ttm")
@@ -447,7 +507,7 @@ async def analyze_stock(
     fcf_period_end = cf.get("free_cash_flow_period_end")
     fcf_currency = cf.get("currency")
     fcf_source = cf.get("free_cash_flow_source")
-    fcf_label = format_fcf_label(fcf_value, fcf_period, fcf_currency, fcf_period_end)
+    fcf_label = fcf_label_from_cashflow(cf)
 
     fundamentals_summary = {
         "valuation": valuation_summary,
@@ -754,32 +814,13 @@ async def analyze_stock(
     staleness_warnings: list[str] = []
     now = datetime.now(UTC).replace(tzinfo=None)
 
-    def _extract_freshness(prov_key: str, component_name: str, stale_threshold_hours: int) -> None:
-        prov = data_provenance.get(prov_key, {})
-        as_of_str = prov.get("as_of")
-        if as_of_str:
-            try:
-                as_of_str_clean = as_of_str.replace("Z", "+00:00")
-                as_of = datetime.fromisoformat(as_of_str_clean).replace(tzinfo=None)
-                age_hours = (now - as_of).total_seconds() / 3600
-                component_freshness[component_name] = {
-                    "as_of": as_of_str,
-                    "age_hours": round(age_hours, 1),
-                    "stale": age_hours > stale_threshold_hours,
-                }
-                if age_hours > stale_threshold_hours:
-                    staleness_warnings.append(f"{component_name}_stale_{int(age_hours)}h")
-            except (ValueError, TypeError):
-                component_freshness[component_name] = {"as_of": as_of_str, "parse_error": True}
-        else:
-            component_freshness[component_name] = {"as_of": None, "status": "unavailable"}
-
-    # Staleness thresholds: price/risk 48h, fundamentals/events 168h, news 336h
-    _extract_freshness("price", "price", stale_threshold_hours=48)
-    _extract_freshness("fundamentals", "fundamentals", stale_threshold_hours=168)
-    _extract_freshness("price", "risk", stale_threshold_hours=48)
-    _extract_freshness("news", "news", stale_threshold_hours=336)
-    _extract_freshness("events", "events", stale_threshold_hours=168)
+    for prov_key, component_name, threshold_h in _FRESHNESS_SPECS:
+        entry, stale_age_hours = _component_freshness_entry(
+            data_provenance.get(prov_key, {}), now, threshold_h
+        )
+        component_freshness[component_name] = entry
+        if stale_age_hours is not None:
+            staleness_warnings.append(f"{component_name}_stale_{stale_age_hours}h")
 
     if articles:
         try:
