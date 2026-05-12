@@ -3,6 +3,8 @@
 ANALYZE_RENDERING_GUIDE = """# Analyze Rendering Guide
 
 Use this guide when presenting the result of the `analyze` tool.
+This guide assumes `detail="full"`; with `detail="standard"`, render only
+sections whose fields are present.
 
 ## Order
 
@@ -117,4 +119,3 @@ Use this guide when presenting the result of the `analyze` tool.
 def read_analyze_rendering_guide() -> tuple[str, str]:
     """Return the analyze rendering guide and MIME type."""
     return ANALYZE_RENDERING_GUIDE, "text/markdown"
-

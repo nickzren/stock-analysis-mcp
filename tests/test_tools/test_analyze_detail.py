@@ -214,6 +214,21 @@ async def test_server_analyze_full_detail_preserves_full_payload(monkeypatch: py
 
 
 @pytest.mark.asyncio
+async def test_server_analyze_snapshot_hash_is_stable_across_detail_levels(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_analyze_stock(*args, **kwargs) -> dict:
+        return _full_result()
+
+    monkeypatch.setattr("stock_analysis.server.analyze_stock", fake_analyze_stock)
+
+    standard = json.loads(await analyze("TEST"))
+    full = json.loads(await analyze("TEST", detail="full"))
+
+    assert standard["watchlist_snapshot"]["snapshot_hash"] == full["watchlist_snapshot"]["snapshot_hash"]
+
+
+@pytest.mark.asyncio
 async def test_server_analyze_invalid_detail_returns_error_without_fetch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -227,4 +242,3 @@ async def test_server_analyze_invalid_detail_returns_error_without_fetch(
     assert parsed["error"] is True
     assert parsed["error_type"] == "invalid_parameters"
     assert "Invalid detail" in parsed["message"]
-
