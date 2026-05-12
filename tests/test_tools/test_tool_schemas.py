@@ -613,6 +613,27 @@ class TestToolResponseSchemas:
         assert result["dislocation_framework"]["action"]["core"] == result["decision_modes"]["core"]["action"]
         assert result["section_summaries"]["dislocation"] == result["dislocation_framework"]["summary"]
 
+        # Integration coverage for the small-account decision_card
+        decision_card = result["decision_card"]
+        assert "action_now" in decision_card
+        assert decision_card["action_now"] in {
+            "buy", "starter", "hold", "hold_or_add", "hold_or_reduce",
+            "wait", "wait_for_data", "avoid", "insufficient_data",
+        }
+        assert "hard_gates" in decision_card
+        assert "any_blocking" in decision_card["hard_gates"]
+        assert "checks" in decision_card["hard_gates"]
+        for gate_id in ("earnings_blackout", "data_quality_critical", "falling_knife",
+                        "missing_runway", "weak_liquidity", "liquidity_missing"):
+            assert gate_id in decision_card["hard_gates"]["checks"]
+        assert "sizing" in decision_card
+        assert "fractional_shares" in decision_card["sizing"]
+        assert "whole_shares" in decision_card["sizing"]
+        for conditions_key in ("buy_only_if", "add_only_if", "do_not_buy_if", "reduce_if", "monitor"):
+            assert conditions_key in decision_card["conditions"]
+        assert "next_review" in decision_card
+        assert "confidence" in decision_card
+
     @pytest.mark.asyncio
     async def test_analyze_stock_resolves_company_name_input(
         self,

@@ -26,7 +26,7 @@ from datetime import datetime
 from typing import Any
 
 # Snapshot format version - bump when normalization logic changes
-SNAPSHOT_VERSION = "1.0.0"
+SNAPSHOT_VERSION = "1.1.0"
 
 
 def canonical_dumps(obj: Any) -> str:
@@ -443,6 +443,13 @@ def build_watchlist_snapshot(raw: dict[str, Any]) -> dict[str, Any]:
     policy = normalized.get("policy_action", {})
     events = normalized.get("events_summary", {})
     risk = normalized.get("risk_summary", {})
+    decision_card = normalized.get("decision_card", {})
+    hard_gates = decision_card.get("hard_gates", {}) if isinstance(decision_card, dict) else {}
+    hard_gate_blocking = hard_gates.get("blocking", []) if isinstance(hard_gates, dict) else []
+    hard_gate_ids: list[str] = sorted(
+        str(g["id"]) for g in hard_gate_blocking
+        if isinstance(g, dict) and g.get("id")
+    )
 
     # Compute snapshot_as_of_date (max of all component dates)
     snapshot_as_of_date = _compute_snapshot_as_of_date(normalized)
@@ -464,6 +471,9 @@ def build_watchlist_snapshot(raw: dict[str, Any]) -> dict[str, Any]:
         "action_long_term": policy.get("long_term"),
         "valuation_gate": policy.get("valuation_gate"),
         "is_unprofitable": policy.get("is_unprofitable"),
+        # Decision card (compact action surface — diffs surface action / gate changes)
+        "decision_action_now": decision_card.get("action_now") if isinstance(decision_card, dict) else None,
+        "hard_gate_ids": hard_gate_ids,
         # Key risk
         "risk_regime": risk.get("risk_regime", {}).get("classification"),
         "volatility_ann": risk.get("annualized_volatility", risk.get("volatility_ann")),

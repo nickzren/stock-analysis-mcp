@@ -286,6 +286,58 @@ class TestBuildWatchlistSnapshot:
         assert "snapshot_version" in snapshot
         assert snapshot["snapshot_version"] == SNAPSHOT_VERSION
 
+    def test_includes_decision_card_fields(self):
+        """detect_changes relies on the snapshot, so decision_card action and
+        hard-gate ids must be exposed at the top level."""
+        raw = {
+            "symbol": "TEST",
+            "decision_card": {
+                "action_now": "wait_for_data",
+                "hard_gates": {
+                    "any_blocking": True,
+                    "blocking": [
+                        {"id": "earnings_blackout", "reason": "..."},
+                        {"id": "falling_knife", "reason": "..."},
+                    ],
+                },
+            },
+        }
+        snapshot = build_watchlist_snapshot(raw)
+        assert snapshot["decision_action_now"] == "wait_for_data"
+        assert snapshot["hard_gate_ids"] == ["earnings_blackout", "falling_knife"]
+
+    def test_decision_card_change_changes_hash(self):
+        """Changing action_now or hard-gate ids must flip the snapshot hash so
+        detect_changes surfaces it."""
+        raw_a = {
+            "symbol": "TEST",
+            "decision_card": {
+                "action_now": "buy",
+                "hard_gates": {"any_blocking": False, "blocking": []},
+            },
+        }
+        raw_b = {
+            "symbol": "TEST",
+            "decision_card": {
+                "action_now": "wait_for_data",
+                "hard_gates": {
+                    "any_blocking": True,
+                    "blocking": [{"id": "earnings_blackout", "reason": "x"}],
+                },
+            },
+        }
+        snap_a = build_watchlist_snapshot(raw_a)
+        snap_b = build_watchlist_snapshot(raw_b)
+        assert snap_a["snapshot_hash"] != snap_b["snapshot_hash"]
+
+    def test_decision_card_missing_yields_none_fields(self):
+        """When decision_card isn't present (e.g., partial result), snapshot
+        gracefully sets the fields to None / empty."""
+        raw = {"symbol": "TEST"}
+        snapshot = build_watchlist_snapshot(raw)
+        assert snapshot["decision_action_now"] is None
+        assert snapshot["hard_gate_ids"] == []
+
     def test_includes_snapshot_hash(self):
         """Should include snapshot_hash in output."""
         raw = {"symbol": "TEST"}

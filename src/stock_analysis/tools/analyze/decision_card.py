@@ -41,8 +41,22 @@ def _compute_hard_gates(
         and 0 <= days_until_earnings <= _EARNINGS_BLACKOUT_DAYS
     )
 
+    # Data quality: block on any of (a) fundamentals missing, (b) critical fields
+    # like current_price/beta missing, (c) any critical tool failure. A weak first
+    # check (only fundamentals_status) leaves obvious blockers like a stock with
+    # no price data slipping through with a "buy" recommendation.
     fund_status = data_quality.get("fundamentals_status")
-    data_quality_critical = fund_status == "missing"
+    missing_critical = data_quality.get("missing_critical") or []
+    tool_failures = data_quality.get("tool_failures") or []
+    critical_tools = {"stock_summary", "technicals", "fundamentals_snapshot", "risk_metrics"}
+    critical_tool_failed = any(
+        tf.get("tool") in critical_tools for tf in tool_failures if isinstance(tf, dict)
+    )
+    data_quality_critical = (
+        fund_status == "missing"
+        or bool(missing_critical)
+        or critical_tool_failed
+    )
 
     dip_type: str | None = None
     if dip_assessment:
@@ -55,12 +69,15 @@ def _compute_hard_gates(
     is_unprofitable = valuation_summary.get("valuation_note") == "pe_not_meaningful"
     missing_runway = is_unprofitable and burn_status == "unavailable"
 
+    # Liquidity gate fires for BOTH "below threshold" and "missing entirely" — for a
+    # small-account decision, "we don't know" is just as blocking as "too thin".
     liquidity = risk_data.get("liquidity") or {}
     avg_dollar_volume = liquidity.get("avg_dollar_volume")
     weak_liquidity = (
         isinstance(avg_dollar_volume, (int, float))
         and avg_dollar_volume < _WEAK_LIQUIDITY_DOLLARS_PER_DAY
     )
+    liquidity_missing = avg_dollar_volume is None
 
     blocking: list[dict[str, str]] = []
     if earnings_blackout and isinstance(days_until_earnings, (int, float)):
@@ -69,9 +86,21 @@ def _compute_hard_gates(
             "reason": f"earnings in {int(days_until_earnings)} days (<= {_EARNINGS_BLACKOUT_DAYS})",
         })
     if data_quality_critical:
+        reasons: list[str] = []
+        if fund_status == "missing":
+            reasons.append("fundamentals_status=missing")
+        if missing_critical:
+            reasons.append(f"missing_critical={','.join(str(x) for x in missing_critical)}")
+        if critical_tool_failed:
+            failed_names = sorted({
+                str(tf.get("tool"))
+                for tf in tool_failures
+                if isinstance(tf, dict) and tf.get("tool") in critical_tools
+            })
+            reasons.append(f"critical_tool_failed={','.join(failed_names)}")
         blocking.append({
             "id": "data_quality_critical",
-            "reason": "fundamentals data unavailable; cannot assess business quality",
+            "reason": "critical data unavailable: " + "; ".join(reasons),
         })
     if falling_knife:
         blocking.append({
@@ -92,6 +121,11 @@ def _compute_hard_gates(
                 f"${_WEAK_LIQUIDITY_DOLLARS_PER_DAY / 1_000_000:.0f}M threshold"
             ),
         })
+    if liquidity_missing:
+        blocking.append({
+            "id": "liquidity_missing",
+            "reason": "avg_dollar_volume unavailable — cannot confirm tradability for small account",
+        })
 
     return {
         "any_blocking": bool(blocking),
@@ -102,15 +136,20 @@ def _compute_hard_gates(
             "falling_knife": falling_knife,
             "missing_runway": missing_runway,
             "weak_liquidity": weak_liquidity,
+            "liquidity_missing": liquidity_missing,
         },
     }
 
 
 # Map verbose policy_action.mid_term values to compact action_now codes used by
 # the decision card. Falls back to the raw value for anything unrecognized.
+#
+# `hold_or_add` is preserved as its own code (not collapsed to `hold`) because it
+# implies new-money is still appropriate for existing holders — and hard gates
+# should treat it as buy-adjacent for the override.
 _MID_TERM_TO_ACTION: dict[str, str] = {
     "buy": "buy",
-    "hold_or_add": "hold",
+    "hold_or_add": "hold_or_add",
     "hold": "hold",
     "hold_or_reduce": "hold_or_reduce",
     "speculative_small_position": "starter",
@@ -118,6 +157,9 @@ _MID_TERM_TO_ACTION: dict[str, str] = {
     "avoid": "avoid",
     "insufficient_data": "insufficient_data",
 }
+
+# Actions that allow new money in (subject to hard gates).
+_NEW_MONEY_ACTIONS = frozenset({"buy", "starter", "hold_or_add"})
 
 
 def _resolve_action_now(
@@ -130,12 +172,12 @@ def _resolve_action_now(
     base_action = _MID_TERM_TO_ACTION.get(mid_term, mid_term)
     rationale.append(f"policy_action.mid_term={mid_term} -> {base_action}")
 
-    # Hard gates only override buy/starter — not hold/reduce/sell paths. A user
-    # already holding the position needs different guidance than someone
-    # considering a new entry, but at the analysis layer we don't know which.
-    # Conservative override: bullish-leaning actions become "wait_for_data" so
-    # the user re-evaluates after the gate clears.
-    if hard_gates["any_blocking"] and base_action in ("buy", "starter"):
+    # Hard gates override new-money actions only. Hold/reduce/avoid/sell pass
+    # through because a user already holding the position needs different
+    # guidance than someone considering a new entry, and the analysis layer
+    # doesn't know which. Conservative override: actions that admit new money
+    # become "wait_for_data" so the user re-evaluates after the gate clears.
+    if hard_gates["any_blocking"] and base_action in _NEW_MONEY_ACTIONS:
         gate_ids = ",".join(g["id"] for g in hard_gates["blocking"])
         rationale.append(f"hard_gates fired ({gate_ids}); downgrading to wait_for_data")
         return "wait_for_data", rationale
@@ -211,20 +253,31 @@ def _build_conditions(
     hard_gates: dict[str, Any],
     dislocation_framework: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    """Compress conditions: add_only_if, do_not_buy_if (hard gates), reduce_if, monitor."""
+    """Compress conditions: buy_only_if, add_only_if, do_not_buy_if, reduce_if, monitor.
+
+    `dislocation_framework.action` distinguishes between:
+      - `buy_only_if`: conditions to lift before any new buy (when can_start_now=False)
+      - `add_only_if`: conditions to lift before adding more (when can_start_now=True)
+    Both surface here so the user sees the right guidance without inspecting the framework.
+    """
     do_not_buy_if = [g["reason"] for g in hard_gates["blocking"]]
 
     add_only_if: list[str] = []
+    buy_only_if: list[str] = []
     if dislocation_framework:
         action_block = dislocation_framework.get("action") or {}
         framework_add_only_if = action_block.get("add_only_if") or []
+        framework_buy_only_if = action_block.get("buy_only_if") or []
         if isinstance(framework_add_only_if, list):
             add_only_if = [str(x) for x in framework_add_only_if]
+        if isinstance(framework_buy_only_if, list):
+            buy_only_if = [str(x) for x in framework_buy_only_if]
 
     reduce_if = list(policy_action.get("conditions_to_downgrade") or [])
     monitor = list(policy_action.get("conditions_to_upgrade") or [])
 
     return {
+        "buy_only_if": buy_only_if,
         "add_only_if": add_only_if,
         "do_not_buy_if": do_not_buy_if,
         "reduce_if": reduce_if,

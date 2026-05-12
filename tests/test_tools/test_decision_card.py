@@ -174,6 +174,74 @@ class TestHardGates:
         assert "falling_knife" in gate_ids
         assert "weak_liquidity" in gate_ids
 
+    def test_data_quality_critical_fires_on_missing_critical_field(self) -> None:
+        """Even if fundamentals_status is OK, missing critical fields (e.g. current_price)
+        should still block new buys."""
+        gates = _compute_hard_gates(
+            events_data={},
+            data_quality={
+                "fundamentals_status": "available",
+                "missing_critical": ["current_price"],
+            },
+            dip_assessment=None,
+            fundamentals_summary={},
+            risk_data={"liquidity": {"avg_dollar_volume": 50_000_000}},
+        )
+        assert gates["checks"]["data_quality_critical"] is True
+        reason = next(b["reason"] for b in gates["blocking"] if b["id"] == "data_quality_critical")
+        assert "missing_critical=current_price" in reason
+
+    def test_data_quality_critical_fires_on_critical_tool_failure(self) -> None:
+        gates = _compute_hard_gates(
+            events_data={},
+            data_quality={
+                "fundamentals_status": "available",
+                "tool_failures": [{"tool": "stock_summary", "error": "timeout"}],
+            },
+            dip_assessment=None,
+            fundamentals_summary={},
+            risk_data={"liquidity": {"avg_dollar_volume": 50_000_000}},
+        )
+        assert gates["checks"]["data_quality_critical"] is True
+        reason = next(b["reason"] for b in gates["blocking"] if b["id"] == "data_quality_critical")
+        assert "critical_tool_failed=stock_summary" in reason
+
+    def test_data_quality_does_not_fire_on_noncritical_tool_failure(self) -> None:
+        """Non-critical tool failures (e.g., options_signals, news) don't block buys."""
+        gates = _compute_hard_gates(
+            events_data={},
+            data_quality={
+                "fundamentals_status": "available",
+                "tool_failures": [{"tool": "options_signals", "error": "x"}],
+            },
+            dip_assessment=None,
+            fundamentals_summary={},
+            risk_data={"liquidity": {"avg_dollar_volume": 50_000_000}},
+        )
+        assert gates["checks"]["data_quality_critical"] is False
+
+    def test_liquidity_missing_fires_when_avg_dollar_volume_none(self) -> None:
+        """Missing liquidity data is treated as blocking, distinct from 'too thin'."""
+        gates = _compute_hard_gates(
+            events_data={},
+            data_quality={},
+            dip_assessment=None,
+            fundamentals_summary={},
+            risk_data={"liquidity": {"avg_dollar_volume": None}},
+        )
+        assert gates["checks"]["liquidity_missing"] is True
+        assert gates["checks"]["weak_liquidity"] is False  # mutually exclusive
+
+    def test_liquidity_missing_fires_when_no_liquidity_section(self) -> None:
+        gates = _compute_hard_gates(
+            events_data={},
+            data_quality={},
+            dip_assessment=None,
+            fundamentals_summary={},
+            risk_data={},
+        )
+        assert gates["checks"]["liquidity_missing"] is True
+
 
 class TestActionNowResolution:
     """Hard gates override bullish actions; non-bullish actions pass through."""
@@ -212,6 +280,27 @@ class TestActionNowResolution:
             },
         )
         assert action == "hold"
+
+    def test_hold_or_add_preserved_when_no_gate(self) -> None:
+        """hold_or_add stays as its own code (not collapsed to hold) so callers can
+        distinguish "hold the position, also add more" from "just hold"."""
+        action, _ = _resolve_action_now(
+            _empty_policy_action("hold_or_add"),
+            {"any_blocking": False, "blocking": [], "checks": {}},
+        )
+        assert action == "hold_or_add"
+
+    def test_hold_or_add_downgraded_by_gate(self) -> None:
+        """hold_or_add admits new money, so a hard gate must downgrade it."""
+        action, _ = _resolve_action_now(
+            _empty_policy_action("hold_or_add"),
+            {
+                "any_blocking": True,
+                "blocking": [{"id": "earnings_blackout", "reason": "..."}],
+                "checks": {},
+            },
+        )
+        assert action == "wait_for_data"
 
     def test_avoid_not_changed_by_gate(self) -> None:
         action, _ = _resolve_action_now(
@@ -325,3 +414,24 @@ class TestDecisionCardSchema:
         card = build_decision_card(**fixture)
         assert "fractional_shares" in card["sizing"]
         assert card["sizing"]["fractional_shares"] is not None
+
+    def test_buy_only_if_propagated_when_can_start_now_false(self, fixture: dict) -> None:
+        """When dislocation_framework says can_start_now=False, buy_only_if (not add_only_if)
+        carries the actionable conditions. Both must be surfaced separately."""
+        fixture["dislocation_framework"] = {
+            "action": {
+                "can_start_now": False,
+                "buy_only_if": ["fcf_turns_positive", "burn_metrics_available"],
+                "add_only_if": [],
+            }
+        }
+        card = build_decision_card(**fixture)
+        assert "buy_only_if" in card["conditions"]
+        assert "fcf_turns_positive" in card["conditions"]["buy_only_if"]
+        assert "burn_metrics_available" in card["conditions"]["buy_only_if"]
+        assert card["conditions"]["add_only_if"] == []
+
+    def test_both_buy_only_if_and_add_only_if_present_in_schema(self, fixture: dict) -> None:
+        card = build_decision_card(**fixture)
+        assert "buy_only_if" in card["conditions"]
+        assert "add_only_if" in card["conditions"]
