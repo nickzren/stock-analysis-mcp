@@ -103,6 +103,8 @@ async def price_history(
 def _build_summary(df: Any) -> dict[str, Any]:
     """Build price-history summary fields."""
     close_prices = df["close"].dropna()
+    start_price: float | None
+    end_price: float | None
     if len(close_prices) >= 2:
         start_price = float(close_prices.iloc[0])
         end_price = float(close_prices.iloc[-1])

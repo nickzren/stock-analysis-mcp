@@ -2,7 +2,7 @@
 
 import operator
 from time import perf_counter
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 
@@ -350,15 +350,16 @@ def _build_volume(volume: pd.Series) -> dict[str, Any]:
 def _build_bollinger(close: pd.Series, current_price: float | None) -> dict[str, Any]:
     """Build Bollinger Band values and rules."""
     bb = calculate_bollinger_bands(close)
+    current = cast(float, current_price)
     return {
         **bb,
         "rules": {
             "above_upper": {
-                "triggered": current_price > bb["upper"] if bb["upper"] is not None else None,
+                "triggered": current > bb["upper"] if bb["upper"] is not None else None,
                 "threshold": "price > upper_band",
             },
             "below_lower": {
-                "triggered": current_price < bb["lower"] if bb["lower"] is not None else None,
+                "triggered": current < bb["lower"] if bb["lower"] is not None else None,
                 "threshold": "price < lower_band",
             },
             "squeeze": {
@@ -389,15 +390,16 @@ def _build_fibonacci(
     current_price: float | None,
 ) -> dict[str, Any] | None:
     """Build Fibonacci retracement levels from the 52-week range."""
+    current = cast(float, current_price)
     w52_high = price_position.get("week_52_high")
     w52_low = price_position.get("week_52_low")
     if w52_high is None or w52_low is None or w52_high <= w52_low:
         return None
 
-    fib_levels = calculate_fibonacci_levels(w52_high, w52_low)
+    fib_levels: dict[str, Any] = calculate_fibonacci_levels(w52_high, w52_low)
     fib_values = sorted(fib_levels.values())
-    fib_levels["nearest_support"] = max((v for v in fib_values if v <= current_price), default=None)
-    fib_levels["nearest_resistance"] = min((v for v in fib_values if v >= current_price), default=None)
+    fib_levels["nearest_support"] = max((v for v in fib_values if v <= current), default=None)
+    fib_levels["nearest_resistance"] = min((v for v in fib_values if v >= current), default=None)
     return fib_levels
 
 
@@ -426,7 +428,7 @@ def _calculate_ytd_return(df: pd.DataFrame) -> float | None:
     if pd.isna(start_price) or pd.isna(end_price) or start_price == 0:
         return None
 
-    return round((end_price - start_price) / start_price, 4)
+    return float(round((end_price - start_price) / start_price, 4))
 
 
 def _calc_sma_slope_pct_per_day(

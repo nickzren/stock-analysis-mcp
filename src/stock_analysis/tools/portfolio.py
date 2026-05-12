@@ -1,7 +1,7 @@
 """Portfolio exposure tool."""
 
 from time import perf_counter
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 
@@ -186,14 +186,15 @@ async def _build_correlation_data(
         }
 
     corr_results = calculate_pairwise_correlations(returns_dict, min_overlap=100)
+    high_correlation_pairs = cast(list[dict[str, Any]] | None, corr_results["high_correlation_pairs"])
     return {
         "pairs": corr_results["pairs"],
-        "high_correlation_pairs": corr_results["high_correlation_pairs"],
+        "high_correlation_pairs": high_correlation_pairs,
         "avg_correlation": corr_results["avg_correlation"],
         "avg_abs_correlation": corr_results["avg_abs_correlation"],
         "high_correlation_risk": (
-            len(corr_results["high_correlation_pairs"]) > 0
-            if corr_results["high_correlation_pairs"] is not None
+            len(high_correlation_pairs) > 0
+            if high_correlation_pairs is not None
             else None
         ),
     }

@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta
 from time import perf_counter
-from typing import Any
+from typing import Any, cast
 
 from stock_analysis.data.yfinance_client import fetch_info, fetch_ticker
 from stock_analysis.utils.helpers import current_price_from_info, safe_float, safe_round
@@ -98,7 +98,7 @@ async def _fetch_info_or_empty(symbol: str) -> dict[str, Any]:
 def _fetch_expirations(ticker: Any) -> tuple[str, ...] | list[str]:
     """Fetch option expirations with the existing empty fallback."""
     try:
-        return ticker.options
+        return cast(tuple[str, ...] | list[str], ticker.options)
     except Exception:
         return ()
 

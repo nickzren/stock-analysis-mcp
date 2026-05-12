@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from time import perf_counter
-from typing import Any
+from typing import Any, cast
 
 from stock_analysis.tools.technicals import technicals
 from stock_analysis.utils.helpers import safe_round
@@ -247,7 +247,7 @@ def _get_rule_triggered(data: dict[str, Any], rule_name: str) -> bool | None:
     """Extract triggered value from a rules dict."""
     rules = data.get("rules", {})
     rule = rules.get(rule_name, {})
-    return rule.get("triggered")
+    return cast(bool | None, rule.get("triggered"))
 
 
 def _invert_nullable(value: bool | None) -> bool | None:

@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta
 from time import perf_counter
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 
@@ -307,7 +307,7 @@ def _parse_date(value: Any) -> datetime | None:
     if isinstance(value, pd.Timestamp):
         return value.to_pydatetime().replace(tzinfo=None)
     try:
-        return pd.to_datetime(value).to_pydatetime().replace(tzinfo=None)
+        return cast(datetime, pd.to_datetime(value).to_pydatetime().replace(tzinfo=None))
     except Exception:
         return None
 

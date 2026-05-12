@@ -3,7 +3,7 @@
 from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from time import perf_counter
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 
@@ -176,7 +176,7 @@ def _parse_articles(news_data: list[dict[str, Any]], cutoff_date: datetime) -> l
         if canonical:
             url = canonical.get("url")
 
-        sentiment_result = _score_sentiment(title, summary)
+        sentiment_result = _score_sentiment(cast(str, title), cast(str, summary))
         articles.append({
             "date": pub_date_naive.strftime("%Y-%m-%d"),
             "title": title,
@@ -186,7 +186,7 @@ def _parse_articles(news_data: list[dict[str, Any]], cutoff_date: datetime) -> l
             "sentiment": sentiment_result["label"],
             "matched_positive": sentiment_result["matched_positive"] or None,
             "matched_negative": sentiment_result["matched_negative"] or None,
-            "catalyst_tags": _extract_catalysts(title, summary),
+            "catalyst_tags": _extract_catalysts(cast(str, title), cast(str, summary)),
         })
 
     articles.sort(key=lambda x: x["date"], reverse=True)
