@@ -222,16 +222,24 @@ def calculate_current_drawdown(prices: pd.Series) -> tuple[float | None, int | N
 
     drawdown = (current - peak) / peak
 
-    # Calculate days since high
-    if isinstance(peak_idx, pd.Timestamp):
-        last_date = prices.index[-1]
-        if isinstance(last_date, pd.Timestamp):
-            days_since = (last_date - peak_idx).days
-        else:
-            days_since = len(prices) - prices.index.get_loc(peak_idx) - 1
+    # Calculate days since high. Prefer timestamp delta when both ends are tz-comparable;
+    # fall back to positional index lookup for non-Timestamp or non-numeric index types.
+    days_since: int | None = None
+    last_date = prices.index[-1]
+    if isinstance(peak_idx, pd.Timestamp) and isinstance(last_date, pd.Timestamp):
+        days_since = (last_date - peak_idx).days
+    elif isinstance(peak_idx, (int, float)):
+        days_since = len(prices) - int(peak_idx) - 1
     else:
-        days_since = len(prices) - peak_idx - 1
+        try:
+            loc = prices.index.get_loc(peak_idx)
+        except (KeyError, TypeError):
+            loc = None
+        if isinstance(loc, int):
+            days_since = len(prices) - loc - 1
 
+    if days_since is None:
+        return float(drawdown), None
     return float(drawdown), int(days_since)
 
 

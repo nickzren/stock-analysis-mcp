@@ -87,7 +87,7 @@ async def risk_metrics(
 
     df_indexed = _index_by_date(df)
     current_price = safe_last_float(close)
-    returns = close.pct_change().dropna()
+    returns = close.pct_change(fill_method=None).dropna()
 
     volatility = _build_volatility(returns)
     benchmark_returns_summary, beta, benchmark_indexed = _build_beta(
@@ -175,7 +175,7 @@ def _build_beta(
     if benchmark_df is not None and len(benchmark_df) > 0:
         benchmark_indexed = _index_by_date(benchmark_df)
         benchmark_close = pd.to_numeric(benchmark_indexed["close"], errors="coerce")
-        benchmark_returns = benchmark_close.pct_change().dropna()
+        benchmark_returns = benchmark_close.pct_change(fill_method=None).dropna()
 
         benchmark_returns_summary = {
             "return_1m": _calculate_period_return(benchmark_close, 21),
@@ -186,7 +186,7 @@ def _build_beta(
         symbol_returns = pd.to_numeric(
             df_indexed["close"],
             errors="coerce",
-        ).pct_change().dropna()
+        ).pct_change(fill_method=None).dropna()
         beta_data = calculate_beta(symbol_returns, benchmark_returns, min_overlap=200)
 
     beta = {

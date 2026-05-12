@@ -356,3 +356,42 @@ class TestOBV:
 
         assert obv is not None
         assert obv.tolist() == [0, 200, -100, -100, 400]
+
+
+class TestCurrentDrawdownIndexHandling:
+    """Regression tests for calculate_current_drawdown across index types."""
+
+    def test_current_drawdown_string_index_does_not_crash(self) -> None:
+        """A string-typed index (e.g., serialized CSV reload) must not raise TypeError."""
+        prices = pd.Series(
+            [100.0, 110.0, 95.0, 90.0],
+            index=["2024-01-01", "2024-01-02", "2024-01-03", "2024-01-04"],
+        )
+
+        dd, days_since = calculate_current_drawdown(prices)
+
+        # Drawdown is computable regardless of index type
+        assert dd is not None
+        assert dd < 0
+        # days_since may be None when the index isn't positionally numeric or comparable;
+        # the contract is that the function doesn't crash.
+        assert days_since is None or isinstance(days_since, int)
+
+    def test_current_drawdown_integer_index(self) -> None:
+        """Integer-indexed series should report days_since via positional difference."""
+        prices = pd.Series([100.0, 120.0, 110.0, 90.0])
+
+        dd, days_since = calculate_current_drawdown(prices)
+
+        assert dd is not None
+        assert dd < 0
+        assert days_since == 2  # peak at idx 1, last at idx 3 → 2 bars later
+
+    def test_current_drawdown_short_series(self) -> None:
+        """Series shorter than 2 must return (None, None)."""
+        prices = pd.Series([100.0])
+
+        dd, days_since = calculate_current_drawdown(prices)
+
+        assert dd is None
+        assert days_since is None

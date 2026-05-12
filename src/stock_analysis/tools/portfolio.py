@@ -170,7 +170,7 @@ async def _build_correlation_data(
             df = await fetch_history(params)
             df["date"] = pd.to_datetime(df["date"])
             close = pd.to_numeric(df["close"], errors="coerce")
-            returns = close.pct_change()
+            returns = close.pct_change(fill_method=None)
             returns.index = df["date"]
             returns_dict[position["symbol"]] = returns.dropna()
         except Exception:

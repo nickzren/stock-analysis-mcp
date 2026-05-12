@@ -2,7 +2,7 @@
 
 import operator
 from time import perf_counter
-from typing import Any, cast
+from typing import Any
 
 import pandas as pd
 
@@ -350,16 +350,25 @@ def _build_volume(volume: pd.Series) -> dict[str, Any]:
 def _build_bollinger(close: pd.Series, current_price: float | None) -> dict[str, Any]:
     """Build Bollinger Band values and rules."""
     bb = calculate_bollinger_bands(close)
-    current = cast(float, current_price)
+    above_upper: bool | None
+    below_lower: bool | None
+    if current_price is None or bb["upper"] is None:
+        above_upper = None
+    else:
+        above_upper = current_price > bb["upper"]
+    if current_price is None or bb["lower"] is None:
+        below_lower = None
+    else:
+        below_lower = current_price < bb["lower"]
     return {
         **bb,
         "rules": {
             "above_upper": {
-                "triggered": current > bb["upper"] if bb["upper"] is not None else None,
+                "triggered": above_upper,
                 "threshold": "price > upper_band",
             },
             "below_lower": {
-                "triggered": current < bb["lower"] if bb["lower"] is not None else None,
+                "triggered": below_lower,
                 "threshold": "price < lower_band",
             },
             "squeeze": {
@@ -390,16 +399,23 @@ def _build_fibonacci(
     current_price: float | None,
 ) -> dict[str, Any] | None:
     """Build Fibonacci retracement levels from the 52-week range."""
-    current = cast(float, current_price)
     w52_high = price_position.get("week_52_high")
     w52_low = price_position.get("week_52_low")
     if w52_high is None or w52_low is None or w52_high <= w52_low:
         return None
 
     fib_levels: dict[str, Any] = calculate_fibonacci_levels(w52_high, w52_low)
+    if current_price is None:
+        fib_levels["nearest_support"] = None
+        fib_levels["nearest_resistance"] = None
+        return fib_levels
     fib_values = sorted(fib_levels.values())
-    fib_levels["nearest_support"] = max((v for v in fib_values if v <= current), default=None)
-    fib_levels["nearest_resistance"] = min((v for v in fib_values if v >= current), default=None)
+    fib_levels["nearest_support"] = max(
+        (v for v in fib_values if v <= current_price), default=None
+    )
+    fib_levels["nearest_resistance"] = min(
+        (v for v in fib_values if v >= current_price), default=None
+    )
     return fib_levels
 
 
