@@ -206,7 +206,12 @@ def _build_recent_earnings(
 
         for date, row in earnings_dates.iterrows():
             if isinstance(date, pd.Timestamp):
-                earnings_date = date.to_pydatetime().replace(tzinfo=None)
+                # Convert to UTC first, then strip tzinfo so the comparison
+                # against naive-UTC `now` is on the same wall-clock basis.
+                if date.tzinfo is not None:
+                    earnings_date = date.tz_convert("UTC").to_pydatetime().replace(tzinfo=None)
+                else:
+                    earnings_date = date.to_pydatetime()
             else:
                 earnings_date = datetime.strptime(str(date)[:10], "%Y-%m-%d")
 

@@ -182,14 +182,19 @@ def _resolve_next_earnings_date(
                 earnings_date_source = "calendar_dataframe"
                 earnings_date_status = "available"
 
-    # Source 2: Fallback to earnings_dates (future dates)
+    # Source 2: Fallback to earnings_dates (future dates).
+    # Normalize all timestamps to naive-UTC so the "future" comparison is consistent
+    # regardless of yfinance's underlying timezone (typically America/New_York).
     if next_earnings_date is None:
         try:
             if earnings_dates is not None and len(earnings_dates) > 0:
-                now = datetime.now()
+                now = datetime.utcnow()
                 for date, _row in earnings_dates.iterrows():
                     if isinstance(date, pd.Timestamp):
-                        dt = date.to_pydatetime().replace(tzinfo=None)
+                        if date.tzinfo is not None:
+                            dt = date.tz_convert("UTC").to_pydatetime().replace(tzinfo=None)
+                        else:
+                            dt = date.to_pydatetime()
                     else:
                         try:
                             dt = datetime.strptime(str(date)[:10], "%Y-%m-%d")

@@ -2,6 +2,7 @@
 
 import json
 import logging
+import math
 import os
 from typing import Any
 
@@ -38,9 +39,27 @@ mcp = FastMCP(
 )
 
 
+def _sanitize_for_json(value: Any) -> Any:
+    """Recursively replace NaN/Infinity floats with None so strict JSON parsers accept the result."""
+    if isinstance(value, float):
+        if math.isnan(value) or math.isinf(value):
+            return None
+        return value
+    if isinstance(value, dict):
+        return {k: _sanitize_for_json(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_sanitize_for_json(v) for v in value]
+    return value
+
+
 def _json_response(result: dict[str, Any]) -> str:
-    """Serialize a tool result using the server's JSON response format."""
-    return json.dumps(result, indent=2, default=str)
+    """Serialize a tool result using the server's JSON response format.
+
+    Uses allow_nan=False after sanitizing NaN/Infinity to None so the output is
+    strict-JSON valid (non-Python parsers reject `NaN` and `Infinity` literals).
+    """
+    sanitized = _sanitize_for_json(result)
+    return json.dumps(sanitized, indent=2, default=str, allow_nan=False)
 
 
 # ============================================================================
