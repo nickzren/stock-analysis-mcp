@@ -30,6 +30,10 @@ _HIGHER_IS_BETTER = {
 
 _ALL_METRICS = _LOWER_IS_BETTER | _HIGHER_IS_BETTER
 
+# Metrics that are reported per-symbol but not directionally rankable.
+# These are wrapped with `rank: None` for schema consistency with ranked metrics.
+_UNRANKED_METRICS: set[str] = {"rsi"}
+
 # Map each comparable metric to (root, section, source_key) where:
 #   root: "fund" or "tech" (selects fund_data or tech_data)
 #   section: top-level section key inside that root
@@ -180,7 +184,12 @@ def _apply_metric_rankings(
     symbol_data: dict[str, dict[str, Any]],
     valid_symbols: list[str],
 ) -> dict[str, list[dict[str, Any]]]:
-    """Rank each metric and write rank payloads into symbol_data."""
+    """Rank each metric and write rank payloads into symbol_data.
+
+    Ranked metrics (`_ALL_METRICS`) get `{value, rank: int}`. Unranked metrics
+    (`_UNRANKED_METRICS`, e.g. RSI where neither high nor low is uniformly "better")
+    get `{value, rank: None}` for schema consistency with the ranked entries.
+    """
     metric_rankings: dict[str, list[dict[str, Any]]] = {}
 
     for metric in _ALL_METRICS:
@@ -197,6 +206,11 @@ def _apply_metric_rankings(
                 "rank": item["rank"],
             }
 
+    for metric in _UNRANKED_METRICS:
+        for sym in valid_symbols:
+            value = symbol_data[sym]["metrics"].get(metric)
+            symbol_data[sym]["metrics"][metric] = {"value": value, "rank": None}
+
     return metric_rankings
 
 
@@ -204,7 +218,11 @@ def _apply_composite_rankings(
     symbol_data: dict[str, dict[str, Any]],
     valid_symbols: list[str],
 ) -> None:
-    """Compute average metric rank and composite position for each symbol."""
+    """Compute average metric rank and composite position for each symbol.
+
+    Composite only considers ranked metrics; unranked metrics (with rank=None) are
+    excluded from the average.
+    """
     for sym in valid_symbols:
         ranks = [
             symbol_data[sym]["metrics"][metric]["rank"]
