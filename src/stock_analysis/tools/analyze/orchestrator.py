@@ -10,6 +10,7 @@ from stock_analysis.tools.analyze.action_zones import (
     apply_dip_gates_to_action_zones,
     build_action_zones,
 )
+from stock_analysis.tools.analyze.constants import CRITICAL_ANALYZE_TOOLS
 from stock_analysis.tools.analyze.decision_card import build_decision_card
 from stock_analysis.tools.analyze.decision_context import (
     build_decision_context,
@@ -932,8 +933,7 @@ async def analyze_stock(
 
     # Top-level error signaling for invalid/unanalyzable symbols.
     # Keep partial payload for diagnostics, but mark as error for callers.
-    critical_tools = {"stock_summary", "technicals", "fundamentals_snapshot", "risk_metrics"}
-    critical_failures = [f for f in tool_failures if f.get("tool") in critical_tools]
+    critical_failures = [f for f in tool_failures if f.get("tool") in CRITICAL_ANALYZE_TOOLS]
     critical_failed_tools = {f.get("tool") for f in critical_failures}
 
     has_core_price = summary.get("current_price") is not None

@@ -14,6 +14,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any
 
+from stock_analysis.tools.analyze.constants import CRITICAL_ANALYZE_TOOLS
+
 # Liquidity threshold below which we block new buys for small accounts.
 # Sized so that a $5K position is well under 1% of typical daily volume.
 _WEAK_LIQUIDITY_DOLLARS_PER_DAY = 1_000_000.0
@@ -48,9 +50,8 @@ def _compute_hard_gates(
     fund_status = data_quality.get("fundamentals_status")
     missing_critical = data_quality.get("missing_critical") or []
     tool_failures = data_quality.get("tool_failures") or []
-    critical_tools = {"stock_summary", "technicals", "fundamentals_snapshot", "risk_metrics"}
     critical_tool_failed = any(
-        tf.get("tool") in critical_tools for tf in tool_failures if isinstance(tf, dict)
+        tf.get("tool") in CRITICAL_ANALYZE_TOOLS for tf in tool_failures if isinstance(tf, dict)
     )
     data_quality_critical = (
         fund_status == "missing"
@@ -95,7 +96,7 @@ def _compute_hard_gates(
             failed_names = sorted({
                 str(tf.get("tool"))
                 for tf in tool_failures
-                if isinstance(tf, dict) and tf.get("tool") in critical_tools
+                if isinstance(tf, dict) and tf.get("tool") in CRITICAL_ANALYZE_TOOLS
             })
             reasons.append(f"critical_tool_failed={','.join(failed_names)}")
         blocking.append({
