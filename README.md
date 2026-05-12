@@ -11,10 +11,9 @@ Informational only — not financial advice.
 
 ## Philosophy
 
-**One command, complete picture.** Just say "Analyze AAPL" and get a comprehensive,
-human-readable report with a consistent JSON schema, plus default `core`,
-`balanced`, and `speculative` decision modes so non-technical users can act
-based on style without changing any code.
+**One command, complete picture.** Just say "Analyze AAPL" and get a compact,
+human-readable report with a consistent JSON schema and a top-level decision card
+so non-technical users can act without changing any code.
 
 ## Architecture
 
@@ -85,7 +84,7 @@ Color legend: `blue=client`, `green=entry`, `orange=engine`, `purple=data`, `red
 
 Node map: `S=src/stock_analysis/server.py`, `O=src/stock_analysis/tools/analyze/orchestrator.py`, `D=src/stock_analysis/data/`.
 
-Output shape details are documented in `Usage -> Full Analysis (Recommended)`.
+Output shape details are documented in `Usage -> Stock Analysis`.
 
 ### Request Lifecycle
 
