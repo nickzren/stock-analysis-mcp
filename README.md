@@ -130,7 +130,7 @@ codex mcp add stock-analysis -- uvx --from git+https://github.com/nickzren/stock
 
 ## Usage
 
-### Full Analysis (Recommended)
+### Stock Analysis
 
 The primary way to use this server—just say:
 
@@ -144,23 +144,16 @@ If you want dollar sizing, you can still pass account context:
 analyze("ASTS", account_size=3000)
 ```
 
-This returns a comprehensive JSON report covering:
+By default, `analyze` returns the `standard` detail level: a compact investor report covering:
 - **Decision card** — compact "what do I do now?" block with `action_now`, hard pre-buy gates (earnings blackout, falling knife, missing runway, data-quality critical, weak liquidity, liquidity missing), starter/full sizing in pct/dollars/whole+fractional shares, entry/stop levels, `buy_only_if` / `add_only_if` / `reduce_if` / `monitor` conditions, and `next_review` date. `hold_or_add` is preserved as its own action so existing-holder vs. new-buyer guidance stays distinct.
 - **Executive summary** — materiality-first narrative (leads with what matters most)
-- **Dislocation framework** — plain-English “broken price vs broken business” view: drawdown setup, business integrity, balance-sheet safety, thesis integrity, mismatch verdict, and what to do now
 - **Section summaries** — 1–2 sentence takeaways per major section
-- **Verdict** — score, tilt (bullish/neutral/bearish), confidence, horizon fit
-- **Policy action** — mid/long-term decision framing with position sizing ranges (informational)
-- **Decision modes** — separate `core`, `balanced`, and `speculative` decision blocks from the same underlying analysis
-- **Action zones** — ATR-based price levels (accumulate/reduce/stop)
-- **Dip assessment** — oversold metrics, support levels, bounce potential, entry timing
-- **Decision context** — what would change the verdict (bullish_if/bearish_if)
-- **Catalyst intelligence** — structured bullish/bearish news catalysts (guidance, dilution, approvals, contracts, etc.)
+- **Verdict** — score, tilt, confidence, components, pros, and cons
+- **Action zones** — compact ATR/valuation-based levels and sizing context
+- **Catalyst intelligence** — structured bullish/bearish news catalyst tags
 - **Analyst coverage** — consensus rating + targets
-- **Ownership & short interest** — insiders/institutions/float, days-to-cover
-- **Governance** — audit/board/comp/rights risk scores
-- **Company profile** — description, industry, employees, website
-- Technical signals, fundamental metrics, risk regime, news sentiment, events
+- **Ownership, short interest, sector comparison, and relative performance**
+- Compact fundamentals, risk, events, and news summaries
 
 The output follows a consistent schema, making it easy to compare multiple stocks or track changes over time.
 For invalid/delisted symbols, `analyze` returns a top-level error (`error=true`) with diagnostics in `data_quality.tool_failures`.
@@ -168,13 +161,14 @@ For detailed rendering guidance, read the MCP resource `stock-analysis://guides/
 
 ### Optional Inputs
 
-`analyze` works without any extra parameters. Optional inputs only refine sizing:
+`analyze` works without any extra parameters. Optional inputs refine sizing and response size:
 
 - `account_size`: portfolio/account size used for dollar sizing output
 - `risk_per_trade_pct`: percent of account you are willing to lose if a stop is hit
 - `max_position_pct`: hard cap for a single position
+- `detail`: `standard` (default), `decision` for the smallest action surface, or `full` for the previous complete audit/debug payload
 
-If `account_size` is omitted, the analysis still returns the default `core` / `balanced` / `speculative` modes, but keeps sizing percent-based.
+If `account_size` is omitted, sizing remains percent-based. If a caller depends on fields omitted from `standard` (for example `decision_context`, `dip_assessment`, `decision_modes`, or full `company_profile`), call `analyze(..., detail="full")`.
 
 ## Available Tools
 
@@ -182,7 +176,7 @@ If `account_size` is omitted, the analysis still returns the default `core` / `b
 
 | Tool | Description |
 |------|-------------|
-| `analyze` | Comprehensive single-stock analysis with default Core/Balanced/Speculative modes, optional dollar sizing, human-readable summaries, and company-name resolution for common inputs |
+| `analyze` | Single-stock analysis with token-efficient `standard` output by default, optional `decision`/`full` detail levels, dollar sizing, and company-name resolution |
 
 ### Comparative Analysis
 

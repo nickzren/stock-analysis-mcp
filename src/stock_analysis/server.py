@@ -29,6 +29,7 @@ from stock_analysis.tools import (
     technicals,
     what_changed,
 )
+from stock_analysis.tools.analyze.projection import normalize_analyze_detail, project_analyze_result
 from stock_analysis.utils.provenance import build_error_response
 
 log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
@@ -214,6 +215,7 @@ async def analyze(
     account_size: float | None = None,
     risk_per_trade_pct: float | None = None,
     max_position_pct: float | None = None,
+    detail: str = "standard",
 ) -> str:
     """
     Comprehensive single-stock analysis with optional sizing inputs.
@@ -224,12 +226,14 @@ async def analyze(
         account_size: Optional account size for dollar sizing
         risk_per_trade_pct: Optional risk budget used for sizing
         max_position_pct: Optional max single-position cap
+        detail: Response detail level: standard (default), decision, or full
 
     Returns:
         JSON analysis payload. For detailed presentation guidance, read the MCP
         resource `stock-analysis://guides/analyze-rendering`.
     """
     try:
+        normalized_detail = normalize_analyze_detail(detail)
         result = await analyze_stock(
             symbol=symbol,
             profile=profile,
@@ -237,6 +241,7 @@ async def analyze(
             risk_per_trade_pct=risk_per_trade_pct,
             max_position_pct=max_position_pct,
         )
+        result = project_analyze_result(result, normalized_detail)
     except ValueError as e:
         result = build_error_response(
             error_type="invalid_parameters",
