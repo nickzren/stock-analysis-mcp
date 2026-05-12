@@ -230,20 +230,29 @@ def generate_signals(
     bearish: list[str] = []
     neutral: list[str] = []
 
+    _append_technical_signals(technicals, bullish, bearish, neutral)
+    _append_fundamental_signals(fundamentals, bullish, bearish)
+    _append_risk_signals(risk, bearish, neutral)
+
+    return {
+        "bullish": bullish,
+        "bearish": bearish,
+        "neutral": neutral,
+    }
+
+
+def _append_technical_signals(
+    technicals: dict[str, Any],
+    bullish: list[str],
+    bearish: list[str],
+    neutral: list[str],
+) -> None:
+    """Append technical-analysis signal labels in historical order."""
     ma = technicals.get("moving_averages", {})
     rsi_data = technicals.get("rsi", {})
     macd_data = technicals.get("macd", {})
     returns = technicals.get("returns", {})
 
-    growth = fundamentals.get("growth", {})
-    profit = fundamentals.get("profitability", {})
-    health = fundamentals.get("financial_health", {})
-    cf = fundamentals.get("cash_flow", {})
-
-    vol = risk.get("volatility", {})
-    beta_data = risk.get("beta", {})
-
-    # Technical signals
     if get_rule_triggered(ma, "above_sma200") is True:
         bullish.append("price_above_sma200")
     elif get_rule_triggered(ma, "above_sma200") is False:
@@ -274,19 +283,28 @@ def generate_signals(
         else:
             neutral.append("moderate_3m_momentum")
 
-    # Growth signals
+
+def _append_fundamental_signals(
+    fundamentals: dict[str, Any],
+    bullish: list[str],
+    bearish: list[str],
+) -> None:
+    """Append fundamental signal labels in historical order."""
+    growth = fundamentals.get("growth", {})
+    profit = fundamentals.get("profitability", {})
+    health = fundamentals.get("financial_health", {})
+    cf = fundamentals.get("cash_flow", {})
+
     if get_rule_triggered(growth, "high_growth") is True:
         bullish.append("high_revenue_growth")
     elif get_rule_triggered(growth, "positive_revenue_growth") is False:
         bearish.append("negative_revenue_growth")
 
-    # Value/health signals
     if get_rule_triggered(health, "net_cash_positive") is True:
         bullish.append("net_cash_positive")
     if get_rule_triggered(health, "low_debt") is True:
         bullish.append("low_debt")
 
-    # Profitability signals
     if get_rule_triggered(profit, "profitable") is True:
         bullish.append("profitable")
     elif get_rule_triggered(profit, "profitable") is False:
@@ -297,7 +315,16 @@ def generate_signals(
     elif get_rule_triggered(cf, "positive_fcf") is False:
         bearish.append("negative_free_cash_flow")
 
-    # Risk signals
+
+def _append_risk_signals(
+    risk: dict[str, Any],
+    bearish: list[str],
+    neutral: list[str],
+) -> None:
+    """Append risk signal labels in historical order."""
+    vol = risk.get("volatility", {})
+    beta_data = risk.get("beta", {})
+
     annualized_vol = vol.get("annualized")
     if annualized_vol is not None:
         if annualized_vol >= VOLATILITY_REGIME_THRESHOLDS["high"]:
@@ -317,9 +344,3 @@ def generate_signals(
             neutral.append("very_high_beta")
         elif beta_val < 0.5:
             neutral.append("low_beta_defensive")
-
-    return {
-        "bullish": bullish,
-        "bearish": bearish,
-        "neutral": neutral,
-    }

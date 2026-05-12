@@ -98,7 +98,15 @@ async def _check_symbol(symbol: str) -> dict[str, Any]:
         "quality_score": 0.0,
     }
 
-    # Check price data
+    await _check_price_data(symbol, report)
+    await _check_fundamentals_data(symbol, report)
+    report["quality_score"] = _quality_score(report)
+
+    return report
+
+
+async def _check_price_data(symbol: str, report: dict[str, Any]) -> None:
+    """Update report with price availability and staleness."""
     try:
         params = FetchParams(
             symbol=symbol,
@@ -113,48 +121,59 @@ async def _check_symbol(symbol: str) -> dict[str, Any]:
     except Exception:
         report["missing_fields"].append("price_data")
 
-    # Check fundamentals
+
+async def _check_fundamentals_data(symbol: str, report: dict[str, Any]) -> None:
+    """Update report with fundamentals and events availability."""
     try:
         info = await fetch_info(symbol)
-        if info:
-            report["availability"]["fundamentals"] = True
-            report["valid"] = True
+        if not info:
+            return
 
-            # Check for key fields
-            key_fields = [
-                "regularMarketPrice",
-                "marketCap",
-                "trailingPE",
-                "profitMargins",
-                "revenueGrowth",
-            ]
-            for field in key_fields:
-                if info.get(field) is None:
-                    report["missing_fields"].append(field)
-
-            # Get fiscal period info
-            fiscal_year_end = info.get("lastFiscalYearEnd")
-            if fiscal_year_end:
-                try:
-                    fiscal_date = datetime.fromtimestamp(fiscal_year_end)
-                    report["staleness"]["fundamentals_fiscal_end"] = fiscal_date.strftime(
-                        "%Y-%m-%d"
-                    )
-                except (ValueError, TypeError, OSError):
-                    pass
-
-            # Check events availability
-            earnings_date = info.get("earningsDate")
-            if earnings_date:
-                report["availability"]["events"] = True
-                report["staleness"]["events_last_update"] = datetime.now(UTC).strftime(
-                    "%Y-%m-%d"
-                )
+        report["availability"]["fundamentals"] = True
+        report["valid"] = True
+        _record_missing_key_fields(info, report)
+        _record_fiscal_staleness(info, report)
+        _record_events_staleness(info, report)
     except Exception:
         report["missing_fields"].append("fundamentals_data")
 
-    # Calculate quality score
-    # Weight: price (30%), fundamentals (40%), events (10%), missing fields penalty (20%)
+
+def _record_missing_key_fields(info: dict[str, Any], report: dict[str, Any]) -> None:
+    """Record missing fields used for quality scoring."""
+    key_fields = [
+        "regularMarketPrice",
+        "marketCap",
+        "trailingPE",
+        "profitMargins",
+        "revenueGrowth",
+    ]
+    for field in key_fields:
+        if info.get(field) is None:
+            report["missing_fields"].append(field)
+
+
+def _record_fiscal_staleness(info: dict[str, Any], report: dict[str, Any]) -> None:
+    """Record fiscal year end date when available."""
+    fiscal_year_end = info.get("lastFiscalYearEnd")
+    if not fiscal_year_end:
+        return
+    try:
+        fiscal_date = datetime.fromtimestamp(fiscal_year_end)
+        report["staleness"]["fundamentals_fiscal_end"] = fiscal_date.strftime("%Y-%m-%d")
+    except (ValueError, TypeError, OSError):
+        pass
+
+
+def _record_events_staleness(info: dict[str, Any], report: dict[str, Any]) -> None:
+    """Record events availability from earnings date presence."""
+    if not info.get("earningsDate"):
+        return
+    report["availability"]["events"] = True
+    report["staleness"]["events_last_update"] = datetime.now(UTC).strftime("%Y-%m-%d")
+
+
+def _quality_score(report: dict[str, Any]) -> float:
+    """Calculate the weighted quality score."""
     score = 0.0
     if report["availability"]["price"]:
         score += 0.30
@@ -166,7 +185,4 @@ async def _check_symbol(symbol: str) -> dict[str, Any]:
     # Penalty for missing fields (up to 20%)
     missing_penalty = min(len(report["missing_fields"]) * 0.04, 0.20)
     score = max(0, score + 0.20 - missing_penalty)
-
-    report["quality_score"] = round(score, 2)
-
-    return report
+    return round(score, 2)
