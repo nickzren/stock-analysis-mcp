@@ -164,6 +164,7 @@ This returns a comprehensive JSON report covering:
 
 The output follows a consistent schema, making it easy to compare multiple stocks or track changes over time.
 For invalid/delisted symbols, `analyze` returns a top-level error (`error=true`) with diagnostics in `data_quality.tool_failures`.
+For detailed rendering guidance, read the MCP resource `stock-analysis://guides/analyze-rendering`.
 
 ### Optional Inputs
 

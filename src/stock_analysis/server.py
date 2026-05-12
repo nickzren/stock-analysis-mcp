@@ -11,6 +11,7 @@ from fastmcp import FastMCP
 from stock_analysis import SCHEMA_VERSION, SERVER_VERSION
 from stock_analysis.data.cache import price_cache
 from stock_analysis.prompts.templates import get_prompt
+from stock_analysis.resources.analyze_guide import read_analyze_rendering_guide
 from stock_analysis.tools import (
     analyze_position,
     analyze_stock,
@@ -211,259 +212,18 @@ async def analyze(
     max_position_pct: float | None = None,
 ) -> str:
     """
-    Comprehensive stock analysis with default decision modes and optional sizing inputs.
-
-    Runs technicals, fundamentals, risk metrics, events, and news analysis
-    in parallel. Returns verdict with decomposed scores, horizon fit assessment,
-    valuation-aware action zones, multi-factor decision context, and separate
-    Core / Balanced / Speculative decision blocks.
-
-    IMPORTANT RENDERING INSTRUCTIONS - Present analysis in this order:
-
-    1. HEADER: Symbol, price, market cap, sector
-
-    2. EXECUTIVE SUMMARY (from executive_summary field):
-       - Render VERBATIM as a blockquote or italicized paragraph
-       - This is the TL;DR - a 2-4 sentence narrative summary
-       - Do NOT paraphrase or rewrite - use the exact text from the field
-       - If FCF is mentioned, it must include value+period via fundamentals_summary.cash_flow.free_cash_flow_label
-       - Example: "Moderna shows strong technicals (golden cross, above SMAs, +40% in 1 month)
-         but faces severe fundamental headwinds..."
-
-    3. DISLOCATION FRAMEWORK (from dislocation_framework):
-       - Render this as six plain-English answers:
-         1. Is it down enough?
-         2. Is the business still good?
-         3. Is the balance sheet safe?
-         4. Is the long-term thesis intact?
-         5. Has price broken more than business?
-         6. What should I do now?
-       - Use:
-         - `setup.status`, `setup.drawdown_label`, `setup.summary`
-         - `business_integrity.status`, `business_integrity.summary`, `business_integrity.checks`
-         - `balance_sheet_safety.status`, `balance_sheet_safety.summary`
-         - `thesis_integrity.status`, `thesis_integrity.hold_thesis`, `thesis_integrity.what_must_remain_true`
-         - `mismatch_verdict.status`, `mismatch_verdict.summary`
-         - `action.core`, `action.balanced`, `action.speculative`
-         - If `action.can_start_now` is true, say a small starter is acceptable now and render `action.add_only_if`
-         - Otherwise render `action.buy_only_if`
-         - Always render `action.sell_without_attachment_if`
-       - This section should explicitly answer the "broken price vs broken business" question before the rest of the report.
-
-    4. VERDICT SUMMARY:
-       - Tilt (bullish/neutral/bearish) + confidence level
-       - Decomposed scores: setup (technicals), business_quality, risk regime
-       - Horizon fit: mid_term + long_term assessments with reasons
-
-    5. HORIZON DRIVERS (from decision_context.horizon_drivers):
-       - Render ONLY if non-empty
-       - These are policy gates (not score-based) that affect horizon fit
-       - Format: "[long_term] gate: reason" or "[mid_term] gate: reason"
-       - Example: "[long_term] burn_metrics_missing: unprofitable with runway unknown"
-       - Example: "[mid_term] extreme_risk: volatility > 60%"
-
-    6. SCORE MATH (always render with CONSISTENT 6-decimal precision):
-       - Use score_display.formula for pre-formatted output
-       - Use score_display.component_breakdown for audit trail
-       - Example: "Score: 0.050000 = 0.090909 × 0.550000"
-       - Example breakdown: "technicals=0.990×0.545455=0.540000 + risk=-0.990×0.454545=-0.450000"
-       - INVARIANT: sum(score_delta) == score_raw (use same precision everywhere)
-       - 6 decimals avoids rounding artifacts that make sums appear wrong
-       - ALWAYS show component_exclusions when coverage < 1.0:
-         ```
-         Excluded components:
-           - fundamentals: {component_exclusions.fundamentals}
-         ```
-         Possible exclusion reasons:
-           - fundamentals_data_unavailable: no fundamentals data fetched
-           - fundamentals_not_meaningful_unprofitable: data present but company unprofitable
-           - fundamentals_key_inputs_missing: coverage=true but margin/EPS/PE all null
-           - no_fundamental_signals_fired: data available but no thresholds triggered
-
-    7. CONFIDENCE PATH (from verdict.confidence_path):
-       - Current blockers: list what's preventing higher confidence
-       - Upgrade if: list only UNMET conditions (omit any already satisfied)
-       - Downgrade if: what would decrease confidence (guidance cut, etc.)
-
-    8. TOP DRIVERS (from decision_context.top_triggers):
-       - Show each trigger with category, direction, reason, and score_delta
-       - score_delta = actual contribution to final score (not just weight)
-       - BALANCE RULE: If tilt=neutral, show top 2 bearish + top 1 bullish
-       - If tilt=bullish, still show top bearish driver for balance
-       - Include next_update dates for fundamental triggers
-       - DEDUPE: Only show one trigger per category (don't show both risk_regime_extreme AND very_high_volatility)
-
-    9. SIGNALS: Bullish (pros) and Bearish (cons) lists
-
-    10. KEY METRICS TABLE with audit fields:
-       - P/E or P/S: show value + source (e.g., "6.2x (computed from mcap/rev)")
-       - FCF: use fundamentals_summary.cash_flow.free_cash_flow_label (omit if unavailable)
-       - Cash runway: show quarters + basis (e.g., "9.1q (min_fcf_ocf)")
-       - Quarterly burn: FCF $X, OCF $Y (from burn_metrics)
-       - Beta, volatility, drawdown
-
-    11. ACTION ZONES:
-        - Current zone + valuation_assessment.gate
-        - Price levels with distances (use action_zones.distance_labels; fallback to price_vs_levels)
-        - For stop loss, prefer action_zones.level_vs_current_labels.stop_loss ("X% below current")
-        - For unprofitable companies, show P/S-based valuation gate
-        - If valuation_gate="unknown", add warning: "(valuation confidence reduced)"
-
-    12. DIP ASSESSMENT (from dip_assessment) - FOR BUY-THE-DIP INVESTORS:
-        This section helps dip buyers assess entry timing. Render as follows:
-
-        a) DIP CLASSIFICATION:
-           ```
-           Dip Type: {dip_classification.type}
-           {dip_classification.explanation}
-           Signals: {dip_classification.signals}
-           ```
-           Types: falling_knife (avoid), extended_decline (caution), healthy_pullback (favorable),
-                  mixed_signals (uncertain), undetermined
-
-        b) DIP DEPTH:
-           ```
-           Severity: {dip_depth.severity} (basis: {dip_depth.severity_basis})
-           From 52W High: {dip_depth.from_52w_high}
-           From 6M High: {dip_depth.from_6m_high}
-           From 3M High: {dip_depth.from_3m_high}
-           From 52W Low: {dip_depth.from_52w_low}
-           Days Since 52W High: {dip_depth.days_since_52w_high} (52W high set today if dip_depth.high_set_today)
-           Days Since 52W Low: {dip_depth.days_since_52w_low} (52W low set today if dip_depth.low_set_today)
-           ```
-           Severity levels: none (>=-2%), shallow (>-10%), moderate (>-25%), deep (>-40%), extreme (<=-40%)
-           Render percentages as negative values (e.g., -45.2% from high).
-           If dip_depth.low_set_today is true, add: "A new 52-week low was set today (intraday)."
-
-        c) OVERSOLD METRICS:
-           ```
-           Oversold Composite: {oversold_metrics.oversold_composite.level} (score: {oversold_metrics.oversold_composite.score})
-           Components: momentum={oversold_metrics.oversold_composite.components.momentum},
-                       trend_deviation={oversold_metrics.oversold_composite.components.trend_deviation},
-                       range_position={oversold_metrics.oversold_composite.components.range_position}
-           Legacy Oversold: {oversold_metrics.level} (score: {oversold_metrics.score})
-           RSI: {oversold_metrics.rsi_value} ({oversold_metrics.rsi_status})
-           Distance from SMA20: {oversold_metrics.distance_from_sma20}
-           Distance from SMA50: {oversold_metrics.distance_from_sma50}
-           Distance from SMA200: {oversold_metrics.distance_from_sma200}
-           Distance from SMA50 (ATR): {oversold_metrics.distance_from_sma50_atr}
-           1W Return Z-Score: {oversold_metrics.return_1w_zscore}
-           SMA200 Slope: {oversold_metrics.sma200_slope_pct_per_day}
-           Position in 52W Range: {oversold_metrics.position_in_52w_range}
-           ```
-
-        d) SUPPORT LEVELS (render as table):
-           | Level | Type | Distance | Strength | Status |
-           Show closest 4 support levels
-
-        e) VOLUME ANALYSIS:
-           ```
-           Volume Signal: {volume_analysis.signal}
-           Volume Ratio: {volume_analysis.ratio}x average
-           {volume_analysis.interpretation}
-           ```
-           Signals: low_conviction (<0.5x), below_average (0.5-0.9x), normal (0.9-1.5x),
-                    above_average (1.5-2x), elevated/potential_capitulation/accumulation (>2x)
-
-        f) BOUNCE POTENTIAL:
-           ```
-           Rating: {bounce_potential.rating} (score: {bounce_potential.score})
-           Factors: {bounce_potential.factors}
-           ```
-
-        g) ENTRY TIMING:
-           - Entry Signals: list each with signal, action, rationale
-           - Wait For: list conditions that would improve entry
-
-        h) DIP CONFIDENCE:
-           ```
-           Confidence: {dip_confidence.level} (score: {dip_confidence.score})
-           Missing: {dip_confidence.missing}
-           ```
-           Always render DIP CONFIDENCE. If Missing is empty, render "Missing: none".
-
-        i) OVERALL ASSESSMENT (render prominently):
-           ```
-           Scope: {assessment.scope} (render ONLY if present)
-           Dip Quality: {assessment.dip_quality}
-           Recommendation: {assessment.recommendation}
-           {assessment.rationale}
-           ```
-           Recommendations: strong_buy_the_dip, buy_the_dip, cautious_accumulation,
-                           small_speculative_position, do_not_catch_falling_knife, wait_for_better_setup,
-                           starter_only_wait_for_stabilization
-           If `assessment.add_only_if` is non-empty, render: `Add only if: ...`
-
-    13. POSITION SIZING (from action_zones.position_sizing_range):
-        - Show range as percentage AND dollars (e.g., "0.5%-3% = $250-$1,500")
-        - Show shares range at current price (e.g., "~7-42 shares @ $35.66")
-        - Show stop-implied max size if stop distance available
-
-    14. DECISION CONTEXT - Render BY CATEGORY with EXPLICIT status fields:
-        Render each category as a separate block (not combined) for scanability.
-
-        a) Fundamentals (include business_quality_evidence for transparency):
-           ```
-           Fundamentals: {business_quality}
-             Status: {status} ({status_explanation if present})
-             Evidence: {decomposed.business_quality_evidence}
-             Bullish if: {bullish_if[0].condition} ({bullish_if[0].current})
-             Bullish if: {bullish_if[1].condition} ({bullish_if[1].current})
-             Bearish if: {bearish_if[0].condition} ({bearish_if[0].current})
-             Next update: {next_update}
-           ```
-           For unprofitable companies, always show 2-3 checkpoints with current values inline.
-
-        b) Valuation (show BOTH P/E and P/S status explicitly):
-           ```
-           Valuation: Gate = {current_gate}
-             P/E: {pe_status} ({pe_explanation if present})
-             P/S: {ps_status} ({ps_explanation if present})
-             Bullish if: {bullish_if}
-             Bearish if: {bearish_if}
-           ```
-           INVARIANT: If gate="unknown", ps_status MUST be "unavailable"
-
-        c) Risk:
-           ```
-           Risk: {current_regime}
-             Bullish if: {bullish_if}
-             Bearish if: {bearish_if}
-           ```
-
-        d) Technicals:
-           ```
-           Technicals:
-             Bullish if: {bullish_if}
-             Bearish if: {bearish_if}
-           ```
-
-        e) News:
-           ```
-           News: {current_sentiment} (confidence: {sentiment_confidence})
-             Headline triggers: {headline_triggers}
-           ```
-
-        f) Next catalyst: earnings date with days countdown
-
-    15. MARKET CONTEXT (from market_context):
-        - SPY trend: above/below 200d SMA
-        - Provenance: "SPY as_of={as_of} source={source} adjustment={price_adjustment}"
-        - If sanity_warnings is non-empty, show: "Warnings: {sanity_warnings}"
-
-    16. NEWS: Recent headlines if available
-
-    For UNPROFITABLE companies specifically:
-    - Show P/S instead of P/E in metrics
-    - Show burn_metrics: liquidity, runway, burn rates, dilution risk
-    - If burn_metrics.status != "available", show status_reason
-    - Emphasize path-to-profitability triggers in fundamentals
+    Comprehensive single-stock analysis with optional sizing inputs.
 
     Args:
         symbol: Stock ticker symbol or company name query
+        profile: Investor profile preset (core, balanced, or speculative)
+        account_size: Optional account size for dollar sizing
+        risk_per_trade_pct: Optional risk budget used for sizing
+        max_position_pct: Optional max single-position cap
 
     Returns:
-        JSON with complete analysis - render ALL sections per instructions above
+        JSON analysis payload. For detailed presentation guidance, read the MCP
+        resource `stock-analysis://guides/analyze-rendering`.
     """
     try:
         result = await analyze_stock(
@@ -664,6 +424,18 @@ def get_cached_price_data(symbol: str, period: str, interval: str, adjusted: str
         return csv_text
     except Exception as e:
         return f"Error: {e}"
+
+
+@mcp.resource("stock-analysis://guides/analyze-rendering")
+def get_analyze_rendering_guide() -> str:
+    """
+    Get the detailed rendering guide for presenting `analyze` output.
+
+    This guide is intentionally exposed as an on-demand resource instead of
+    being embedded in the `analyze` tool description.
+    """
+    guide, _mime_type = read_analyze_rendering_guide()
+    return guide
 
 
 # ============================================================================

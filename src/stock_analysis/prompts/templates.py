@@ -62,6 +62,9 @@ If the user gives an account size, include it:
 
 Do not manually reconstruct the report from secondary tools unless `analyze` fails.
 
+If you need detailed presentation rules, read:
+`stock-analysis://guides/analyze-rendering`
+
 When you present the result, lead with:
 1. `executive_summary`
 2. `dislocation_framework`
