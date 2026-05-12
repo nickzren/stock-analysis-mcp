@@ -928,7 +928,13 @@ def _fcf_coverage_score(
 
 
 def _analyze_dividend_history(ticker: Any, info: dict[str, Any]) -> dict[str, Any] | None:
-    """Analyze dividend payment history, streak, growth, and safety."""
+    """Analyze dividend payment history, streak, growth, and safety.
+
+    The streak and CAGR calculations intentionally skip the current calendar year
+    when it appears partial (i.e., the most recent payment is recent relative to
+    today). Otherwise mid-year totals — which include only the dividends paid so
+    far — would falsely break a multi-year increase streak.
+    """
     try:
         dividends = ticker.dividends
     except Exception as e:
@@ -950,30 +956,42 @@ def _analyze_dividend_history(ticker: Any, info: dict[str, Any]) -> dict[str, An
         return None
 
     sorted_years = sorted(annual.keys(), reverse=True)
+    current_year = datetime.now().year
 
-    # Last 10 years of annual dividends
-    annual_dividends = [
-        {"year": y, "total": safe_round(annual[y], 4)}
-        for y in sorted_years[:10]
-    ]
+    # Determine whether the latest year is a partial (in-progress) calendar year.
+    # We treat it as partial only when the latest year equals the current calendar
+    # year. Companies whose last payment was in a prior year are not partial.
+    latest_year = sorted_years[0]
+    latest_year_is_partial = latest_year == current_year
 
-    # Consecutive years of increases (dividend streak)
+    # "Complete" years are those safe to use for streak/CAGR comparisons.
+    complete_years = [y for y in sorted_years if not (y == current_year and latest_year_is_partial)]
+
+    # Last 10 years of annual dividends — include the partial year with a flag.
+    annual_dividends: list[dict[str, Any]] = []
+    for y in sorted_years[:10]:
+        entry: dict[str, Any] = {"year": y, "total": safe_round(annual[y], 4)}
+        if y == current_year and latest_year_is_partial:
+            entry["partial"] = True
+        annual_dividends.append(entry)
+
+    # Consecutive years of increases (dividend streak) — use complete years only.
     streak = 0
-    for i in range(len(sorted_years) - 1):
-        if annual[sorted_years[i]] > annual[sorted_years[i + 1]]:
+    for i in range(len(complete_years) - 1):
+        if annual[complete_years[i]] > annual[complete_years[i + 1]]:
             streak += 1
         else:
             break
 
-    # CAGR calculations
+    # CAGR calculations — use complete years only.
     def _cagr(years_back: int) -> float | None:
-        if len(sorted_years) <= years_back:
+        if len(complete_years) <= years_back:
             return None
-        latest_year = sorted_years[0]
-        past_year = sorted_years[years_back]
-        latest_val = annual[latest_year]
+        latest_y = complete_years[0]
+        past_year = complete_years[years_back]
+        latest_val = annual[latest_y]
         past_val = annual[past_year]
-        actual_years = latest_year - past_year
+        actual_years = latest_y - past_year
         if past_val <= 0 or latest_val <= 0 or actual_years <= 0:
             return None
         return safe_round((latest_val / past_val) ** (1 / actual_years) - 1, 4)
