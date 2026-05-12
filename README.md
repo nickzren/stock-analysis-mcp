@@ -196,7 +196,7 @@ If `account_size` is omitted, the analysis still returns the default `core` / `b
 | `search_symbol` | Search for stock symbols by company name or ticker |
 | `get_stock_summary` | Basic stock info (name, sector, price, market cap) |
 | `get_price_history` | Historical price data with summary and resource URI |
-| `get_technicals` | Technical indicators (SMA, EMA, RSI, MACD, Bollinger, Fibonacci, OBV) |
+| `get_technicals` | Technical indicators (SMA, EMA, RSI, MACD, ATR, Bollinger, Fibonacci, OBV) |
 | `get_fundamentals` | Financial metrics, valuation history, analyst estimates, dividends |
 | `get_events` | Earnings dates, dividends, splits |
 | `get_news` | Recent news headlines, earnings surprise data, and structured catalyst tags |
@@ -220,10 +220,10 @@ If `account_size` is omitted, the analysis still returns the default `core` / `b
 uv pip install -e ".[dev]"
 
 # Run tests
-uv run python -m pytest tests/ -v
+uv run pytest
 
 # Linting
-ruff check src/ tests/
+uv run ruff check src tests
 ```
 
 ## Disclaimer
