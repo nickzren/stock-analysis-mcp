@@ -325,14 +325,16 @@ def build_decision_card(
     """Build the compact small-account decision card.
 
     Schema:
-        action_now: buy | starter | hold | hold_or_reduce | wait | wait_for_data |
-                    avoid | insufficient_data
+        action_now: buy | starter | hold | hold_or_add | hold_or_reduce | wait |
+                    wait_for_data | avoid | insufficient_data
         rationale: short bulleted reasons
-        hard_gates: blocking conditions that override bullish recommendations
+        hard_gates: blocking conditions that override new-money recommendations.
+                    Checks: earnings_blackout, data_quality_critical, falling_knife,
+                    missing_runway, weak_liquidity, liquidity_missing.
         sizing: starter/full pct + dollars + whole/fractional shares
         entry: current zone, price, buy band
         exit: stop / invalidation level
-        conditions: add_only_if / do_not_buy_if / reduce_if / monitor
+        conditions: buy_only_if / add_only_if / do_not_buy_if / reduce_if / monitor
         next_review: date + reason
         confidence: from verdict
         horizon_fit: mid/long-term action labels from policy_action

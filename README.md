@@ -145,7 +145,7 @@ analyze("ASTS", account_size=3000)
 ```
 
 This returns a comprehensive JSON report covering:
-- **Decision card** — compact "what do I do now?" block with `action_now`, hard pre-buy gates (earnings blackout, falling knife, missing runway, data-quality critical, weak liquidity), starter/full sizing in pct/dollars/whole+fractional shares, entry/stop levels, add/reduce/monitor conditions, and `next_review` date
+- **Decision card** — compact "what do I do now?" block with `action_now`, hard pre-buy gates (earnings blackout, falling knife, missing runway, data-quality critical, weak liquidity, liquidity missing), starter/full sizing in pct/dollars/whole+fractional shares, entry/stop levels, `buy_only_if` / `add_only_if` / `reduce_if` / `monitor` conditions, and `next_review` date. `hold_or_add` is preserved as its own action so existing-holder vs. new-buyer guidance stays distinct.
 - **Executive summary** — materiality-first narrative (leads with what matters most)
 - **Dislocation framework** — plain-English “broken price vs broken business” view: drawdown setup, business integrity, balance-sheet safety, thesis integrity, mismatch verdict, and what to do now
 - **Section summaries** — 1–2 sentence takeaways per major section

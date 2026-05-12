@@ -108,6 +108,22 @@ def _diff_signals(
     }
 
 
+def _diff_hard_gates(
+    prev: dict[str, Any],
+    curr: dict[str, Any],
+) -> dict[str, Any]:
+    """Diff the set of active hard-gate ids — what fired or cleared between snapshots."""
+    prev_gates = set(prev.get("hard_gate_ids") or [])
+    curr_gates = set(curr.get("hard_gate_ids") or [])
+    return {
+        "previous": sorted(prev_gates),
+        "current": sorted(curr_gates),
+        "new": sorted(curr_gates - prev_gates),
+        "cleared": sorted(prev_gates - curr_gates),
+        "changed": prev_gates != curr_gates,
+    }
+
+
 def _build_material_changes(changes: dict[str, Any]) -> list[str]:
     """Build a human-readable list of material changes."""
     items: list[str] = []
@@ -133,6 +149,18 @@ def _build_material_changes(changes: dict[str, Any]) -> list[str]:
     zone = changes.get("action_zone", {})
     if zone.get("changed"):
         items.append(f"zone: {zone['previous']} -> {zone['current']}")
+
+    action_now = changes.get("decision_action_now", {})
+    if action_now.get("changed"):
+        items.append(
+            f"action_now: {action_now['previous']} -> {action_now['current']}"
+        )
+
+    hard_gates = changes.get("hard_gates", {})
+    for gate_id in hard_gates.get("new", []):
+        items.append(f"+hard_gate: {gate_id}")
+    for gate_id in hard_gates.get("cleared", []):
+        items.append(f"-hard_gate: {gate_id}")
 
     horizon = changes.get("horizon_fit", {})
     mid = horizon.get("mid_term", {})
@@ -182,6 +210,18 @@ def _build_summary(
     zone = changes.get("action_zone", {})
     if zone.get("changed"):
         parts.append(f"Zone moved from {zone['previous']} to {zone['current']}.")
+
+    action_now = changes.get("decision_action_now", {})
+    if action_now.get("changed"):
+        parts.append(
+            f"Action now: {action_now['previous']} -> {action_now['current']}."
+        )
+
+    hard_gates = changes.get("hard_gates", {})
+    if hard_gates.get("new"):
+        parts.append(f"New hard gate(s): {', '.join(hard_gates['new'])}.")
+    if hard_gates.get("cleared"):
+        parts.append(f"Cleared hard gate(s): {', '.join(hard_gates['cleared'])}.")
 
     score = changes.get("score", {})
     if score.get("material") and score.get("change") is not None:
@@ -269,6 +309,10 @@ async def what_changed(
         "tilt": _diff_scalar(previous_snapshot, current_snapshot, "tilt"),
         "risk_regime": _diff_scalar(previous_snapshot, current_snapshot, "risk_regime"),
         "action_zone": _diff_scalar(previous_snapshot, current_snapshot, "zone"),
+        "decision_action_now": _diff_scalar(
+            previous_snapshot, current_snapshot, "decision_action_now"
+        ),
+        "hard_gates": _diff_hard_gates(previous_snapshot, current_snapshot),
         "horizon_fit": {
             "mid_term": _diff_scalar(previous_snapshot, current_snapshot, "mid_term_fit"),
             "long_term": _diff_scalar(previous_snapshot, current_snapshot, "long_term_fit"),
