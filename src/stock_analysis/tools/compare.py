@@ -81,23 +81,65 @@ async def compare_stocks(symbols: list[str]) -> dict[str, Any]:
 
     symbols = [s.upper().strip() for s in symbols]
 
-    # Fetch all data in parallel: summary + fundamentals + technicals per symbol
-    summary_tasks = [stock_summary(s) for s in symbols]
-    fundamental_tasks = [fundamentals_snapshot(s) for s in symbols]
-    technical_tasks = [technicals(s) for s in symbols]
+    warnings: list[str] = []
+    summary_results, fundamental_results, technical_results = await _fetch_comparison_inputs(symbols)
+    symbol_data = _build_symbol_data(
+        symbols=symbols,
+        summary_results=summary_results,
+        fundamental_results=fundamental_results,
+        technical_results=technical_results,
+        warnings=warnings,
+    )
+
+    if len(symbol_data) < 2:
+        duration_ms = (perf_counter() - start_time) * 1000
+        return build_error_response(
+            error_type="insufficient_data",
+            message=f"Need at least 2 valid symbols for comparison, got {len(symbol_data)}",
+        )
+
+    valid_symbols = list(symbol_data.keys())
+    metric_rankings = _apply_metric_rankings(symbol_data, valid_symbols)
+    _apply_composite_rankings(symbol_data, valid_symbols)
+
+    duration_ms = (perf_counter() - start_time) * 1000
+
+    return {
+        "meta": build_meta("compare_stocks", duration_ms),
+        "symbols": valid_symbols,
+        "comparison": symbol_data,
+        "metric_rankings": metric_rankings,
+        "warnings": warnings if warnings else None,
+    }
+
+
+async def _fetch_comparison_inputs(
+    symbols: list[str],
+) -> tuple[list[Any], list[Any], list[Any]]:
+    """Fetch summary, fundamentals, and technicals results in parallel."""
+    summary_tasks = [stock_summary(symbol) for symbol in symbols]
+    fundamental_tasks = [fundamentals_snapshot(symbol) for symbol in symbols]
+    technical_tasks = [technicals(symbol) for symbol in symbols]
 
     all_results = await asyncio.gather(
-        *summary_tasks, *fundamental_tasks, *technical_tasks,
+        *summary_tasks,
+        *fundamental_tasks,
+        *technical_tasks,
         return_exceptions=True,
     )
 
     n = len(symbols)
-    summary_results = all_results[:n]
-    fundamental_results = all_results[n : 2 * n]
-    technical_results = all_results[2 * n : 3 * n]
+    return all_results[:n], all_results[n : 2 * n], all_results[2 * n : 3 * n]
 
-    # Build per-symbol data, skipping failures
-    warnings: list[str] = []
+
+def _build_symbol_data(
+    symbols: list[str],
+    summary_results: list[Any],
+    fundamental_results: list[Any],
+    technical_results: list[Any],
+    warnings: list[str],
+) -> dict[str, dict[str, Any]]:
+    """Build per-symbol comparison data, skipping failed symbols."""
     symbol_data: dict[str, dict[str, Any]] = {}
 
     for i, sym in enumerate(symbols):
@@ -117,82 +159,73 @@ async def compare_stocks(symbols: list[str]) -> dict[str, Any]:
 
         if summ.get("error") or fund.get("error") or tech.get("error"):
             failed = [
-                r.get("message", "unknown error")
-                for r in (summ, fund, tech)
-                if r.get("error")
+                result.get("message", "unknown error")
+                for result in (summ, fund, tech)
+                if result.get("error")
             ]
             warnings.append(f"{sym}: {'; '.join(failed)}")
             continue
 
-        metrics = _extract_metrics(fund, tech)
         symbol_data[sym] = {
             "name": summ.get("name"),
             "sector": summ.get("sector"),
             "market_cap": summ.get("market_cap"),
-            "metrics": metrics,
+            "metrics": _extract_metrics(fund, tech),
         }
 
-    if len(symbol_data) < 2:
-        duration_ms = (perf_counter() - start_time) * 1000
-        return build_error_response(
-            error_type="insufficient_data",
-            message=f"Need at least 2 valid symbols for comparison, got {len(symbol_data)}",
-        )
+    return symbol_data
 
-    # Rank each metric across symbols
-    valid_symbols = list(symbol_data.keys())
+
+def _apply_metric_rankings(
+    symbol_data: dict[str, dict[str, Any]],
+    valid_symbols: list[str],
+) -> dict[str, list[dict[str, Any]]]:
+    """Rank each metric and write rank payloads into symbol_data."""
     metric_rankings: dict[str, list[dict[str, Any]]] = {}
 
     for metric in _ALL_METRICS:
-        entries: list[dict[str, Any]] = []
-        for sym in valid_symbols:
-            value = symbol_data[sym]["metrics"].get(metric)
-            entries.append({"symbol": sym, "value": value})
-
+        entries = [
+            {"symbol": sym, "value": symbol_data[sym]["metrics"].get(metric)}
+            for sym in valid_symbols
+        ]
         ranked = _rank_metric(entries, metric)
         metric_rankings[metric] = ranked
 
-        # Write ranks back into symbol_data
         for item in ranked:
-            sym = item["symbol"]
-            symbol_data[sym]["metrics"][metric] = {
+            symbol_data[item["symbol"]]["metrics"][metric] = {
                 "value": item["value"],
                 "rank": item["rank"],
             }
 
-    # Composite ranking: average rank across all metrics with data
+    return metric_rankings
+
+
+def _apply_composite_rankings(
+    symbol_data: dict[str, dict[str, Any]],
+    valid_symbols: list[str],
+) -> None:
+    """Compute average metric rank and composite position for each symbol."""
     for sym in valid_symbols:
         ranks = [
-            symbol_data[sym]["metrics"][m]["rank"]
-            for m in _ALL_METRICS
-            if m in symbol_data[sym]["metrics"]
-            and symbol_data[sym]["metrics"][m]["value"] is not None
+            symbol_data[sym]["metrics"][metric]["rank"]
+            for metric in _ALL_METRICS
+            if metric in symbol_data[sym]["metrics"]
+            and symbol_data[sym]["metrics"][metric]["value"] is not None
         ]
         symbol_data[sym]["composite_rank"] = (
             safe_round(sum(ranks) / len(ranks), 2) if ranks else None
         )
 
-    # Assign composite position (1 = best = lowest composite_rank)
     ranked_symbols = sorted(
         valid_symbols,
-        key=lambda s: (
-            symbol_data[s]["composite_rank"]
-            if symbol_data[s]["composite_rank"] is not None
+        key=lambda sym: (
+            symbol_data[sym]["composite_rank"]
+            if symbol_data[sym]["composite_rank"] is not None
             else float("inf")
         ),
     )
     for pos, sym in enumerate(ranked_symbols, start=1):
         symbol_data[sym]["composite_position"] = pos
-
-    duration_ms = (perf_counter() - start_time) * 1000
-
-    return {
-        "meta": build_meta("compare_stocks", duration_ms),
-        "symbols": valid_symbols,
-        "comparison": symbol_data,
-        "metric_rankings": metric_rankings,
-        "warnings": warnings if warnings else None,
-    }
 
 
 def _extract_metrics(

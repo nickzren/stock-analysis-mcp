@@ -34,11 +34,7 @@ async def options_signals(symbol: str) -> dict[str, Any]:
     except FetchError as fe:
         return fe.response
 
-    try:
-        info = await fetch_info(symbol)
-    except Exception:
-        info = {}
-
+    info = await _fetch_info_or_empty(symbol)
     current_price = current_price_from_info(info)
     if current_price is None or current_price <= 0:
         return build_error_response(
@@ -47,12 +43,7 @@ async def options_signals(symbol: str) -> dict[str, Any]:
             symbol=normalized_symbol,
         )
 
-    # Get expiration dates
-    try:
-        expirations = ticker.options
-    except Exception:
-        expirations = ()
-
+    expirations = _fetch_expirations(ticker)
     if not expirations:
         return build_error_response(
             error_type="no_options",
@@ -69,11 +60,8 @@ async def options_signals(symbol: str) -> dict[str, Any]:
             symbol=normalized_symbol,
         )
 
-    # Fetch option chain
     try:
-        chain = ticker.option_chain(expiration)
-        calls = chain.calls
-        puts = chain.puts
+        calls, puts = _fetch_option_chain(ticker, expiration)
     except Exception as e:
         return build_error_response(
             error_type="data_unavailable",
@@ -88,19 +76,49 @@ async def options_signals(symbol: str) -> dict[str, Any]:
             symbol=normalized_symbol,
         )
 
-    warnings: list[str] = []
-
-    # Implied volatility
-    iv_data = _compute_iv(calls, puts, current_price)
-
-    # Put/call ratio
-    pc_data = _compute_put_call_ratio(calls, puts, warnings)
-
-    # Unusual activity
-    unusual_data = _compute_unusual_activity(calls, puts)
-
     duration_ms = (perf_counter() - start_time) * 1000
+    return _build_options_response(
+        normalized_symbol=normalized_symbol,
+        expiration=expiration,
+        calls=calls,
+        puts=puts,
+        current_price=current_price,
+        duration_ms=duration_ms,
+    )
 
+
+async def _fetch_info_or_empty(symbol: str) -> dict[str, Any]:
+    """Fetch info with the existing empty-dict fallback."""
+    try:
+        return await fetch_info(symbol)
+    except Exception:
+        return {}
+
+
+def _fetch_expirations(ticker: Any) -> tuple[str, ...] | list[str]:
+    """Fetch option expirations with the existing empty fallback."""
+    try:
+        return ticker.options
+    except Exception:
+        return ()
+
+
+def _fetch_option_chain(ticker: Any, expiration: str) -> tuple[Any, Any]:
+    """Fetch calls and puts for an expiration."""
+    chain = ticker.option_chain(expiration)
+    return chain.calls, chain.puts
+
+
+def _build_options_response(
+    normalized_symbol: str,
+    expiration: str,
+    calls: Any,
+    puts: Any,
+    current_price: float,
+    duration_ms: float,
+) -> dict[str, Any]:
+    """Build the options signals response."""
+    warnings: list[str] = []
     return {
         "meta": build_meta("options_signals", duration_ms),
         "data_provenance": {
@@ -111,9 +129,9 @@ async def options_signals(symbol: str) -> dict[str, Any]:
         },
         "symbol": normalized_symbol,
         "expiration_used": expiration,
-        "implied_volatility": iv_data,
-        "put_call_ratio": pc_data,
-        "unusual_activity": unusual_data,
+        "implied_volatility": _compute_iv(calls, puts, current_price),
+        "put_call_ratio": _compute_put_call_ratio(calls, puts, warnings),
+        "unusual_activity": _compute_unusual_activity(calls, puts),
         "warnings": warnings or None,
     }
 

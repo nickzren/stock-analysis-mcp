@@ -79,85 +79,28 @@ def _build_insider_activity(ticker: Any, warnings: list[str]) -> dict[str, Any]:
             warnings.append("insider_transactions_unavailable")
             return result
 
-        now = datetime.now()
-        cutoff_3m = now - timedelta(days=90)
-        cutoff_6m = now - timedelta(days=180)
-        cutoff_12m = now - timedelta(days=365)
-
-        # Identify the date column
-        date_col = _find_column(txns, ["startDate", "Start Date", "Date"])
-        shares_col = _find_column(txns, ["shares", "Shares"])
-        text_col = _find_column(txns, ["text", "Text", "Transaction"])
-        insider_col = _find_column(txns, ["insider", "Insider", "Name", "Insider Trading"])
-        value_col = _find_column(txns, ["value", "Value"])
+        columns = _insider_transaction_columns(txns)
+        date_col = columns["date"]
+        shares_col = columns["shares"]
 
         if date_col is None or shares_col is None:
             warnings.append("insider_transactions_columns_unrecognized")
             return result
 
-        # Parse dates and compute net shares per period
-        net_3m = 0
-        net_6m = 0
-        net_12m = 0
-        scored_rows: list[tuple[float, int]] = []  # (abs_shares_or_value, row_index)
-
-        for idx in range(len(txns)):
-            row = txns.iloc[idx]
-            txn_date = _parse_date(row.get(date_col))
-            if txn_date is None:
-                continue
-
-            shares_val = safe_float(row.get(shares_col))
-            if shares_val is None:
-                continue
-
-            # Determine sign: negative shares = sale, positive = purchase
-            # Some yfinance versions use text like "Sale" / "Purchase"
-            txn_text = str(row.get(text_col, "")).lower() if text_col else ""
-            signed_shares = _sign_shares(shares_val, txn_text)
-
-            if txn_date >= cutoff_3m:
-                net_3m += signed_shares
-            if txn_date >= cutoff_6m:
-                net_6m += signed_shares
-            if txn_date >= cutoff_12m:
-                net_12m += signed_shares
-
-            # Score for "largest" selection: prefer value, fallback to abs(shares)
-            score = abs(safe_float(row.get(value_col)) or 0) if value_col else 0
-            if score == 0:
-                score = abs(shares_val)
-            scored_rows.append((score, idx))
+        net_3m, net_6m, net_12m, scored_rows = _aggregate_insider_transactions(
+            txns=txns,
+            columns=columns,
+        )
 
         result["net_shares_3m"] = net_3m
         result["net_shares_6m"] = net_6m
         result["net_shares_12m"] = net_12m
-
-        # Derive sentiment from 3-month net
-        if net_3m > 0:
-            result["sentiment"] = "buying"
-        elif net_3m < 0:
-            result["sentiment"] = "selling"
-        else:
-            result["sentiment"] = "neutral"
-
-        # Top 5 largest transactions
-        scored_rows.sort(key=lambda x: x[0], reverse=True)
-        for _, row_idx in scored_rows[:5]:
-            row = txns.iloc[row_idx]
-            txn_date = _parse_date(row.get(date_col))
-            shares_val = safe_float(row.get(shares_col))
-            txn_text = str(row.get(text_col, "")) if text_col else None
-            insider_name = sanitize_text(str(row.get(insider_col))) if insider_col and row.get(insider_col) is not None else None
-            txn_value = safe_float(row.get(value_col)) if value_col else None
-
-            result["recent_transactions"].append({
-                "date": txn_date.strftime("%Y-%m-%d") if txn_date else None,
-                "insider": insider_name,
-                "text": sanitize_text(txn_text, max_length=200) if txn_text else None,
-                "shares": safe_round(shares_val, 0),
-                "value": safe_round(txn_value, 2),
-            })
+        result["sentiment"] = _insider_sentiment(net_3m)
+        result["recent_transactions"] = _build_recent_insider_transactions(
+            txns=txns,
+            scored_rows=scored_rows,
+            columns=columns,
+        )
 
     except Exception:
         warnings.append("insider_transactions_error")
@@ -239,6 +182,112 @@ def _apply_major_holders(
 
 
 # --- Private helpers ---
+
+
+def _insider_transaction_columns(txns: pd.DataFrame) -> dict[str, str | None]:
+    """Find relevant insider transaction columns."""
+    return {
+        "date": _find_column(txns, ["startDate", "Start Date", "Date"]),
+        "shares": _find_column(txns, ["shares", "Shares"]),
+        "text": _find_column(txns, ["text", "Text", "Transaction"]),
+        "insider": _find_column(txns, ["insider", "Insider", "Name", "Insider Trading"]),
+        "value": _find_column(txns, ["value", "Value"]),
+    }
+
+
+def _aggregate_insider_transactions(
+    txns: pd.DataFrame,
+    columns: dict[str, str | None],
+) -> tuple[float, float, float, list[tuple[float, int]]]:
+    """Compute insider net shares by period and largest-transaction scores."""
+    now = datetime.now()
+    cutoff_3m = now - timedelta(days=90)
+    cutoff_6m = now - timedelta(days=180)
+    cutoff_12m = now - timedelta(days=365)
+
+    date_col = columns["date"]
+    shares_col = columns["shares"]
+    text_col = columns["text"]
+    value_col = columns["value"]
+
+    net_3m = 0.0
+    net_6m = 0.0
+    net_12m = 0.0
+    scored_rows: list[tuple[float, int]] = []
+
+    for idx in range(len(txns)):
+        row = txns.iloc[idx]
+        txn_date = _parse_date(row.get(date_col))
+        if txn_date is None:
+            continue
+
+        shares_val = safe_float(row.get(shares_col))
+        if shares_val is None:
+            continue
+
+        txn_text = str(row.get(text_col, "")).lower() if text_col else ""
+        signed_shares = _sign_shares(shares_val, txn_text)
+
+        if txn_date >= cutoff_3m:
+            net_3m += signed_shares
+        if txn_date >= cutoff_6m:
+            net_6m += signed_shares
+        if txn_date >= cutoff_12m:
+            net_12m += signed_shares
+
+        score = abs(safe_float(row.get(value_col)) or 0) if value_col else 0
+        if score == 0:
+            score = abs(shares_val)
+        scored_rows.append((score, idx))
+
+    return net_3m, net_6m, net_12m, scored_rows
+
+
+def _insider_sentiment(net_3m: float) -> str:
+    """Derive insider sentiment from 3-month net shares."""
+    if net_3m > 0:
+        return "buying"
+    if net_3m < 0:
+        return "selling"
+    return "neutral"
+
+
+def _build_recent_insider_transactions(
+    txns: pd.DataFrame,
+    scored_rows: list[tuple[float, int]],
+    columns: dict[str, str | None],
+) -> list[dict[str, Any]]:
+    """Build the top recent insider transaction rows."""
+    date_col = columns["date"]
+    shares_col = columns["shares"]
+    text_col = columns["text"]
+    insider_col = columns["insider"]
+    value_col = columns["value"]
+
+    recent_transactions: list[dict[str, Any]] = []
+    scored_rows.sort(key=lambda item: item[0], reverse=True)
+
+    for _, row_idx in scored_rows[:5]:
+        row = txns.iloc[row_idx]
+        txn_date = _parse_date(row.get(date_col))
+        shares_val = safe_float(row.get(shares_col))
+        txn_text = str(row.get(text_col, "")) if text_col else None
+        insider_name = (
+            sanitize_text(str(row.get(insider_col)))
+            if insider_col and row.get(insider_col) is not None
+            else None
+        )
+        txn_value = safe_float(row.get(value_col)) if value_col else None
+
+        recent_transactions.append({
+            "date": txn_date.strftime("%Y-%m-%d") if txn_date else None,
+            "insider": insider_name,
+            "text": sanitize_text(txn_text, max_length=200) if txn_text else None,
+            "shares": safe_round(shares_val, 0),
+            "value": safe_round(txn_value, 2),
+        })
+
+    return recent_transactions
 
 
 def _find_column(df: pd.DataFrame, candidates: list[str]) -> str | None:
