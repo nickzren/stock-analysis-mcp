@@ -56,9 +56,9 @@ def get_prompt(name: str, arguments: dict[str, str]) -> dict[str, Any] | None:
                     "role": "user",
                     "content": f"""Analyze {symbol} with the single `analyze` tool first.
 
-Use `analyze("{symbol}")` by default.
+Use `analyze("{symbol}", detail="full")` by default.
 If the user gives an account size, include it:
-`analyze("{symbol}", account_size=<value>)`
+`analyze("{symbol}", account_size=<value>, detail="full")`
 
 Do not manually reconstruct the report from secondary tools unless `analyze` fails.
 

@@ -135,6 +135,20 @@ def test_decision_projection_uses_slim_allowlists() -> None:
     assert "tool_timings" not in projected["data_quality"]
 
 
+def test_decision_projection_preserves_tool_failures_for_diagnostics() -> None:
+    result = _full_result()
+    result["error"] = True
+    result["data_quality"]["tool_failures"] = [
+        {"tool": "stock_summary", "error_type": "invalid_symbol", "message": "No data"}
+    ]
+
+    decision = project_analyze_result(result, "decision")
+    standard = project_analyze_result(result, "standard")
+
+    assert decision["data_quality"]["tool_failures"] == result["data_quality"]["tool_failures"]
+    assert standard["data_quality"]["tool_failures"] == result["data_quality"]["tool_failures"]
+
+
 def test_standard_projection_includes_investor_blocks_and_omits_full_only_blocks() -> None:
     projected = project_analyze_result(_full_result(), "standard")
 

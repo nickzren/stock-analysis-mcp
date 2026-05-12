@@ -29,4 +29,4 @@ def test_read_analyze_rendering_guide_returns_markdown_mime_type() -> None:
 
     assert mime_type == "text/markdown"
     assert "Use this guide when presenting the result of the `analyze` tool." in guide
-
+    assert 'This guide assumes `detail="full"`' in guide

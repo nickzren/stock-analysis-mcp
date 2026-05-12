@@ -24,7 +24,8 @@ def test_full_analysis_prompt_uses_analyze_tool_first() -> None:
 
     assert prompt is not None
     content = prompt["messages"][0]["content"]
-    assert 'analyze("NVDA")' in content
+    assert 'analyze("NVDA", detail="full")' in content
+    assert 'analyze("NVDA", account_size=<value>, detail="full")' in content
     assert "Do not manually reconstruct the report" in content
     assert "decision_modes.balanced" in content
     assert "get_stock_summary" not in content

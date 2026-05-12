@@ -56,6 +56,16 @@ def _pick(source: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
     return {key: source.get(key) for key in keys if key in source}
 
 
+def _project_data_quality(result: dict[str, Any]) -> dict[str, Any]:
+    """Return compact data-quality fields without dropping error diagnostics."""
+    data_quality = result.get("data_quality") or {}
+    projected = _pick(data_quality, DATA_QUALITY_DECISION_KEYS)
+    tool_failures = data_quality.get("tool_failures")
+    if tool_failures or result.get("error"):
+        projected["tool_failures"] = tool_failures or []
+    return projected
+
+
 def _base_decision_projection(result: dict[str, Any]) -> dict[str, Any]:
     projected: dict[str, Any] = {
         "meta": result.get("meta"),
@@ -63,7 +73,7 @@ def _base_decision_projection(result: dict[str, Any]) -> dict[str, Any]:
         "summary": _pick(result.get("summary") or {}, SUMMARY_KEYS),
         "decision_card": result.get("decision_card"),
         "verdict": _pick(result.get("verdict") or {}, VERDICT_DECISION_KEYS),
-        "data_quality": _pick(result.get("data_quality") or {}, DATA_QUALITY_DECISION_KEYS),
+        "data_quality": _project_data_quality(result),
         "watchlist_snapshot": result.get("watchlist_snapshot"),
     }
     for key in ("error", "error_type", "message"):
@@ -102,4 +112,3 @@ def project_analyze_result(result: dict[str, Any], detail: str) -> dict[str, Any
     if normalized == "decision":
         return _base_decision_projection(result)
     return _standard_projection(result)
-
