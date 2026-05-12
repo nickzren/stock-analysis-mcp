@@ -10,6 +10,7 @@ from stock_analysis.tools.analyze.action_zones import (
     apply_dip_gates_to_action_zones,
     build_action_zones,
 )
+from stock_analysis.tools.analyze.decision_card import build_decision_card
 from stock_analysis.tools.analyze.decision_context import (
     build_decision_context,
     build_relative_performance,
@@ -916,6 +917,19 @@ async def analyze_stock(
     )
     section_summaries["dislocation"] = dislocation_framework.get("summary")
 
+    decision_card = build_decision_card(
+        summary=summary,
+        verdict=verdict,
+        action_zones=action_zones,
+        policy_action=policy_action,
+        fundamentals_summary=fundamentals_summary,
+        risk_data=risk_data,
+        events_data=events_data,
+        data_quality=data_quality,
+        dip_assessment=dip_assessment,
+        dislocation_framework=dislocation_framework,
+    )
+
     # Top-level error signaling for invalid/unanalyzable symbols.
     # Keep partial payload for diagnostics, but mark as error for callers.
     critical_tools = {"stock_summary", "technicals", "fundamentals_snapshot", "risk_metrics"}
@@ -979,6 +993,7 @@ async def analyze_stock(
         "news_summary": news_summary,
         "signals": signals,
         "verdict": verdict,
+        "decision_card": decision_card,
         "dislocation_framework": dislocation_framework,
         "action_zones": action_zones,
         "policy_action": policy_action,
