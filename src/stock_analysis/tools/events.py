@@ -1,6 +1,6 @@
 """Events calendar tool."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from time import perf_counter
 from typing import Any
 
@@ -188,7 +188,7 @@ def _resolve_next_earnings_date(
     if next_earnings_date is None:
         try:
             if earnings_dates is not None and len(earnings_dates) > 0:
-                now = datetime.utcnow()
+                now = datetime.now(UTC).replace(tzinfo=None)
                 for date, _row in earnings_dates.iterrows():
                     if isinstance(date, pd.Timestamp):
                         if date.tzinfo is not None:

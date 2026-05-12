@@ -5,10 +5,12 @@ Stripping tzinfo without converting treats the local wall-clock time as UTC,
 producing 4-5 hour boundary errors at the cutoff window edges.
 """
 
+import warnings
 from datetime import datetime, timedelta
 
 import pandas as pd
 
+from stock_analysis.tools.events import _resolve_next_earnings_date
 from stock_analysis.tools.news import _build_recent_earnings
 
 
@@ -90,3 +92,51 @@ class TestNewsEarningsTimezone:
         result = _build_recent_earnings(_TickerWithEarnings(frame), cutoff_date=cutoff, now=now)
 
         assert result is None
+
+
+class TestEventsResolveNextEarningsDate:
+    """_resolve_next_earnings_date must not emit deprecation warnings.
+
+    Regression: the helper previously used datetime.utcnow(), which emits a
+    DeprecationWarning. Under `pytest -W error` that warning becomes an
+    exception, gets swallowed by the surrounding broad try/except, and the
+    helper silently returns `next_date=None` even when a valid future
+    earnings date is present.
+    """
+
+    def test_no_deprecation_warning_emitted(self) -> None:
+        """The helper must not trigger any DeprecationWarning under strict mode."""
+        # Future ET timestamp
+        future_ts = pd.Timestamp("2026-08-15 16:00:00", tz="America/New_York")
+        earnings_dates = pd.DataFrame(
+            {"EPS Estimate": [1.5]},
+            index=pd.DatetimeIndex([future_ts]),
+        )
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", DeprecationWarning)
+            next_date, _days_until, source, status = _resolve_next_earnings_date(
+                calendar=None,
+                earnings_dates=earnings_dates,
+                info={},
+            )
+
+        assert next_date is not None
+        assert source == "earnings_dates"
+        assert status == "available"
+
+    def test_returns_none_when_only_past_earnings(self) -> None:
+        past_ts = pd.Timestamp("2020-01-15 16:00:00", tz="America/New_York")
+        earnings_dates = pd.DataFrame(
+            {"EPS Estimate": [1.5]},
+            index=pd.DatetimeIndex([past_ts]),
+        )
+
+        next_date, _days_until, _source, status = _resolve_next_earnings_date(
+            calendar=None,
+            earnings_dates=earnings_dates,
+            info={},
+        )
+
+        assert next_date is None
+        assert status == "unavailable"

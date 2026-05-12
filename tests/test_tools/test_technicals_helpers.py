@@ -1,8 +1,14 @@
 """Regression tests for technicals helpers under missing-price edge cases."""
 
+import warnings
+
 import pandas as pd
 
-from stock_analysis.tools.technicals import _build_bollinger, _build_fibonacci
+from stock_analysis.tools.technicals import (
+    _build_bollinger,
+    _build_fibonacci,
+    _zscore_weekly_return,
+)
 
 
 class TestBollingerWithMissingCurrentPrice:
@@ -90,3 +96,32 @@ class TestPctChangeFillBehavior:
         # The key contract is: NaN in input must not silently become 0 return.
         # We accept either NaN or the correctly-computed (110-100)/100 = 0.10 here.
         assert pd.isna(returns.iloc[2]) or abs(returns.iloc[2] - 0.10) < 1e-9
+
+
+class TestZscoreWeeklyReturnFillBehavior:
+    """_zscore_weekly_return must use fill_method=None to avoid fabricated returns.
+
+    Regression: the weekly-return path was missed by the initial pct_change fix.
+    Forward-filling gaps fabricates flat weekly returns that distort the z-score.
+    """
+
+    def test_no_pandas_future_warning_on_gapped_series(self) -> None:
+        """Calling the helper on a gapped series must not emit a pandas FutureWarning."""
+        prices = pd.Series([100.0 + i * 0.5 for i in range(120)])
+        # Inject a NaN in the middle (data gap)
+        prices.iloc[50] = float("nan")
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", FutureWarning)
+            # Should not raise — fill_method=None is explicit
+            _zscore_weekly_return(prices)
+
+    def test_zscore_returns_float_on_normal_series(self) -> None:
+        prices = pd.Series([100.0 + i * 0.1 for i in range(120)])
+        result = _zscore_weekly_return(prices)
+        assert result is not None
+        assert isinstance(result, float)
+
+    def test_zscore_returns_none_on_short_series(self) -> None:
+        prices = pd.Series([100.0, 101.0, 102.0])
+        assert _zscore_weekly_return(prices) is None

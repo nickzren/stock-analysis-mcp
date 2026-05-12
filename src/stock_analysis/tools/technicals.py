@@ -467,7 +467,7 @@ def _zscore_weekly_return(
     lookback_weeks: int = 104,
 ) -> float | None:
     """Z-score of the most recent 1-week return vs trailing weekly returns."""
-    weekly = close_series.pct_change(5).dropna()
+    weekly = close_series.pct_change(5, fill_method=None).dropna()
     if len(weekly) < 20:
         return None
     weekly = weekly.tail(lookback_weeks)
