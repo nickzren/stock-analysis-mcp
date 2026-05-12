@@ -61,3 +61,15 @@ class TestJsonResponseStrictness:
         payload = {"a": 1, "b": "text", "c": [1.0, 2.0], "d": {"e": True}}
         parsed = json.loads(_json_response(payload))
         assert parsed == payload
+
+    def test_default_output_is_compact_json(self) -> None:
+        output = _json_response({"a": 1, "b": {"c": 2}})
+
+        assert output == '{"a":1,"b":{"c":2}}'
+
+    def test_pretty_json_escape_hatch(self, monkeypatch) -> None:
+        monkeypatch.setenv("STOCK_ANALYSIS_PRETTY_JSON", "1")
+
+        output = _json_response({"a": 1, "b": {"c": 2}})
+
+        assert output == '{\n  "a": 1,\n  "b": {\n    "c": 2\n  }\n}'

@@ -58,9 +58,13 @@ def _json_response(result: dict[str, Any]) -> str:
 
     Uses allow_nan=False after sanitizing NaN/Infinity to None so the output is
     strict-JSON valid (non-Python parsers reject `NaN` and `Infinity` literals).
+    Defaults to compact JSON to reduce MCP response tokens. Set
+    STOCK_ANALYSIS_PRETTY_JSON=1 for local pretty-printed debugging.
     """
     sanitized = _sanitize_for_json(result)
-    return json.dumps(sanitized, indent=2, default=str, allow_nan=False)
+    if os.environ.get("STOCK_ANALYSIS_PRETTY_JSON") == "1":
+        return json.dumps(sanitized, indent=2, default=str, allow_nan=False)
+    return json.dumps(sanitized, separators=(",", ":"), default=str, allow_nan=False)
 
 
 # ============================================================================
