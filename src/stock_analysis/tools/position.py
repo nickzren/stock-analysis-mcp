@@ -116,10 +116,15 @@ def _build_position(
 
 
 def _build_holding(purchase_date: str, purchase_dt: datetime) -> dict[str, Any]:
-    """Build holding-period fields."""
+    """Build holding-period fields.
+
+    IRS rule (26 USC §1222): long-term capital gains require holding the asset
+    for **more than** one year. A position held exactly 365 days is still
+    short-term; it qualifies as long-term at 366+ days.
+    """
     days_held = (datetime.now() - purchase_dt).days
-    is_long_term = days_held >= 365
-    days_to_long_term = None if is_long_term else 365 - days_held
+    is_long_term = days_held > 365
+    days_to_long_term = None if is_long_term else 366 - days_held
 
     return {
         "purchase_date": purchase_date,
