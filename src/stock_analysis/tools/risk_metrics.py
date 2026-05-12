@@ -99,50 +99,33 @@ async def risk_metrics(
     atr, atr_val = _build_atr(high, low, close, current_price)
     liquidity, avg_dollar_volume = _build_liquidity(volume, current_price)
 
-    # Stop suggestions
-    sma_50 = calculate_sma(close, 50)
-    sma_200 = calculate_sma(close, 200)
-    sma_50_val = safe_last_float(sma_50)
-    sma_200_val = safe_last_float(sma_200)
-
-    stop_suggestions = _build_stop_suggestions(current_price, atr_val, sma_50_val, sma_200_val)
-
-    # Position sizing
-    position_sizing = _build_position_sizing(
+    stop_suggestions, position_sizing = _build_stop_and_position_sizing(
+        close=close,
         portfolio_value=portfolio_value,
         risk_per_trade=risk_per_trade,
         current_price=current_price,
         avg_dollar_volume=avg_dollar_volume,
-        stop_suggestions=stop_suggestions,
+        atr_val=atr_val,
     )
-
-    # Market context (SPY trend for regime awareness)
     market_context = _build_market_context(benchmark_indexed)
-
     duration_ms = (perf_counter() - start_time) * 1000
 
-    return {
-        "meta": build_meta("risk_metrics", duration_ms),
-        "data_provenance": {
-            "price": build_provenance(
-                source="yfinance",
-                as_of=utcnow_isoformat_z(),
-                last_bar_date=df["date"].iloc[-1] if len(df) > 0 else None,
-            ),
-        },
-        "symbol": params.symbol,
-        "benchmark": benchmark,
-        "benchmark_returns": benchmark_returns_summary,
-        "volatility": volatility,
-        "beta": beta,
-        "drawdown": drawdown,
-        "var": var,
-        "atr": atr,
-        "liquidity": liquidity,
-        "stop_suggestions": stop_suggestions,
-        "position_sizing": position_sizing,
-        "market_context": market_context,
-    }
+    return _build_risk_response(
+        params=params,
+        benchmark=benchmark,
+        df=df,
+        duration_ms=duration_ms,
+        benchmark_returns_summary=benchmark_returns_summary,
+        volatility=volatility,
+        beta=beta,
+        drawdown=drawdown,
+        var=var,
+        atr=atr,
+        liquidity=liquidity,
+        stop_suggestions=stop_suggestions,
+        position_sizing=position_sizing,
+        market_context=market_context,
+    )
 
 
 async def _fetch_benchmark(params: FetchParams) -> pd.DataFrame | None:
@@ -283,6 +266,74 @@ def _build_liquidity(
             },
         },
     }, avg_dollar_volume
+
+
+def _build_stop_and_position_sizing(
+    close: pd.Series,
+    portfolio_value: float | None,
+    risk_per_trade: float | None,
+    current_price: float | None,
+    avg_dollar_volume: float | None,
+    atr_val: float | None,
+) -> tuple[dict[str, dict[str, float | None]], dict[str, Any]]:
+    """Build stop suggestions and dependent position sizing."""
+    sma_50 = calculate_sma(close, 50)
+    sma_200 = calculate_sma(close, 200)
+    stop_suggestions = _build_stop_suggestions(
+        current_price=current_price,
+        atr_val=atr_val,
+        sma_50_val=safe_last_float(sma_50),
+        sma_200_val=safe_last_float(sma_200),
+    )
+    position_sizing = _build_position_sizing(
+        portfolio_value=portfolio_value,
+        risk_per_trade=risk_per_trade,
+        current_price=current_price,
+        avg_dollar_volume=avg_dollar_volume,
+        stop_suggestions=stop_suggestions,
+    )
+    return stop_suggestions, position_sizing
+
+
+def _build_risk_response(
+    params: FetchParams,
+    benchmark: str,
+    df: pd.DataFrame,
+    duration_ms: float,
+    benchmark_returns_summary: dict[str, float | None],
+    volatility: dict[str, Any],
+    beta: dict[str, Any],
+    drawdown: dict[str, Any],
+    var: dict[str, float | None],
+    atr: dict[str, float | None],
+    liquidity: dict[str, Any],
+    stop_suggestions: dict[str, dict[str, float | None]],
+    position_sizing: dict[str, Any],
+    market_context: dict[str, Any],
+) -> dict[str, Any]:
+    """Build the risk metrics response payload."""
+    return {
+        "meta": build_meta("risk_metrics", duration_ms),
+        "data_provenance": {
+            "price": build_provenance(
+                source="yfinance",
+                as_of=utcnow_isoformat_z(),
+                last_bar_date=df["date"].iloc[-1] if len(df) > 0 else None,
+            ),
+        },
+        "symbol": params.symbol,
+        "benchmark": benchmark,
+        "benchmark_returns": benchmark_returns_summary,
+        "volatility": volatility,
+        "beta": beta,
+        "drawdown": drawdown,
+        "var": var,
+        "atr": atr,
+        "liquidity": liquidity,
+        "stop_suggestions": stop_suggestions,
+        "position_sizing": position_sizing,
+        "market_context": market_context,
+    }
 
 
 def _build_stop_suggestions(

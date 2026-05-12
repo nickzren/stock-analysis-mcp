@@ -23,35 +23,7 @@ def build_position_sizing_range(
     profile_max_position_pct = investor_profile.get("max_position_pct")
     risk_per_trade_pct = investor_profile.get("risk_per_trade_pct") or 1.0
 
-    position_sizing_range: dict[str, Any]
-    if normalized_regime == "extreme":
-        pct_min, pct_max = 0.5, 3.0
-        position_sizing_range = {
-            "suggested_pct_range": [pct_min, pct_max],
-            "max_pct": pct_max,
-            "rationale": "extreme_risk_requires_minimal_exposure",
-        }
-    elif normalized_regime == "high":
-        pct_min, pct_max = 2.0, 6.0
-        position_sizing_range = {
-            "suggested_pct_range": [pct_min, pct_max],
-            "max_pct": pct_max,
-            "rationale": "high_risk_warrants_conservative_sizing",
-        }
-    elif normalized_regime == "medium":
-        pct_min, pct_max = 3.0, 8.0
-        position_sizing_range = {
-            "suggested_pct_range": [pct_min, pct_max],
-            "max_pct": pct_max,
-            "rationale": "moderate_risk_standard_sizing",
-        }
-    else:
-        pct_min, pct_max = 3.0, 10.0
-        position_sizing_range = {
-            "suggested_pct_range": [pct_min, pct_max],
-            "max_pct": pct_max,
-            "rationale": "low_risk_allows_larger_positions",
-        }
+    pct_min, pct_max, position_sizing_range = _base_sizing_range(normalized_regime)
 
     if starter_position_pct is not None:
         pct_min = round(min(pct_min, starter_position_pct), 1)
@@ -110,6 +82,28 @@ def build_position_sizing_range(
         position_sizing_range["stop_implied_max"] = None
 
     return position_sizing_range
+
+
+def _base_sizing_range(regime_classification: str | None) -> tuple[float, float, dict[str, Any]]:
+    """Build base position sizing range by risk regime."""
+    if regime_classification == "extreme":
+        pct_min, pct_max = 0.5, 3.0
+        rationale = "extreme_risk_requires_minimal_exposure"
+    elif regime_classification == "high":
+        pct_min, pct_max = 2.0, 6.0
+        rationale = "high_risk_warrants_conservative_sizing"
+    elif regime_classification == "medium":
+        pct_min, pct_max = 3.0, 8.0
+        rationale = "moderate_risk_standard_sizing"
+    else:
+        pct_min, pct_max = 3.0, 10.0
+        rationale = "low_risk_allows_larger_positions"
+
+    return pct_min, pct_max, {
+        "suggested_pct_range": [pct_min, pct_max],
+        "max_pct": pct_max,
+        "rationale": rationale,
+    }
 
 
 def _build_level_distance_views(
@@ -373,6 +367,50 @@ def _apply_valuation_gate_to_zone(
     return current_zone, None
 
 
+def _missing_price_response() -> dict[str, Any]:
+    """Build action-zone payload for missing current price."""
+    return {
+        "current_zone": None,
+        "levels": {},
+        "distance_to_levels": {},
+        "price_vs_levels": {},
+        "distance_labels": {},
+        "level_vs_current_labels": {},
+        "basis": {},
+        "stop_calculation": None,
+        "zone_warnings": ["missing_price"],
+        "method": "atr_based_v1",
+    }
+
+
+def _append_stop_warning(
+    zone_warnings: list[str],
+    distance_to_levels: dict[str, float | None],
+    atr_pct: float | None,
+    stop_min_multiple_required: float,
+) -> None:
+    """Append stop-distance warning when the stop is too tight."""
+    stop_distance = distance_to_levels.get("stop_loss")
+    if stop_distance is not None and atr_pct is not None:
+        stop_distance_pct_val = abs(stop_distance)
+        if stop_distance_pct_val < (stop_min_multiple_required * atr_pct):
+            zone_warnings.append("stop_too_tight")
+    elif stop_distance is not None and stop_distance > -0.05:
+        zone_warnings.append("stop_too_tight")
+
+
+def _append_regime_warnings(
+    zone_warnings: list[str],
+    is_extreme_regime: bool,
+    is_high_regime: bool,
+) -> None:
+    """Append risk-regime sizing warnings."""
+    if is_extreme_regime:
+        zone_warnings.append("extreme_risk_regime:prefer_small_position")
+    elif is_high_regime:
+        zone_warnings.append("high_risk_regime:size_conservatively")
+
+
 def build_action_zones(
     current_price: float | None,
     tech_data: dict[str, Any],
@@ -389,18 +427,7 @@ def build_action_zones(
     Risk regime affects zone interpretation and warnings.
     """
     if current_price is None:
-        return {
-            "current_zone": None,
-            "levels": {},
-            "distance_to_levels": {},
-            "price_vs_levels": {},
-            "distance_labels": {},
-            "level_vs_current_labels": {},
-            "basis": {},
-            "stop_calculation": None,
-            "zone_warnings": ["missing_price"],
-            "method": "atr_based_v1",
-        }
+        return _missing_price_response()
 
     # Extract risk regime classification
     regime_classification = (
@@ -475,21 +502,17 @@ def build_action_zones(
     if valuation_zone_warning is not None:
         zone_warnings.append(valuation_zone_warning)
 
-    # Check for stop_too_tight warning - volatility-aware using ATR multiple
-    stop_distance = distance_to_levels.get("stop_loss")
-    if stop_distance is not None and atr_pct is not None:
-        stop_distance_pct_val = abs(stop_distance)
-        if stop_distance_pct_val < (stop_min_multiple_required * atr_pct):
-            zone_warnings.append("stop_too_tight")
-    elif stop_distance is not None and stop_distance > -0.05:
-        # Fallback: fixed 5% if no ATR available
-        zone_warnings.append("stop_too_tight")
-
-    # Add regime-specific warnings
-    if is_extreme_regime:
-        zone_warnings.append("extreme_risk_regime:prefer_small_position")
-    elif is_high_regime:
-        zone_warnings.append("high_risk_regime:size_conservatively")
+    _append_stop_warning(
+        zone_warnings=zone_warnings,
+        distance_to_levels=distance_to_levels,
+        atr_pct=atr_pct,
+        stop_min_multiple_required=stop_min_multiple_required,
+    )
+    _append_regime_warnings(
+        zone_warnings=zone_warnings,
+        is_extreme_regime=is_extreme_regime,
+        is_high_regime=is_high_regime,
+    )
 
     position_sizing_range = build_position_sizing_range(
         current_price=current_price,
