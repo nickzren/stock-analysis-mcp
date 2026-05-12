@@ -342,5 +342,8 @@ def _sign_shares(shares: float, txn_text: str) -> float:
         return -abs(shares)
     if "purchase" in text_lower or "buy" in text_lower or "acquisition" in text_lower:
         return abs(shares)
-    # If text doesn't indicate direction, use sign as-is
-    return shares
+    # Unknown transaction type (e.g., "Exercise of Stock Option", "Gift",
+    # "Conversion"). yfinance returns positive raw share counts for all kinds
+    # of transactions, so falling back to the raw value would inflate apparent
+    # insider buying. Return 0 to leave the net unaffected by ambiguous rows.
+    return 0

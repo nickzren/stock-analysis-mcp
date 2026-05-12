@@ -212,12 +212,15 @@ def _compute_put_call_ratio(
         else None
     )
 
+    # Compute ratios only when both sides are present and the denominator is
+    # strictly positive. The previous truthy check on call_volume / call_oi
+    # treated a legitimate 0 as missing.
     volume_ratio: float | None = None
-    if call_volume and put_volume is not None and call_volume > 0:
+    if call_volume is not None and put_volume is not None and call_volume > 0:
         volume_ratio = safe_round(put_volume / call_volume, 2)
 
     oi_ratio: float | None = None
-    if call_oi and put_oi is not None and call_oi > 0:
+    if call_oi is not None and put_oi is not None and call_oi > 0:
         oi_ratio = safe_round(put_oi / call_oi, 2)
 
     # Determine signal from whichever ratio is available (prefer volume)

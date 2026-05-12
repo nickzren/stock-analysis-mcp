@@ -219,14 +219,13 @@ def build_executive_summary(
     if net_margin is not None:
         fund_parts.append(f"net_margin {net_margin * 100:.1f}%")
 
+    # `fcf_label` already covers the annualized FCF amount for burners, so don't
+    # also append a manual `FCF $X M` clause derived from quarterly_burn — that
+    # would duplicate the same information in `fund_parts` and crowd out runway.
     fcf_label = fcf_label_from_cashflow(cash_flow_summary)
     if fcf_label:
         fund_parts.append(fcf_label)
     quarterly_burn = burn_metrics.get("quarterly_fcf_burn")
-    if quarterly_burn is not None and quarterly_burn > 0:
-        annual_fcf = -quarterly_burn * 4
-        fund_parts.append(f"FCF ${annual_fcf / 1_000_000:.0f}M")
-
     if quarterly_burn is not None and quarterly_burn > 0:
         fund_parts.append(f"burn ~${quarterly_burn / 1_000_000:.0f}M/quarter")
 

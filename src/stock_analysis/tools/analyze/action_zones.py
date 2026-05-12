@@ -148,16 +148,22 @@ def _classify_current_zone(
     sma_50: float | None,
     sma_200: float | None,
 ) -> str:
-    """Classify the current price into an action zone."""
+    """Classify the current price into an action zone.
+
+    Level ordering invariant: strong_buy ≤ accumulate ≤ hold ≤ reduce.
+    `reduce_above` is checked before the SMA200 fallback so a price that's both
+    below SMA200 and above the `52w_high - 1·ATR` threshold doesn't get
+    mis-classified as "accumulate".
+    """
     strong_buy_level = levels.get("strong_buy_below")
     reduce_level = levels.get("reduce_above")
 
     if strong_buy_level is not None and current_price <= strong_buy_level:
         return "strong_buy"
-    if sma_200 and current_price < sma_200:
-        return "accumulate"
     if reduce_level is not None and current_price >= reduce_level:
         return "reduce"
+    if sma_200 and current_price < sma_200:
+        return "accumulate"
     if sma_50 and current_price > sma_50:
         return "hold_bullish"
     if sma_50 and current_price <= sma_50:
