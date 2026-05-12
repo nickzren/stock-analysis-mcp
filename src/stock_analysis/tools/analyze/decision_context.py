@@ -223,14 +223,14 @@ def _build_fundamental_conditions(
         (
             bullish_list,
             fundamentals_bearish,
-            "high_growth",
+            "high_revenue_growth",
             "growth_decelerates",
             "revenue_yoy < 15%",
         ),
         (
             bearish_list,
             fundamentals_bullish,
-            "declining_growth",
+            "negative_revenue_growth",
             "growth_accelerates",
             "revenue_yoy > 10%",
         ),
@@ -797,19 +797,6 @@ def build_decision_context(
                     "threshold": "fcf_yield < 3%",
                     "current": f"fcf_yield = {fcf_yield_val * 100:.1f}%",
                 })
-
-        if "high_pe" in bearish_list and pe_forward is not None:
-            valuation_bullish.append({
-                "condition": "valuation_normalizes",
-                "threshold": "forward_pe < 25 or growth accelerates",
-                "current": f"forward_pe = {pe_forward:.1f}",
-            })
-        if "low_peg" in bullish_list and peg_ratio is not None:
-            valuation_bearish.append({
-                "condition": "peg_expands",
-                "threshold": "peg_ratio > 2.0",
-                "current": f"peg_ratio = {peg_ratio:.2f}",
-            })
 
     # === NEWS CATEGORY ===
     catalyst_intelligence = news_data.get("catalyst_intelligence") or {}
