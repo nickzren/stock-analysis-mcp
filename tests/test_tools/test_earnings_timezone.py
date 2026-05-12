@@ -106,8 +106,9 @@ class TestEventsResolveNextEarningsDate:
 
     def test_no_deprecation_warning_emitted(self) -> None:
         """The helper must not trigger any DeprecationWarning under strict mode."""
-        # Future ET timestamp
-        future_ts = pd.Timestamp("2026-08-15 16:00:00", tz="America/New_York")
+        # Far-future ET timestamp so the test stays deterministic regardless of
+        # when it runs (the helper reads the real clock).
+        future_ts = pd.Timestamp("2099-01-15 16:00:00", tz="America/New_York")
         earnings_dates = pd.DataFrame(
             {"EPS Estimate": [1.5]},
             index=pd.DatetimeIndex([future_ts]),
@@ -126,7 +127,8 @@ class TestEventsResolveNextEarningsDate:
         assert status == "available"
 
     def test_returns_none_when_only_past_earnings(self) -> None:
-        past_ts = pd.Timestamp("2020-01-15 16:00:00", tz="America/New_York")
+        # Far-past timestamp so the "past" classification stays deterministic.
+        past_ts = pd.Timestamp("2000-01-15 16:00:00", tz="America/New_York")
         earnings_dates = pd.DataFrame(
             {"EPS Estimate": [1.5]},
             index=pd.DatetimeIndex([past_ts]),
