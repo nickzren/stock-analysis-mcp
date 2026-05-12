@@ -77,16 +77,7 @@ async def risk_metrics(
         adjusted=True,
     )
 
-    benchmark_df = None
-    beta_data: dict[str, Any] = {"value": None, "warning": "benchmark_fetch_failed"}
-    benchmark_returns_summary: dict[str, float | None] = {
-        "return_1m": None,
-        "return_3m": None,
-        "return_1y": None,
-    }
-
-    with suppress(Exception):
-        benchmark_df = await fetch_history(benchmark_params)
+    benchmark_df = await _fetch_benchmark(benchmark_params)
 
     # Extract price series
     close = pd.to_numeric(df["close"], errors="coerce")
@@ -94,113 +85,19 @@ async def risk_metrics(
     low = pd.to_numeric(df["low"], errors="coerce")
     volume = pd.to_numeric(df["volume"], errors="coerce")
 
-    # Set index to date for alignment
-    df_indexed = df.copy()
-    df_indexed["date"] = pd.to_datetime(df_indexed["date"])
-    df_indexed = df_indexed.set_index("date")
-
+    df_indexed = _index_by_date(df)
     current_price = safe_last_float(close)
-
-    # Calculate daily returns
     returns = close.pct_change().dropna()
 
-    # Volatility
-    daily_std = float(returns.std()) if len(returns) > 0 else None
-    annualized_vol = calculate_volatility(returns, annualize=True)
-
-    volatility = {
-        "daily_std": safe_round(daily_std, 6),
-        "annualized": safe_round(annualized_vol, 4),
-        "rules": {
-            "high_volatility": {
-                "triggered": check_rule(annualized_vol, 0.40, operator.gt),
-                "threshold": 0.40,
-            },
-        },
-    }
-
-    # Beta (with proper alignment)
-    if benchmark_df is not None and len(benchmark_df) > 0:
-        benchmark_indexed = benchmark_df.copy()
-        benchmark_indexed["date"] = pd.to_datetime(benchmark_indexed["date"])
-        benchmark_indexed = benchmark_indexed.set_index("date")
-        benchmark_close = pd.to_numeric(benchmark_indexed["close"], errors="coerce")
-        benchmark_returns = benchmark_close.pct_change().dropna()
-
-        benchmark_returns_summary = {
-            "return_1m": _calculate_period_return(benchmark_close, 21),
-            "return_3m": _calculate_period_return(benchmark_close, 63),
-            "return_1y": _calculate_period_return(benchmark_close, 252),
-        }
-
-        # Create returns series with date index
-        symbol_returns = pd.to_numeric(df_indexed["close"], errors="coerce").pct_change().dropna()
-
-        beta_data = calculate_beta(symbol_returns, benchmark_returns, min_overlap=200)
-
-    beta = {
-        "value": beta_data.get("value"),
-        "overlap_days": beta_data.get("overlap_days"),
-        "rules": {
-            "high_beta": {
-                "triggered": check_rule(beta_data.get("value"), 1.3, operator.gt),
-                "threshold": 1.3,
-            },
-            "low_beta": {
-                "triggered": check_rule(beta_data.get("value"), 0.7, operator.lt),
-                "threshold": 0.7,
-            },
-        },
-    }
-    if beta_data.get("warning"):
-        beta["warning"] = beta_data["warning"]
-
-    # Drawdown
-    max_dd = calculate_max_drawdown(close)
-    current_dd, days_since_high = calculate_current_drawdown(close)
-
-    drawdown = {
-        "max_1y": safe_round(max_dd, 4),
-        "current": safe_round(current_dd, 4),
-        "days_since_high": days_since_high,
-    }
-
-    # VaR
-    var_95 = calculate_var(returns, 0.95)
-    var_99 = calculate_var(returns, 0.99)
-
-    var = {
-        "daily_95": safe_round(var_95, 4),
-        "daily_99": safe_round(var_99, 4),
-    }
-
-    # ATR
-    atr_series = calculate_atr(high, low, close, 14)
-    atr_val = safe_last_float(atr_series)
-    atr_pct: float | None = None
-    if atr_val is not None and current_price is not None and current_price > 0:
-        atr_pct = atr_val / current_price
-
-    atr = {
-        "value": safe_round(atr_val, 2),
-        "as_pct_of_price": safe_round(atr_pct, 4),
-    }
-
-    # Liquidity
-    avg_volume = float(volume.mean()) if not volume.isna().all() else None
-    avg_dollar_volume: float | None = None
-    if avg_volume is not None and current_price is not None:
-        avg_dollar_volume = avg_volume * current_price
-
-    liquidity = {
-        "avg_dollar_volume": safe_round(avg_dollar_volume, 2),
-        "rules": {
-            "liquid": {
-                "triggered": check_rule(avg_dollar_volume, 10_000_000, operator.gt),
-                "threshold": 10_000_000,
-            },
-        },
-    }
+    volatility = _build_volatility(returns)
+    benchmark_returns_summary, beta, benchmark_indexed = _build_beta(
+        df_indexed=df_indexed,
+        benchmark_df=benchmark_df,
+    )
+    drawdown = _build_drawdown(close)
+    var = _build_var(returns)
+    atr, atr_val = _build_atr(high, low, close, current_price)
+    liquidity, avg_dollar_volume = _build_liquidity(volume, current_price)
 
     # Stop suggestions
     sma_50 = calculate_sma(close, 50)
@@ -220,7 +117,7 @@ async def risk_metrics(
     )
 
     # Market context (SPY trend for regime awareness)
-    market_context = _build_market_context(benchmark_indexed if benchmark_df is not None else None)
+    market_context = _build_market_context(benchmark_indexed)
 
     duration_ms = (perf_counter() - start_time) * 1000
 
@@ -246,6 +143,146 @@ async def risk_metrics(
         "position_sizing": position_sizing,
         "market_context": market_context,
     }
+
+
+async def _fetch_benchmark(params: FetchParams) -> pd.DataFrame | None:
+    """Fetch benchmark data, preserving the existing silent fallback."""
+    with suppress(Exception):
+        return await fetch_history(params)
+    return None
+
+
+def _index_by_date(df: pd.DataFrame) -> pd.DataFrame:
+    """Return a copy indexed by date for return alignment."""
+    indexed = df.copy()
+    indexed["date"] = pd.to_datetime(indexed["date"])
+    return indexed.set_index("date")
+
+
+def _build_volatility(returns: pd.Series) -> dict[str, Any]:
+    """Build volatility metrics and rules."""
+    daily_std = float(returns.std()) if len(returns) > 0 else None
+    annualized_vol = calculate_volatility(returns, annualize=True)
+
+    return {
+        "daily_std": safe_round(daily_std, 6),
+        "annualized": safe_round(annualized_vol, 4),
+        "rules": {
+            "high_volatility": {
+                "triggered": check_rule(annualized_vol, 0.40, operator.gt),
+                "threshold": 0.40,
+            },
+        },
+    }
+
+
+def _build_beta(
+    df_indexed: pd.DataFrame,
+    benchmark_df: pd.DataFrame | None,
+) -> tuple[dict[str, float | None], dict[str, Any], pd.DataFrame | None]:
+    """Build benchmark returns, beta payload, and indexed benchmark data."""
+    benchmark_returns_summary: dict[str, float | None] = {
+        "return_1m": None,
+        "return_3m": None,
+        "return_1y": None,
+    }
+    beta_data: dict[str, Any] = {"value": None, "warning": "benchmark_fetch_failed"}
+    benchmark_indexed: pd.DataFrame | None = None
+
+    if benchmark_df is not None and len(benchmark_df) > 0:
+        benchmark_indexed = _index_by_date(benchmark_df)
+        benchmark_close = pd.to_numeric(benchmark_indexed["close"], errors="coerce")
+        benchmark_returns = benchmark_close.pct_change().dropna()
+
+        benchmark_returns_summary = {
+            "return_1m": _calculate_period_return(benchmark_close, 21),
+            "return_3m": _calculate_period_return(benchmark_close, 63),
+            "return_1y": _calculate_period_return(benchmark_close, 252),
+        }
+
+        symbol_returns = pd.to_numeric(
+            df_indexed["close"],
+            errors="coerce",
+        ).pct_change().dropna()
+        beta_data = calculate_beta(symbol_returns, benchmark_returns, min_overlap=200)
+
+    beta = {
+        "value": beta_data.get("value"),
+        "overlap_days": beta_data.get("overlap_days"),
+        "rules": {
+            "high_beta": {
+                "triggered": check_rule(beta_data.get("value"), 1.3, operator.gt),
+                "threshold": 1.3,
+            },
+            "low_beta": {
+                "triggered": check_rule(beta_data.get("value"), 0.7, operator.lt),
+                "threshold": 0.7,
+            },
+        },
+    }
+    if beta_data.get("warning"):
+        beta["warning"] = beta_data["warning"]
+
+    return benchmark_returns_summary, beta, benchmark_indexed
+
+
+def _build_drawdown(close: pd.Series) -> dict[str, Any]:
+    """Build drawdown metrics."""
+    max_dd = calculate_max_drawdown(close)
+    current_dd, days_since_high = calculate_current_drawdown(close)
+    return {
+        "max_1y": safe_round(max_dd, 4),
+        "current": safe_round(current_dd, 4),
+        "days_since_high": days_since_high,
+    }
+
+
+def _build_var(returns: pd.Series) -> dict[str, float | None]:
+    """Build daily value-at-risk metrics."""
+    return {
+        "daily_95": safe_round(calculate_var(returns, 0.95), 4),
+        "daily_99": safe_round(calculate_var(returns, 0.99), 4),
+    }
+
+
+def _build_atr(
+    high: pd.Series,
+    low: pd.Series,
+    close: pd.Series,
+    current_price: float | None,
+) -> tuple[dict[str, float | None], float | None]:
+    """Build ATR metrics and return the raw ATR value for stop suggestions."""
+    atr_series = calculate_atr(high, low, close, 14)
+    atr_val = safe_last_float(atr_series)
+    atr_pct: float | None = None
+    if atr_val is not None and current_price is not None and current_price > 0:
+        atr_pct = atr_val / current_price
+
+    return {
+        "value": safe_round(atr_val, 2),
+        "as_pct_of_price": safe_round(atr_pct, 4),
+    }, atr_val
+
+
+def _build_liquidity(
+    volume: pd.Series,
+    current_price: float | None,
+) -> tuple[dict[str, Any], float | None]:
+    """Build liquidity metrics and return raw average dollar volume."""
+    avg_volume = float(volume.mean()) if not volume.isna().all() else None
+    avg_dollar_volume: float | None = None
+    if avg_volume is not None and current_price is not None:
+        avg_dollar_volume = avg_volume * current_price
+
+    return {
+        "avg_dollar_volume": safe_round(avg_dollar_volume, 2),
+        "rules": {
+            "liquid": {
+                "triggered": check_rule(avg_dollar_volume, 10_000_000, operator.gt),
+                "threshold": 10_000_000,
+            },
+        },
+    }, avg_dollar_volume
 
 
 def _build_stop_suggestions(
