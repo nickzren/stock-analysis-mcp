@@ -1,4 +1,4 @@
-# Stock Analysis MCP Server
+# Stock Analysis MCP
 
 [![Tests](https://img.shields.io/badge/Tests-Pytest-0A9EDC?logo=pytest)](tests/)
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
@@ -6,16 +6,154 @@
 [![Data: yfinance](https://img.shields.io/badge/Data-yfinance-720e9e)](https://github.com/ranaroussi/yfinance)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-An MCP server that gives AI agents (Claude Code, Codex, etc.) single-stock analysis capabilities.
+AI-assisted single-stock analysis for individual investors using Claude Code,
+Codex, or any MCP client.
+
+Ask for a stock and get a disciplined buy / wait / avoid read, risk summary,
+position-sizing context, catalyst notes, and a five-question dislocation check.
+
 Informational only — not financial advice.
 
-## Philosophy
+## Example Output
 
-**One command, complete picture.** Just say "Analyze AAPL" and get a compact,
-human-readable report with a consistent JSON schema and a top-level decision card
-so non-technical users can act without changing any code.
+Shortened example from a live `HOOD` analysis on 2026-05-13. Market data changes over time.
 
-## Architecture
+```text
+HOOD — Robinhood Markets @ $76.67
+
+Decision: WAIT
+Reason: falling-knife gate — severe decline with broken trends
+Verdict: neutral, score -0.10 (scale -1 to +1), low confidence
+Risk: EXTREME
+
+Dislocation Check
+
+Question                              Answer    Read
+Is it down enough?                    Yes       -50.2% from 52W high.
+Is the business still good?           Yes       Net margin 41.1%, FCF +$3.0B, revenue +15.1% YoY.
+Is the balance sheet safe?            Yes       Net cash positive balance sheet.
+Is the long-term thesis intact?       Watch     Good business, but high volatility and rich valuation need monitoring.
+Has price broken more than business?  Unclear   Business is intact, but valuation is still rich and technicals are broken.
+
+Bottom line: HOOD looks like a strong business in a broken chart, not a clear buy.
+Wait for stabilization and a volatility drop before adding.
+```
+
+## Quick Start
+
+### Claude Code
+
+```bash
+claude mcp add -s user stock-analysis -- uvx --from git+https://github.com/nickzren/stock-analysis-mcp stock-analysis
+```
+
+### Codex
+
+```bash
+codex mcp add stock-analysis -- uvx --from git+https://github.com/nickzren/stock-analysis-mcp stock-analysis
+```
+
+## How To Use
+
+Ask your agent:
+
+```text
+Analyze HOOD
+```
+
+With account sizing:
+
+```text
+Analyze HOOD with account size $3000
+```
+
+The default report is compact and decision-focused. It still computes the full
+underlying analysis before returning the shorter investor view.
+
+## What It Checks
+
+- **Action now:** buy, starter, hold, wait, avoid, or wait for data
+- **Hard gates:** falling knife, weak liquidity, poor data quality, missing runway
+- **Business quality:** growth, margins, free cash flow, profitability
+- **Balance-sheet safety:** debt, cash runway, dilution risk
+- **Technicals:** trend, momentum, moving averages, RSI, MACD, ATR
+- **Risk:** volatility, beta, drawdown, stop levels, position sizing
+- **Catalysts:** earnings, analyst targets, news, short interest, ownership
+- **Dislocation check:** whether price is broken more than the business
+
+## Advanced Usage
+
+By default, `analyze` returns the `standard` detail level: a compact investor report covering:
+- **Decision card** — what to do now, sizing, entry/stop, conditions, and next review
+- **Hard gates** — pre-buy checks such as falling knife, weak liquidity, missing runway, and poor data quality
+- **Executive summary** — materiality-first narrative (leads with what matters most)
+- **Section summaries** — 1–2 sentence takeaways per major section
+- **Verdict** — score, tilt, confidence, components, pros, and cons
+- **Dislocation check** — five-question broken-price vs. broken-business read
+- **Action zones** — compact ATR/valuation-based levels and sizing context
+- **Catalyst intelligence** — structured bullish/bearish news catalyst tags
+- **Analyst coverage** — consensus rating + targets
+- **Ownership, short interest, sector comparison, and relative performance**
+- Compact fundamentals, risk, events, and news summaries
+
+The output follows a consistent schema, making it easy to compare multiple stocks or track changes over time.
+For invalid/delisted symbols, `analyze` returns a top-level error (`error=true`) with diagnostics in `data_quality.tool_failures`.
+For detailed rendering guidance, read the MCP resource `stock-analysis://guides/analyze-rendering`.
+
+### Optional Inputs
+
+`analyze` works without any extra parameters. Optional inputs refine sizing and response size:
+
+- `account_size`: portfolio/account size used for dollar sizing output
+- `risk_per_trade_pct`: percent of account you are willing to lose if a stop is hit
+- `max_position_pct`: hard cap for a single position
+- `detail`: `standard` (default), `decision` for the smallest action surface, or `full` for the previous complete audit/debug payload
+
+If `account_size` is omitted, sizing remains percent-based. If a caller depends on fields omitted from `standard` (for example `decision_context`, `dip_assessment`, `decision_modes`, or full `company_profile`), call `analyze(..., detail="full")`.
+
+## Available Tools
+
+### Primary
+
+| Tool | Description |
+|------|-------------|
+| `analyze` | Single-stock analysis with token-efficient `standard` output by default, optional `decision`/`full` detail levels, dollar sizing, and company-name resolution |
+
+### Comparative Analysis
+
+| Tool | Description |
+|------|-------------|
+| `compare` | Side-by-side comparison for 2-5 symbols with rankings |
+| `detect_changes` | Diff current analysis vs prior snapshot (material changes) |
+
+### Market Data & Signals
+
+| Tool | Description |
+|------|-------------|
+| `search_symbol` | Search for stock symbols by company name or ticker |
+| `get_stock_summary` | Basic stock info (name, sector, price, market cap) |
+| `get_price_history` | Historical price data with summary and resource URI |
+| `get_technicals` | Technical indicators (SMA, EMA, RSI, MACD, ATR, Bollinger, Fibonacci, OBV) |
+| `get_fundamentals` | Financial metrics, valuation history, analyst estimates, dividends |
+| `get_events` | Earnings dates, dividends, splits |
+| `get_news` | Recent news headlines, earnings surprise data, and structured catalyst tags |
+| `get_ownership` | Insider transactions and institutional ownership trends |
+| `get_options_signals` | Options-derived signals (IV, put/call, unusual activity) |
+
+`get_price_history` returns a `price://...` resource URI backed by an in-memory, process-local cache. Read that resource during the same server session; it does not survive restarts.
+
+### Portfolio & Utilities
+
+| Tool | Description |
+|------|-------------|
+| `analyze_my_position` | Hold/sell analysis for existing positions |
+| `analyze_portfolio` | Concentration, sector exposure, correlation |
+| `check_data_quality` | Verify data availability for symbols |
+
+## Technical Details
+
+<details>
+<summary>Architecture</summary>
 
 Read left to right: request -> orchestration -> parallel data fetch -> synthesized response.
 
@@ -84,8 +222,6 @@ Color legend: `blue=client`, `green=entry`, `orange=engine`, `purple=data`, `red
 
 Node map: `S=src/stock_analysis/server.py`, `O=src/stock_analysis/tools/analyze/orchestrator.py`, `D=src/stock_analysis/data/`.
 
-Output shape details are documented in `Usage -> Stock Analysis`.
-
 ### Request Lifecycle
 
 ```mermaid
@@ -113,101 +249,7 @@ sequenceDiagram
     M-->>U: analysis result
 ```
 
-## Quick Start
-
-### Claude Code
-
-```bash
-claude mcp add -s user stock-analysis -- uvx --from git+https://github.com/nickzren/stock-analysis-mcp stock-analysis
-```
-
-### Codex
-
-```bash
-codex mcp add stock-analysis -- uvx --from git+https://github.com/nickzren/stock-analysis-mcp stock-analysis
-```
-
-## Usage
-
-### Stock Analysis
-
-The primary way to use this server—just say:
-
-```
-"Analyze NVDA"
-```
-
-If you want dollar sizing, you can still pass account context:
-
-```
-analyze("ASTS", account_size=3000)
-```
-
-By default, `analyze` returns the `standard` detail level: a compact investor report covering:
-- **Decision card** — compact "what do I do now?" block with `action_now`, hard pre-buy gates (earnings blackout, falling knife, missing runway, data-quality critical, weak liquidity, liquidity missing), starter/full sizing in pct/dollars/whole+fractional shares, entry/stop levels, `buy_only_if` / `add_only_if` / `reduce_if` / `monitor` conditions, and `next_review` date. `hold_or_add` is preserved as its own action so existing-holder vs. new-buyer guidance stays distinct.
-- **Executive summary** — materiality-first narrative (leads with what matters most)
-- **Section summaries** — 1–2 sentence takeaways per major section
-- **Verdict** — score, tilt, confidence, components, pros, and cons
-- **Dislocation check** — five-question broken-price vs. broken-business read
-- **Action zones** — compact ATR/valuation-based levels and sizing context
-- **Catalyst intelligence** — structured bullish/bearish news catalyst tags
-- **Analyst coverage** — consensus rating + targets
-- **Ownership, short interest, sector comparison, and relative performance**
-- Compact fundamentals, risk, events, and news summaries
-
-The output follows a consistent schema, making it easy to compare multiple stocks or track changes over time.
-For invalid/delisted symbols, `analyze` returns a top-level error (`error=true`) with diagnostics in `data_quality.tool_failures`.
-For detailed rendering guidance, read the MCP resource `stock-analysis://guides/analyze-rendering`.
-
-### Optional Inputs
-
-`analyze` works without any extra parameters. Optional inputs refine sizing and response size:
-
-- `account_size`: portfolio/account size used for dollar sizing output
-- `risk_per_trade_pct`: percent of account you are willing to lose if a stop is hit
-- `max_position_pct`: hard cap for a single position
-- `detail`: `standard` (default), `decision` for the smallest action surface, or `full` for the previous complete audit/debug payload
-
-If `account_size` is omitted, sizing remains percent-based. If a caller depends on fields omitted from `standard` (for example `decision_context`, `dip_assessment`, `decision_modes`, or full `company_profile`), call `analyze(..., detail="full")`.
-
-## Available Tools
-
-### Primary
-
-| Tool | Description |
-|------|-------------|
-| `analyze` | Single-stock analysis with token-efficient `standard` output by default, optional `decision`/`full` detail levels, dollar sizing, and company-name resolution |
-
-### Comparative Analysis
-
-| Tool | Description |
-|------|-------------|
-| `compare` | Side-by-side comparison for 2-5 symbols with rankings |
-| `detect_changes` | Diff current analysis vs prior snapshot (material changes) |
-
-### Market Data & Signals
-
-| Tool | Description |
-|------|-------------|
-| `search_symbol` | Search for stock symbols by company name or ticker |
-| `get_stock_summary` | Basic stock info (name, sector, price, market cap) |
-| `get_price_history` | Historical price data with summary and resource URI |
-| `get_technicals` | Technical indicators (SMA, EMA, RSI, MACD, ATR, Bollinger, Fibonacci, OBV) |
-| `get_fundamentals` | Financial metrics, valuation history, analyst estimates, dividends |
-| `get_events` | Earnings dates, dividends, splits |
-| `get_news` | Recent news headlines, earnings surprise data, and structured catalyst tags |
-| `get_ownership` | Insider transactions and institutional ownership trends |
-| `get_options_signals` | Options-derived signals (IV, put/call, unusual activity) |
-
-`get_price_history` returns a `price://...` resource URI backed by an in-memory, process-local cache. Read that resource during the same server session; it does not survive restarts.
-
-### Portfolio & Utilities
-
-| Tool | Description |
-|------|-------------|
-| `analyze_my_position` | Hold/sell analysis for existing positions |
-| `analyze_portfolio` | Concentration, sector exposure, correlation |
-| `check_data_quality` | Verify data availability for symbols |
+</details>
 
 ## Development
 
