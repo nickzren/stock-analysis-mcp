@@ -148,6 +148,7 @@ By default, `analyze` returns the `standard` detail level: a compact investor re
 - **Executive summary** — materiality-first narrative (leads with what matters most)
 - **Section summaries** — 1–2 sentence takeaways per major section
 - **Verdict** — score, tilt, confidence, components, pros, and cons
+- **Dislocation check** — five-question broken-price vs. broken-business read
 - **Action zones** — compact ATR/valuation-based levels and sizing context
 - **Catalyst intelligence** — structured bullish/bearish news catalyst tags
 - **Analyst coverage** — consensus rating + targets

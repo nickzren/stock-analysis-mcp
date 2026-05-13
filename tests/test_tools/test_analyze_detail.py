@@ -95,7 +95,29 @@ def _full_result() -> dict:
         "company_profile": {"description": "Long profile"},
         "policy_action": {"mid_term": "buy"},
         "decision_modes": {"balanced": {"action": "starter"}},
-        "dislocation_framework": {"action": {"buy_only_if": []}},
+        "dislocation_framework": {
+            "setup": {
+                "status": "present",
+                "summary": "Large drawdown is present: -60.0% from 52W high.",
+            },
+            "business_integrity": {
+                "status": "intact",
+                "summary": "Business still looks intact.",
+            },
+            "balance_sheet_safety": {
+                "status": "safe",
+                "summary": "Balance sheet looks safe.",
+            },
+            "thesis_integrity": {
+                "status": "watch",
+                "summary": "The long-term thesis is still alive, but it needs proof.",
+            },
+            "mismatch_verdict": {
+                "status": "price_broken_more_than_business",
+                "summary": "Price looks more broken than the business.",
+            },
+            "action": {"buy_only_if": []},
+        },
         "dip_assessment": {"dip_classification": {"type": "healthy_pullback"}},
         "decision_context": {"top_triggers": [{"id": "risk"}]},
         "ownership_flow": {"transactions": [{"shares": 1000}]},
@@ -157,6 +179,7 @@ def test_standard_projection_includes_investor_blocks_and_omits_full_only_blocks
     assert projected["ownership"] == {"institutional_pct": 0.7}
     assert projected["sector_comparison"] == {"pe_percentile": 45}
     assert projected["relative_performance"] == {"vs_spy_1m": 0.02}
+    assert "dislocation_check" in projected
     assert "dip_assessment" not in projected
     assert "decision_context" not in projected
     assert "ownership_flow" not in projected
@@ -187,6 +210,49 @@ def test_standard_nested_blocks_use_schema_accurate_allowlists() -> None:
         "summary",
     }
     assert "stop_calculation" in projected["action_zones"]
+
+
+def test_standard_projection_includes_compact_dislocation_check() -> None:
+    projected = project_analyze_result(_full_result(), "standard")
+
+    dislocation_check = projected["dislocation_check"]
+
+    assert dislocation_check == {
+        "overall_status": "price_broken_more_than_business",
+        "overall_read": "Price looks more broken than the business.",
+        "questions": [
+            {
+                "id": "down_enough",
+                "question": "Is it down enough?",
+                "answer": "yes",
+                "read": "Large drawdown is present: -60.0% from 52W high.",
+            },
+            {
+                "id": "business_still_good",
+                "question": "Is the business still good?",
+                "answer": "yes",
+                "read": "Business still looks intact.",
+            },
+            {
+                "id": "balance_sheet_safe",
+                "question": "Is the balance sheet safe?",
+                "answer": "yes",
+                "read": "Balance sheet looks safe.",
+            },
+            {
+                "id": "long_term_thesis_intact",
+                "question": "Is the long-term thesis intact?",
+                "answer": "watch",
+                "read": "The long-term thesis is still alive, but it needs proof.",
+            },
+            {
+                "id": "price_broken_more_than_business",
+                "question": "Has price broken more than business?",
+                "answer": "yes",
+                "read": "Price looks more broken than the business.",
+            },
+        ],
+    }
 
 
 def test_projection_size_ordering() -> None:

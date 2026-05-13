@@ -3,6 +3,7 @@
 from typing import Any
 
 ANALYZE_DETAIL_LEVELS = frozenset({"decision", "standard", "full"})
+DislocationQuestionSpec = tuple[str, str, str, dict[str, str]]
 
 SUMMARY_KEYS = ("name", "current_price", "sector", "industry", "market_cap", "currency")
 VERDICT_DECISION_KEYS = ("score", "tilt", "confidence", "components", "pros", "cons")
@@ -41,6 +42,61 @@ FUNDAMENTALS_SUMMARY_STANDARD_KEYS = (
     "summary",
 )
 
+DISLOCATION_QUESTIONS: tuple[DislocationQuestionSpec, ...] = (
+    (
+        "down_enough",
+        "Is it down enough?",
+        "setup",
+        {
+            "present": "yes",
+            "weak": "partial",
+            "absent": "no",
+        },
+    ),
+    (
+        "business_still_good",
+        "Is the business still good?",
+        "business_integrity",
+        {
+            "intact": "yes",
+            "mixed": "mixed",
+            "broken": "no",
+        },
+    ),
+    (
+        "balance_sheet_safe",
+        "Is the balance sheet safe?",
+        "balance_sheet_safety",
+        {
+            "safe": "yes",
+            "watch": "watch",
+            "unsafe": "no",
+        },
+    ),
+    (
+        "long_term_thesis_intact",
+        "Is the long-term thesis intact?",
+        "thesis_integrity",
+        {
+            "intact": "yes",
+            "watch": "watch",
+            "broken": "no",
+        },
+    ),
+    (
+        "price_broken_more_than_business",
+        "Has price broken more than business?",
+        "mismatch_verdict",
+        {
+            "price_broken_more_than_business": "yes",
+            "business_intact_but_not_cheap": "no",
+            "business_broken_more_than_price": "no",
+            "both_broken": "no",
+            "unclear": "unclear",
+        },
+    ),
+)
+
 
 def normalize_analyze_detail(detail: str) -> str:
     """Normalize and validate an analyze detail level."""
@@ -64,6 +120,36 @@ def _project_data_quality(result: dict[str, Any]) -> dict[str, Any]:
     if tool_failures or result.get("error"):
         projected["tool_failures"] = tool_failures or []
     return projected
+
+
+def _build_dislocation_check(result: dict[str, Any]) -> dict[str, Any] | None:
+    """Return the compact five-question dislocation read for standard output."""
+    framework = result.get("dislocation_framework")
+    if not isinstance(framework, dict):
+        return None
+
+    questions: list[dict[str, Any]] = []
+    for question_id, question, section_key, answers in DISLOCATION_QUESTIONS:
+        section = framework.get(section_key) or {}
+        if not isinstance(section, dict):
+            section = {}
+        status = section.get("status")
+        status_key = status if isinstance(status, str) else ""
+        questions.append({
+            "id": question_id,
+            "question": question,
+            "answer": answers.get(status_key, "unknown"),
+            "read": section.get("summary"),
+        })
+
+    mismatch = framework.get("mismatch_verdict") or {}
+    if not isinstance(mismatch, dict):
+        mismatch = {}
+    return {
+        "overall_status": mismatch.get("status"),
+        "overall_read": mismatch.get("summary"),
+        "questions": questions,
+    }
 
 
 def _base_decision_projection(result: dict[str, Any]) -> dict[str, Any]:
@@ -101,6 +187,9 @@ def _standard_projection(result: dict[str, Any]) -> dict[str, Any]:
         "sector_comparison": result.get("sector_comparison"),
         "relative_performance": result.get("relative_performance"),
     })
+    dislocation_check = _build_dislocation_check(result)
+    if dislocation_check is not None:
+        projected["dislocation_check"] = dislocation_check
     return projected
 
 
