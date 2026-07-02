@@ -14,15 +14,11 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any
 
-from stock_analysis.tools.analyze.constants import CRITICAL_ANALYZE_TOOLS
-
-# Liquidity threshold below which we block new buys for small accounts.
-# Sized so that a $5K position is well under 1% of typical daily volume.
-_WEAK_LIQUIDITY_DOLLARS_PER_DAY = 1_000_000.0
-
-# Number of days before earnings during which we block new buys.
-# Earnings move stocks ±5-15% on average; entering inside this window is gambling.
-_EARNINGS_BLACKOUT_DAYS = 5
+from stock_analysis.tools.analyze.gates import (
+    check_data_quality,
+    check_earnings_blackout,
+    check_liquidity,
+)
 
 # Default look-ahead for "next_review.date" when no earnings date is near.
 _DEFAULT_REVIEW_HORIZON_DAYS = 30
@@ -36,28 +32,8 @@ def _compute_hard_gates(
     risk_data: dict[str, Any],
 ) -> dict[str, Any]:
     """Collect blocking conditions that must override any bullish recommendation."""
-    earnings = events_data.get("earnings") or {}
-    days_until_earnings = earnings.get("days_until")
-    earnings_blackout = (
-        isinstance(days_until_earnings, (int, float))
-        and 0 <= days_until_earnings <= _EARNINGS_BLACKOUT_DAYS
-    )
-
-    # Data quality: block on any of (a) fundamentals missing, (b) critical fields
-    # like current_price/beta missing, (c) any critical tool failure. A weak first
-    # check (only fundamentals_status) leaves obvious blockers like a stock with
-    # no price data slipping through with a "buy" recommendation.
-    fund_status = data_quality.get("fundamentals_status")
-    missing_critical = data_quality.get("missing_critical") or []
-    tool_failures = data_quality.get("tool_failures") or []
-    critical_tool_failed = any(
-        tf.get("tool") in CRITICAL_ANALYZE_TOOLS for tf in tool_failures if isinstance(tf, dict)
-    )
-    data_quality_critical = (
-        fund_status == "missing"
-        or bool(missing_critical)
-        or critical_tool_failed
-    )
+    earnings_blackout, earnings_blocker = check_earnings_blackout(events_data)
+    data_quality_critical, data_quality_blocker = check_data_quality(data_quality)
 
     dip_type: str | None = None
     if dip_assessment:
@@ -70,39 +46,13 @@ def _compute_hard_gates(
     is_unprofitable = valuation_summary.get("valuation_note") == "pe_not_meaningful"
     missing_runway = is_unprofitable and burn_status == "unavailable"
 
-    # Liquidity gate fires for BOTH "below threshold" and "missing entirely" — for a
-    # small-account decision, "we don't know" is just as blocking as "too thin".
-    liquidity = risk_data.get("liquidity") or {}
-    avg_dollar_volume = liquidity.get("avg_dollar_volume")
-    weak_liquidity = (
-        isinstance(avg_dollar_volume, (int, float))
-        and avg_dollar_volume < _WEAK_LIQUIDITY_DOLLARS_PER_DAY
-    )
-    liquidity_missing = avg_dollar_volume is None
+    weak_liquidity, liquidity_missing, liquidity_blockers = check_liquidity(risk_data)
 
     blocking: list[dict[str, str]] = []
-    if earnings_blackout and isinstance(days_until_earnings, (int, float)):
-        blocking.append({
-            "id": "earnings_blackout",
-            "reason": f"earnings in {int(days_until_earnings)} days (<= {_EARNINGS_BLACKOUT_DAYS})",
-        })
-    if data_quality_critical:
-        reasons: list[str] = []
-        if fund_status == "missing":
-            reasons.append("fundamentals_status=missing")
-        if missing_critical:
-            reasons.append(f"missing_critical={','.join(str(x) for x in missing_critical)}")
-        if critical_tool_failed:
-            failed_names = sorted({
-                str(tf.get("tool"))
-                for tf in tool_failures
-                if isinstance(tf, dict) and tf.get("tool") in CRITICAL_ANALYZE_TOOLS
-            })
-            reasons.append(f"critical_tool_failed={','.join(failed_names)}")
-        blocking.append({
-            "id": "data_quality_critical",
-            "reason": "critical data unavailable: " + "; ".join(reasons),
-        })
+    if earnings_blocker:
+        blocking.append(earnings_blocker)
+    if data_quality_blocker:
+        blocking.append(data_quality_blocker)
     if falling_knife:
         blocking.append({
             "id": "falling_knife",
@@ -113,20 +63,7 @@ def _compute_hard_gates(
             "id": "missing_runway",
             "reason": "unprofitable company with no usable runway data — uninvestable for sizing",
         })
-    if weak_liquidity and isinstance(avg_dollar_volume, (int, float)):
-        blocking.append({
-            "id": "weak_liquidity",
-            "reason": (
-                f"avg daily dollar volume "
-                f"~${avg_dollar_volume / 1_000_000:.2f}M < "
-                f"${_WEAK_LIQUIDITY_DOLLARS_PER_DAY / 1_000_000:.0f}M threshold"
-            ),
-        })
-    if liquidity_missing:
-        blocking.append({
-            "id": "liquidity_missing",
-            "reason": "avg_dollar_volume unavailable — cannot confirm tradability for small account",
-        })
+    blocking.extend(liquidity_blockers)
 
     return {
         "any_blocking": bool(blocking),

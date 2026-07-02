@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from stock_analysis.tools.analyze.gates import falling_knife_assessment
 from stock_analysis.utils.helpers import round_or_none
 
 # Static dip-type / recommendation lookups used by build_dip_assessment.
@@ -191,28 +192,15 @@ def _classify_dip(
     """Classify the current decline as pullback, falling-knife, etc."""
     dip_signals: list[str] = []
 
-    falling_knife_score = 0
-    if "death_cross" in bearish_signals:
-        falling_knife_score += 2
-        dip_signals.append("death_cross_active")
-    if "price_below_sma200" in bearish_signals:
-        falling_knife_score += 1
-        dip_signals.append("below_sma200")
-    if return_3m is not None and return_3m < -0.30:
-        falling_knife_score += 2
-        dip_signals.append("severe_3m_decline")
-    elif return_3m is not None and return_3m < -0.20:
-        falling_knife_score += 1
-        dip_signals.append("significant_3m_decline")
-    if position_in_range is not None and position_in_range < 0.10:
-        falling_knife_score += 1
-        dip_signals.append("near_52w_low")
-    if sma_200_slope is not None and sma_200_slope < 0:
-        falling_knife_score += 1
-        dip_signals.append("sma200_downtrend")
-    if days_since_52w_high is not None and days_since_52w_high > 180:
-        falling_knife_score += 1
-        dip_signals.append("stale_52w_high")
+    falling_knife_score, knife_reasons = falling_knife_assessment(
+        death_cross="death_cross" in bearish_signals,
+        below_sma200="price_below_sma200" in bearish_signals,
+        return_3m=return_3m,
+        position_in_range=position_in_range,
+        sma_200_slope=sma_200_slope,
+        days_since_52w_high=days_since_52w_high,
+    )
+    dip_signals.extend(knife_reasons)
 
     pullback_score = 0
     if "golden_cross" in bullish_signals or (sma_50 and sma_200 and sma_50 > sma_200):
