@@ -231,3 +231,22 @@ async def test_mixed_failures_prefer_data_unavailable(
     result = await orch.analyze_trade_setup("AAPL", _now=NOW_EVENING)
     assert result["error"] is True
     assert result["error_type"] == "data_unavailable"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("kwargs", "bad_param"), [
+    ({"account_size": 0.0}, "account_size"),
+    ({"account_size": -5000.0}, "account_size"),
+    ({"risk_per_trade_pct": 0.0}, "risk_per_trade_pct"),
+    ({"risk_per_trade_pct": -1.0}, "risk_per_trade_pct"),
+    ({"risk_per_trade_pct": 150.0}, "risk_per_trade_pct"),
+    ({"max_position_pct": 0.0}, "max_position_pct"),
+    ({"max_position_pct": 101.0}, "max_position_pct"),
+])
+async def test_out_of_bounds_sizing_inputs_rejected(
+    patched: None, kwargs: dict[str, float], bad_param: str,
+) -> None:
+    result = await orch.analyze_trade_setup("TEST", _now=NOW_EVENING, **kwargs)
+    assert result["error"] is True
+    assert result["error_type"] == "invalid_parameters"
+    assert bad_param in result["message"]

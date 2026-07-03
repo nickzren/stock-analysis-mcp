@@ -272,9 +272,9 @@ async def analyze_trade_setup(
 
     Args:
         symbol: Stock ticker symbol
-        account_size: Optional account size in dollars for share sizing
-        risk_per_trade_pct: Percent of account risked between entry and stop (default 1.0)
-        max_position_pct: Hard cap on position size as percent of account (default 10.0)
+        account_size: Optional account size in dollars for share sizing (must be > 0)
+        risk_per_trade_pct: Percent of account risked between entry and stop, in (0, 100] (default 1.0)
+        max_position_pct: Hard cap on position size as percent of account, in (0, 100] (default 10.0)
 
     Returns:
         JSON trade-setup card

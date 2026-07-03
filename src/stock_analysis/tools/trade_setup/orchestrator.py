@@ -26,6 +26,21 @@ _ET = pytz.timezone("America/New_York")
 _CORE_TOOL_NAMES = ["stock_summary", "technicals", "risk_metrics", "events_calendar"]
 
 
+def _validate_sizing_params(
+    account_size: float | None,
+    risk_per_trade_pct: float,
+    max_position_pct: float,
+) -> str | None:
+    """Bounds for sizing inputs; None when valid, else the rejection message."""
+    if account_size is not None and account_size <= 0:
+        return f"account_size must be positive, got {account_size}"
+    if not 0 < risk_per_trade_pct <= 100:
+        return f"risk_per_trade_pct must be in (0, 100], got {risk_per_trade_pct}"
+    if not 0 < max_position_pct <= 100:
+        return f"max_position_pct must be in (0, 100], got {max_position_pct}"
+    return None
+
+
 async def analyze_trade_setup(
     symbol: str,
     account_size: float | None = None,
@@ -35,6 +50,17 @@ async def analyze_trade_setup(
 ) -> dict[str, Any]:
     start_time = perf_counter()
     normalized = symbol.upper().strip()
+
+    param_error = _validate_sizing_params(
+        account_size, risk_per_trade_pct, max_position_pct
+    )
+    if param_error is not None:
+        return build_error_response(
+            error_type="invalid_parameters",
+            message=param_error,
+            symbol=normalized,
+        )
+
     now = _now or datetime.now(_ET)
     session = get_market_state()["state"]
 
