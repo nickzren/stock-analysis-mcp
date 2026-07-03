@@ -59,6 +59,8 @@ class TestPrecedence:
         card = build_card(actionable_price=101.5)  # above 101 trigger
         assert card["action"] == "trade_now"
         assert card["plan"]["entry"]["type"] == "market"
+        # sizing anchored to actionable price (101.5), not the 101.0 trigger level
+        assert card["plan"]["stop"]["distance_pct"] == round((101.5 - 97.0) / 101.5, 4)
 
     def test_stale_data_wins_over_everything(self) -> None:
         card = build_card(freshness=STALE, actionable_price=101.5)
@@ -111,6 +113,17 @@ class TestPrecedence:
         assert card["setup"] is not None  # blackout watch carries the setup
         assert card["plan"] is None
         assert card["next_review"]["date"] == "2026-03-13"
+        assert card["confidence"] == "low"
+
+    def test_events_calendar_failure_caps_at_watch_with_setup(self) -> None:
+        card = build_card(
+            events_data={},
+            tool_failures=[{"tool": "events_calendar", "error": "fetch_error"}],
+        )
+        assert card["action"] == "watch"
+        assert "earnings_unverifiable" in blocker_ids(card)
+        assert card["setup"] is not None
+        assert card["plan"] is None
 
 
 class TestSessionInvariant:

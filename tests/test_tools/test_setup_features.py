@@ -26,6 +26,12 @@ def test_returns_none_for_short_frames() -> None:
     assert compute_setup_features(make_df([100.0] * 20)) is None
 
 
+def test_returns_none_when_core_scalar_is_nan() -> None:
+    highs = [101.0] * 30
+    highs[-2] = float("nan")  # prior_day_high
+    assert compute_setup_features(make_df([100.0] * 30, highs=highs)) is None
+
+
 def test_prior_day_and_20d_levels_exclude_current_bar() -> None:
     closes = [100.0] * 29 + [120.0]
     highs = [101.0] * 28 + [110.0, 121.0]  # prior-day high 110, current 121
@@ -45,6 +51,16 @@ def test_swing_low_finds_pivot() -> None:
     f = compute_setup_features(make_df(closes, lows=lows))
     assert f is not None
     assert f["swing_low"] == 89.5
+
+
+def test_swing_low_falls_back_to_lookback_min_without_pivot() -> None:
+    # Monotonically declining lows: no interior point is strictly below both
+    # its left AND right neighbors, so no strict pivot exists anywhere.
+    closes = [130.0 - i * 1.0 for i in range(30)]
+    lows = [c - 0.5 for c in closes]
+    f = compute_setup_features(make_df(closes, lows=lows))
+    assert f is not None
+    assert f["swing_low"] == min(lows[-20:])
 
 
 def test_swing_low_prefers_most_recent_strict_pivot() -> None:

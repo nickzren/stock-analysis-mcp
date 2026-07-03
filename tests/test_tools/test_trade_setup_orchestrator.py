@@ -1,5 +1,6 @@
 """Orchestrator tests with all fetches monkeypatched (no network)."""
 
+import math
 from datetime import datetime
 from typing import Any
 
@@ -12,6 +13,7 @@ from tests.test_tools.test_setup_detection import make_technicals
 
 ET = pytz.timezone("America/New_York")
 NOW_EVENING = ET.localize(datetime(2026, 3, 10, 18, 30))  # Tuesday after hours
+NOW_REGULAR = ET.localize(datetime(2026, 3, 10, 10, 30))  # Tuesday regular session
 
 
 def daily_df() -> pd.DataFrame:
@@ -24,6 +26,43 @@ def daily_df() -> pd.DataFrame:
         "open": closes, "high": [c + 1 for c in closes],
         "low": [c - 1 for c in closes], "close": closes,
         "volume": [1_000_000.0] * n,
+    })
+
+
+def breakout_daily_df() -> pd.DataFrame:
+    """60 daily bars: a noisy early uptrend (keeps historical bandwidth wide),
+    a tight 24-bar consolidation (compresses current bandwidth into the
+    breakout detector's <=25th percentile band), then a final bar that clears
+    the 20d high on 2x volume (breakout trigger_satisfied)."""
+    n = 60
+    base: list[float] = []
+    price = 85.0
+    for i in range(35):
+        price += 0.3 + 1.5 * math.sin(i * 0.9)
+        base.append(round(price, 2))
+    consolidation = [base[-1] + 0.02 * (i % 2) for i in range(24)]
+    breakout_close = consolidation[-1] + 1.0
+    closes = base + consolidation + [breakout_close]
+    highs = [c + 0.1 for c in closes[:-1]] + [breakout_close + 0.1]
+    lows = [c - 0.1 for c in closes[:-1]] + [breakout_close - 0.1]
+    volumes = [1_000_000.0] * (n - 2) + [1_000_000.0, 2_000_000.0]  # last-bar ratio 2.0
+
+    dates = pd.date_range("2025-12-15", periods=n, freq="B").strftime("%Y-%m-%d").tolist()
+    dates[-1] = "2026-03-10"
+    return pd.DataFrame({
+        "date": dates,
+        "open": closes, "high": highs, "low": lows, "close": closes,
+        "volume": volumes,
+    })
+
+
+def breakout_probe_df() -> pd.DataFrame:
+    """5m intraday bar, timestamped 5 minutes before NOW_REGULAR (within the
+    15m freshness ceiling), with a close above the breakout trigger."""
+    return pd.DataFrame({
+        "date": ["2026-03-10T10:25:00-0400"],
+        "open": [96.5], "high": [96.9], "low": [96.4], "close": [96.7],
+        "volume": [500_000.0],
     })
 
 
@@ -95,3 +134,51 @@ async def test_technicals_failure_alone_degrades_to_wait_for_data(
     result = await orch.analyze_trade_setup("TEST", _now=NOW_EVENING)
     assert result["action"] == "wait_for_data"
     assert any(b["id"] == "data_quality_critical" for b in result["blockers"])
+
+
+@pytest.mark.asyncio
+async def test_regular_session_fresh_satisfied_trigger_is_trade_now(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """End-to-end: regular session, fresh 5m probe above the breakout trigger
+    with qualifying volume -> trade_now with a market entry."""
+    async def fake_summary(symbol: str) -> dict[str, Any]:
+        return {"symbol": symbol, "name": "Test Co", "currency": "USD",
+                "current_price": 96.7}
+
+    breakout_technicals = make_technicals(
+        rsi={"value": 65.0, "bullish_divergence": False},  # outside pullback/meanrev RSI bands
+        atr={"value": 1.0, "value_pct": 0.01},
+        price_position={"position_in_range": 0.8, "days_since_52w_high": 2},
+        returns={"return_3m": 0.10, "return_1w_zscore": 0.5},
+        volume={"ratio": 2.0},
+    )
+
+    async def fake_technicals(symbol: str) -> dict[str, Any]:
+        return breakout_technicals
+
+    async def fake_risk(symbol: str) -> dict[str, Any]:
+        return {"liquidity": {"avg_dollar_volume": 50_000_000}}
+
+    async def fake_events(symbol: str) -> dict[str, Any]:
+        return {"earnings": {"days_until": 40, "next_date": "2026-04-19"}}
+
+    async def fake_history(params: Any) -> pd.DataFrame:
+        if params.interval == "1d":
+            return breakout_daily_df()
+        return breakout_probe_df()
+
+    monkeypatch.setattr(orch, "stock_summary", fake_summary)
+    monkeypatch.setattr(orch, "technicals", fake_technicals)
+    monkeypatch.setattr(orch, "risk_metrics", fake_risk)
+    monkeypatch.setattr(orch, "events_calendar", fake_events)
+    monkeypatch.setattr(orch, "fetch_history", fake_history)
+    monkeypatch.setattr(orch, "get_market_state", lambda: {"state": "regular"})
+
+    result = await orch.analyze_trade_setup("TEST", _now=NOW_REGULAR)
+
+    assert result.get("error") is None
+    assert result["action"] == "trade_now"
+    assert result["plan"]["entry"]["type"] == "market"
+    assert result["freshness"]["basis"] == "bar_timestamp"
+    assert result["freshness"]["stale"] is False

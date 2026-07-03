@@ -151,6 +151,16 @@ class TestMeanReversion:
         assert detect_setup(t, f, actionable_price=100.0) is None
 
 
+def test_exact_3pct_off_high_boundary_favors_pullback_over_breakout() -> None:
+    # off_high == (100 - 97) / 100 == 0.03 exactly: satisfies both
+    # PULLBACK_MIN_OFF_HIGH (>=0.03) and BREAKOUT_MAX_BELOW_HIGH (<=0.03).
+    # SETUP_PRIORITY checks pullback before breakout, so pullback wins.
+    f = make_features(high_20d_prior=100.0, bandwidth_pctile_6m=0.10, last_volume_ratio=2.0)
+    setup = detect_setup(make_technicals(), f, actionable_price=97.0)
+    assert setup is not None
+    assert setup["type"] == "pullback_in_uptrend"
+
+
 def test_no_setup_on_boring_chart() -> None:
     t = make_technicals(rsi={"value": 60.0, "bullish_divergence": False})
     f = make_features(high_20d_prior=120.0)  # not near high, not oversold
