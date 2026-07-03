@@ -1,0 +1,104 @@
+"""Freshness block and gate for the trade-setup card.
+
+`as_of` and `quote_age_seconds` derive exclusively from market-data bar
+timestamps — never from fetch/provenance time (design doc: Contract Invariant).
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, date, datetime, timedelta
+from typing import Any
+
+import pandas as pd
+
+from stock_analysis.tools.trade_setup.setup_rules import FRESHNESS_CEILING_MINUTES
+
+_UNVERIFIABLE: dict[str, Any] = {
+    "as_of": None,
+    "basis": "unverifiable",
+    "quote_age_seconds": None,
+    "stale": True,
+}
+
+
+def most_recent_expected_trading_day(now: datetime, session: str) -> date:
+    """Most recent weekday whose daily bar should exist (no holiday calendar in v1)."""
+    d = now.date()
+    if session == "pre_market" or (session == "closed" and now.hour < 4):
+        d = d - timedelta(days=1)
+    while d.weekday() >= 5:
+        d = d - timedelta(days=1)
+    return d
+
+
+def build_freshness(
+    *,
+    intraday_df: pd.DataFrame | None,
+    daily_df: pd.DataFrame | None,
+    session: str,
+    now: datetime,
+) -> dict[str, Any]:
+    """Build the freshness block. `now` must be tz-aware (America/New_York)."""
+    if session == "regular":
+        ts = _last_bar_timestamp_utc(intraday_df)
+        if ts is None:
+            return {**_UNVERIFIABLE, "session": session}
+        age = max(0, int((now.astimezone(UTC) - ts).total_seconds()))
+        return {
+            "as_of": ts.isoformat(),
+            "basis": "bar_timestamp",
+            "session": session,
+            "quote_age_seconds": age,
+            "stale": age > FRESHNESS_CEILING_MINUTES * 60,
+        }
+
+    last_daily = _last_daily_date(daily_df)
+    if last_daily is None:
+        return {**_UNVERIFIABLE, "session": session}
+    expected = most_recent_expected_trading_day(now, session)
+    return {
+        "as_of": last_daily.isoformat(),
+        "basis": "bar_timestamp",
+        "session": session,
+        "quote_age_seconds": None,
+        "stale": last_daily < expected,
+    }
+
+
+def freshness_blockers(freshness: dict[str, Any]) -> list[dict[str, str]]:
+    if freshness["basis"] == "unverifiable":
+        return [{
+            "id": "freshness_unverifiable",
+            "reason": "no reliable market-data timestamp for the actionable price",
+        }]
+    if freshness["stale"]:
+        if freshness["session"] == "regular":
+            reason = (
+                f"market data is {freshness['quote_age_seconds']}s old "
+                f"(> {FRESHNESS_CEILING_MINUTES}m ceiling)"
+            )
+        else:
+            reason = f"newest daily bar {freshness['as_of']} predates the last expected trading day"
+        return [{"id": "stale_data", "reason": reason}]
+    return []
+
+
+def _last_bar_timestamp_utc(df: pd.DataFrame | None) -> datetime | None:
+    if df is None or len(df) == 0 or "date" not in df.columns:
+        return None
+    # Naive timestamps get localized as UTC, which overstates age for ET data —
+    # errs toward downgrade, the safe direction.
+    ts = pd.to_datetime(df["date"].iloc[-1], utc=True, errors="coerce")
+    if pd.isna(ts):
+        return None
+    return ts.to_pydatetime()  # type: ignore[no-any-return]
+
+
+def _last_daily_date(df: pd.DataFrame | None) -> date | None:
+    if df is None or len(df) == 0 or "date" not in df.columns:
+        return None
+    raw = str(df["date"].iloc[-1])[:10]
+    try:
+        return date.fromisoformat(raw)
+    except ValueError:
+        return None
