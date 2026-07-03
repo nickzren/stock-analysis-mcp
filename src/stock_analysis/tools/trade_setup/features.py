@@ -67,19 +67,24 @@ def compute_setup_features(df: pd.DataFrame | None) -> dict[str, Any] | None:
 
 
 def _most_recent_pivot_low(low: pd.Series) -> float | None:
-    """Most recent pivot low (local min over ±SWING_PIVOT_WINDOW) within SWING_LOOKBACK."""
+    """Most recent strict pivot low (strictly below all neighbors within
+    ±SWING_PIVOT_WINDOW) within SWING_LOOKBACK; falls back to the lookback min."""
     clean = low.dropna().reset_index(drop=True)
     if len(clean) < 2 * SWING_PIVOT_WINDOW + 1:
         return None
     start = max(SWING_PIVOT_WINDOW, len(clean) - SWING_LOOKBACK)
-    pivots: list[float] = []
+    pivot: float | None = None
     for i in range(start, len(clean) - SWING_PIVOT_WINDOW):
         window = clean[i - SWING_PIVOT_WINDOW: i + SWING_PIVOT_WINDOW + 1]
-        if clean[i] == window.min():
-            pivots.append(float(clean[i]))
-    if pivots:
-        return min(pivots)
-    return float(clean.tail(SWING_LOOKBACK).min())
+        neighbors_min = min(
+            window.iloc[:SWING_PIVOT_WINDOW].min(),
+            window.iloc[SWING_PIVOT_WINDOW + 1:].min(),
+        )
+        if clean[i] < neighbors_min:
+            pivot = float(clean[i])
+    if pivot is None:
+        pivot = float(clean.tail(SWING_LOOKBACK).min())
+    return pivot
 
 
 def _bandwidth_percentile(close: pd.Series) -> float | None:

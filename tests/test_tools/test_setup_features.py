@@ -47,6 +47,16 @@ def test_swing_low_finds_pivot() -> None:
     assert f["swing_low"] == 89.5
 
 
+def test_swing_low_prefers_most_recent_strict_pivot() -> None:
+    # Older deeper pivot (low 84.5), recovery, then recent shallower pivot (low 91.5)
+    closes = ([100.0] * 8 + [95.0, 90.0, 85.0, 91.0, 96.0]
+              + [100.0] * 5 + [96.0, 92.0, 95.0, 98.0] + [99.0] * 8)
+    lows = [c - 0.5 for c in closes]
+    f = compute_setup_features(make_df(closes, lows=lows))
+    assert f is not None
+    assert f["swing_low"] == 91.5
+
+
 def test_volume_ratio_uses_prior_20d_average() -> None:
     volumes = [1_000_000.0] * 29 + [3_000_000.0]
     f = compute_setup_features(make_df([100.0] * 30, volumes=volumes))
