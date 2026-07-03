@@ -27,12 +27,14 @@ def build_plan(
     risk_per_trade_pct: float,
     max_position_pct: float,
     now: datetime,
+    actionable_price: float,
 ) -> dict[str, Any]:
-    entry_price = float(setup["trigger_price"])
+    entry_price = float(setup["trigger_price"])  # LEVEL — kept verbatim in entry.trigger_price
     stop_price = float(setup["stop_price"])
-    risk_per_share = entry_price - stop_price  # > 0 guaranteed by detectors
+    anchor = max(entry_price, actionable_price) if setup["trigger_satisfied"] else entry_price
+    risk_per_share = anchor - stop_price  # > 0 guaranteed by detectors + anchor >= entry_price
 
-    targets = _build_targets(setup, entry_price, risk_per_share)
+    targets = _build_targets(setup, anchor, risk_per_share)
 
     if action == "trade_now":
         entry = {
@@ -59,19 +61,19 @@ def build_plan(
     else:
         risk_dollars = account_size * risk_per_trade_pct / 100.0
         raw_shares = risk_dollars / risk_per_share
-        cap_shares = (account_size * max_position_pct / 100.0) / entry_price
+        cap_shares = (account_size * max_position_pct / 100.0) / anchor
         fractional_shares = round(min(raw_shares, cap_shares), 4)
         shares = int(fractional_shares)
-        position_dollars = round(fractional_shares * entry_price, 2)
+        position_dollars = round(fractional_shares * anchor, 2)
         max_loss_dollars = round(fractional_shares * risk_per_share, 2)
 
-    uncapped_pct = risk_per_trade_pct * entry_price / risk_per_share
+    uncapped_pct = risk_per_trade_pct * anchor / risk_per_share
     return {
         "entry": entry,
         "stop": {
             "price": round(stop_price, 2),
             "basis": setup["stop_basis"],
-            "distance_pct": round(risk_per_share / entry_price, 4),
+            "distance_pct": round(risk_per_share / anchor, 4),
         },
         "targets": targets,
         "reward_risk": targets[0]["r_multiple"],
@@ -89,27 +91,27 @@ def build_plan(
 
 def _build_targets(
     setup: dict[str, Any],
-    entry_price: float,
+    anchor: float,
     risk_per_share: float,
 ) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
     primary = setup.get("target_primary")
-    if primary is not None and primary["price"] > entry_price:
+    if primary is not None and primary["price"] > anchor:
         candidates.append({"price": float(primary["price"]), "basis": primary["basis"]})
     else:
-        candidates.append({"price": entry_price + risk_per_share, "basis": "r_multiple"})
-    candidates.append({"price": entry_price + 2.0 * risk_per_share, "basis": "r_multiple"})
+        candidates.append({"price": anchor + risk_per_share, "basis": "r_multiple"})
+    candidates.append({"price": anchor + 2.0 * risk_per_share, "basis": "r_multiple"})
 
     targets: list[dict[str, Any]] = []
     seen: set[float] = set()
     for c in sorted(candidates, key=lambda x: x["price"]):
         price = round(c["price"], 2)
-        if price in seen or price <= entry_price:
+        if price in seen or price <= anchor:
             continue
         seen.add(price)
         targets.append({
             "price": price,
-            "r_multiple": round((price - entry_price) / risk_per_share, 2),
+            "r_multiple": round((price - anchor) / risk_per_share, 2),
             "basis": c["basis"],
         })
     return targets

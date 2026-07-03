@@ -52,7 +52,8 @@ def build_trade_setup_card(
     blockers: list[dict[str, str]] = []
 
     # Rule 1 inputs: freshness + trade-critical data quality.
-    blockers.extend(freshness_blockers(freshness))
+    fresh_blockers = freshness_blockers(freshness)
+    blockers.extend(fresh_blockers)
     dq_fired, dq_blocker = check_data_quality(
         {"tool_failures": tool_failures or []},
         critical_tools=TRADE_CRITICAL_TOOLS,
@@ -63,9 +64,12 @@ def build_trade_setup_card(
         dq_fired = True
         blockers.append({
             "id": "data_quality_critical",
-            "reason": "daily price history unavailable — cannot compute setup features",
+            "reason": (
+                "daily price history unavailable or incomplete — "
+                "cannot compute setup features"
+            ),
         })
-    wait_for_data = bool(freshness_blockers(freshness)) or dq_fired
+    wait_for_data = bool(fresh_blockers) or dq_fired
 
     # Rule 2 inputs: structural disqualifiers (evaluable even when rule 1 fired).
     knife = False
@@ -83,6 +87,7 @@ def build_trade_setup_card(
     earnings_blackout, earnings_blocker = check_earnings_blackout(events_data)
     if earnings_blocker:
         blockers.append(earnings_blocker)
+    events_failed = any(tf.get("tool") == "events_calendar" for tf in tool_failures or [])
 
     setup: dict[str, Any] | None = None
     plan: dict[str, Any] | None = None
@@ -95,19 +100,25 @@ def build_trade_setup_card(
         setup = detect_setup(technicals_data, features, actionable_price)  # type: ignore[arg-type]
         if setup is None:
             action = "no_setup"
-        elif earnings_blackout:
-            action = "watch"
-        elif setup["trigger_satisfied"] and session == "regular" and not freshness["stale"]:
-            action = "trade_now"
-        elif setup.get("trigger_price") is not None:
-            action = "enter_on_trigger"
-            if session != "regular":
-                blockers.append({
-                    "id": "market_closed",
-                    "reason": "market not in regular session — trade_now unavailable",
-                })
         else:
-            action = "watch"
+            if events_failed:
+                blockers.append({
+                    "id": "earnings_unverifiable",
+                    "reason": "earnings calendar unavailable — event risk unverified",
+                })
+            if earnings_blackout or events_failed:
+                action = "watch"
+            elif setup["trigger_satisfied"] and session == "regular" and not freshness["stale"]:
+                action = "trade_now"
+            elif setup.get("trigger_price") is not None:
+                action = "enter_on_trigger"
+                if session != "regular":
+                    blockers.append({
+                        "id": "market_closed",
+                        "reason": "market not in regular session — trade_now unavailable",
+                    })
+            else:
+                action = "watch"
 
     if action in _ACTIONABLE and setup is not None:
         plan = build_plan(
@@ -118,6 +129,7 @@ def build_trade_setup_card(
             risk_per_trade_pct=risk_per_trade_pct,
             max_position_pct=max_position_pct,
             now=now,
+            actionable_price=actionable_price,  # type: ignore[arg-type]
         )
 
     earnings = events_data.get("earnings") or {}
@@ -132,7 +144,7 @@ def build_trade_setup_card(
 
     return {
         "symbol": symbol,
-        "currency": summary_data.get("currency", "USD"),
+        "currency": summary_data.get("currency"),
         "freshness": freshness,
         "action": action,
         "setup": setup,

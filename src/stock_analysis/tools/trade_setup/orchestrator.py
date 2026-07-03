@@ -76,9 +76,15 @@ async def analyze_trade_setup(
     )
     features = compute_setup_features(daily_df)
 
-    actionable_price: float | None
+    probe_close: float | None = None
     if session == "regular" and probe_df is not None and len(probe_df) > 0:
-        actionable_price = float(pd.to_numeric(probe_df["close"], errors="coerce").iloc[-1])
+        last_close = pd.to_numeric(probe_df["close"], errors="coerce").iloc[-1]
+        if not pd.isna(last_close):
+            probe_close = float(last_close)
+
+    actionable_price: float | None
+    if probe_close is not None:
+        actionable_price = probe_close
     elif features is not None:
         actionable_price = features["last_close"]
     else:

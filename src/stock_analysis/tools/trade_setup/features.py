@@ -38,6 +38,13 @@ def compute_setup_features(df: pd.DataFrame | None) -> dict[str, Any] | None:
     high_20d_prior = float(high.iloc[-21:-1].max())
     low_20d_prior = float(low.iloc[-21:-1].min())
 
+    core_scalars = (
+        last_close, prior_close, prior_day_high, prior_day_low,
+        high_20d_prior, low_20d_prior,
+    )
+    if any(pd.isna(v) for v in core_scalars):
+        return None
+
     swing_low = _most_recent_pivot_low(low)
 
     prior_volume = volume.iloc[-21:-1]

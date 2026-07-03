@@ -51,6 +51,9 @@
   Dollar/share fields are `null` (not `0`) when `account_size` is omitted.
 - `analyze_trade_setup.freshness.as_of` is a market-data bar timestamp, never
   fetch time; `basis="unverifiable"` forces `wait_for_data`.
+- `analyze_trade_setup` caps the action at `watch` with an `earnings_unverifiable`
+  blocker when the earnings calendar cannot be fetched; a missing earnings date
+  inside a successful calendar response simply does not fire the blackout.
 
 ## Multi-Agent Note
 - `AGENTS.md` is the canonical shared instruction file for this repo.

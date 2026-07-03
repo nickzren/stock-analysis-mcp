@@ -2,7 +2,10 @@
 
 from typing import Any
 
-from stock_analysis.tools.analyze.gates import falling_knife_assessment
+from stock_analysis.tools.analyze.gates import (
+    FALLING_KNIFE_SCORE_THRESHOLD,
+    falling_knife_assessment,
+)
 from stock_analysis.utils.helpers import round_or_none
 
 # Static dip-type / recommendation lookups used by build_dip_assessment.
@@ -219,7 +222,7 @@ def _classify_dip(
         pullback_score += 1
         dip_signals.append("near_3m_high")
 
-    if falling_knife_score >= 4:
+    if falling_knife_score >= FALLING_KNIFE_SCORE_THRESHOLD:
         dip_type = "falling_knife"
     elif falling_knife_score >= 2 and pullback_score < 2:
         dip_type = "extended_decline"
