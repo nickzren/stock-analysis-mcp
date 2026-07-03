@@ -67,6 +67,17 @@ With account sizing:
 Analyze HOOD with account size $3000
 ```
 
+Swing-trade check:
+
+```text
+Any swing setup on HOOD? Account size $3000.
+```
+
+`analyze_trade_setup` returns an action (`trade_now`, `enter_on_trigger`, `watch`,
+`no_setup`, `avoid`, `wait_for_data`) plus an executable plan when actionable.
+`trade_now` is only possible during regular market hours with fresh data; stale,
+delayed, or unverifiable data downgrades the action and explains why in `blockers`.
+
 The default report is compact and decision-focused. It still computes the full
 underlying analysis before returning the shorter investor view.
 
@@ -118,6 +129,7 @@ If `account_size` is omitted, sizing remains percent-based. If a caller depends 
 | Tool | Description |
 |------|-------------|
 | `analyze` | Single-stock analysis with token-efficient `standard` output by default, optional `decision`/`full` detail levels, dollar sizing, and company-name resolution |
+| `analyze_trade_setup` | Swing-trade setup card (long-only, days-to-weeks): setup type, entry trigger, stop, targets, R-based sizing, time stop, and freshness-gated action |
 
 ### Comparative Analysis
 

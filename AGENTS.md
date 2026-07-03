@@ -42,6 +42,15 @@
 - `options_signals` returns put/call data at `put_call_ratio.volume_based` and `put_call_ratio.oi_based`, not under `summary.*`.
 - In `analyze`, raw options output is nested under `options_signals`, while derived narrative fields appear elsewhere such as `section_summaries`, `signals`, and `decision_context`.
 - `risk_metrics` keeps volatility at `volatility.annualized`; the synthesized `analyze` output exposes the normalized view under `risk_summary.annualized_volatility`.
+- `analyze_trade_setup` returns `plan` only when `action` is `trade_now` or
+  `enter_on_trigger`; `watch` keeps `setup` with a null `plan`.
+- `analyze_trade_setup` reuses the `wait_for_data` action code from the decision
+  card; there is no `wait_for_fresh_data`.
+- `analyze_trade_setup` sizing is R-based (risk budget ÷ stop distance) under
+  `plan`, not the accumulation-style `position_sizing_range` used by `analyze`.
+  Dollar/share fields are `null` (not `0`) when `account_size` is omitted.
+- `analyze_trade_setup.freshness.as_of` is a market-data bar timestamp, never
+  fetch time; `basis="unverifiable"` forces `wait_for_data`.
 
 ## Multi-Agent Note
 - `AGENTS.md` is the canonical shared instruction file for this repo.
