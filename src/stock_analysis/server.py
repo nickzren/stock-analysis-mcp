@@ -29,6 +29,9 @@ from stock_analysis.tools import (
     technicals,
     what_changed,
 )
+from stock_analysis.tools import (
+    analyze_trade_setup as trade_setup_analysis,
+)
 from stock_analysis.tools.analyze.projection import normalize_analyze_detail, project_analyze_result
 from stock_analysis.utils.provenance import build_error_response
 
@@ -248,6 +251,40 @@ async def analyze(
             message=str(e),
             symbol=symbol,
         )
+    return _json_response(result)
+
+
+@mcp.tool
+async def analyze_trade_setup(
+    symbol: str,
+    account_size: float | None = None,
+    risk_per_trade_pct: float = 1.0,
+    max_position_pct: float = 10.0,
+) -> str:
+    """
+    Swing-trade setup card for a single stock (days-to-weeks horizon, long-only).
+
+    Detects pullback_in_uptrend / breakout / oversold_mean_reversion setups and
+    returns an action (trade_now, enter_on_trigger, watch, no_setup, avoid,
+    wait_for_data) with entry trigger, stop, targets, reward/risk, time stop,
+    R-based sizing, and blockers. trade_now requires fresh regular-session data.
+    Informational only — not financial advice.
+
+    Args:
+        symbol: Stock ticker symbol
+        account_size: Optional account size in dollars for share sizing
+        risk_per_trade_pct: Percent of account risked between entry and stop (default 1.0)
+        max_position_pct: Hard cap on position size as percent of account (default 10.0)
+
+    Returns:
+        JSON trade-setup card
+    """
+    result = await trade_setup_analysis(
+        symbol=symbol,
+        account_size=account_size,
+        risk_per_trade_pct=risk_per_trade_pct,
+        max_position_pct=max_position_pct,
+    )
     return _json_response(result)
 
 

@@ -16,10 +16,12 @@ from stock_analysis.tools.risk_metrics import risk_metrics
 from stock_analysis.tools.stock_summary import stock_summary
 from stock_analysis.tools.symbol_search import symbol_search
 from stock_analysis.tools.technicals import technicals
+from stock_analysis.tools.trade_setup import analyze_trade_setup
 
 __all__ = [
     "analyze_position",
     "analyze_stock",
+    "analyze_trade_setup",
     "compare_stocks",
     "data_quality_report",
     "events_calendar",
