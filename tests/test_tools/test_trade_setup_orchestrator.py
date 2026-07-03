@@ -182,3 +182,52 @@ async def test_regular_session_fresh_satisfied_trigger_is_trade_now(
     assert result["plan"]["entry"]["type"] == "market"
     assert result["freshness"]["basis"] == "bar_timestamp"
     assert result["freshness"]["stale"] is False
+
+
+@pytest.mark.asyncio
+async def test_transport_failures_report_data_unavailable(
+    patched: None, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def transport_error(symbol: str) -> dict[str, Any]:
+        return {"error": True, "error_type": "data_unavailable",
+                "message": "Failed to fetch data: connection refused"}
+
+    monkeypatch.setattr(orch, "stock_summary", transport_error)
+    monkeypatch.setattr(orch, "technicals", transport_error)
+    result = await orch.analyze_trade_setup("AAPL", _now=NOW_EVENING)
+    assert result["error"] is True
+    assert result["error_type"] == "data_unavailable"
+    assert "AAPL" in result["message"]
+    failures = result["data_quality"]["tool_failures"]
+    assert {tf["tool"] for tf in failures} == {"stock_summary", "technicals"}
+
+
+@pytest.mark.asyncio
+async def test_unanimous_invalid_symbol_stays_invalid(
+    patched: None, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def invalid(symbol: str) -> dict[str, Any]:
+        return {"error": True, "error_type": "invalid_symbol", "message": "Invalid symbol"}
+
+    monkeypatch.setattr(orch, "stock_summary", invalid)
+    monkeypatch.setattr(orch, "technicals", invalid)
+    result = await orch.analyze_trade_setup("NOPE", _now=NOW_EVENING)
+    assert result["error"] is True
+    assert result["error_type"] == "invalid_symbol"
+
+
+@pytest.mark.asyncio
+async def test_mixed_failures_prefer_data_unavailable(
+    patched: None, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def invalid(symbol: str) -> dict[str, Any]:
+        return {"error": True, "error_type": "invalid_symbol", "message": "Invalid symbol"}
+
+    async def raises(symbol: str) -> dict[str, Any]:
+        raise RuntimeError("socket closed")
+
+    monkeypatch.setattr(orch, "stock_summary", invalid)
+    monkeypatch.setattr(orch, "technicals", raises)
+    result = await orch.analyze_trade_setup("AAPL", _now=NOW_EVENING)
+    assert result["error"] is True
+    assert result["error_type"] == "data_unavailable"

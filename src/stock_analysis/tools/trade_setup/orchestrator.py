@@ -57,6 +57,7 @@ async def analyze_trade_setup(
             tool_failures.append({
                 "tool": name,
                 "error": result.get("message") or result.get("error_type"),
+                "error_type": result.get("error_type"),
             })
         else:
             cleaned[name] = result
@@ -65,11 +66,25 @@ async def analyze_trade_setup(
     probe_df = results[5] if isinstance(results[5], pd.DataFrame) else None
 
     if "technicals" not in cleaned and "stock_summary" not in cleaned:
-        return build_error_response(
-            error_type="invalid_symbol",
-            message=f"No usable data for '{symbol}'",
+        # invalid_symbol only when every core failure says so; a transport
+        # failure anywhere means an invalid-symbol verdict cannot be trusted.
+        core_failures = [
+            tf for tf in tool_failures if tf["tool"] in ("stock_summary", "technicals")
+        ]
+        unanimous_invalid = bool(core_failures) and all(
+            tf.get("error_type") == "invalid_symbol" for tf in core_failures
+        )
+        response = build_error_response(
+            error_type="invalid_symbol" if unanimous_invalid else "data_unavailable",
+            message=(
+                f"No usable data for '{normalized}'"
+                if unanimous_invalid
+                else f"Market data unavailable for '{normalized}' — upstream fetches failed"
+            ),
             symbol=normalized,
         )
+        response["data_quality"] = {"tool_failures": core_failures}
+        return response
 
     freshness = build_freshness(
         intraday_df=probe_df, daily_df=daily_df, session=session, now=now,
