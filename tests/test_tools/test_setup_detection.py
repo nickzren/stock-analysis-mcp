@@ -211,3 +211,12 @@ class TestBreakoutStructuralTargets:
         setup = detect_setup(t, f, actionable_price=115.0)
         assert setup is not None
         assert setup["target_primary"] is None
+
+    def test_candidate_equal_to_anchor_is_filtered(self) -> None:
+        # Strictly-above means a candidate AT the anchor is excluded:
+        # measured move = 102 + (102 - 95) = 109 == anchor when the run-past
+        # actionable price is exactly 109.
+        t, f = self._inputs()
+        setup = detect_setup(t, f, actionable_price=109.0)
+        assert setup is not None
+        assert setup["target_primary"] == {"price": 150.0, "basis": "week_52_high"}

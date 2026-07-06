@@ -66,7 +66,7 @@ def build_intraday_block(
     if hourly is None:
         warnings.append({
             "id": "hourly_unavailable",
-            "reason": "hourly bars unavailable — trend and alignment omitted",
+            "reason": "hourly bars unavailable — trend omitted; alignment lacks hourly confirmation",
         })
 
     daily_state = _daily_state(technicals_payload)

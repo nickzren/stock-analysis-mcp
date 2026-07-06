@@ -95,7 +95,13 @@ class TestTimeAdjustedRvol:
 
     def test_early_session_clamps_to_min_fraction(self) -> None:
         early = ET.localize(datetime(2026, 3, 10, 9, 35))  # 5 min -> 0.0128 -> clamp 0.05
-        b = block(now=early)
+        fresh = pd.DataFrame({
+            "date": ["2026-03-10T09:30:00-0400", "2026-03-10T09:35:00-0400"],
+            "open": [100.0, 101.0], "high": [102.0, 103.0],
+            "low": [100.0, 101.0], "close": [101.0, 102.0],
+            "volume": [150.0, 250.0],
+        })
+        b = block(df_5m=fresh, now=early)
         assert b["rvol_time_adjusted"]["elapsed_session_pct"] == 5.0
         assert b["rvol_time_adjusted"]["value"] == round(400.0 / (1_000_000.0 * 0.05), 2)
 
@@ -103,12 +109,17 @@ class TestTimeAdjustedRvol:
         late = ET.localize(datetime(2026, 3, 10, 16, 30))  # 420 min -> 1.077 -> clamp 1.0
         # Bars must be fresh at 16:30: with the default 11:15-11:25 fixture the
         # 15-min staleness gate nulls rvol before the clamp is ever reached.
-        fresh = five_min_df()
-        fresh["date"] = ["2026-03-10T16:15:00-0400", "2026-03-10T16:20:00-0400",
-                         "2026-03-10T16:25:00-0400"]
+        fresh = pd.DataFrame({
+            "date": ["2026-03-10T16:15:00-0400", "2026-03-10T16:25:00-0400"],
+            "open": [100.0, 101.0], "high": [102.0, 103.0],
+            "low": [100.0, 101.0], "close": [101.0, 102.0],
+            "volume": [400_000.0, 600_000.0],
+        })
         b = block(df_5m=fresh, now=late)  # session stays "regular" via the fixture default
         assert b["rvol_time_adjusted"]["elapsed_session_pct"] == 100.0
-        assert b["rvol_time_adjusted"]["value"] == round(400.0 / 1_000_000.0, 2)
+        # Unclamped elapsed (1.077) would give 1_000_000 / (1_000_000 * 1.077) = 0.93;
+        # clamping elapsed to 1.0 pins it at the ceiling value of 1.0 instead.
+        assert b["rvol_time_adjusted"]["value"] == 1.0
 
 
 class TestHourlyTrend:
