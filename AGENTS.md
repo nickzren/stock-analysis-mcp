@@ -57,6 +57,15 @@
 - `analyze_trade_setup` caps the action at `watch` with an `earnings_unverifiable`
   blocker when the earnings calendar cannot be fetched; a missing earnings date
   inside a successful calendar response simply does not fire the blackout.
+- `get_technicals` default response gained one additive `short_term` key;
+  `intraday` exists only under `timeframe="swing"`. `prior_*` level fields
+  exclude the current bar.
+- `short_term.rvol.value` excludes the current bar from its 20-day average;
+  the legacy `volume.ratio` includes it — the two legitimately differ.
+- `intraday.freshness` is disclosure, not gating: stale/missing intraday data
+  nulls dependent fields and adds `{id, reason}` warnings instead of blocking.
+- Breakout `target_primary` is the nearest of measured-move / 52-week-high
+  strictly above the effective entry anchor; `None` means the 1R fallback.
 
 ## Multi-Agent Note
 - `AGENTS.md` is the canonical shared instruction file for this repo.

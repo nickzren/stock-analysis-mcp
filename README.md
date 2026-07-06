@@ -145,7 +145,7 @@ If `account_size` is omitted, sizing remains percent-based. If a caller depends 
 | `search_symbol` | Search for stock symbols by company name or ticker |
 | `get_stock_summary` | Basic stock info (name, sector, price, market cap) |
 | `get_price_history` | Historical price data with summary and resource URI |
-| `get_technicals` | Technical indicators (SMA, EMA, RSI, MACD, ATR, Bollinger, Fibonacci, OBV) |
+| `get_technicals` | Technical indicators (SMA, EMA, RSI, MACD, ATR, Bollinger, Fibonacci, OBV) plus a `short_term` block (levels, gap, RVOL, compression); `timeframe="swing"` adds intraday VWAP, time-adjusted RVOL, hourly trend, and alignment with freshness disclosure |
 | `get_fundamentals` | Financial metrics, valuation history, analyst estimates, dividends |
 | `get_events` | Earnings dates, dividends, splits |
 | `get_news` | Recent news headlines, earnings surprise data, and structured catalyst tags |
