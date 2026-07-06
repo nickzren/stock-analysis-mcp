@@ -175,3 +175,17 @@ class TestSchemaInvariants:
     def test_confidence_low_when_not_actionable(self) -> None:
         card = build_card(freshness=STALE)
         assert card["confidence"] == "low"
+
+
+def test_v_recovery_is_not_a_falling_knife() -> None:
+    # HOOD 2026-07-06 regression: recovery chart must not be gated as a knife.
+    t = make_technicals(rsi={"value": 68.0, "bullish_divergence": False})
+    t["moving_averages"]["rules"]["death_cross"] = {"triggered": True}
+    t["moving_averages"]["rules"]["golden_cross"] = {"triggered": False}
+    t["moving_averages"]["sma_200_slope_pct_per_day"] = -0.000514
+    t["price_position"]["days_since_52w_high"] = 186
+    t["returns"]["return_3m"] = 0.66
+    f = make_features(high_20d_prior=120.0)  # far from high: no setup expected
+    card = build_card(technicals_data=t, features=f)
+    assert card["action"] == "no_setup"
+    assert "falling_knife" not in blocker_ids(card)

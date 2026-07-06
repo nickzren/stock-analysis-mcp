@@ -106,3 +106,56 @@ class TestFallingKnife:
         is_knife, reasons = is_falling_knife_technicals(technicals_data)
         assert is_knife is True
         assert "death_cross_active" in reasons
+
+
+class TestFallingKnifeDeclinePrecondition:
+    """Structure-lag artifacts alone must not qualify a chart as a knife."""
+
+    def test_recovery_chart_scores_zero(self) -> None:
+        # HOOD 2026-07-06 regression: +66% 3m, above SMA200, death cross
+        # persistence + barely-negative slope + stale 52w high scored 4.
+        score, reasons = falling_knife_assessment(
+            death_cross=True,
+            below_sma200=False,
+            return_3m=0.66,
+            position_in_range=0.56,
+            sma_200_slope=-0.000514,
+            days_since_52w_high=186,
+        )
+        assert (score, reasons) == (0, [])
+
+    def test_shallow_decline_above_sma200_scores_zero(self) -> None:
+        # -1% over 3m above SMA200 is not a knife either (Codex tightening).
+        score, reasons = falling_knife_assessment(
+            death_cross=True,
+            below_sma200=False,
+            return_3m=-0.01,
+            position_in_range=0.56,
+            sma_200_slope=-0.001,
+            days_since_52w_high=200,
+        )
+        assert (score, reasons) == (0, [])
+
+    def test_below_sma200_still_scores_despite_positive_returns(self) -> None:
+        score, reasons = falling_knife_assessment(
+            death_cross=True,
+            below_sma200=True,
+            return_3m=0.05,
+            position_in_range=0.3,
+            sma_200_slope=-0.001,
+            days_since_52w_high=200,
+        )
+        assert score == 5  # 2 + 1 + 1 + 1
+        assert "death_cross_active" in reasons
+
+    def test_significant_decline_above_sma200_still_scores(self) -> None:
+        # Early violent break: above SMA200 but down >20% in 3m qualifies.
+        score, _ = falling_knife_assessment(
+            death_cross=True,
+            below_sma200=False,
+            return_3m=-0.25,
+            position_in_range=0.3,
+            sma_200_slope=-0.001,
+            days_since_52w_high=200,
+        )
+        assert score >= 4

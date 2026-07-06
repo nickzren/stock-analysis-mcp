@@ -97,7 +97,18 @@ def falling_knife_assessment(
     sma_200_slope: float | None,
     days_since_52w_high: int | None,
 ) -> tuple[int, list[str]]:
-    """Score falling-knife conditions. Identical rubric to dip assessment."""
+    """Score falling-knife conditions. Identical rubric to dip assessment.
+
+    A knife requires evidence of an actual decline: price below SMA200, or a
+    3-month return past the significant-decline tier (< -20%). Structure-lag
+    artifacts alone (persistent death cross, stale 52w high, a barely-negative
+    long SMA slope) must not qualify a recovering chart.
+    """
+    declining = below_sma200 is True or (
+        return_3m is not None and return_3m < -0.20
+    )
+    if not declining:
+        return 0, []
     score = 0
     reasons: list[str] = []
     if death_cross:
