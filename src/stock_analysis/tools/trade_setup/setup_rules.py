@@ -1,6 +1,9 @@
 """All tunable thresholds for the trade-setup card. Values pinned by the design doc."""
 
-FRESHNESS_CEILING_MINUTES = 15
+from stock_analysis.utils.freshness import (
+    FRESHNESS_CEILING_MINUTES as FRESHNESS_CEILING_MINUTES,
+)
+
 PROBE_PERIOD = "1d"
 PROBE_INTERVAL = "5m"
 
