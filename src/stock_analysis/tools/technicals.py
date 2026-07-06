@@ -1,12 +1,14 @@
 """Technical analysis tool."""
 
 import operator
+from datetime import datetime
 from time import perf_counter
 from typing import Any
 
 import pandas as pd
+import pytz
 
-from stock_analysis.data.yfinance_client import fetch_history
+from stock_analysis.data.yfinance_client import fetch_history, get_market_state
 from stock_analysis.utils.helpers import safe_last_float, safe_round
 from stock_analysis.utils.indicators import (
     calculate_atr,
@@ -19,6 +21,7 @@ from stock_analysis.utils.indicators import (
     calculate_rsi,
     calculate_sma,
 )
+from stock_analysis.utils.intraday_features import build_intraday_block
 from stock_analysis.utils.provenance import (
     FetchError,
     build_error_response,
@@ -27,19 +30,43 @@ from stock_analysis.utils.provenance import (
     fetch_or_error,
     utcnow_isoformat_z,
 )
+from stock_analysis.utils.swing_features import build_short_term_block
 from stock_analysis.utils.validators import FetchParams, check_rule, check_rule_expr
 
+_ET = pytz.timezone("America/New_York")
 
-async def technicals(symbol: str) -> dict[str, Any]:
+
+async def _quiet_fetch(params: FetchParams) -> pd.DataFrame | None:
+    """Fetch history, returning None on any failure (disclosure warnings handle it)."""
+    try:
+        return await fetch_history(params)
+    except Exception:
+        return None
+
+
+async def technicals(
+    symbol: str,
+    timeframe: str = "position",
+    _now: datetime | None = None,
+) -> dict[str, Any]:
     """
     Calculate technical indicators for a symbol.
 
     Args:
         symbol: Stock ticker symbol
+        timeframe: "position" (default) or "swing" (adds an intraday block)
+        _now: Test seam for the current ET time; production uses the clock
 
     Returns:
         Dict with moving averages, RSI, MACD, ATR, price position, returns, volume
     """
+    if timeframe not in ("position", "swing"):
+        return build_error_response(
+            error_type="invalid_parameters",
+            message=f"timeframe must be 'position' or 'swing', got '{timeframe}'",
+            symbol=symbol,
+        )
+
     start_time = perf_counter()
 
     # Fetch 1 year of daily data for calculations
@@ -84,7 +111,7 @@ async def technicals(symbol: str) -> dict[str, Any]:
 
     duration_ms = (perf_counter() - start_time) * 1000
 
-    return {
+    result: dict[str, Any] = {
         "meta": build_meta("technicals", duration_ms),
         "data_provenance": {
             "price": build_provenance(
@@ -107,6 +134,20 @@ async def technicals(symbol: str) -> dict[str, Any]:
         "fibonacci": fib_levels,
         "price_action": price_action,
     }
+
+    now = _now or datetime.now(_ET)
+    session = get_market_state()["state"]
+    result["short_term"] = build_short_term_block(
+        df, today=now.date(), session=session,
+    )
+    if timeframe == "swing":
+        df_5m = await _quiet_fetch(FetchParams(params.symbol, "1d", "5m", True))
+        df_1h = await _quiet_fetch(FetchParams(params.symbol, "3mo", "1h", True))
+        result["intraday"] = build_intraday_block(
+            df_5m=df_5m, df_1h=df_1h, daily_df=df,
+            technicals_payload=result, session=session, now=now,
+        )
+    return result
 
 
 def _build_moving_averages(

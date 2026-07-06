@@ -139,20 +139,27 @@ async def get_price_history(
 
 
 @mcp.tool
-async def get_technicals(symbol: str) -> str:
+async def get_technicals(symbol: str, timeframe: str = "position") -> str:
     """
     Calculate technical indicators for a stock.
 
-    Includes moving averages (SMA 20/50/200, EMA 12/26), RSI, MACD,
-    ATR, 52-week position, and multi-period returns.
+    Includes moving averages (SMA 20/50/200, EMA 12/26), RSI, MACD, ATR,
+    52-week position, multi-period returns, and a `short_term` block
+    (prior-day/5d/20d levels, swing pivots, gap, RVOL, compression).
+
+    timeframe="swing" adds an `intraday` block (session VWAP, time-adjusted
+    RVOL, hourly trend, daily/hourly alignment) with a freshness sub-block.
+    Intraday freshness is disclosure, not gating: failures null the dependent
+    fields and add warnings instead of blocking the response.
 
     Args:
         symbol: Stock ticker symbol
+        timeframe: "position" (default) or "swing" (adds intraday features)
 
     Returns:
         JSON with technical indicators and rule-based signals
     """
-    result = await technicals(symbol=symbol)
+    result = await technicals(symbol=symbol, timeframe=timeframe)
     return _json_response(result)
 
 
