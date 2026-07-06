@@ -53,3 +53,6 @@ htmlcov/
 .DS_Store
 Thumbs.db
 docs/plans/
+
+# Agent scratch (task briefs, reports, review packages)
+.superpowers/
