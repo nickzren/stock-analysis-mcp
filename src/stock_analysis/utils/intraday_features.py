@@ -16,8 +16,8 @@ import pandas as pd
 from stock_analysis.utils.freshness import build_freshness
 from stock_analysis.utils.helpers import safe_round
 from stock_analysis.utils.indicators import calculate_ema
+from stock_analysis.utils.market_calendar import regular_session_minutes
 
-SESSION_MINUTES = 390.0  # 9:30-16:00 ET
 MIN_ELAPSED_FRACTION = 0.05
 HOURLY_EMA_PERIOD = 20
 HOURLY_SLOPE_BARS = 5
@@ -130,7 +130,8 @@ def _time_adjusted_rvol(
         return None
     cumulative = float(pd.to_numeric(df_5m["volume"], errors="coerce").sum())
     minutes = (now.hour - 9) * 60 + (now.minute - 30)
-    elapsed = max(MIN_ELAPSED_FRACTION, min(1.0, minutes / SESSION_MINUTES))
+    session_minutes = regular_session_minutes(now.date())
+    elapsed = max(MIN_ELAPSED_FRACTION, min(1.0, minutes / session_minutes))
     return {
         "value": safe_round(cumulative / (avg_full_day * elapsed), 2),
         "elapsed_session_pct": safe_round(elapsed * 100, 1),

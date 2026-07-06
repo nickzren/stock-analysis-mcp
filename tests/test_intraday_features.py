@@ -121,6 +121,27 @@ class TestTimeAdjustedRvol:
         # clamping elapsed to 1.0 pins it at the ceiling value of 1.0 instead.
         assert b["rvol_time_adjusted"]["value"] == 1.0
 
+    def test_time_adjusted_rvol_on_early_close_day(self) -> None:
+        # 2025-11-28 (day after Thanksgiving) is a 210-minute session:
+        # 11:30 is 120 elapsed minutes -> 120/210, not 120/390.
+        early_close_now = ET.localize(datetime(2025, 11, 28, 11, 30))
+        df_5m = pd.DataFrame({
+            "date": ["2025-11-28T11:20:00-0500", "2025-11-28T11:25:00-0500"],
+            "open": [100.0, 100.5], "high": [101.0, 101.5],
+            "low": [99.5, 100.0], "close": [100.5, 101.0],
+            "volume": [150.0, 250.0],
+        })
+        daily = pd.DataFrame({"date": ["2025-11-26", "2025-11-28"],
+                              "open": [100.0, 100.5], "high": [101.0, 101.5],
+                              "low": [99.0, 99.5], "close": [100.5, 101.0],
+                              "volume": [1_000_000.0, 200_000.0]})
+        b = build_intraday_block(df_5m=df_5m, df_1h=None, daily_df=daily,
+                                 technicals_payload=TECHNICALS,
+                                 session="regular", now=early_close_now)
+        elapsed = 120 / 210
+        assert b["rvol_time_adjusted"]["elapsed_session_pct"] == round(elapsed * 100, 1)
+        assert b["rvol_time_adjusted"]["value"] == round(400.0 / (1_000_000.0 * elapsed), 2)
+
 
 class TestHourlyTrend:
     def test_advance(self) -> None:  # rising closes: above rising EMA
