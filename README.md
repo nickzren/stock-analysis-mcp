@@ -152,7 +152,7 @@ If `account_size` is omitted, sizing remains percent-based. If a caller depends 
 | `get_ownership` | Insider transactions and institutional ownership trends |
 | `get_options_signals` | Options-derived signals (IV, put/call, unusual activity) |
 
-`get_price_history` returns a `price://...` resource URI backed by an in-memory, process-local cache. Read that resource during the same server session; it does not survive restarts.
+`get_price_history` returns a `price://...` resource URI backed by an in-memory, process-local cache. Read that resource during the same server session; it does not survive restarts. Some MCP clients (observed: Claude Desktop) serve resource reads from a separate server process where that cache is empty — if resource reads return "not cached", fall back to `include_preview=true` for inline bars.
 
 ### Portfolio & Utilities
 

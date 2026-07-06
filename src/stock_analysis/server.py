@@ -270,6 +270,11 @@ async def analyze_trade_setup(
     R-based sizing, and blockers. trade_now requires fresh regular-session data.
     Informational only — not financial advice.
 
+    Rendering rules: report `action` verbatim; when action is not trade_now/
+    enter_on_trigger there is no plan — never present entry/stop/target/sizing
+    structure for it; do not mix `analyze` fields into this card; label any
+    forward-looking levels as conditions to watch, not a plan.
+
     Args:
         symbol: Stock ticker symbol
         account_size: Optional account size in dollars for share sizing (must be > 0)

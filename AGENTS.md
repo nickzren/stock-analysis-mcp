@@ -51,6 +51,9 @@
   Dollar/share fields are `null` (not `0`) when `account_size` is omitted.
 - `analyze_trade_setup.freshness.as_of` is a market-data bar timestamp, never
   fetch time; `basis="unverifiable"` forces `wait_for_data`.
+- When `analyze_trade_setup.action` is not `trade_now`/`enter_on_trigger`, do not
+  render entry/stop/target/sizing structure and do not mix `analyze` fields into
+  the card; forward-looking levels are conditions to watch, not a plan.
 - `analyze_trade_setup` caps the action at `watch` with an `earnings_unverifiable`
   blocker when the earnings calendar cannot be fetched; a missing earnings date
   inside a successful calendar response simply does not fire the blackout.
