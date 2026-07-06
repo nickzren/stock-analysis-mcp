@@ -6,10 +6,12 @@ timestamps — never from fetch/provenance time (design doc: Contract Invariant)
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime
 from typing import Any
 
 import pandas as pd
+
+from stock_analysis.utils.market_calendar import most_recent_trading_day
 
 # Generic freshness property (minutes); trade-setup re-exports it for
 # backward compatibility.
@@ -24,13 +26,8 @@ _UNVERIFIABLE: dict[str, Any] = {
 
 
 def most_recent_expected_trading_day(now: datetime, session: str) -> date:
-    """Most recent weekday whose daily bar should exist (no holiday calendar in v1)."""
-    d = now.date()
-    if session == "pre_market" or (session == "closed" and now.hour < 4):
-        d = d - timedelta(days=1)
-    while d.weekday() >= 5:
-        d = d - timedelta(days=1)
-    return d
+    """Most recent day whose daily bar should exist (holiday-aware in coverage)."""
+    return most_recent_trading_day(now, session)
 
 
 def build_freshness(
@@ -44,6 +41,16 @@ def build_freshness(
     if session == "regular":
         ts = _last_bar_timestamp_utc(intraday_df)
         if ts is None:
+            return {**_UNVERIFIABLE, "session": session}
+        last_close = (
+            pd.to_numeric(intraday_df["close"], errors="coerce").iloc[-1]
+            if intraday_df is not None and "close" in intraday_df.columns
+            and len(intraday_df) > 0
+            else None
+        )
+        if last_close is None or pd.isna(last_close):
+            # A timestamp without a finite close is not a reliable actionable
+            # price (contract invariant).
             return {**_UNVERIFIABLE, "session": session}
         age = max(0, int((now.astimezone(UTC) - ts).total_seconds()))
         return {

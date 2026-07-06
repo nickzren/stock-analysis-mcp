@@ -7,6 +7,8 @@ from typing import Any
 
 import pytz
 
+from stock_analysis.utils.market_calendar import classify_session as _calendar_classify
+
 
 class DataType(Enum):
     """Data types with associated TTL configurations."""
@@ -31,21 +33,9 @@ _TTL_CONFIG: dict[DataType, tuple[int, int]] = {
 def classify_session(now: datetime) -> str:
     """Classify a US-equities trading session for the given (tz-aware) datetime.
 
-    Returns one of: "closed", "pre_market", "regular", "after_hours".
-    Clock-based only — does not account for holidays.
+    Calendar-aware (vendored NYSE tables 2025-2030); clock-only outside coverage.
     """
-    if now.weekday() >= 5:
-        return "closed"
-    minutes = now.hour * 60 + now.minute
-    if minutes < 4 * 60:
-        return "closed"
-    if minutes < 9 * 60 + 30:
-        return "pre_market"
-    if minutes < 16 * 60:
-        return "regular"
-    if minutes < 20 * 60:
-        return "after_hours"
-    return "closed"
+    return _calendar_classify(now)
 
 
 def is_market_hours() -> bool:

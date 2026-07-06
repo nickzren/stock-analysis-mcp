@@ -23,6 +23,7 @@ from stock_analysis.data.cache_manager import (
     info_cache,
     ticker_cache,
 )
+from stock_analysis.utils.market_calendar import session_method
 from stock_analysis.utils.ohlcv import standardize_ohlcv
 from stock_analysis.utils.validators import FetchParams
 
@@ -664,7 +665,7 @@ async def fetch_ticker(symbol: str) -> yf.Ticker:
 
 def get_market_state(tz: str = "America/New_York") -> dict[str, str]:
     """
-    Determine market state. Clock-based only (no holiday calendar).
+    Determine market state, calendar-aware where vendored coverage exists.
 
     Args:
         tz: Timezone (default: America/New_York)
@@ -675,7 +676,7 @@ def get_market_state(tz: str = "America/New_York") -> dict[str, str]:
     now = datetime.now(pytz.timezone(tz))
     return {
         "state": classify_session(now),
-        "method": "clock_only_no_holidays",
+        "method": session_method(now),
         "checked_at": now.isoformat(),
     }
 

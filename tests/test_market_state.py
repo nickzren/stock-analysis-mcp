@@ -14,9 +14,11 @@ class TestMarketState:
     """Tests for market state detection."""
 
     def test_market_state_method(self) -> None:
-        """Test market state includes method."""
+        """Test market state includes a recognized method."""
         state = get_market_state()
-        assert state["method"] == "clock_only_no_holidays"
+        assert state["method"] in (
+            "calendar_static", "clock_only_no_holidays_fallback",
+        )
 
     def test_market_state_has_checked_at(self) -> None:
         """Test market state includes timestamp."""
@@ -61,3 +63,21 @@ class TestMarketState:
 
         state = get_market_state()
         assert state["state"] == expected_state
+
+
+class TestCalendarAwareSession:
+    def test_full_holiday_is_closed(self) -> None:
+        from datetime import datetime
+
+        import pytz
+
+        from stock_analysis.data.cache_manager import classify_session
+        et = pytz.timezone("America/New_York")
+        assert classify_session(et.localize(datetime(2026, 7, 3, 11, 30))) == "closed"
+
+    def test_get_market_state_reports_method(self) -> None:
+        from stock_analysis.data.yfinance_client import get_market_state
+        state = get_market_state()
+        assert state["method"] in (
+            "calendar_static", "clock_only_no_holidays_fallback",
+        )

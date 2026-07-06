@@ -114,3 +114,35 @@ class TestExpectedTradingDay:
     def test_monday_premarket_is_friday(self) -> None:
         now = ET.localize(datetime(2026, 3, 9, 8, 0))
         assert most_recent_expected_trading_day(now, "pre_market") == date(2026, 3, 6)
+
+
+class TestHolidayAwareWalkBack:
+    def test_monday_after_holiday_friday_expects_thursday(self) -> None:
+        now = ET.localize(datetime(2026, 7, 6, 8, 0))  # Mon pre_market
+        assert most_recent_expected_trading_day(now, "pre_market") == date(2026, 7, 2)
+
+    def test_eod_fresh_across_holiday_weekend(self) -> None:
+        # Monday 2026-07-06 pre_market with newest daily bar Thu 07-02:
+        # previously stale (expected Fri 07-03); now fresh.
+        now = ET.localize(datetime(2026, 7, 6, 8, 0))
+        f = build_freshness(intraday_df=None, daily_df=daily_df("2026-07-02"),
+                            session="pre_market", now=now)
+        assert f["stale"] is False
+
+
+class TestNanCloseGate:
+    def test_valid_timestamp_nan_close_is_unverifiable(self) -> None:
+        import numpy as np
+        df = intraday_df("2026-03-10T10:25:00-0400")
+        df.loc[df.index[-1], "close"] = np.nan
+        f = build_freshness(intraday_df=df, daily_df=None,
+                            session="regular", now=TestRegularSession.NOW)
+        assert f["basis"] == "unverifiable"
+        assert f["stale"] is True
+        assert freshness_blockers(f)[0]["id"] == "freshness_unverifiable"
+
+    def test_finite_close_path_unchanged(self) -> None:
+        f = build_freshness(intraday_df=intraday_df("2026-03-10T10:25:00-0400"),
+                            daily_df=None, session="regular",
+                            now=TestRegularSession.NOW)
+        assert f["basis"] == "bar_timestamp" and f["stale"] is False
