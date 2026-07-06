@@ -21,6 +21,7 @@ from stock_analysis.tools.trade_setup.setup_rules import (
     SETUP_PRIORITY,
     STOP_ATR_MULT,
 )
+from stock_analysis.utils.swing_features import measured_move_target
 
 _QUALITY_BY_FACTORS = {3: "A", 2: "B"}
 
@@ -161,6 +162,13 @@ def _detect_breakout(
             return None
 
     volume_ok = volume_ratio is not None and volume_ratio >= BREAKOUT_VOLUME_RATIO_MIN
+    trigger_satisfied = bool(actionable_price > trigger_price and volume_ok)
+    anchor = max(trigger_price, actionable_price) if trigger_satisfied else trigger_price
+    target_primary = _breakout_structural_target(
+        anchor=anchor,
+        measured_move=measured_move_target(trigger_price, features.get("low_20d_prior")),
+        week_52_high=(technicals_data.get("price_position") or {}).get("week_52_high"),
+    )
     quality = _grade([
         bandwidth_pctile is not None and bandwidth_pctile <= 0.10,
         volume_ratio is not None and volume_ratio >= 2.0,
@@ -179,15 +187,33 @@ def _detect_breakout(
             "Breakout on below-average volume",
         ],
         "trigger_price": round(trigger_price, 2),
-        "trigger_satisfied": bool(actionable_price > trigger_price and volume_ok),
+        "trigger_satisfied": trigger_satisfied,
         "trigger_condition": (
             f"price clears 20d high {trigger_price:.2f} with volume ratio >= "
             f"{BREAKOUT_VOLUME_RATIO_MIN}"
         ),
         "stop_price": stop_price,
         "stop_basis": "below_breakout_level",
-        "target_primary": None,  # blue sky above a 20d-high break: 1R fallback
+        "target_primary": target_primary,
     }
+
+
+def _breakout_structural_target(
+    *,
+    anchor: float,
+    measured_move: float | None,
+    week_52_high: float | None,
+) -> dict[str, Any] | None:
+    """Nearest structural target STRICTLY above the effective entry anchor."""
+    candidates = [
+        (measured_move, "measured_move"),
+        (week_52_high, "week_52_high"),
+    ]
+    valid = [(p, basis) for p, basis in candidates if p is not None and p > anchor]
+    if not valid:
+        return None
+    price, basis = min(valid, key=lambda c: c[0])
+    return {"price": round(float(price), 2), "basis": basis}
 
 
 def _detect_mean_reversion(

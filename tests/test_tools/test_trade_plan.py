@@ -137,3 +137,26 @@ class TestEntry:
                           risk_per_trade_pct=1.0, max_position_pct=10.0, now=NOW,
                           actionable_price=100.0)
         assert plan["time_stop"] == {"trading_days": 5, "date": "2026-03-17"}
+
+
+def test_breakout_structural_target_beats_tautological_1r() -> None:
+    # Structural target INSIDE 2R (risk 5, mm at 1.4R) so it legitimately
+    # sorts first under the locked targets contract (ascending, 2R always
+    # present). Beyond-2R structural targets sort after 2R by design — see
+    # test_structural_target_beyond_2r_sorts_after.
+    setup = make_setup(
+        type="breakout",
+        trigger_price=102.0,
+        stop_price=97.0,
+        target_primary={"price": 109.0, "basis": "measured_move"},
+    )
+    plan = build_plan(setup, action="enter_on_trigger", session="closed",
+                      account_size=None, risk_per_trade_pct=1.0,
+                      max_position_pct=10.0, now=NOW,
+                      actionable_price=100.0)
+    assert plan["targets"][0] == {"price": 109.0, "r_multiple": 1.4,
+                                  "basis": "measured_move"}
+    assert plan["targets"][1] == {"price": 112.0, "r_multiple": 2.0,
+                                  "basis": "r_multiple"}
+    assert plan["reward_risk"] == 1.4
+    assert plan["reward_risk"] != 1.0

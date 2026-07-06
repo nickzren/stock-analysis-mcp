@@ -171,3 +171,43 @@ def test_returns_none_when_atr_missing_and_no_structural_stop() -> None:
     t = make_technicals(atr={"value": None, "value_pct": None})
     f = make_features(swing_low=None)
     assert detect_setup(t, f, actionable_price=100.0) is None
+
+
+class TestBreakoutStructuralTargets:
+    def _inputs(self, **feat_over: Any) -> tuple[dict[str, Any], dict[str, Any]]:
+        t = make_technicals(rsi={"value": 60.0, "bullish_divergence": False})
+        t["price_position"]["week_52_high"] = 150.0
+        f = make_features(high_20d_prior=102.0, low_20d_prior=95.0,
+                          bandwidth_pctile_6m=0.10, last_volume_ratio=2.0)
+        f.update(feat_over)
+        return t, f
+
+    def test_measured_move_target_when_nearest(self) -> None:
+        t, f = self._inputs()
+        setup = detect_setup(t, f, actionable_price=100.0)
+        assert setup is not None and setup["type"] == "breakout"
+        # measured move = 102 + (102 - 95) = 109 < 52w high 150
+        assert setup["target_primary"] == {"price": 109.0, "basis": "measured_move"}
+
+    def test_week52_high_wins_when_nearer(self) -> None:
+        t, f = self._inputs()
+        t["price_position"]["week_52_high"] = 105.0
+        setup = detect_setup(t, f, actionable_price=100.0)
+        assert setup["target_primary"] == {"price": 105.0, "basis": "week_52_high"}
+
+    def test_run_past_anchor_filters_low_targets(self) -> None:
+        # Trigger satisfied at 112: measured move 109 is BELOW the anchor,
+        # so the 52w high is the only valid structural target.
+        t, f = self._inputs()
+        setup = detect_setup(t, f, actionable_price=112.0)
+        assert setup is not None
+        assert setup["trigger_satisfied"] is True
+        assert setup["target_primary"] == {"price": 150.0, "basis": "week_52_high"}
+
+    def test_ath_break_falls_back_to_none(self) -> None:
+        # Anchor above every candidate -> None (plan builder's 1R fallback).
+        t, f = self._inputs()
+        t["price_position"]["week_52_high"] = 102.0
+        setup = detect_setup(t, f, actionable_price=115.0)
+        assert setup is not None
+        assert setup["target_primary"] is None
