@@ -8,7 +8,8 @@ from typing import Any
 import pandas as pd
 import pytz
 
-from stock_analysis.data.yfinance_client import fetch_history, get_market_state
+from stock_analysis.data.cache_manager import classify_session
+from stock_analysis.data.yfinance_client import fetch_history
 from stock_analysis.utils.helpers import safe_last_float, safe_round
 from stock_analysis.utils.indicators import (
     calculate_atr,
@@ -134,7 +135,7 @@ async def technicals(
     }
 
     now = _now or datetime.now(_ET)
-    session = get_market_state()["state"]
+    session = classify_session(now)
     result["short_term"] = build_short_term_block(
         df, today=now.date(), session=session,
     )

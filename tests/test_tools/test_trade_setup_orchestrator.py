@@ -91,7 +91,6 @@ def patched(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(orch, "risk_metrics", fake_risk)
     monkeypatch.setattr(orch, "events_calendar", fake_events)
     monkeypatch.setattr(orch, "fetch_history", fake_history)
-    monkeypatch.setattr(orch, "get_market_state", lambda: {"state": "after_hours"})
 
 
 @pytest.mark.asyncio
@@ -173,7 +172,6 @@ async def test_regular_session_fresh_satisfied_trigger_is_trade_now(
     monkeypatch.setattr(orch, "risk_metrics", fake_risk)
     monkeypatch.setattr(orch, "events_calendar", fake_events)
     monkeypatch.setattr(orch, "fetch_history", fake_history)
-    monkeypatch.setattr(orch, "get_market_state", lambda: {"state": "regular"})
 
     result = await orch.analyze_trade_setup("TEST", _now=NOW_REGULAR)
 
@@ -182,6 +180,25 @@ async def test_regular_session_fresh_satisfied_trigger_is_trade_now(
     assert result["plan"]["entry"]["type"] == "market"
     assert result["freshness"]["basis"] == "bar_timestamp"
     assert result["freshness"]["stale"] is False
+
+
+@pytest.mark.asyncio
+async def test_nan_probe_close_during_regular_is_wait_for_data(
+    patched: None, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import numpy as np
+
+    async def nan_probe_history(params: Any) -> pd.DataFrame:
+        if params.interval == "1d":
+            return daily_df()
+        probe = breakout_probe_df()
+        probe.loc[probe.index[-1], "close"] = np.nan
+        return probe
+
+    monkeypatch.setattr(orch, "fetch_history", nan_probe_history)
+    result = await orch.analyze_trade_setup("TEST", _now=NOW_REGULAR)
+    assert result["action"] == "wait_for_data"
+    assert any(b["id"] == "freshness_unverifiable" for b in result["blockers"])
 
 
 @pytest.mark.asyncio

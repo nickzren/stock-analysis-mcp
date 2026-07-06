@@ -59,7 +59,6 @@ def patched(monkeypatch: pytest.MonkeyPatch) -> None:
         return hourly_1h()
 
     monkeypatch.setattr(tech_mod, "fetch_history", fake_history)
-    monkeypatch.setattr(tech_mod, "get_market_state", lambda: {"state": "regular"})
 
 
 @pytest.mark.asyncio

@@ -10,7 +10,8 @@ from typing import Any
 import pandas as pd
 import pytz
 
-from stock_analysis.data.yfinance_client import fetch_history, get_market_state
+from stock_analysis.data.cache_manager import classify_session
+from stock_analysis.data.yfinance_client import fetch_history
 from stock_analysis.tools.events import events_calendar
 from stock_analysis.tools.risk_metrics import risk_metrics
 from stock_analysis.tools.stock_summary import stock_summary
@@ -62,7 +63,7 @@ async def analyze_trade_setup(
         )
 
     now = _now or datetime.now(_ET)
-    session = get_market_state()["state"]
+    session = classify_session(now)
 
     results = await asyncio.gather(
         stock_summary(normalized),
