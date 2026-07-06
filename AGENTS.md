@@ -66,6 +66,14 @@
   nulls dependent fields and adds `{id, reason}` warnings instead of blocking.
 - Breakout `target_primary` is the nearest of measured-move / 52-week-high
   strictly above the effective entry anchor; `None` means the 1R fallback.
+- `get_market_state().method` is `"calendar_static"` within the vendored
+  NYSE calendar (2025–2030) and `"clock_only_no_holidays_fallback"` outside
+  it. Early-close days run regular 9:30–13:00 with after-hours ending at
+  17:00 (approximation). To extend coverage: add the year's dates to
+  `utils/market_calendar.py`, bump `CALENDAR_LAST_YEAR`, update the count
+  tests.
+- Freshness treats a bar timestamp with a NaN close as unverifiable — a
+  quote without a finite price cannot verify the actionable price.
 
 ## Multi-Agent Note
 - `AGENTS.md` is the canonical shared instruction file for this repo.

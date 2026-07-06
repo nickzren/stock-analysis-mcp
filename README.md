@@ -164,6 +164,13 @@ If `account_size` is omitted, sizing remains percent-based. If a caller depends 
 
 ## Technical Details
 
+**Session Classification and Holidays**
+
+Session classification is holiday-aware via a vendored NYSE calendar
+(2025–2030, full holidays and 13:00 early closes); outside that range it
+falls back to clock-only weekday logic, reported as
+`method="clock_only_no_holidays_fallback"` in `get_market_state` provenance.
+
 <details>
 <summary>Architecture</summary>
 
