@@ -67,7 +67,7 @@ async def analyze_trade_setup(
 
     results = await asyncio.gather(
         stock_summary(normalized),
-        technicals(normalized),
+        technicals(normalized, _now=now),
         risk_metrics(normalized),
         events_calendar(normalized),
         _quiet_history(FetchParams(normalized, "1y", "1d", True)),
