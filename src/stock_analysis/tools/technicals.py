@@ -109,10 +109,8 @@ async def technicals(
     fib_levels = _build_fibonacci(price_position, current_price)
     price_action = _build_price_action(close)
 
-    duration_ms = (perf_counter() - start_time) * 1000
-
     result: dict[str, Any] = {
-        "meta": build_meta("technicals", duration_ms),
+        "meta": {},  # stamped with the final duration just before return
         "data_provenance": {
             "price": build_provenance(
                 source="yfinance",
@@ -147,6 +145,7 @@ async def technicals(
             df_5m=df_5m, df_1h=df_1h, daily_df=df,
             technicals_payload=result, session=session, now=now,
         )
+    result["meta"] = build_meta("technicals", (perf_counter() - start_time) * 1000)
     return result
 
 
