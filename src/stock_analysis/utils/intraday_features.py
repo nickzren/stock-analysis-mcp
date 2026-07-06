@@ -48,7 +48,7 @@ def build_intraday_block(
         intraday_usable = False
         warnings.append({
             "id": "stale_intraday",
-            "reason": "intraday data is stale — VWAP and time-adjusted RVOL omitted",
+            "reason": "intraday data is stale — intraday-derived fields omitted",
         })
 
     vwap = _session_vwap(df_5m) if intraday_usable else None

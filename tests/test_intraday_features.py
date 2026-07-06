@@ -93,6 +93,23 @@ class TestTimeAdjustedRvol:
         assert b["rvol_time_adjusted"] is None
         assert any(w["id"] == "off_session" for w in b["warnings"])
 
+    def test_early_session_clamps_to_min_fraction(self) -> None:
+        early = ET.localize(datetime(2026, 3, 10, 9, 35))  # 5 min -> 0.0128 -> clamp 0.05
+        b = block(now=early)
+        assert b["rvol_time_adjusted"]["elapsed_session_pct"] == 5.0
+        assert b["rvol_time_adjusted"]["value"] == round(400.0 / (1_000_000.0 * 0.05), 2)
+
+    def test_late_session_clamps_to_full_fraction(self) -> None:
+        late = ET.localize(datetime(2026, 3, 10, 16, 30))  # 420 min -> 1.077 -> clamp 1.0
+        # Bars must be fresh at 16:30: with the default 11:15-11:25 fixture the
+        # 15-min staleness gate nulls rvol before the clamp is ever reached.
+        fresh = five_min_df()
+        fresh["date"] = ["2026-03-10T16:15:00-0400", "2026-03-10T16:20:00-0400",
+                         "2026-03-10T16:25:00-0400"]
+        b = block(df_5m=fresh, now=late)  # session stays "regular" via the fixture default
+        assert b["rvol_time_adjusted"]["elapsed_session_pct"] == 100.0
+        assert b["rvol_time_adjusted"]["value"] == round(400.0 / 1_000_000.0, 2)
+
 
 class TestHourlyTrend:
     def test_advance(self) -> None:  # rising closes: above rising EMA
@@ -148,3 +165,23 @@ def test_stale_intraday_nulls_dependents() -> None:
     assert b["vwap"] is None
     assert b["rvol_time_adjusted"] is None
     assert any(w["id"] == "stale_intraday" for w in b["warnings"])
+
+
+def test_old_intraday_plus_off_session_interaction() -> None:
+    # Off-session, build_freshness judges staleness by the DAILY bars (EOD-fresh
+    # in this fixture), so freshness.stale is False and stale_intraday does NOT
+    # fire — the old 09:35 bar still yields a VWAP. RVOL is independently gated
+    # by off_session. This pins current behavior: intraday bar age is only
+    # enforced during the regular session.
+    old = pd.DataFrame({"date": ["2026-03-10T09:35:00-0400"], "open": [100.0],
+                        "high": [101.0], "low": [99.0], "close": [100.0],
+                        "volume": [100.0]})
+    evening = ET.localize(datetime(2026, 3, 10, 18, 30))
+    b = block(df_5m=old, session="after_hours", now=evening)
+    assert b["freshness"]["stale"] is False  # daily-based off-session
+    assert b["freshness"]["basis"] == "bar_timestamp"
+    assert b["vwap"] is not None  # intraday age not enforced off-session
+    assert b["rvol_time_adjusted"] is None
+    ids = {w["id"] for w in b["warnings"]}
+    assert "off_session" in ids
+    assert "stale_intraday" not in ids
