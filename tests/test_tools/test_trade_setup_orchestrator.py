@@ -72,7 +72,7 @@ def patched(monkeypatch: pytest.MonkeyPatch) -> None:
         return {"symbol": symbol, "name": "Test Co", "currency": "USD",
                 "current_price": 101.8}
 
-    async def fake_technicals(symbol: str) -> dict[str, Any]:
+    async def fake_technicals(symbol: str, **kwargs: Any) -> dict[str, Any]:
         return make_technicals()
 
     async def fake_risk(symbol: str) -> dict[str, Any]:
@@ -113,7 +113,7 @@ async def test_probe_failure_off_hours_still_works(patched: None) -> None:
 @pytest.mark.asyncio
 async def test_all_core_tools_failing_returns_error(patched: None,
                                                     monkeypatch: pytest.MonkeyPatch) -> None:
-    async def boom(symbol: str) -> dict[str, Any]:
+    async def boom(symbol: str, **kwargs: Any) -> dict[str, Any]:
         return {"error": True, "error_type": "invalid_symbol", "message": "bad"}
 
     monkeypatch.setattr(orch, "stock_summary", boom)
@@ -126,7 +126,7 @@ async def test_all_core_tools_failing_returns_error(patched: None,
 async def test_technicals_failure_alone_degrades_to_wait_for_data(
     patched: None, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def boom(symbol: str) -> dict[str, Any]:
+    async def boom(symbol: str, **kwargs: Any) -> dict[str, Any]:
         return {"error": True, "error_type": "fetch_error", "message": "boom"}
 
     monkeypatch.setattr(orch, "technicals", boom)
@@ -153,7 +153,7 @@ async def test_regular_session_fresh_satisfied_trigger_is_trade_now(
         volume={"ratio": 2.0},
     )
 
-    async def fake_technicals(symbol: str) -> dict[str, Any]:
+    async def fake_technicals(symbol: str, **kwargs: Any) -> dict[str, Any]:
         return breakout_technicals
 
     async def fake_risk(symbol: str) -> dict[str, Any]:
@@ -205,7 +205,7 @@ async def test_nan_probe_close_during_regular_is_wait_for_data(
 async def test_transport_failures_report_data_unavailable(
     patched: None, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def transport_error(symbol: str) -> dict[str, Any]:
+    async def transport_error(symbol: str, **kwargs: Any) -> dict[str, Any]:
         return {"error": True, "error_type": "data_unavailable",
                 "message": "Failed to fetch data: connection refused"}
 
@@ -223,7 +223,7 @@ async def test_transport_failures_report_data_unavailable(
 async def test_unanimous_invalid_symbol_stays_invalid(
     patched: None, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def invalid(symbol: str) -> dict[str, Any]:
+    async def invalid(symbol: str, **kwargs: Any) -> dict[str, Any]:
         return {"error": True, "error_type": "invalid_symbol", "message": "Invalid symbol"}
 
     monkeypatch.setattr(orch, "stock_summary", invalid)
@@ -237,10 +237,10 @@ async def test_unanimous_invalid_symbol_stays_invalid(
 async def test_mixed_failures_prefer_data_unavailable(
     patched: None, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def invalid(symbol: str) -> dict[str, Any]:
+    async def invalid(symbol: str, **kwargs: Any) -> dict[str, Any]:
         return {"error": True, "error_type": "invalid_symbol", "message": "Invalid symbol"}
 
-    async def raises(symbol: str) -> dict[str, Any]:
+    async def raises(symbol: str, **kwargs: Any) -> dict[str, Any]:
         raise RuntimeError("socket closed")
 
     monkeypatch.setattr(orch, "stock_summary", invalid)
