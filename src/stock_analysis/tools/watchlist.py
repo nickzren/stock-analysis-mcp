@@ -112,17 +112,19 @@ async def scan_watchlist(
     state, state_warnings = load_scan_state(directory)
     warnings = [*warnings, *state_warnings]
     prior_symbols = state.get("symbols")
-    if not isinstance(prior_symbols, dict):
+    first_scan = "symbols" not in state
+    if first_scan:
+        prior_symbols = {}
+        warnings.append({
+            "id": "first_scan",
+            "reason": "no prior scan state — transitions start next scan",
+        })
+    elif not isinstance(prior_symbols, dict):
+        # Key present but wrong shape: damaged state, not a clean install.
         prior_symbols = {}
         warnings.append({
             "id": "state_unreadable",
             "reason": "scan state malformed — treating as empty",
-        })
-    first_scan = "symbols" not in state
-    if first_scan:
-        warnings.append({
-            "id": "first_scan",
-            "reason": "no prior scan state — transitions start next scan",
         })
 
     symbols = sorted(stored)

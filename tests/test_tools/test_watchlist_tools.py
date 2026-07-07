@@ -121,6 +121,8 @@ class TestScan:
         assert r["symbols_scanned"] == 2 and r["full_cards"] == 2
         assert r["changes"] == []  # first scan
         assert any(w["id"] == "first_scan" for w in r["warnings"])
+        # A clean first scan must NOT look corrupted (Codex P2 regression).
+        assert not any(w["id"] == "state_unreadable" for w in r["warnings"])
         state, _ = load_scan_state(scan_env)
         assert state["symbols"]["HOOD"]["action"] == "enter_on_trigger"
 
