@@ -267,3 +267,49 @@ async def test_out_of_bounds_sizing_inputs_rejected(
     assert result["error"] is True
     assert result["error_type"] == "invalid_parameters"
     assert bad_param in result["message"]
+
+
+@pytest.mark.asyncio
+async def test_expected_move_fetched_within_earnings_window(
+    patched: None, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def near_earnings(symbol: str, **kwargs: Any) -> dict[str, Any]:
+        return {"earnings": {"days_until": 10, "next_date": "2026-03-20"}}
+
+    async def fake_em(symbol: str, earnings_date: Any, now: Any, spot: Any) -> dict[str, Any]:
+        return {"pct": 0.07, "dollars": 7.1, "strike": 100.0,
+                "basis": "atm_straddle_mid", "expiration": "2026-03-20"}
+
+    monkeypatch.setattr(orch, "events_calendar", near_earnings)
+    monkeypatch.setattr(orch, "_fetch_expected_move", fake_em)
+    result = await orch.analyze_trade_setup("TEST", _now=NOW_EVENING)
+    assert result["event_risk"]["expected_move_pct"] == 0.07
+
+
+@pytest.mark.asyncio
+async def test_no_options_fetch_outside_earnings_window(
+    patched: None, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def explode(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        raise AssertionError("options fetch must not fire outside the window")
+
+    monkeypatch.setattr(orch, "_fetch_expected_move", explode)
+    result = await orch.analyze_trade_setup("TEST", _now=NOW_EVENING)  # 40d fixture
+    assert result["event_risk"]["expected_move_pct"] is None
+
+
+@pytest.mark.asyncio
+async def test_expected_move_failure_leaves_card_intact(
+    patched: None, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def near_earnings(symbol: str, **kwargs: Any) -> dict[str, Any]:
+        return {"earnings": {"days_until": 10, "next_date": "2026-03-20"}}
+
+    async def em_none(*args: Any, **kwargs: Any) -> None:
+        return None
+
+    monkeypatch.setattr(orch, "events_calendar", near_earnings)
+    monkeypatch.setattr(orch, "_fetch_expected_move", em_none)
+    result = await orch.analyze_trade_setup("TEST", _now=NOW_EVENING)
+    assert result.get("error") is None
+    assert result["event_risk"]["expected_move_pct"] is None

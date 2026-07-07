@@ -35,5 +35,7 @@ SETUP_PRIORITY = ["pullback_in_uptrend", "breakout", "oversold_mean_reversion"]
 PDT_ACCOUNT_MIN = 25_000.0
 DEFAULT_REVIEW_TRADING_DAYS = 10
 
+EXPECTED_MOVE_EARNINGS_WINDOW_DAYS = 21
+
 # Tools whose failure makes the trade card unable to gate/detect safely.
 TRADE_CRITICAL_TOOLS = frozenset({"technicals", "risk_metrics"})

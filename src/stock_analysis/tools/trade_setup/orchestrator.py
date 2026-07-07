@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime
+from datetime import date, datetime
 from time import perf_counter
 from typing import Any
 
@@ -11,7 +11,7 @@ import pandas as pd
 import pytz
 
 from stock_analysis.data.cache_manager import classify_session
-from stock_analysis.data.yfinance_client import fetch_history
+from stock_analysis.data.yfinance_client import fetch_history, fetch_ticker
 from stock_analysis.tools.events import events_calendar
 from stock_analysis.tools.risk_metrics import risk_metrics
 from stock_analysis.tools.stock_summary import stock_summary
@@ -19,7 +19,12 @@ from stock_analysis.tools.technicals import technicals
 from stock_analysis.tools.trade_setup.card import build_trade_setup_card
 from stock_analysis.tools.trade_setup.features import compute_setup_features
 from stock_analysis.tools.trade_setup.freshness import build_freshness
-from stock_analysis.tools.trade_setup.setup_rules import PROBE_INTERVAL, PROBE_PERIOD
+from stock_analysis.tools.trade_setup.setup_rules import (
+    EXPECTED_MOVE_EARNINGS_WINDOW_DAYS,
+    PROBE_INTERVAL,
+    PROBE_PERIOD,
+)
+from stock_analysis.utils.expected_move import compute_expected_move, select_event_expiration
 from stock_analysis.utils.provenance import build_error_response, build_meta
 from stock_analysis.utils.validators import FetchParams
 
@@ -132,6 +137,18 @@ async def analyze_trade_setup(
     else:
         actionable_price = (cleaned.get("technicals") or {}).get("current_price")
 
+    expected_move: dict[str, Any] | None = None
+    earnings = (cleaned.get("events_calendar") or {}).get("earnings") or {}
+    days_until = earnings.get("days_until")
+    if (
+        isinstance(days_until, (int, float))
+        and 0 <= days_until <= EXPECTED_MOVE_EARNINGS_WINDOW_DAYS
+        and actionable_price is not None
+    ):
+        expected_move = await _fetch_expected_move(
+            normalized, earnings.get("next_date"), now, actionable_price,
+        )
+
     card = build_trade_setup_card(
         symbol=normalized,
         summary_data=cleaned.get("stock_summary") or {},
@@ -147,6 +164,7 @@ async def analyze_trade_setup(
         risk_per_trade_pct=risk_per_trade_pct,
         max_position_pct=max_position_pct,
         tool_failures=tool_failures,
+        expected_move=expected_move,
     )
     duration_ms = (perf_counter() - start_time) * 1000
     card["meta"] = build_meta("analyze_trade_setup", duration_ms)
@@ -157,5 +175,34 @@ async def _quiet_history(params: FetchParams) -> pd.DataFrame | None:
     """Fetch history, returning None on any failure (freshness gate handles it)."""
     try:
         return await fetch_history(params)
+    except Exception:
+        return None
+
+
+async def _fetch_expected_move(
+    symbol: str,
+    earnings_date_raw: Any,
+    now: datetime,
+    spot: float,
+) -> dict[str, Any] | None:
+    """Failure-quiet ATM-straddle fetch (mirrors options_signals' chain pattern)."""
+    try:
+        earnings_date = date.fromisoformat(str(earnings_date_raw)[:10])
+    except (TypeError, ValueError):
+        return None
+    try:
+        ticker = await fetch_ticker(symbol)
+        expiration = select_event_expiration(
+            list(ticker.options), earnings_date, now.date(),
+        )
+        if expiration is None:
+            return None
+        option_chain = ticker.option_chain(expiration)
+        result = compute_expected_move(
+            option_chain.calls, option_chain.puts, float(spot),
+        )
+        if result is not None:
+            result["expiration"] = expiration
+        return result
     except Exception:
         return None

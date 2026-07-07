@@ -85,3 +85,8 @@ class TestComputeExpectedMove:
         assert compute_expected_move(good, chain([]), 100.0) is None
         assert compute_expected_move(good, good, 0.0) is None
         assert compute_expected_move(good, good, None) is None
+
+    def test_non_numeric_quotes_are_none_not_an_exception(self) -> None:
+        calls = chain([{"strike": 100.0, "bid": "N/A", "ask": "N/A", "lastPrice": "N/A"}])
+        puts = chain([{"strike": 100.0, "bid": 2.6, "ask": 3.0, "lastPrice": 2.9}])
+        assert compute_expected_move(calls, puts, 100.0) is None

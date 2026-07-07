@@ -12,7 +12,7 @@ from typing import Any
 
 import pandas as pd
 
-from stock_analysis.utils.helpers import safe_round
+from stock_analysis.utils.helpers import safe_float, safe_round
 
 
 def select_event_expiration(
@@ -86,7 +86,5 @@ def _leg_price(chain: pd.DataFrame, strike: float) -> tuple[float | None, str]:
 
 
 def _positive(value: Any) -> float | None:
-    if value is None or pd.isna(value):
-        return None
-    number = float(value)
-    return number if number > 0 else None
+    number = safe_float(value)
+    return number if number is not None and number > 0 else None

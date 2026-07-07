@@ -189,3 +189,28 @@ def test_v_recovery_is_not_a_falling_knife() -> None:
     card = build_card(technicals_data=t, features=f)
     assert card["action"] == "no_setup"
     assert "falling_knife" not in blocker_ids(card)
+
+
+class TestExpectedMove:
+    def test_pct_filled_and_note_when_stop_inside_move(self) -> None:
+        card_result = build_card(
+            expected_move={"pct": 0.08, "dollars": 8.0, "strike": 100.0,
+                           "basis": "atm_straddle_mid", "expiration": "2026-03-20"},
+        )
+        assert card_result["event_risk"]["expected_move_pct"] == 0.08
+        # default fixture: armed pullback, stop distance ~4% < 8% move
+        assert card_result["plan"] is not None
+        assert any("options-implied earnings move" in n for n in card_result["notes"])
+
+    def test_no_note_when_stop_outside_move(self) -> None:
+        card_result = build_card(
+            expected_move={"pct": 0.01, "dollars": 1.0, "strike": 100.0,
+                           "basis": "atm_straddle_mid", "expiration": "2026-03-20"},
+        )
+        assert card_result["event_risk"]["expected_move_pct"] == 0.01
+        assert not any("options-implied" in n for n in card_result["notes"])
+
+    def test_null_expected_move_unchanged_card(self) -> None:
+        card_result = build_card()
+        assert card_result["event_risk"]["expected_move_pct"] is None
+        assert not any("options-implied" in n for n in card_result["notes"])
