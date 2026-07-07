@@ -32,6 +32,12 @@ from stock_analysis.tools import (
 from stock_analysis.tools import (
     analyze_trade_setup as trade_setup_analysis,
 )
+from stock_analysis.tools import (
+    manage_watchlist as watchlist_manage,
+)
+from stock_analysis.tools import (
+    scan_watchlist as watchlist_scan,
+)
 from stock_analysis.tools.analyze.projection import normalize_analyze_detail, project_analyze_result
 from stock_analysis.utils.provenance import build_error_response
 
@@ -438,6 +444,55 @@ async def check_data_quality(symbols: list[str]) -> str:
         JSON with per-symbol data quality and summary statistics
     """
     result = await data_quality_report(symbols=symbols)
+    return _json_response(result)
+
+
+@mcp.tool
+async def manage_watchlist(action: str, symbols: list[str] | None = None) -> str:
+    """
+    Manage the persisted watchlist (max 25 symbols).
+
+    Storage: $STOCK_ANALYSIS_DATA_DIR, else $XDG_DATA_HOME/stock-analysis,
+    else ~/.local/share/stock-analysis.
+
+    Args:
+        action: add | remove | list
+        symbols: Symbols for add/remove (normalized and deduplicated)
+
+    Returns:
+        JSON with the resulting watchlist, count, and warnings
+    """
+    result = await watchlist_manage(action=action, symbols=symbols)
+    return _json_response(result)
+
+
+@mcp.tool
+async def scan_watchlist(
+    account_size: float | None = None,
+    risk_per_trade_pct: float = 1.0,
+    max_position_pct: float = 10.0,
+) -> str:
+    """
+    Scan the persisted watchlist for swing setups (two-phase: cheap daily
+    screen, full analyze_trade_setup card only for candidates and
+    previously-actionable symbols).
+
+    `changes` lists card transitions since the last scan; `rows` is the full
+    current state. Informational only — not financial advice.
+
+    Args:
+        account_size: Optional account size in dollars for card sizing (> 0)
+        risk_per_trade_pct: Percent of account risked per trade, in (0, 100]
+        max_position_pct: Position cap as percent of account, in (0, 100]
+
+    Returns:
+        JSON scan report (changes, rows, warnings, errors)
+    """
+    result = await watchlist_scan(
+        account_size=account_size,
+        risk_per_trade_pct=risk_per_trade_pct,
+        max_position_pct=max_position_pct,
+    )
     return _json_response(result)
 
 

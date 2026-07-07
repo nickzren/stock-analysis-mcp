@@ -17,6 +17,7 @@ from stock_analysis.tools.stock_summary import stock_summary
 from stock_analysis.tools.symbol_search import symbol_search
 from stock_analysis.tools.technicals import technicals
 from stock_analysis.tools.trade_setup import analyze_trade_setup
+from stock_analysis.tools.watchlist import manage_watchlist, scan_watchlist
 
 __all__ = [
     "analyze_position",
@@ -26,11 +27,13 @@ __all__ = [
     "data_quality_report",
     "events_calendar",
     "fundamentals_snapshot",
+    "manage_watchlist",
     "options_signals",
     "ownership_analysis",
     "portfolio_exposure",
     "price_history",
     "risk_metrics",
+    "scan_watchlist",
     "stock_news",
     "stock_summary",
     "symbol_search",
