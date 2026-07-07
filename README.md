@@ -154,6 +154,17 @@ If `account_size` is omitted, sizing remains percent-based. If a caller depends 
 
 `get_price_history` returns a `price://...` resource URI backed by an in-memory, process-local cache. Read that resource during the same server session; it does not survive restarts. Some MCP clients (observed: Claude Desktop) serve resource reads from a separate server process where that cache is empty — if resource reads return "not cached", fall back to `include_preview=true` for inline bars.
 
+### Watchlist
+
+| Tool | Description |
+|------|-------------|
+| `manage_watchlist` | Add, remove, or list symbols (max 25); normalized and deduplicated |
+| `scan_watchlist` | Two-phase screen for swing setups: cheap daily screen for all symbols, full card (`analyze_trade_setup`) only for candidates and previously-actionable ones; `changes` lists transitions since the last scan, `rows` is the full current state |
+
+**Storage:** Watchlist and scan state persist under `$STOCK_ANALYSIS_DATA_DIR` (if set), else `$XDG_DATA_HOME/stock-analysis`, else `~/.local/share/stock-analysis`. The same directory stores `watchlist.json` and `scan_state.json`; corrupt files degrade to empty state with a warning instead of failing. Run `manage_watchlist action=list` to inspect the current watchlist and storage state.
+
+**Scheduled Brief Example:** Run `scan_watchlist` from a scheduled task before market open (e.g., via cron or `at` command) with optional `account_size`, `risk_per_trade_pct`, and `max_position_pct` parameters to match your account. Lead the report with the `changes` key to focus on symbol transitions; `rows` provides full current state for trend analysis. First scan returns an empty `changes` list with a `first_scan` warning; transitions appear starting from the second scan.
+
 ### Portfolio & Utilities
 
 | Tool | Description |
