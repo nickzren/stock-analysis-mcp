@@ -78,6 +78,10 @@
 - `scan_watchlist` phase 1 (cheap daily screen for all symbols) runs `screen_symbol`, which nulls `earnings_in_days` for screened-out rows (no events fetch in phase 1); full card is fetched only for candidates (`screen["promote"]`) and previously-actionable symbols.
 - Phase-1 `avoid` rows carry screen blockers only (e.g., `"falling_knife"`, `"weak_liquidity"`); they do not have `entry`, `stop`, or `plan` fields from a full card — these are not omitted, they do not exist in phase-1 rows.
 - `scan_watchlist` `changes` lists only action transitions for symbols with a prior scan state; the first scan always returns empty `changes` with a `first_scan` warning; transitions appear starting from the second scan.
+- `expected_move_pct` populates only within 21 days of earnings AND when the
+  options chain is usable; `basis` (in the internal result) discloses
+  mid-vs-last pricing; it never gates an action and never causes a scan
+  transition.
 
 ## Multi-Agent Note
 - `AGENTS.md` is the canonical shared instruction file for this repo.

@@ -159,7 +159,7 @@ If `account_size` is omitted, sizing remains percent-based. If a caller depends 
 | Tool | Description |
 |------|-------------|
 | `manage_watchlist` | Add, remove, or list symbols (max 25); normalized and deduplicated |
-| `scan_watchlist` | Two-phase screen for swing setups: cheap daily screen for all symbols, full card (`analyze_trade_setup`) only for candidates and previously-actionable ones; `changes` lists transitions since the last scan, `rows` is the full current state |
+| `scan_watchlist` | Two-phase screen for swing setups: cheap daily screen for all symbols, full card (`analyze_trade_setup`) only for candidates and previously-actionable ones; `changes` lists transitions since the last scan, `rows` is the full current state. Near earnings (≤21 days) the card fills `event_risk.expected_move_pct` from the ATM straddle and warns when the stop sits inside the implied move |
 
 **Storage:** Watchlist and scan state persist under `$STOCK_ANALYSIS_DATA_DIR` (if set), else `$XDG_DATA_HOME/stock-analysis`, else `~/.local/share/stock-analysis`. The same directory stores `watchlist.json` and `scan_state.json`; corrupt files degrade to empty state with a warning instead of failing. Run `manage_watchlist action=list` to inspect the current watchlist and storage state.
 

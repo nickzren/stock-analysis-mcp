@@ -169,8 +169,10 @@ async def scan_watchlist(
                 continue
             full_cards += 1
             summary = _summary_from_card(card)
+            event_risk = card.get("event_risk") or {}
             row = _row(symbol, summary, screen,
-                       (card.get("event_risk") or {}).get("earnings_in_days"))
+                       event_risk.get("earnings_in_days"),
+                       event_risk.get("expected_move_pct"))
         else:
             summary = _summary_from_screen(screen)
             row = _row(symbol, summary, screen, None)
@@ -254,6 +256,7 @@ def _row(
     summary: dict[str, Any],
     screen: dict[str, Any],
     earnings_in_days: int | None,
+    expected_move_pct: float | None = None,
 ) -> dict[str, Any]:
     trigger = summary.get("trigger_price")
     last_close = screen.get("last_close")
@@ -270,6 +273,7 @@ def _row(
         "distance_to_trigger_pct": distance,
         "blockers": summary["blockers"],
         "earnings_in_days": earnings_in_days,
+        "expected_move_pct": expected_move_pct,
     }
 
 

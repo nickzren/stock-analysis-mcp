@@ -230,3 +230,30 @@ class TestScan:
         r = await wl_mod.scan_watchlist(_now=NOW, data_dir=scan_env)
         assert r.get("error") is None
         assert r["changes"] == []  # no prior => no transition reported
+
+    @pytest.mark.asyncio
+    async def test_phase2_row_carries_expected_move(self, scan_env: Path,
+                                                    monkeypatch: pytest.MonkeyPatch) -> None:
+        await wl_mod.manage_watchlist("add", ["HOOD"], _today=TODAY, data_dir=scan_env)
+        monkeypatch.setattr(wl_mod, "screen_symbol",
+                            lambda df: screen_result(promote=True, action_hint="candidate",
+                                                     setup_type="breakout",
+                                                     trigger_price=102.0))
+
+        async def fake_card(symbol: str, **kwargs: Any) -> dict[str, Any]:
+            c = card("enter_on_trigger")
+            c["event_risk"] = {"earnings_in_days": 10, "expected_move_pct": 0.065}
+            return c
+
+        monkeypatch.setattr(wl_mod, "analyze_trade_setup", fake_card)
+        first = await wl_mod.scan_watchlist(_now=NOW, data_dir=scan_env)
+        assert first["rows"][0]["expected_move_pct"] == 0.065
+        # EM is display data: an EM change alone must NOT create a transition.
+        async def fake_card_2(symbol: str, **kwargs: Any) -> dict[str, Any]:
+            c = card("enter_on_trigger")
+            c["event_risk"] = {"earnings_in_days": 10, "expected_move_pct": 0.09}
+            return c
+
+        monkeypatch.setattr(wl_mod, "analyze_trade_setup", fake_card_2)
+        second = await wl_mod.scan_watchlist(_now=NOW, data_dir=scan_env)
+        assert second["changes"] == []
