@@ -27,7 +27,7 @@ _ET = pytz.timezone("America/New_York")
 _CORE_TOOL_NAMES = ["stock_summary", "technicals", "risk_metrics", "events_calendar"]
 
 
-def _validate_sizing_params(
+def validate_sizing_params(
     account_size: float | None,
     risk_per_trade_pct: float,
     max_position_pct: float,
@@ -52,7 +52,7 @@ async def analyze_trade_setup(
     start_time = perf_counter()
     normalized = symbol.upper().strip()
 
-    param_error = _validate_sizing_params(
+    param_error = validate_sizing_params(
         account_size, risk_per_trade_pct, max_position_pct
     )
     if param_error is not None:

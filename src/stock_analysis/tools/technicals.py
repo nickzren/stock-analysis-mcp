@@ -21,6 +21,9 @@ from stock_analysis.utils.indicators import (
     calculate_returns,
     calculate_rsi,
     calculate_sma,
+    calculate_sma_slope,
+    days_since_extreme,
+    weekly_return_zscore,
 )
 from stock_analysis.utils.intraday_features import build_intraday_block
 from stock_analysis.utils.provenance import (
@@ -190,7 +193,7 @@ def _build_moving_averages(
         "ema_12": safe_round(ema_12_val, 2),
         "ema_26": safe_round(ema_26_val, 2),
         "sma_200_slope_pct_per_day": safe_round(
-            _calc_sma_slope_pct_per_day(sma_200, slope_window=20),
+            calculate_sma_slope(sma_200, slope_window=20),
             6,
         ),
         "price_vs_sma20": safe_round(price_vs_sma20, 4),
@@ -350,8 +353,8 @@ def _build_price_position(
         "from_52w_low": safe_round(from_52w_low, 4),
         "from_3m_high": safe_round(from_3m_high, 4),
         "from_6m_high": safe_round(from_6m_high, 4),
-        "days_since_52w_high": _days_since_extreme(high, kind="high"),
-        "days_since_52w_low": _days_since_extreme(low, kind="low"),
+        "days_since_52w_high": days_since_extreme(high, kind="high"),
+        "days_since_52w_low": days_since_extreme(low, kind="low"),
         "position_in_range": safe_round(position_in_range, 4),
     }
 
@@ -364,7 +367,7 @@ def _build_returns(df: pd.DataFrame, close: pd.Series) -> dict[str, Any]:
 
     return {
         "return_1w": safe_round(calculate_returns(close, 5), 4),
-        "return_1w_zscore": safe_round(_zscore_weekly_return(close, lookback_weeks=104), 2),
+        "return_1w_zscore": safe_round(weekly_return_zscore(close, lookback_weeks=104), 2),
         "return_1m": safe_round(calculate_returns(close, 21), 4),
         "return_3m": safe_round(calculate_returns(close, 63), 4),
         "return_6m": safe_round(calculate_returns(close, 126), 4),
@@ -488,43 +491,10 @@ def _calculate_ytd_return(df: pd.DataFrame) -> float | None:
     return float(round((end_price - start_price) / start_price, 4))
 
 
-def _calc_sma_slope_pct_per_day(
-    sma_series: pd.Series,
-    slope_window: int = 20,
-) -> float | None:
-    """Calculate SMA slope as percent change per day over slope_window."""
-    series = sma_series.dropna()
-    if len(series) < slope_window + 1:
-        return None
-    start = series.iloc[-(slope_window + 1)]
-    end = series.iloc[-1]
-    if start == 0 or pd.isna(start) or pd.isna(end):
-        return None
-    return float((end - start) / start / slope_window)
-
-
-def _zscore_weekly_return(
-    close_series: pd.Series,
-    lookback_weeks: int = 104,
-) -> float | None:
-    """Z-score of the most recent 1-week return vs trailing weekly returns."""
-    weekly = close_series.pct_change(5, fill_method=None).dropna()
-    if len(weekly) < 20:
-        return None
-    weekly = weekly.tail(lookback_weeks)
-    std = weekly.std()
-    if std == 0 or pd.isna(std):
-        return None
-    return float((weekly.iloc[-1] - weekly.mean()) / std)
-
-
-def _days_since_extreme(series: pd.Series, *, kind: str) -> int | None:
-    """Days since most recent extreme (high/low) in series."""
-    clean = series.dropna().reset_index(drop=True)
-    if len(clean) == 0:
-        return None
-    idx = int(clean.idxmax()) if kind == "high" else int(clean.idxmin())
-    return int(len(clean) - 1 - idx)
+# Backward compatibility aliases for relocated helpers (test shim)
+_calc_sma_slope_pct_per_day = calculate_sma_slope
+_days_since_extreme = days_since_extreme
+_zscore_weekly_return = weekly_return_zscore
 
 
 def _detect_bullish_rsi_divergence(

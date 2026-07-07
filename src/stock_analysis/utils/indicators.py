@@ -429,3 +429,42 @@ def calculate_fibonacci_levels(
         "level_786": round(high - 0.786 * diff, 2),
         "level_1000": round(low, 2),
     }
+
+
+def calculate_sma_slope(
+    sma_series: pd.Series,
+    slope_window: int = 20,
+) -> float | None:
+    """Calculate SMA slope as percent change per day over slope_window."""
+    series = sma_series.dropna()
+    if len(series) < slope_window + 1:
+        return None
+    start = series.iloc[-(slope_window + 1)]
+    end = series.iloc[-1]
+    if start == 0 or pd.isna(start) or pd.isna(end):
+        return None
+    return float((end - start) / start / slope_window)
+
+
+def days_since_extreme(series: pd.Series, *, kind: str) -> int | None:
+    """Days since most recent extreme (high/low) in series."""
+    clean = series.dropna().reset_index(drop=True)
+    if len(clean) == 0:
+        return None
+    idx = int(clean.idxmax()) if kind == "high" else int(clean.idxmin())
+    return int(len(clean) - 1 - idx)
+
+
+def weekly_return_zscore(
+    close_series: pd.Series,
+    lookback_weeks: int = 104,
+) -> float | None:
+    """Z-score of the most recent 1-week return vs trailing weekly returns."""
+    weekly = close_series.pct_change(5, fill_method=None).dropna()
+    if len(weekly) < 20:
+        return None
+    weekly = weekly.tail(lookback_weeks)
+    std = weekly.std()
+    if std == 0 or pd.isna(std):
+        return None
+    return float((weekly.iloc[-1] - weekly.mean()) / std)
