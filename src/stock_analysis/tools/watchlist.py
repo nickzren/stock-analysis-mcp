@@ -82,10 +82,9 @@ async def manage_watchlist(
         }]
     save_watchlist(directory, kept)
     state, _ = load_scan_state(directory)
-    if state.get("symbols"):
-        state["symbols"] = {
-            s: v for s, v in state["symbols"].items() if s in kept
-        }
+    state_symbols = state.get("symbols")
+    if isinstance(state_symbols, dict) and state_symbols:
+        state["symbols"] = {s: v for s, v in state_symbols.items() if s in kept}
         save_scan_state(directory, state)
     return _watchlist_response(kept, warnings)
 
@@ -112,7 +111,13 @@ async def scan_watchlist(
     stored, warnings = load_watchlist(directory)
     state, state_warnings = load_scan_state(directory)
     warnings = [*warnings, *state_warnings]
-    prior_symbols: dict[str, dict[str, Any]] = state.get("symbols", {})
+    prior_symbols = state.get("symbols")
+    if not isinstance(prior_symbols, dict):
+        prior_symbols = {}
+        warnings.append({
+            "id": "state_unreadable",
+            "reason": "scan state malformed — treating as empty",
+        })
     first_scan = "symbols" not in state
     if first_scan:
         warnings.append({
@@ -133,6 +138,8 @@ async def scan_watchlist(
 
     for symbol, screen in zip(symbols, screens, strict=True):
         prior = prior_symbols.get(symbol)
+        if not isinstance(prior, dict):
+            prior = None
         if screen is None:  # daily fetch failed
             errors.append({"symbol": symbol, "error_type": "data_unavailable"})
             if prior is not None:

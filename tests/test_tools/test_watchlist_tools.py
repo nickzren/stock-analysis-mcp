@@ -65,6 +65,14 @@ class TestManage:
         state, _ = load_scan_state(tmp_path)
         assert "HOOD" not in state.get("symbols", {})
 
+    @pytest.mark.asyncio
+    async def test_remove_survives_malformed_scan_state(self, tmp_path: Path) -> None:
+        await wl_mod.manage_watchlist("add", ["HOOD"], _today=TODAY, data_dir=tmp_path)
+        save_scan_state(tmp_path, {"scanned_at": "x", "symbols": [1, 2]})
+        r = await wl_mod.manage_watchlist("remove", ["HOOD"], data_dir=tmp_path)
+        assert r.get("error") is None
+        assert r["watchlist"] == []
+
 
 def screen_result(**over: Any) -> dict[str, Any]:
     base = {"promote": False, "action_hint": "no_setup", "setup_type": None,
@@ -197,3 +205,26 @@ class TestScan:
     async def test_empty_watchlist_is_clean_noop(self, scan_env: Path) -> None:
         r = await wl_mod.scan_watchlist(_now=NOW, data_dir=scan_env)
         assert r["symbols_scanned"] == 0 and r["rows"] == [] and r.get("error") is None
+
+    @pytest.mark.asyncio
+    async def test_malformed_symbols_list_treated_as_empty(
+        self, scan_env: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        await wl_mod.manage_watchlist("add", ["HOOD"], _today=TODAY, data_dir=scan_env)
+        save_scan_state(scan_env, {"scanned_at": "x", "symbols": [1, 2]})
+        monkeypatch.setattr(wl_mod, "screen_symbol", lambda df: screen_result())
+        r = await wl_mod.scan_watchlist(_now=NOW, data_dir=scan_env)
+        assert r.get("error") is None
+        assert any(w["id"] == "state_unreadable" for w in r["warnings"])
+        assert r["changes"] == []
+
+    @pytest.mark.asyncio
+    async def test_malformed_per_symbol_prior_treated_as_no_prior(
+        self, scan_env: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        await wl_mod.manage_watchlist("add", ["HOOD"], _today=TODAY, data_dir=scan_env)
+        save_scan_state(scan_env, {"scanned_at": "x", "symbols": {"HOOD": "garbage"}})
+        monkeypatch.setattr(wl_mod, "screen_symbol", lambda df: screen_result())
+        r = await wl_mod.scan_watchlist(_now=NOW, data_dir=scan_env)
+        assert r.get("error") is None
+        assert r["changes"] == []  # no prior => no transition reported

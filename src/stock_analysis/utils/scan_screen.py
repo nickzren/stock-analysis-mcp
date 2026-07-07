@@ -3,7 +3,9 @@
 No-false-negative contract (spec amendment): the payload carries every
 detection and gate input the full card's detectors read. The only
 approximation is rsi.bullish_divergence=False, which feeds quality grading
-only and cannot affect promotion.
+only and cannot affect promotion. `volume.ratio` is included for payload
+parity with technicals, but detectors read `features.last_volume_ratio`
+(from compute_setup_features), not this field.
 """
 
 from __future__ import annotations
@@ -13,11 +15,6 @@ from typing import Any
 
 import pandas as pd
 
-from stock_analysis.tools.analyze.gates import (
-    check_liquidity,
-    is_falling_knife_technicals,
-)
-from stock_analysis.tools.trade_setup.setups import detect_setup
 from stock_analysis.utils.helpers import safe_last_float, safe_round
 from stock_analysis.utils.indicators import (
     calculate_atr,
@@ -102,6 +99,14 @@ def build_screen_payload(df: pd.DataFrame | None) -> dict[str, Any] | None:
 
 def screen_symbol(df: pd.DataFrame | None) -> dict[str, Any]:
     """Phase-1 verdict from one daily frame, using the shared detectors/gates."""
+    # Lazy: tools.* imports here would close a cycle via
+    # tools/__init__ -> watchlist -> scan_screen.
+    from stock_analysis.tools.analyze.gates import (
+        check_liquidity,
+        is_falling_knife_technicals,
+    )
+    from stock_analysis.tools.trade_setup.setups import detect_setup
+
     payload = build_screen_payload(df)
     features = compute_setup_features(df)
     if payload is None or features is None or payload["current_price"] is None:

@@ -99,7 +99,7 @@ class TestPctChangeFillBehavior:
 
 
 class TestZscoreWeeklyReturnFillBehavior:
-    """_zscore_weekly_return must use fill_method=None to avoid fabricated returns.
+    """weekly_return_zscore must use fill_method=None to avoid fabricated returns.
 
     Regression: the weekly-return path was missed by the initial pct_change fix.
     Forward-filling gaps fabricates flat weekly returns that distort the z-score.

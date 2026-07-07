@@ -1,6 +1,8 @@
 """Screen must agree with the full card's detectors: no false negatives."""
 
 import math
+import subprocess
+import sys
 from typing import Any
 
 import pandas as pd
@@ -8,6 +10,24 @@ import pandas as pd
 from stock_analysis.tools.trade_setup.setups import detect_setup
 from stock_analysis.utils.scan_screen import build_screen_payload, screen_symbol
 from stock_analysis.utils.swing_features import compute_setup_features
+
+
+class TestNoCircularImport:
+    """scan_screen must import standalone without going through tools/__init__.
+
+    Regression: module-level imports of tools.analyze.gates and
+    tools.trade_setup.setups closed a cycle via
+    tools/__init__ -> watchlist -> scan_screen. A subprocess is required
+    because in-process import order in this test session is already
+    contaminated by earlier imports.
+    """
+
+    def test_standalone_import_succeeds(self) -> None:
+        result = subprocess.run(
+            [sys.executable, "-c", "import stock_analysis.utils.scan_screen"],
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0, result.stderr
 
 
 def make_df(closes, highs=None, lows=None, volumes=None):
