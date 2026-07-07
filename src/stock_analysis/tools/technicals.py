@@ -491,12 +491,6 @@ def _calculate_ytd_return(df: pd.DataFrame) -> float | None:
     return float(round((end_price - start_price) / start_price, 4))
 
 
-# Backward compatibility aliases for relocated helpers (test shim)
-_calc_sma_slope_pct_per_day = calculate_sma_slope
-_days_since_extreme = days_since_extreme
-_zscore_weekly_return = weekly_return_zscore
-
-
 def _detect_bullish_rsi_divergence(
     close: pd.Series,
     rsi: pd.Series,

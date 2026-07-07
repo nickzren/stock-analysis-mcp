@@ -7,8 +7,8 @@ import pandas as pd
 from stock_analysis.tools.technicals import (
     _build_bollinger,
     _build_fibonacci,
-    _zscore_weekly_return,
 )
+from stock_analysis.utils.indicators import weekly_return_zscore
 
 
 class TestBollingerWithMissingCurrentPrice:
@@ -114,14 +114,14 @@ class TestZscoreWeeklyReturnFillBehavior:
         with warnings.catch_warnings():
             warnings.simplefilter("error", FutureWarning)
             # Should not raise — fill_method=None is explicit
-            _zscore_weekly_return(prices)
+            weekly_return_zscore(prices)
 
     def test_zscore_returns_float_on_normal_series(self) -> None:
         prices = pd.Series([100.0 + i * 0.1 for i in range(120)])
-        result = _zscore_weekly_return(prices)
+        result = weekly_return_zscore(prices)
         assert result is not None
         assert isinstance(result, float)
 
     def test_zscore_returns_none_on_short_series(self) -> None:
         prices = pd.Series([100.0, 101.0, 102.0])
-        assert _zscore_weekly_return(prices) is None
+        assert weekly_return_zscore(prices) is None
