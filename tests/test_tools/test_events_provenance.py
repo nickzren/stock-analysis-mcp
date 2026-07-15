@@ -1,4 +1,4 @@
-"""Red-first regressions R1/R2/R3/R4/R13/R17: earnings provenance + day math."""
+"""Red-first regressions R1/R2/R3/R4/R13/R17/R18/R19: earnings provenance + day math."""
 
 from datetime import datetime
 
@@ -117,3 +117,27 @@ async def test_info_fetch_raise_marks_info_failed(monkeypatch):
     ticker = FakeTicker(calendar={}, earnings_dates=None)
     earnings = await _earnings(monkeypatch, ticker, info_raises=True)
     assert earnings["sources_failed"] == ["info"]
+
+
+@pytest.mark.asyncio
+async def test_r18_naive_earnings_timestamp_same_day_is_day_zero(monkeypatch):
+    # Naive index entries (no tzinfo) must be treated as exchange-local (ET)
+    # wall time. Localizing as UTC first shifts a pre-~04:00 ET wall time back
+    # one calendar day, so 00:30 on earnings day would resolve to yesterday
+    # and be filtered out by the `row_date >= cutoff` check below.
+    idx = pd.DatetimeIndex([pd.Timestamp("2026-07-15 00:30")])  # naive
+    df = pd.DataFrame({"EPS Estimate": [1.0]}, index=idx)
+    ticker = FakeTicker(calendar={}, earnings_dates=df)
+    earnings = await _earnings(monkeypatch, ticker)
+    assert earnings["next_date"] == "2026-07-15"  # OLD: None (shifted to 07-14, filtered out)
+    assert earnings["days_until"] == 0
+
+
+@pytest.mark.asyncio
+async def test_r19_naive_earnings_timestamp_t5_boundary(monkeypatch):
+    idx = pd.DatetimeIndex([pd.Timestamp("2026-07-20 16:30")])  # naive
+    df = pd.DataFrame({"EPS Estimate": [1.0]}, index=idx)
+    ticker = FakeTicker(calendar={}, earnings_dates=df)
+    earnings = await _earnings(monkeypatch, ticker)
+    assert earnings["next_date"] == "2026-07-20"
+    assert earnings["days_until"] == 5

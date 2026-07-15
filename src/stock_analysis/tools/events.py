@@ -224,7 +224,9 @@ def _resolve_next_earnings_date(
                 for idx, _row in earnings_dates.iterrows():
                     rows_seen += 1
                     if isinstance(idx, pd.Timestamp):
-                        ts = idx if idx.tzinfo is not None else idx.tz_localize("UTC")
+                        # Naive entries are treated as exchange-local (ET) wall
+                        # time; tz-aware entries convert to ET.
+                        ts = idx if idx.tzinfo is not None else idx.tz_localize("America/New_York")
                         row_date = ts.tz_convert("America/New_York").date()
                     else:
                         try:
