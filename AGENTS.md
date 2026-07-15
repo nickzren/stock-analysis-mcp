@@ -74,11 +74,11 @@
   17:00 (approximation). To extend coverage: add the year's dates to
   `utils/market_calendar.py`, bump `CALENDAR_LAST_YEAR`, update the count
   tests.
-- Freshness requires a finite close (no NaN/±inf), a bar timestamp not more than
-  5s in the future, and in regular session a current daily frame (`daily_bar_date
-  >= daily_expected_date`). Any non-finite close, future-dated bar, or unusable
-  daily data (off-hours: non-finite or stale) is unverifiable; in regular session
-  only stale/unusable daily is `stale_data`, not unverifiable.
+- Freshness treats any non-finite close (NaN/±inf) or a bar timestamp more
+  than 5s in the future as unverifiable — a quote without a trustworthy
+  finite price cannot verify the actionable price. The session-specific
+  daily-frame rules (regular two-leg vs off-hours) live in the
+  `analyze_trade_setup.freshness` bullet below.
 - `events_calendar` earnings: `days_until` counts ET calendar days with day-of
   earnings = `0` (same-day earnings count as day 0); `sources_failed` lists
   sources whose read raised OR whose payload was present but uninterpretable
