@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 from datetime import date, datetime
 from time import perf_counter
 from typing import Any
@@ -126,7 +127,7 @@ async def analyze_trade_setup(
     probe_close: float | None = None
     if session == "regular" and probe_df is not None and len(probe_df) > 0:
         last_close = pd.to_numeric(probe_df["close"], errors="coerce").iloc[-1]
-        if not pd.isna(last_close):
+        if not pd.isna(last_close) and math.isfinite(float(last_close)):
             probe_close = float(last_close)
 
     actionable_price: float | None

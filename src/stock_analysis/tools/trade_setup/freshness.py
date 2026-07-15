@@ -1,6 +1,9 @@
 """Re-export shim: implementation moved to stock_analysis.utils.freshness."""
 
 from stock_analysis.utils.freshness import FRESHNESS_CEILING_MINUTES as FRESHNESS_CEILING_MINUTES
+from stock_analysis.utils.freshness import (
+    FUTURE_SKEW_TOLERANCE_SECONDS as FUTURE_SKEW_TOLERANCE_SECONDS,
+)
 from stock_analysis.utils.freshness import build_freshness as build_freshness
 from stock_analysis.utils.freshness import freshness_blockers as freshness_blockers
 from stock_analysis.utils.freshness import (

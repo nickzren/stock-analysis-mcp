@@ -14,13 +14,21 @@ NOW_REGULAR = ET.localize(datetime(2026, 3, 10, 10, 30))
 NOW_EVENING = ET.localize(datetime(2026, 3, 10, 18, 30))
 
 FRESH = {"as_of": "2026-03-10T14:25:00+00:00", "basis": "bar_timestamp",
-         "session": "regular", "quote_age_seconds": 300, "stale": False}
+         "session": "regular", "quote_age_seconds": 300, "stale": False,
+         "reason_code": None, "daily_bar_date": "2026-03-09",
+         "daily_expected_date": "2026-03-09"}
 EOD_FRESH = {"as_of": "2026-03-10", "basis": "bar_timestamp",
-             "session": "after_hours", "quote_age_seconds": None, "stale": False}
+             "session": "after_hours", "quote_age_seconds": None, "stale": False,
+             "reason_code": None, "daily_bar_date": "2026-03-10",
+             "daily_expected_date": "2026-03-10"}
 STALE = {"as_of": "2026-03-10T13:00:00+00:00", "basis": "bar_timestamp",
-         "session": "regular", "quote_age_seconds": 5400, "stale": True}
+         "session": "regular", "quote_age_seconds": 5400, "stale": True,
+         "reason_code": "stale_quote", "daily_bar_date": "2026-03-09",
+         "daily_expected_date": "2026-03-09"}
 UNVERIFIABLE = {"as_of": None, "basis": "unverifiable", "session": "regular",
-                "quote_age_seconds": None, "stale": True}
+                "quote_age_seconds": None, "stale": True,
+                "reason_code": "no_bar_timestamp", "daily_bar_date": None,
+                "daily_expected_date": "2026-03-09"}
 
 
 def build_card(**overrides: Any) -> dict[str, Any]:
