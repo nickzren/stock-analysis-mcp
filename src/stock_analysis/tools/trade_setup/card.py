@@ -90,6 +90,10 @@ def build_trade_setup_card(
     if earnings_blocker:
         blockers.append(earnings_blocker)
     events_failed = any(tf.get("tool") == "events_calendar" for tf in tool_failures or [])
+    earnings = (events_data.get("earnings") or {}) if events_data else {}
+    events_degraded = (
+        earnings.get("next_date") is None and bool(earnings.get("sources_failed"))
+    )
 
     setup: dict[str, Any] | None = None
     plan: dict[str, Any] | None = None
@@ -103,12 +107,13 @@ def build_trade_setup_card(
         if setup is None:
             action = "no_setup"
         else:
-            if events_failed:
+            if events_failed or events_degraded:
+                failed = ", ".join(earnings.get("sources_failed") or []) or "tool fetch"
                 blockers.append({
                     "id": "earnings_unverifiable",
-                    "reason": "earnings calendar unavailable — event risk unverified",
+                    "reason": f"earnings calendar unverifiable ({failed}) — event risk unverified",
                 })
-            if earnings_blackout or events_failed:
+            if earnings_blackout or events_failed or events_degraded:
                 action = "watch"
             elif setup["trigger_satisfied"] and session == "regular" and not freshness["stale"]:
                 action = "trade_now"
@@ -134,7 +139,6 @@ def build_trade_setup_card(
             actionable_price=actionable_price,  # type: ignore[arg-type]
         )
 
-    earnings = events_data.get("earnings") or {}
     days_until = earnings.get("days_until")
     next_date = earnings.get("next_date")
     em_pct = (expected_move or {}).get("pct")

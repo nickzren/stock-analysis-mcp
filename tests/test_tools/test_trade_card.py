@@ -125,6 +125,44 @@ class TestPrecedence:
         assert card["setup"] is not None
         assert card["plan"] is None
 
+    def test_r2_degraded_events_caps_watch_with_unverifiable(self) -> None:
+        # Trigger satisfied (would be trade_now) but events succeeded with no
+        # date and failed sources — degraded, must be gated like a hard tool
+        # failure, not treated as a verified-empty result.
+        card = build_card(
+            actionable_price=101.5,
+            events_data={"earnings": {
+                "next_date": None, "days_until": None,
+                "sources_failed": ["calendar", "earnings_dates"],
+            }},
+        )
+        assert card["action"] == "watch"
+        assert "earnings_unverifiable" in blocker_ids(card)
+        assert card["plan"] is None
+
+    def test_r3_verified_empty_events_do_not_block(self) -> None:
+        card = build_card(
+            actionable_price=101.5,
+            events_data={"earnings": {
+                "next_date": None, "days_until": None, "sources_failed": [],
+            }},
+        )
+        assert card["action"] == "trade_now"
+        assert "earnings_unverifiable" not in blocker_ids(card)
+
+    def test_r1_earnings_today_blocks_trade_now(self) -> None:
+        # Green pin: Task 2 fixed same-day earnings to report days_until=0
+        # (was -1), so day-0 must blackout rather than pass through to
+        # trade_now.
+        card = build_card(
+            actionable_price=101.5,
+            events_data={"earnings": {
+                "next_date": "2026-07-15", "days_until": 0, "sources_failed": [],
+            }},
+        )
+        assert card["action"] == "watch"
+        assert "earnings_blackout" in blocker_ids(card)
+
 
 class TestSessionInvariant:
     @pytest.mark.parametrize("session,now", [
