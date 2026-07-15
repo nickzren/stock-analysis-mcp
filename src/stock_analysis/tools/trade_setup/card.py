@@ -94,6 +94,7 @@ def build_trade_setup_card(
     events_degraded = (
         earnings.get("next_date") is None and bool(earnings.get("sources_failed"))
     )
+    events_unverifiable = events_failed or events_degraded
 
     setup: dict[str, Any] | None = None
     plan: dict[str, Any] | None = None
@@ -107,13 +108,13 @@ def build_trade_setup_card(
         if setup is None:
             action = "no_setup"
         else:
-            if events_failed or events_degraded:
+            if events_unverifiable:
                 failed = ", ".join(earnings.get("sources_failed") or []) or "tool fetch"
                 blockers.append({
                     "id": "earnings_unverifiable",
                     "reason": f"earnings calendar unverifiable ({failed}) — event risk unverified",
                 })
-            if earnings_blackout or events_failed or events_degraded:
+            if earnings_blackout or events_unverifiable:
                 action = "watch"
             elif setup["trigger_satisfied"] and session == "regular" and not freshness["stale"]:
                 action = "trade_now"
