@@ -2,20 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import datetime
 from typing import Any
 
 from stock_analysis.tools.trade_setup.setup_rules import TIME_STOP_TRADING_DAYS
-
-
-def add_trading_days(start: date, days: int) -> date:
-    d = start
-    remaining = days
-    while remaining > 0:
-        d += timedelta(days=1)
-        if d.weekday() < 5:
-            remaining -= 1
-    return d
+from stock_analysis.utils.market_calendar import add_trading_days
 
 
 def build_plan(

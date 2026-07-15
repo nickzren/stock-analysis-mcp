@@ -12,13 +12,14 @@ from stock_analysis.tools.analyze.gates import (
     is_falling_knife_technicals,
 )
 from stock_analysis.tools.trade_setup.freshness import freshness_blockers
-from stock_analysis.tools.trade_setup.plan import add_trading_days, build_plan
+from stock_analysis.tools.trade_setup.plan import build_plan
 from stock_analysis.tools.trade_setup.setup_rules import (
     DEFAULT_REVIEW_TRADING_DAYS,
     PDT_ACCOUNT_MIN,
     TRADE_CRITICAL_TOOLS,
 )
 from stock_analysis.tools.trade_setup.setups import detect_setup
+from stock_analysis.utils.market_calendar import add_trading_days
 
 _ACTIONABLE = frozenset({"trade_now", "enter_on_trigger"})
 _CONFIDENCE_BY_QUALITY = {"A": "high", "B": "medium", "C": "low"}

@@ -4,7 +4,8 @@ from datetime import date, datetime
 
 import pytz
 
-from stock_analysis.tools.trade_setup.plan import add_trading_days, build_plan
+from stock_analysis.tools.trade_setup.plan import build_plan
+from stock_analysis.utils.market_calendar import add_trading_days
 
 ET = pytz.timezone("America/New_York")
 NOW = ET.localize(datetime(2026, 3, 10, 18, 0))  # Tuesday evening

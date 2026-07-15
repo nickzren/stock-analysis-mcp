@@ -133,3 +133,33 @@ def most_recent_trading_day(now: datetime, session: str) -> date:
     while d.weekday() >= 5 or (calendar_covers(d) and d in FULL_HOLIDAYS):
         d = d - timedelta(days=1)
     return d
+
+
+def _is_trading_day(d: date) -> bool:
+    """Weekday and, within calendar coverage, not a full holiday.
+
+    Outside coverage this is weekday-only — the same fallback posture as
+    session classification. Early-close days ARE trading days.
+    """
+    if d.weekday() >= 5:
+        return False
+    return not (calendar_covers(d) and d in FULL_HOLIDAYS)
+
+
+def add_trading_days(start: date, days: int) -> date:
+    d = start
+    remaining = days
+    while remaining > 0:
+        d += timedelta(days=1)
+        if _is_trading_day(d):
+            remaining -= 1
+    return d
+
+
+def previous_trading_day(d: date) -> date:
+    """Most recent trading day STRICTLY before `d` (last completed session
+    when `d` is today during regular hours)."""
+    cur = d - timedelta(days=1)
+    while not _is_trading_day(cur):
+        cur -= timedelta(days=1)
+    return cur
