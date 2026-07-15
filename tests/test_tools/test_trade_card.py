@@ -245,9 +245,16 @@ def test_r10_plan_invariant_violation_downgrades_to_watch(
     monkeypatched detect_setup, since the real detectors now guard this
     geometry themselves) must downgrade an otherwise-actionable card to
     watch with a plan_invariant_violation blocker — never propagate the
-    ZeroDivisionError that used to reach build_plan."""
+    ZeroDivisionError that used to reach build_plan.
+
+    Quality is forced to "A" (not "C") so the confidence assertion below
+    proves the watch-downgrade gate rather than incidental C-quality
+    mapping: an A-quality setup on an ACTIONABLE action would map to
+    "high" (_CONFIDENCE_BY_QUALITY), so "low" here is only explained by
+    the gate forcing confidence to "low" whenever action is not
+    actionable."""
     forced_setup = {
-        "type": "pullback_in_uptrend", "quality": "C", "thesis": [],
+        "type": "pullback_in_uptrend", "quality": "A", "thesis": [],
         "invalidation": [], "trigger_price": 101.0, "trigger_satisfied": False,
         "trigger_condition": "x", "stop_price": 101.0, "stop_basis": "atr",
         "target_primary": None,
@@ -257,6 +264,7 @@ def test_r10_plan_invariant_violation_downgrades_to_watch(
     assert card["action"] == "watch"
     assert card["plan"] is None
     assert "plan_invariant_violation" in blocker_ids(card)
+    assert card["confidence"] == "low"
 
 
 class TestExpectedMove:

@@ -46,7 +46,7 @@ def build_plan(
         )
     anchor = max(entry_price, actionable) if setup["trigger_satisfied"] else entry_price
     risk_per_share = anchor - stop_price
-    if risk_per_share < 0.01:
+    if round(risk_per_share, 2) < 0.01:
         raise PlanInvariantError(
             f"risk_per_share {risk_per_share} below 0.01 minimum"
         )

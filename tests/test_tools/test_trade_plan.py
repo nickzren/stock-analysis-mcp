@@ -6,7 +6,9 @@ import pytest
 import pytz
 
 from stock_analysis.tools.trade_setup.plan import PlanInvariantError, build_plan
+from stock_analysis.tools.trade_setup.setups import _detect_pullback
 from stock_analysis.utils.market_calendar import add_trading_days
+from tests.test_tools.test_setup_detection import make_features, make_technicals
 
 ET = pytz.timezone("America/New_York")
 NOW = ET.localize(datetime(2026, 3, 10, 18, 0))  # Tuesday evening
@@ -187,3 +189,31 @@ class TestPlanInvariants:
             build_plan(setup, action="enter_on_trigger", session="regular",
                       account_size=3000, risk_per_trade_pct=1.0, max_position_pct=10.0,
                       now=NOW, actionable_price=9.5)
+
+
+class TestOneCentRiskBoundary:
+    """`risk_per_share < 0.01` compared the raw float subtraction of two 2dp
+    price levels. 10.0 - 9.99 == 0.009999999999999787 (< 0.01, wrongly
+    rejected) while 100.0 - 99.99 == 0.010000000000005116 (>= 0.01, accepted)
+    even though both represent an identical, legitimate 1-cent stop distance.
+    The guard must round before comparing so acceptance is deterministic
+    across float representations, not float-noise-dependent."""
+
+    @pytest.mark.parametrize("trigger,stop,high_20d,actionable", [
+        (10.00, 9.99, 10.40, 9.88),
+        (100.00, 99.99, 104.00, 98.80),
+    ])
+    def test_exact_one_cent_risk_accepted_regardless_of_float_noise(
+        self, trigger: float, stop: float, high_20d: float, actionable: float,
+    ) -> None:
+        setup = _detect_pullback(
+            make_technicals(),
+            make_features(prior_day_high=trigger, swing_low=stop, high_20d_prior=high_20d),
+            actionable_price=actionable,
+        )
+        assert setup is not None
+        assert setup["stop_basis"] == "swing_low"
+        plan = build_plan(setup, action="enter_on_trigger", session="regular",
+                          account_size=3000, risk_per_trade_pct=1.0, max_position_pct=10.0,
+                          now=NOW, actionable_price=actionable)
+        assert plan["stop"]["price"] == stop
