@@ -78,7 +78,7 @@ def patched(monkeypatch: pytest.MonkeyPatch) -> None:
     async def fake_risk(symbol: str) -> dict[str, Any]:
         return {"liquidity": {"avg_dollar_volume": 50_000_000}}
 
-    async def fake_events(symbol: str) -> dict[str, Any]:
+    async def fake_events(symbol: str, **kwargs: Any) -> dict[str, Any]:
         return {"earnings": {"days_until": 40, "next_date": "2026-04-19"}}
 
     async def fake_history(params: Any) -> pd.DataFrame:
@@ -159,7 +159,7 @@ async def test_regular_session_fresh_satisfied_trigger_is_trade_now(
     async def fake_risk(symbol: str) -> dict[str, Any]:
         return {"liquidity": {"avg_dollar_volume": 50_000_000}}
 
-    async def fake_events(symbol: str) -> dict[str, Any]:
+    async def fake_events(symbol: str, **kwargs: Any) -> dict[str, Any]:
         return {"earnings": {"days_until": 40, "next_date": "2026-04-19"}}
 
     async def fake_history(params: Any) -> pd.DataFrame:

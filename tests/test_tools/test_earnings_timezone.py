@@ -106,8 +106,7 @@ class TestEventsResolveNextEarningsDate:
 
     def test_no_deprecation_warning_emitted(self) -> None:
         """The helper must not trigger any DeprecationWarning under strict mode."""
-        # Far-future ET timestamp so the test stays deterministic regardless of
-        # when it runs (the helper reads the real clock).
+        # Far-future ET timestamp, well after the injected `now` below.
         future_ts = pd.Timestamp("2099-01-15 16:00:00", tz="America/New_York")
         earnings_dates = pd.DataFrame(
             {"EPS Estimate": [1.5]},
@@ -116,10 +115,11 @@ class TestEventsResolveNextEarningsDate:
 
         with warnings.catch_warnings():
             warnings.simplefilter("error", DeprecationWarning)
-            next_date, _days_until, source, status = _resolve_next_earnings_date(
+            next_date, _days_until, source, status, _parse_failures = _resolve_next_earnings_date(
                 calendar=None,
                 earnings_dates=earnings_dates,
                 info={},
+                now=datetime(2026, 1, 15),
             )
 
         assert next_date is not None
@@ -127,17 +127,18 @@ class TestEventsResolveNextEarningsDate:
         assert status == "available"
 
     def test_returns_none_when_only_past_earnings(self) -> None:
-        # Far-past timestamp so the "past" classification stays deterministic.
+        # Far-past timestamp, well before the injected `now` below.
         past_ts = pd.Timestamp("2000-01-15 16:00:00", tz="America/New_York")
         earnings_dates = pd.DataFrame(
             {"EPS Estimate": [1.5]},
             index=pd.DatetimeIndex([past_ts]),
         )
 
-        next_date, _days_until, _source, status = _resolve_next_earnings_date(
+        next_date, _days_until, _source, status, _parse_failures = _resolve_next_earnings_date(
             calendar=None,
             earnings_dates=earnings_dates,
             info={},
+            now=datetime(2026, 1, 15),
         )
 
         assert next_date is None

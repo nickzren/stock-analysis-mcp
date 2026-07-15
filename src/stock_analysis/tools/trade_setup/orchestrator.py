@@ -74,7 +74,7 @@ async def analyze_trade_setup(
         stock_summary(normalized),
         technicals(normalized, _now=now),
         risk_metrics(normalized),
-        events_calendar(normalized),
+        events_calendar(normalized, _now=now),
         _quiet_history(FetchParams(normalized, "1y", "1d", True)),
         _quiet_history(FetchParams(normalized, PROBE_PERIOD, PROBE_INTERVAL, True)),
         return_exceptions=True,
