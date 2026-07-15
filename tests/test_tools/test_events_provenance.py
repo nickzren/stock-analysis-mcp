@@ -1,4 +1,5 @@
-"""Red-first regressions R1/R2/R3/R4/R13/R17/R18/R19: earnings provenance + day math."""
+"""Red-first regressions R1/R2/R3/R4/R13/R17/R18/R19 + P1/P2/P3 post-merge fixes:
+earnings provenance, day math, strict/ET-normalized date parsing."""
 
 from datetime import datetime
 
@@ -50,10 +51,15 @@ def _patch(monkeypatch, ticker, info=None, info_raises=False):
     monkeypatch.setattr(events_mod, "fetch_info", fake_fetch_info)
 
 
-async def _earnings(monkeypatch, ticker, **kw):
+async def _events(monkeypatch, ticker, **kw):
     _patch(monkeypatch, ticker, **kw)
     result = await events_mod.events_calendar("TEST", _now=NOW)
     assert not result.get("error"), result
+    return result
+
+
+async def _earnings(monkeypatch, ticker, **kw):
+    result = await _events(monkeypatch, ticker, **kw)
     return result["earnings"]
 
 
@@ -141,3 +147,65 @@ async def test_r19_naive_earnings_timestamp_t5_boundary(monkeypatch):
     earnings = await _earnings(monkeypatch, ticker)
     assert earnings["next_date"] == "2026-07-20"
     assert earnings["days_until"] == 5
+
+
+@pytest.mark.asyncio
+async def test_p1_invalid_dict_calendar_value_marks_calendar_failed(monkeypatch):
+    # OLD: _format_date's string branch passed "not-a-date" through unchanged
+    # on parse failure, so next_date came back truthy with status "available"
+    # and sources_failed empty -- a garbage date reached callers with no
+    # blocker. Present-but-uninterpretable must read as a source failure.
+    ticker = FakeTicker(calendar={"Earnings Date": ["not-a-date"]})
+    earnings = await _earnings(monkeypatch, ticker)
+    assert earnings["next_date"] is None  # OLD: "not-a-date"
+    assert earnings["next_date_status"] == "unavailable"  # OLD: "available"
+    assert earnings["sources_failed"] == ["calendar"]  # OLD: []
+
+
+@pytest.mark.asyncio
+async def test_p1_invalid_dataframe_calendar_value_marks_calendar_failed(monkeypatch):
+    cal = pd.DataFrame({0: ["garbage"]}, index=["Earnings Date"])
+    ticker = FakeTicker(calendar=cal)
+    earnings = await _earnings(monkeypatch, ticker)
+    assert earnings["next_date"] is None  # OLD: "garbage"
+    assert earnings["next_date_status"] == "unavailable"  # OLD: "available"
+    assert earnings["sources_failed"] == ["calendar"]  # OLD: []
+
+
+@pytest.mark.asyncio
+async def test_p2_mixed_earnings_dates_rows_marks_earnings_dates_failed(monkeypatch):
+    # OLD: the earnings_dates branch only marked the source failed when
+    # EVERY row was unparseable (rows_unparseable == rows_seen). A valid
+    # PAST row alongside one malformed row left next_date None with no
+    # failure recorded -- indistinguishable from a verified-empty result,
+    # even though the malformed row could have been the future earnings.
+    idx = pd.Index(
+        [pd.Timestamp("2026-01-15 16:30", tz="America/New_York"), "garbage-index"],
+        dtype=object,
+    )
+    df = pd.DataFrame({"EPS Estimate": [1.0, 1.0]}, index=idx)
+    ticker = FakeTicker(calendar={}, earnings_dates=df)
+    earnings = await _earnings(monkeypatch, ticker)
+    assert earnings["next_date"] is None
+    assert earnings["sources_failed"] == ["earnings_dates"]  # OLD: []
+
+
+@pytest.mark.asyncio
+async def test_p3_tz_aware_calendar_value_normalizes_to_et_date(monkeypatch):
+    # OLD: _format_date formatted tz-aware values with a bare strftime on
+    # the value's own (non-ET) wall clock, so a UTC 00:30 timestamp just
+    # after ET midnight rollover reported the UTC date/day count instead
+    # of the ET one -- shifting blackout boundaries by a day.
+    ticker = FakeTicker(calendar={"Earnings Date": [pd.Timestamp("2026-07-16 00:30", tz="UTC")]})
+    earnings = await _earnings(monkeypatch, ticker)
+    assert earnings["next_date"] == "2026-07-15"  # OLD: "2026-07-16"
+    assert earnings["days_until"] == 0  # OLD: 1
+
+
+@pytest.mark.asyncio
+async def test_p1_invalid_dividend_ex_date_no_longer_passthrough(monkeypatch):
+    # Dividends ripple: _build_dividends also calls _format_date, so the
+    # same strict-parsing fix must apply to the Ex-Dividend Date field.
+    ticker = FakeTicker(calendar={"Ex-Dividend Date": "not-a-date"})
+    result = await _events(monkeypatch, ticker)
+    assert result["dividends"]["ex_date"] is None  # OLD: "not-a-date"

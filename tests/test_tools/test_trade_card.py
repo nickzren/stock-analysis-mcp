@@ -159,6 +159,24 @@ class TestPrecedence:
         assert card["action"] == "trade_now"
         assert "earnings_unverifiable" not in blocker_ids(card)
 
+    def test_p1_garbage_calendar_source_failure_caps_watch_with_unverifiable(self) -> None:
+        # Post-merge fix P1: a garbage calendar date now resolves to
+        # next_date=None with sources_failed=["calendar"] (events.py strict
+        # parsing) instead of passing the garbage string through as a valid
+        # date. This fixture is narrower than test_r2's dual-source-failure
+        # case (single failed source, not two), so it isn't a duplicate --
+        # it ties this specific defect's output shape to the same watch +
+        # earnings_unverifiable gate.
+        card = build_card(
+            actionable_price=101.5,
+            events_data={"earnings": {
+                "next_date": None, "days_until": None, "sources_failed": ["calendar"],
+            }},
+        )
+        assert card["action"] == "watch"
+        assert "earnings_unverifiable" in blocker_ids(card)
+        assert card["plan"] is None
+
     def test_r1_earnings_today_blocks_trade_now(self) -> None:
         # Green pin: Task 2 fixed same-day earnings to report days_until=0
         # (was -1), so day-0 must blackout rather than pass through to

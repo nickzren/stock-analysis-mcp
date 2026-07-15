@@ -218,11 +218,9 @@ def _resolve_next_earnings_date(
             parse_failures.add("earnings_dates")
         elif earnings_dates is not None and len(earnings_dates) > 0:
             cutoff = now.date()
-            rows_seen = 0
             rows_unparseable = 0
             try:
                 for idx, _row in earnings_dates.iterrows():
-                    rows_seen += 1
                     if isinstance(idx, pd.Timestamp):
                         # Naive entries are treated as exchange-local (ET) wall
                         # time; tz-aware entries convert to ET.
@@ -241,7 +239,9 @@ def _resolve_next_earnings_date(
                         break
             except Exception:
                 parse_failures.add("earnings_dates")
-            if rows_seen > 0 and rows_unparseable == rows_seen:
+            # A malformed row could have been the future earnings date; a
+            # resolved valid date makes malformed siblings irrelevant.
+            if next_earnings_date is None and rows_unparseable > 0:
                 parse_failures.add("earnings_dates")
 
     # Source 3: Fallback to info earningsTimestamp (rare)
@@ -374,25 +374,30 @@ def _build_analyst(info: dict[str, Any]) -> dict[str, Any]:
 
 
 def _format_date(value: Any) -> str | None:
-    """Format a date value to YYYY-MM-DD string."""
+    """Format a date value to its America/New_York calendar date as YYYY-MM-DD.
+
+    Returns None when the value is missing or cannot be interpreted as a
+    date -- an uninterpretable value is never passed through unchanged, since
+    a present-but-uninterpretable date must read as a source failure upstream.
+    """
     if value is None:
         return None
 
-    if isinstance(value, pd.Timestamp):
-        return value.strftime("%Y-%m-%d")
+    if isinstance(value, str):
+        try:
+            value = pd.to_datetime(value)
+        except Exception:
+            return None
+        if pd.isna(value):
+            return None
 
-    if isinstance(value, datetime):
-        return value.strftime("%Y-%m-%d")
+    if isinstance(value, (pd.Timestamp, datetime)):
+        # Naive values are treated as exchange-local (ET) wall time;
+        # tz-aware values convert to ET first.
+        converted = value.astimezone(_ET) if value.tzinfo is not None else value
+        return converted.strftime("%Y-%m-%d")
 
     if isinstance(value, date):
-        return value.strftime("%Y-%m-%d")
-
-    if isinstance(value, str):
-        # Try to parse and reformat
-        try:
-            dt = pd.to_datetime(value)
-            return dt.strftime("%Y-%m-%d")
-        except Exception:
-            return value
+        return value.isoformat()
 
     return None
