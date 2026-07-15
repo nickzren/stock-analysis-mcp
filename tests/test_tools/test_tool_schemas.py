@@ -130,7 +130,10 @@ class _FakeEventsTicker:
                 "EPS Estimate": [1.0, 1.1],
                 "Reported EPS": [1.2, None],
             },
-            index=[pd.Timestamp("2025-01-01"), pd.Timestamp("2099-01-01")],
+            index=[
+                pd.Timestamp("2025-01-01", tz="America/New_York"),
+                pd.Timestamp("2099-01-01", tz="America/New_York"),
+            ],
         )
 
 

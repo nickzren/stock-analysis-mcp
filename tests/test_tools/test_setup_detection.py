@@ -2,7 +2,11 @@
 
 from typing import Any
 
-from stock_analysis.tools.trade_setup.setups import detect_setup
+from stock_analysis.tools.trade_setup.setups import (
+    _detect_mean_reversion,
+    _detect_pullback,
+    detect_setup,
+)
 
 
 def make_technicals(**overrides: Any) -> dict[str, Any]:
@@ -171,6 +175,38 @@ def test_returns_none_when_atr_missing_and_no_structural_stop() -> None:
     t = make_technicals(atr={"value": None, "value_pct": None})
     f = make_features(swing_low=None)
     assert detect_setup(t, f, actionable_price=100.0) is None
+
+
+def test_r8_subdollar_pullback_does_not_collapse_to_zero_risk() -> None:
+    tech = {
+        "moving_averages": {
+            "sma_200_slope_pct_per_day": 0.1,
+            "rules": {
+                "above_sma200": {"triggered": True},
+                "golden_cross": {"triggered": True},
+                "above_sma50": {"triggered": True},
+            },
+        },
+        "rsi": {"value": 45.0},
+        "atr": {"value": 0.002},
+    }
+    feat = {"high_20d_prior": 0.42, "prior_day_high": 0.40, "swing_low": None}
+    setup = _detect_pullback(tech, feat, actionable_price=0.398)
+    # OLD: returns trigger 0.40 / stop 0.40 -> ZeroDivisionError in build_plan.
+    assert setup is None or setup["stop_price"] < setup["trigger_price"]
+
+
+def test_r9_meanrev_negative_stop_rejected() -> None:
+    tech = {
+        "rsi": {"value": 25.0},
+        "returns": {"return_1w_zscore": -2.6},
+        "moving_averages": {"sma_200": 0.70, "sma_20": 1.10},
+        "atr": {"value": 0.40},
+        "price_position": {"position_in_range": 0.3},
+    }
+    feat = {"prior_day_high": 0.80}
+    setup = _detect_mean_reversion(tech, feat, actionable_price=0.75)
+    assert setup is None  # OLD: stop_price == -0.20 published
 
 
 class TestBreakoutStructuralTargets:

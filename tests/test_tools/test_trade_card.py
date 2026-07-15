@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 import pytz
 
+import stock_analysis.tools.trade_setup.card as card_module
 from stock_analysis.tools.trade_setup.card import build_trade_setup_card
 from tests.test_tools.test_setup_detection import make_features, make_technicals
 
@@ -14,13 +15,21 @@ NOW_REGULAR = ET.localize(datetime(2026, 3, 10, 10, 30))
 NOW_EVENING = ET.localize(datetime(2026, 3, 10, 18, 30))
 
 FRESH = {"as_of": "2026-03-10T14:25:00+00:00", "basis": "bar_timestamp",
-         "session": "regular", "quote_age_seconds": 300, "stale": False}
+         "session": "regular", "quote_age_seconds": 300, "stale": False,
+         "reason_code": None, "daily_bar_date": "2026-03-09",
+         "daily_expected_date": "2026-03-09"}
 EOD_FRESH = {"as_of": "2026-03-10", "basis": "bar_timestamp",
-             "session": "after_hours", "quote_age_seconds": None, "stale": False}
+             "session": "after_hours", "quote_age_seconds": None, "stale": False,
+             "reason_code": None, "daily_bar_date": "2026-03-10",
+             "daily_expected_date": "2026-03-10"}
 STALE = {"as_of": "2026-03-10T13:00:00+00:00", "basis": "bar_timestamp",
-         "session": "regular", "quote_age_seconds": 5400, "stale": True}
+         "session": "regular", "quote_age_seconds": 5400, "stale": True,
+         "reason_code": "stale_quote", "daily_bar_date": "2026-03-09",
+         "daily_expected_date": "2026-03-09"}
 UNVERIFIABLE = {"as_of": None, "basis": "unverifiable", "session": "regular",
-                "quote_age_seconds": None, "stale": True}
+                "quote_age_seconds": None, "stale": True,
+                "reason_code": "no_bar_timestamp", "daily_bar_date": None,
+                "daily_expected_date": "2026-03-09"}
 
 
 def build_card(**overrides: Any) -> dict[str, Any]:
@@ -125,6 +134,44 @@ class TestPrecedence:
         assert card["setup"] is not None
         assert card["plan"] is None
 
+    def test_r2_degraded_events_caps_watch_with_unverifiable(self) -> None:
+        # Trigger satisfied (would be trade_now) but events succeeded with no
+        # date and failed sources — degraded, must be gated like a hard tool
+        # failure, not treated as a verified-empty result.
+        card = build_card(
+            actionable_price=101.5,
+            events_data={"earnings": {
+                "next_date": None, "days_until": None,
+                "sources_failed": ["calendar", "earnings_dates"],
+            }},
+        )
+        assert card["action"] == "watch"
+        assert "earnings_unverifiable" in blocker_ids(card)
+        assert card["plan"] is None
+
+    def test_r3_verified_empty_events_do_not_block(self) -> None:
+        card = build_card(
+            actionable_price=101.5,
+            events_data={"earnings": {
+                "next_date": None, "days_until": None, "sources_failed": [],
+            }},
+        )
+        assert card["action"] == "trade_now"
+        assert "earnings_unverifiable" not in blocker_ids(card)
+
+    def test_r1_earnings_today_blocks_trade_now(self) -> None:
+        # Green pin: Task 2 fixed same-day earnings to report days_until=0
+        # (was -1), so day-0 must blackout rather than pass through to
+        # trade_now.
+        card = build_card(
+            actionable_price=101.5,
+            events_data={"earnings": {
+                "next_date": "2026-07-15", "days_until": 0, "sources_failed": [],
+            }},
+        )
+        assert card["action"] == "watch"
+        assert "earnings_blackout" in blocker_ids(card)
+
 
 class TestSessionInvariant:
     @pytest.mark.parametrize("session,now", [
@@ -189,6 +236,35 @@ def test_v_recovery_is_not_a_falling_knife() -> None:
     card = build_card(technicals_data=t, features=f)
     assert card["action"] == "no_setup"
     assert "falling_knife" not in blocker_ids(card)
+
+
+def test_r10_plan_invariant_violation_downgrades_to_watch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """R10: build_plan raising PlanInvariantError (forced here via a
+    monkeypatched detect_setup, since the real detectors now guard this
+    geometry themselves) must downgrade an otherwise-actionable card to
+    watch with a plan_invariant_violation blocker — never propagate the
+    ZeroDivisionError that used to reach build_plan.
+
+    Quality is forced to "A" (not "C") so the confidence assertion below
+    proves the watch-downgrade gate rather than incidental C-quality
+    mapping: an A-quality setup on an ACTIONABLE action would map to
+    "high" (_CONFIDENCE_BY_QUALITY), so "low" here is only explained by
+    the gate forcing confidence to "low" whenever action is not
+    actionable."""
+    forced_setup = {
+        "type": "pullback_in_uptrend", "quality": "A", "thesis": [],
+        "invalidation": [], "trigger_price": 101.0, "trigger_satisfied": False,
+        "trigger_condition": "x", "stop_price": 101.0, "stop_basis": "atr",
+        "target_primary": None,
+    }
+    monkeypatch.setattr(card_module, "detect_setup", lambda *a, **k: forced_setup)
+    card = build_card()
+    assert card["action"] == "watch"
+    assert card["plan"] is None
+    assert "plan_invariant_violation" in blocker_ids(card)
+    assert card["confidence"] == "low"
 
 
 class TestExpectedMove:

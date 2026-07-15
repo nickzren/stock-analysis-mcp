@@ -9,8 +9,10 @@ from stock_analysis.utils.market_calendar import (
     CALENDAR_LAST_YEAR,
     EARLY_CLOSES,
     FULL_HOLIDAYS,
+    add_trading_days,
     classify_session,
     most_recent_trading_day,
+    previous_trading_day,
     regular_session_minutes,
     session_method,
 )
@@ -118,3 +120,35 @@ class TestWalkBack:
         # Pre-coverage: 2024-07-05 Fri pre_market expects Thu 2024-07-04
         # (clock-only fallback cannot know it was a holiday).
         assert most_recent_trading_day(at(2024, 7, 5, 8), "pre_market") == date(2024, 7, 4)
+
+
+class TestAddTradingDaysHolidayAware:
+    def test_christmas_crossing_skips_holiday(self):
+        # Fri 2026-12-18 + 5 trading days: 21,22,23,24, skip Fri 25 (holiday), Mon 28
+        assert add_trading_days(date(2026, 12, 18), 5) == date(2026, 12, 28)
+
+    def test_thanksgiving_crossing_counts_early_close(self):
+        # Mon 2026-11-23 + 5: 24,25, skip Thu 26 (holiday), 27 (early close counts),
+        # 30, Tue Dec 1
+        assert add_trading_days(date(2026, 11, 23), 5) == date(2026, 12, 1)
+
+    def test_outside_coverage_falls_back_to_weekdays(self):
+        # 2024 predates coverage: weekday-only walk (2024-12-24 + 2 -> 26 Thu, 27 Fri)
+        assert add_trading_days(date(2024, 12, 24), 2) == date(2024, 12, 26)
+
+
+class TestPreviousTradingDay:
+    def test_monday_returns_friday(self):
+        assert previous_trading_day(date(2026, 7, 13)) == date(2026, 7, 10)
+
+    def test_post_holiday_monday_skips_friday_holiday(self):
+        # Fri 2026-07-03 is a FULL_HOLIDAY; Mon 2026-07-06 -> Thu 2026-07-02
+        assert previous_trading_day(date(2026, 7, 6)) == date(2026, 7, 2)
+
+    def test_early_close_day_counts_as_completed_session(self):
+        # Mon 2026-11-30 -> Fri 2026-11-27 (early close, still a trading day)
+        assert previous_trading_day(date(2026, 11, 30)) == date(2026, 11, 27)
+
+    def test_outside_coverage_weekday_fallback(self):
+        # Mon 2024-01-08 -> Fri 2024-01-05 (2024 outside coverage)
+        assert previous_trading_day(date(2024, 1, 8)) == date(2024, 1, 5)

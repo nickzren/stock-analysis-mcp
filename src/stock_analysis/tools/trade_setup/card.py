@@ -12,13 +12,14 @@ from stock_analysis.tools.analyze.gates import (
     is_falling_knife_technicals,
 )
 from stock_analysis.tools.trade_setup.freshness import freshness_blockers
-from stock_analysis.tools.trade_setup.plan import add_trading_days, build_plan
+from stock_analysis.tools.trade_setup.plan import PlanInvariantError, build_plan
 from stock_analysis.tools.trade_setup.setup_rules import (
     DEFAULT_REVIEW_TRADING_DAYS,
     PDT_ACCOUNT_MIN,
     TRADE_CRITICAL_TOOLS,
 )
 from stock_analysis.tools.trade_setup.setups import detect_setup
+from stock_analysis.utils.market_calendar import add_trading_days
 
 _ACTIONABLE = frozenset({"trade_now", "enter_on_trigger"})
 _CONFIDENCE_BY_QUALITY = {"A": "high", "B": "medium", "C": "low"}
@@ -89,6 +90,11 @@ def build_trade_setup_card(
     if earnings_blocker:
         blockers.append(earnings_blocker)
     events_failed = any(tf.get("tool") == "events_calendar" for tf in tool_failures or [])
+    earnings = (events_data.get("earnings") or {}) if events_data else {}
+    events_degraded = (
+        earnings.get("next_date") is None and bool(earnings.get("sources_failed"))
+    )
+    events_unverifiable = events_failed or events_degraded
 
     setup: dict[str, Any] | None = None
     plan: dict[str, Any] | None = None
@@ -102,12 +108,13 @@ def build_trade_setup_card(
         if setup is None:
             action = "no_setup"
         else:
-            if events_failed:
+            if events_unverifiable:
+                failed = ", ".join(earnings.get("sources_failed") or []) or "tool fetch"
                 blockers.append({
                     "id": "earnings_unverifiable",
-                    "reason": "earnings calendar unavailable — event risk unverified",
+                    "reason": f"earnings calendar unverifiable ({failed}) — event risk unverified",
                 })
-            if earnings_blackout or events_failed:
+            if earnings_blackout or events_unverifiable:
                 action = "watch"
             elif setup["trigger_satisfied"] and session == "regular" and not freshness["stale"]:
                 action = "trade_now"
@@ -122,18 +129,25 @@ def build_trade_setup_card(
                 action = "watch"
 
     if action in _ACTIONABLE and setup is not None:
-        plan = build_plan(
-            setup,
-            action=action,
-            session=session,
-            account_size=account_size,
-            risk_per_trade_pct=risk_per_trade_pct,
-            max_position_pct=max_position_pct,
-            now=now,
-            actionable_price=actionable_price,  # type: ignore[arg-type]
-        )
+        try:
+            plan = build_plan(
+                setup,
+                action=action,
+                session=session,
+                account_size=account_size,
+                risk_per_trade_pct=risk_per_trade_pct,
+                max_position_pct=max_position_pct,
+                now=now,
+                actionable_price=actionable_price,  # type: ignore[arg-type]
+            )
+        except PlanInvariantError as exc:
+            plan = None
+            action = "watch"
+            blockers.append({
+                "id": "plan_invariant_violation",
+                "reason": f"plan geometry invalid — {exc}",
+            })
 
-    earnings = events_data.get("earnings") or {}
     days_until = earnings.get("days_until")
     next_date = earnings.get("next_date")
     em_pct = (expected_move or {}).get("pct")

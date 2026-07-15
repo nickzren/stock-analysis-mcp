@@ -78,7 +78,7 @@ def patched(monkeypatch: pytest.MonkeyPatch) -> None:
     async def fake_risk(symbol: str) -> dict[str, Any]:
         return {"liquidity": {"avg_dollar_volume": 50_000_000}}
 
-    async def fake_events(symbol: str) -> dict[str, Any]:
+    async def fake_events(symbol: str, **kwargs: Any) -> dict[str, Any]:
         return {"earnings": {"days_until": 40, "next_date": "2026-04-19"}}
 
     async def fake_history(params: Any) -> pd.DataFrame:
@@ -159,7 +159,7 @@ async def test_regular_session_fresh_satisfied_trigger_is_trade_now(
     async def fake_risk(symbol: str) -> dict[str, Any]:
         return {"liquidity": {"avg_dollar_volume": 50_000_000}}
 
-    async def fake_events(symbol: str) -> dict[str, Any]:
+    async def fake_events(symbol: str, **kwargs: Any) -> dict[str, Any]:
         return {"earnings": {"days_until": 40, "next_date": "2026-04-19"}}
 
     async def fake_history(params: Any) -> pd.DataFrame:
@@ -199,6 +199,75 @@ async def test_nan_probe_close_during_regular_is_wait_for_data(
     result = await orch.analyze_trade_setup("TEST", _now=NOW_REGULAR)
     assert result["action"] == "wait_for_data"
     assert any(b["id"] == "freshness_unverifiable" for b in result["blockers"])
+
+
+@pytest.mark.asyncio
+async def test_r5_stale_daily_blocks_trade_now(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """End-to-end: fresh 5m probe above the breakout trigger with qualifying
+    volume, but the daily frame's last bar is ~5 sessions stale -> the daily
+    leg of the freshness gate must block trade_now."""
+    async def fake_summary(symbol: str) -> dict[str, Any]:
+        return {"symbol": symbol, "name": "Test Co", "currency": "USD",
+                "current_price": 96.7}
+
+    breakout_technicals = make_technicals(
+        rsi={"value": 65.0, "bullish_divergence": False},
+        atr={"value": 1.0, "value_pct": 0.01},
+        price_position={"position_in_range": 0.8, "days_since_52w_high": 2},
+        returns={"return_3m": 0.10, "return_1w_zscore": 0.5},
+        volume={"ratio": 2.0},
+    )
+
+    async def fake_technicals(symbol: str, **kwargs: Any) -> dict[str, Any]:
+        return breakout_technicals
+
+    async def fake_risk(symbol: str) -> dict[str, Any]:
+        return {"liquidity": {"avg_dollar_volume": 50_000_000}}
+
+    async def fake_events(symbol: str, **kwargs: Any) -> dict[str, Any]:
+        return {"earnings": {"days_until": 40, "next_date": "2026-04-19"}}
+
+    stale_daily = breakout_daily_df()
+    stale_daily.loc[stale_daily.index[-1], "date"] = "2026-03-03"  # ~5 sessions stale
+
+    async def fake_history(params: Any) -> pd.DataFrame:
+        if params.interval == "1d":
+            return stale_daily
+        return breakout_probe_df()  # fresh 5m probe, unaffected
+
+    monkeypatch.setattr(orch, "stock_summary", fake_summary)
+    monkeypatch.setattr(orch, "technicals", fake_technicals)
+    monkeypatch.setattr(orch, "risk_metrics", fake_risk)
+    monkeypatch.setattr(orch, "events_calendar", fake_events)
+    monkeypatch.setattr(orch, "fetch_history", fake_history)
+
+    result = await orch.analyze_trade_setup("TEST", _now=NOW_REGULAR)
+
+    assert result.get("error") is None
+    assert result["action"] != "trade_now"
+    assert any(b["id"] == "stale_data" for b in result["blockers"])
+
+
+@pytest.mark.asyncio
+async def test_r7_inf_probe_close_is_wait_for_data(
+    patched: None, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An infinite probe close must not become the actionable price — the
+    orchestrator's own probe_close finiteness guard must reject it too."""
+    async def inf_probe_history(params: Any) -> pd.DataFrame:
+        if params.interval == "1d":
+            return daily_df()
+        probe = breakout_probe_df()
+        probe.loc[probe.index[-1], "close"] = float("inf")
+        return probe
+
+    monkeypatch.setattr(orch, "fetch_history", inf_probe_history)
+    result = await orch.analyze_trade_setup("TEST", _now=NOW_REGULAR)
+    assert result["action"] == "wait_for_data"
+    assert any(b["id"] == "freshness_unverifiable" for b in result["blockers"])
+    assert result["plan"] is None
 
 
 @pytest.mark.asyncio
@@ -267,6 +336,23 @@ async def test_out_of_bounds_sizing_inputs_rejected(
     assert result["error"] is True
     assert result["error_type"] == "invalid_parameters"
     assert bad_param in result["message"]
+
+
+@pytest.mark.parametrize(("kwargs", "expect_error"), [
+    ({"account_size": float("nan")}, True),        # R11 red: currently passes
+    ({"account_size": float("inf")}, True),         # R11 red
+    ({"risk_per_trade_pct": float("nan")}, True),   # R19 green pin
+    ({"max_position_pct": float("inf")}, True),     # R19 green pin
+])
+def test_r11_r19_nonfinite_sizing_rejected(
+    kwargs: dict[str, float], expect_error: bool,
+) -> None:
+    msg = orch.validate_sizing_params(
+        kwargs.get("account_size", 1000.0),
+        kwargs.get("risk_per_trade_pct", 1.0),
+        kwargs.get("max_position_pct", 10.0),
+    )
+    assert (msg is not None) is expect_error
 
 
 @pytest.mark.asyncio

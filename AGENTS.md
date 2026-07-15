@@ -55,8 +55,10 @@
   render entry/stop/target/sizing structure and do not mix `analyze` fields into
   the card; forward-looking levels are conditions to watch, not a plan.
 - `analyze_trade_setup` caps the action at `watch` with an `earnings_unverifiable`
-  blocker when the earnings calendar cannot be fetched; a missing earnings date
-  inside a successful calendar response simply does not fire the blackout.
+  blocker when the earnings calendar cannot be fetched or a missing date is found
+  inside a successful calendar response with non-empty `sources_failed` (indicating
+  some sources raised or returned uninterpretable payloads); a verified-empty
+  calendar (successful response, empty `sources_failed`) avoids the blocker.
 - `get_technicals` default response gained one additive `short_term` key;
   `intraday` exists only under `timeframe="swing"`. `prior_*` level fields
   exclude the current bar.
@@ -72,8 +74,31 @@
   17:00 (approximation). To extend coverage: add the year's dates to
   `utils/market_calendar.py`, bump `CALENDAR_LAST_YEAR`, update the count
   tests.
-- Freshness treats a bar timestamp with a NaN close as unverifiable — a
-  quote without a finite price cannot verify the actionable price.
+- Freshness treats any non-finite close (NaN/±inf) or a bar timestamp more
+  than 5s in the future as unverifiable — a quote without a trustworthy
+  finite price cannot verify the actionable price. The session-specific
+  daily-frame rules (regular two-leg vs off-hours) live in the
+  `analyze_trade_setup.freshness` bullet below.
+- `events_calendar` earnings: `days_until` counts ET calendar days with day-of
+  earnings = `0` (same-day earnings count as day 0); `sources_failed` lists
+  sources whose read raised OR whose payload was present but uninterpretable
+  (`calendar` accepts dict AND DataFrame payloads); a well-formed absence is NOT
+  a failure. Naive earnings timestamps are treated as exchange-local ET.
+- `analyze_trade_setup.freshness` in regular session requires BOTH a fresh
+  intraday bar and a current daily frame (`daily_bar_date >=
+  daily_expected_date`, the previous completed session); daily-leg failure is
+  `stale_data`, not unverifiable. Off-hours, unusable daily data (non-finite
+  close, future date) IS unverifiable. `reason_code` is a stable enum:
+  no_bar_timestamp | nonfinite_close | future_timestamp | daily_unusable |
+  stale_quote | stale_daily. Bar timestamps more than 5s in the future are
+  unverifiable. `get_technicals` `intraday.freshness` shares these rules
+  (disclosure only, never gates).
+- Detectors only emit setups with `0 < stop < trigger` on 2-dp rounded
+  values; `build_plan` independently raises `PlanInvariantError` on geometry
+  violations and the card downgrades to `watch` with a
+  `plan_invariant_violation` blocker. Sizing inputs must be finite.
+- `add_trading_days` / time stops / `next_review` skip NYSE FULL_HOLIDAYS
+  within calendar coverage (weekday-only outside coverage).
 - `manage_watchlist` and `scan_watchlist` persist to `$STOCK_ANALYSIS_DATA_DIR` (or `$XDG_DATA_HOME/stock-analysis` or `~/.local/share/stock-analysis`); watchlist.json stores symbols with `added` date, scan_state.json stores scanned_at and per-symbol card summaries; corrupt files degrade to empty with a warning, never fail.
 - `scan_watchlist` phase 1 (cheap daily screen for all symbols) runs `screen_symbol`, which nulls `earnings_in_days` for screened-out rows (no events fetch in phase 1); full card is fetched only for candidates (`screen["promote"]`) and previously-actionable symbols.
 - Phase-1 `avoid` rows carry screen blockers only (e.g., `"falling_knife"`, `"weak_liquidity"`); they do not have `entry`, `stop`, or `plan` fields from a full card — these are not omitted, they do not exist in phase-1 rows.

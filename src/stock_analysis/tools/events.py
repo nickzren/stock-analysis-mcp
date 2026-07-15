@@ -1,10 +1,12 @@
 """Events calendar tool."""
 
-from datetime import UTC, datetime
+import contextlib
+from datetime import UTC, date, datetime
 from time import perf_counter
 from typing import Any
 
 import pandas as pd
+import pytz
 
 from stock_analysis.data.yfinance_client import fetch_info, fetch_ticker
 from stock_analysis.utils.helpers import current_price_from_info, safe_float, safe_round
@@ -16,34 +18,48 @@ from stock_analysis.utils.provenance import (
     utcnow_isoformat_z,
 )
 
+_ET = pytz.timezone("America/New_York")
 
-async def events_calendar(symbol: str) -> dict[str, Any]:
+
+async def events_calendar(symbol: str, _now: datetime | None = None) -> dict[str, Any]:
     """
     Get upcoming events and historical earnings for a symbol.
 
     Args:
         symbol: Stock ticker symbol
+        _now: Test seam for the current ET time; production uses the clock
 
     Returns:
         Dict with earnings, dividends, and splits information
     """
     start_time = perf_counter()
     normalized_symbol = symbol.upper().strip()
+    now = _now or datetime.now(_ET)
 
     try:
         ticker = await fetch_or_error(fetch_ticker(symbol), symbol)
     except FetchError as fe:
         return fe.response
 
+    info_ok = True
     try:
         info = await fetch_info(symbol)
     except Exception:
         info = {}
+        info_ok = False
 
-    calendar = _fetch_calendar(ticker)
-    earnings_dates = _fetch_earnings_dates(ticker)
+    calendar, calendar_ok = _fetch_calendar(ticker)
+    earnings_dates, earnings_dates_ok = _fetch_earnings_dates(ticker)
 
-    earnings = _build_earnings(calendar, earnings_dates, info)
+    read_failures: set[str] = set()
+    if not calendar_ok:
+        read_failures.add("calendar")
+    if not earnings_dates_ok:
+        read_failures.add("earnings_dates")
+    if not info_ok:
+        read_failures.add("info")
+
+    earnings = _build_earnings(calendar, earnings_dates, info, now, read_failures)
     dividends = _build_dividends(calendar, info)
     splits_info = _build_splits(ticker)
     analyst = _build_analyst(info)
@@ -66,32 +82,35 @@ async def events_calendar(symbol: str) -> dict[str, Any]:
     }
 
 
-def _fetch_calendar(ticker: Any) -> Any:
-    """Fetch yfinance calendar data, returning an empty dict when unavailable."""
+def _fetch_calendar(ticker: Any) -> tuple[Any, bool]:
+    """(payload, ok). ok=False only when the read raised."""
     try:
-        return ticker.calendar
+        return ticker.calendar, True
     except Exception:
-        return {}
+        return {}, False
 
 
-def _fetch_earnings_dates(ticker: Any) -> Any:
-    """Fetch yfinance earnings dates, returning None when unavailable."""
+def _fetch_earnings_dates(ticker: Any) -> tuple[Any, bool]:
+    """(payload, ok). ok=False only when the read raised."""
     try:
-        return ticker.earnings_dates
+        return ticker.earnings_dates, True
     except Exception:
-        return None
+        return None, False
 
 
 def _build_earnings(
     calendar: Any,
     earnings_dates: Any,
     info: dict[str, Any],
+    now: datetime,
+    read_failures: set[str],
 ) -> dict[str, Any]:
     """Build earnings history and next-earnings metadata."""
     earnings_history, beat_count, total_with_data = _build_earnings_history(earnings_dates)
-    next_earnings_date, days_until_earnings, earnings_date_source, earnings_date_status = (
-        _resolve_next_earnings_date(calendar, earnings_dates, info)
+    next_earnings_date, days_until_earnings, earnings_date_source, earnings_date_status, parse_failures = (
+        _resolve_next_earnings_date(calendar, earnings_dates, info, now)
     )
+    sources_failed = sorted(read_failures | parse_failures)
 
     earnings_date_status_reason = None
     if next_earnings_date is None:
@@ -105,6 +124,7 @@ def _build_earnings(
         "next_date_status": earnings_date_status,
         "next_date_status_reason": earnings_date_status_reason if earnings_date_status == "unavailable" else None,
         "days_until": days_until_earnings,
+        "sources_failed": sources_failed,
         "history": earnings_history,
         "beat_rate": safe_round(beat_rate, 2),
     }
@@ -154,12 +174,14 @@ def _resolve_next_earnings_date(
     calendar: Any,
     earnings_dates: Any,
     info: dict[str, Any],
-) -> tuple[str | None, int | None, str | None, str]:
+    now: datetime,
+) -> tuple[str | None, int | None, str | None, str, set[str]]:
     """Resolve the next earnings date from calendar, earnings dates, then info."""
     next_earnings_date = None
     days_until_earnings = None
     earnings_date_source: str | None = None
     earnings_date_status: str = "unavailable"
+    parse_failures: set[str] = set()
 
     # Source 1: Calendar (most reliable when present)
     if isinstance(calendar, dict):
@@ -173,6 +195,8 @@ def _resolve_next_earnings_date(
             if next_earnings_date:
                 earnings_date_source = "calendar"
                 earnings_date_status = "available"
+            else:
+                parse_failures.add("calendar")
     elif isinstance(calendar, pd.DataFrame) and len(calendar) > 0:
         # Some versions return DataFrame
         if "Earnings Date" in calendar.index:
@@ -181,58 +205,74 @@ def _resolve_next_earnings_date(
             if next_earnings_date:
                 earnings_date_source = "calendar_dataframe"
                 earnings_date_status = "available"
+            else:
+                parse_failures.add("calendar")
+    elif calendar is not None and not isinstance(calendar, pd.DataFrame):
+        parse_failures.add("calendar")
 
-    # Source 2: Fallback to earnings_dates (future dates).
-    # Normalize all timestamps to naive-UTC so the "future" comparison is consistent
-    # regardless of yfinance's underlying timezone (typically America/New_York).
+    # Source 2: Fallback to earnings_dates (future dates), filtered by ET
+    # calendar date (via the injected `now`) so same-day earnings survive
+    # instead of being floored to "past."
     if next_earnings_date is None:
-        try:
-            if earnings_dates is not None and len(earnings_dates) > 0:
-                now = datetime.now(UTC).replace(tzinfo=None)
-                for date, _row in earnings_dates.iterrows():
-                    if isinstance(date, pd.Timestamp):
-                        if date.tzinfo is not None:
-                            dt = date.tz_convert("UTC").to_pydatetime().replace(tzinfo=None)
-                        else:
-                            dt = date.to_pydatetime()
+        if earnings_dates is not None and not isinstance(earnings_dates, pd.DataFrame):
+            parse_failures.add("earnings_dates")
+        elif earnings_dates is not None and len(earnings_dates) > 0:
+            cutoff = now.date()
+            rows_seen = 0
+            rows_unparseable = 0
+            try:
+                for idx, _row in earnings_dates.iterrows():
+                    rows_seen += 1
+                    if isinstance(idx, pd.Timestamp):
+                        # Naive entries are treated as exchange-local (ET) wall
+                        # time; tz-aware entries convert to ET.
+                        ts = idx if idx.tzinfo is not None else idx.tz_localize("America/New_York")
+                        row_date = ts.tz_convert("America/New_York").date()
                     else:
                         try:
-                            dt = datetime.strptime(str(date)[:10], "%Y-%m-%d")
+                            row_date = date.fromisoformat(str(idx)[:10])
                         except ValueError:
+                            rows_unparseable += 1
                             continue
-                    # Only use future dates
-                    if dt > now:
-                        next_earnings_date = _format_date(date)
+                    if row_date >= cutoff:
+                        next_earnings_date = row_date.isoformat()
                         earnings_date_source = "earnings_dates"
                         earnings_date_status = "available"
                         break
-        except Exception:
-            pass
+            except Exception:
+                parse_failures.add("earnings_dates")
+            if rows_seen > 0 and rows_unparseable == rows_seen:
+                parse_failures.add("earnings_dates")
 
-    # Source 3: Fallback to info earningsQuarterlyGrowth dates (rare)
-    # (yfinance sometimes has this)
+    # Source 3: Fallback to info earningsTimestamp (rare)
     if next_earnings_date is None and info:
-        # Some tickers have earningsDate in info
-        info_earnings = info.get("earningsTimestamp")
-        if info_earnings:
-            try:
-                dt = datetime.fromtimestamp(info_earnings)
-                if dt > datetime.now():
-                    next_earnings_date = dt.strftime("%Y-%m-%d")
-                    earnings_date_source = "info_timestamp"
-                    earnings_date_status = "available"
-            except (ValueError, TypeError, OSError):
-                pass
+        if not isinstance(info, dict):
+            parse_failures.add("info")
+        else:
+            info_earnings = info.get("earningsTimestamp")
+            if info_earnings:
+                try:
+                    dt = datetime.fromtimestamp(info_earnings, tz=UTC)
+                    info_date = dt.astimezone(_ET).date()
+                    if info_date >= now.date():
+                        next_earnings_date = info_date.isoformat()
+                        earnings_date_source = "info_timestamp"
+                        earnings_date_status = "available"
+                except (ValueError, TypeError, OSError, OverflowError):
+                    parse_failures.add("info")
 
     # Compute days until earnings if we have a date
     if next_earnings_date:
-        try:
-            earnings_dt = datetime.strptime(next_earnings_date, "%Y-%m-%d")
-            days_until_earnings = (earnings_dt - datetime.now()).days
-        except (ValueError, TypeError):
-            pass
+        with contextlib.suppress(ValueError):
+            days_until_earnings = (date.fromisoformat(next_earnings_date) - now.date()).days
 
-    return next_earnings_date, days_until_earnings, earnings_date_source, earnings_date_status
+    return (
+        next_earnings_date,
+        days_until_earnings,
+        earnings_date_source,
+        earnings_date_status,
+        parse_failures,
+    )
 
 
 def _build_dividends(calendar: Any, info: dict[str, Any]) -> dict[str, Any]:
@@ -342,6 +382,9 @@ def _format_date(value: Any) -> str | None:
         return value.strftime("%Y-%m-%d")
 
     if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%d")
+
+    if isinstance(value, date):
         return value.strftime("%Y-%m-%d")
 
     if isinstance(value, str):
