@@ -338,6 +338,23 @@ async def test_out_of_bounds_sizing_inputs_rejected(
     assert bad_param in result["message"]
 
 
+@pytest.mark.parametrize(("kwargs", "expect_error"), [
+    ({"account_size": float("nan")}, True),        # R11 red: currently passes
+    ({"account_size": float("inf")}, True),         # R11 red
+    ({"risk_per_trade_pct": float("nan")}, True),   # R19 green pin
+    ({"max_position_pct": float("inf")}, True),     # R19 green pin
+])
+def test_r11_r19_nonfinite_sizing_rejected(
+    kwargs: dict[str, float], expect_error: bool,
+) -> None:
+    msg = orch.validate_sizing_params(
+        kwargs.get("account_size", 1000.0),
+        kwargs.get("risk_per_trade_pct", 1.0),
+        kwargs.get("max_position_pct", 10.0),
+    )
+    assert (msg is not None) is expect_error
+
+
 @pytest.mark.asyncio
 async def test_expected_move_fetched_within_earnings_window(
     patched: None, monkeypatch: pytest.MonkeyPatch,

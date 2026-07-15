@@ -39,12 +39,14 @@ def validate_sizing_params(
     max_position_pct: float,
 ) -> str | None:
     """Bounds for sizing inputs; None when valid, else the rejection message."""
-    if account_size is not None and account_size <= 0:
-        return f"account_size must be positive, got {account_size}"
-    if not 0 < risk_per_trade_pct <= 100:
-        return f"risk_per_trade_pct must be in (0, 100], got {risk_per_trade_pct}"
-    if not 0 < max_position_pct <= 100:
-        return f"max_position_pct must be in (0, 100], got {max_position_pct}"
+    if account_size is not None and (
+        not math.isfinite(account_size) or account_size <= 0
+    ):
+        return f"account_size must be a finite positive number, got {account_size}"
+    if not math.isfinite(risk_per_trade_pct) or not 0 < risk_per_trade_pct <= 100:
+        return f"risk_per_trade_pct must be finite in (0, 100], got {risk_per_trade_pct}"
+    if not math.isfinite(max_position_pct) or not 0 < max_position_pct <= 100:
+        return f"max_position_pct must be finite in (0, 100], got {max_position_pct}"
     return None
 
 

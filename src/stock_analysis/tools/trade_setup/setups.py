@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from typing import Any
 
@@ -53,6 +54,18 @@ def _rule(technicals_data: dict[str, Any], name: str) -> bool | None:
     return (rules.get(name) or {}).get("triggered")
 
 
+def _valid_stop_pair(trigger_price: float, stop_price: float) -> tuple[float, float] | None:
+    """Round both to the published 2dp precision, then enforce
+    finite and 0 < stop < trigger. None = reject the setup."""
+    trig_r = round(float(trigger_price), 2)
+    stop_r = round(float(stop_price), 2)
+    if not (math.isfinite(trig_r) and math.isfinite(stop_r)):
+        return None
+    if stop_r <= 0 or stop_r >= trig_r:
+        return None
+    return trig_r, stop_r
+
+
 def _atr(technicals_data: dict[str, Any]) -> float | None:
     return (technicals_data.get("atr") or {}).get("value")
 
@@ -99,8 +112,10 @@ def _detect_pullback(
         stop_price, stop_basis = trigger_price - STOP_ATR_MULT * atr, "atr"
     else:
         return None
-    if stop_price >= trigger_price:
+    pair = _valid_stop_pair(trigger_price, stop_price)
+    if pair is None:
         return None
+    trigger_price, stop_price = pair
 
     high_20d = features.get("high_20d_prior")
     target_primary = (
@@ -125,10 +140,10 @@ def _detect_pullback(
             "Close below the pullback swing low",
             "SMA50 crossing below SMA200",
         ],
-        "trigger_price": round(float(trigger_price), 2),
+        "trigger_price": trigger_price,
         "trigger_satisfied": actionable_price > trigger_price,
         "trigger_condition": f"price reclaims prior-day high {trigger_price:.2f}",
-        "stop_price": round(float(stop_price), 2),
+        "stop_price": stop_price,
         "stop_basis": stop_basis,
         "target_primary": target_primary,
     }
@@ -152,14 +167,17 @@ def _detect_breakout(
         return None
 
     trigger_price = float(high_20d)
-    stop_price = round(trigger_price * (1 - BREAKOUT_STOP_LEVEL_BUFFER), 2)
-    if stop_price >= trigger_price:
+    stop_price = trigger_price * (1 - BREAKOUT_STOP_LEVEL_BUFFER)
+    pair = _valid_stop_pair(trigger_price, stop_price)
+    if pair is None:
         atr = _atr(technicals_data)
         if atr is None:
             return None
-        stop_price = round(trigger_price - STOP_ATR_MULT * atr, 2)
-        if stop_price >= trigger_price:
+        stop_price = trigger_price - STOP_ATR_MULT * atr
+        pair = _valid_stop_pair(trigger_price, stop_price)
+        if pair is None:
             return None
+    trigger_price, stop_price = pair
 
     volume_ok = volume_ratio is not None and volume_ratio >= BREAKOUT_VOLUME_RATIO_MIN
     trigger_satisfied = bool(actionable_price > trigger_price and volume_ok)
@@ -186,7 +204,7 @@ def _detect_breakout(
             "Close back below the breakout level",
             "Breakout on below-average volume",
         ],
-        "trigger_price": round(trigger_price, 2),
+        "trigger_price": trigger_price,
         "trigger_satisfied": trigger_satisfied,
         "trigger_condition": (
             f"price clears 20d high {trigger_price:.2f} with volume ratio >= "
@@ -240,9 +258,11 @@ def _detect_mean_reversion(
     atr = _atr(technicals_data)
     if trigger_price is None or atr is None:
         return None
-    stop_price = round(float(trigger_price) - MEANREV_STOP_ATR_MULT * atr, 2)
-    if stop_price >= trigger_price:
+    stop_price = float(trigger_price) - MEANREV_STOP_ATR_MULT * atr
+    pair = _valid_stop_pair(trigger_price, stop_price)
+    if pair is None:
         return None
+    trigger_price, stop_price = pair
 
     sma_20 = (technicals_data.get("moving_averages") or {}).get("sma_20")
     target_primary = (
@@ -269,7 +289,7 @@ def _detect_mean_reversion(
             "Close below the ATR stop",
             f"Loss of long-term support (price < {MEANREV_SUPPORT_SMA200_FACTOR:.0%} of SMA200)",
         ],
-        "trigger_price": round(float(trigger_price), 2),
+        "trigger_price": trigger_price,
         "trigger_satisfied": actionable_price > trigger_price,
         "trigger_condition": f"first close above prior-day high {trigger_price:.2f}",
         "stop_price": stop_price,

@@ -12,7 +12,7 @@ from stock_analysis.tools.analyze.gates import (
     is_falling_knife_technicals,
 )
 from stock_analysis.tools.trade_setup.freshness import freshness_blockers
-from stock_analysis.tools.trade_setup.plan import build_plan
+from stock_analysis.tools.trade_setup.plan import PlanInvariantError, build_plan
 from stock_analysis.tools.trade_setup.setup_rules import (
     DEFAULT_REVIEW_TRADING_DAYS,
     PDT_ACCOUNT_MIN,
@@ -129,16 +129,24 @@ def build_trade_setup_card(
                 action = "watch"
 
     if action in _ACTIONABLE and setup is not None:
-        plan = build_plan(
-            setup,
-            action=action,
-            session=session,
-            account_size=account_size,
-            risk_per_trade_pct=risk_per_trade_pct,
-            max_position_pct=max_position_pct,
-            now=now,
-            actionable_price=actionable_price,  # type: ignore[arg-type]
-        )
+        try:
+            plan = build_plan(
+                setup,
+                action=action,
+                session=session,
+                account_size=account_size,
+                risk_per_trade_pct=risk_per_trade_pct,
+                max_position_pct=max_position_pct,
+                now=now,
+                actionable_price=actionable_price,  # type: ignore[arg-type]
+            )
+        except PlanInvariantError as exc:
+            plan = None
+            action = "watch"
+            blockers.append({
+                "id": "plan_invariant_violation",
+                "reason": f"plan geometry invalid — {exc}",
+            })
 
     days_until = earnings.get("days_until")
     next_date = earnings.get("next_date")

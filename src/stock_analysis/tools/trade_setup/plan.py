@@ -2,11 +2,28 @@
 
 from __future__ import annotations
 
+import math
 from datetime import datetime
 from typing import Any
 
 from stock_analysis.tools.trade_setup.setup_rules import TIME_STOP_TRADING_DAYS
 from stock_analysis.utils.market_calendar import add_trading_days
+
+
+class PlanInvariantError(ValueError):
+    """A generated setup violates plan-geometry invariants (finite, positive,
+    stop strictly below entry). Card assembly catches ONLY this and downgrades.
+    """
+
+
+def _finite_positive(name: str, value: Any) -> float:
+    try:
+        v = float(value)
+    except (TypeError, ValueError) as exc:
+        raise PlanInvariantError(f"{name} not numeric: {value!r}") from exc
+    if not math.isfinite(v) or v <= 0:
+        raise PlanInvariantError(f"{name} must be finite and positive, got {value!r}")
+    return v
 
 
 def build_plan(
@@ -20,10 +37,19 @@ def build_plan(
     now: datetime,
     actionable_price: float,
 ) -> dict[str, Any]:
-    entry_price = float(setup["trigger_price"])  # LEVEL — kept verbatim in entry.trigger_price
-    stop_price = float(setup["stop_price"])
-    anchor = max(entry_price, actionable_price) if setup["trigger_satisfied"] else entry_price
-    risk_per_share = anchor - stop_price  # > 0 guaranteed by detectors + anchor >= entry_price
+    entry_price = _finite_positive("trigger_price", setup["trigger_price"])
+    stop_price = _finite_positive("stop_price", setup["stop_price"])
+    actionable = _finite_positive("actionable_price", actionable_price)
+    if stop_price >= entry_price:
+        raise PlanInvariantError(
+            f"stop {stop_price} must be strictly below entry {entry_price}"
+        )
+    anchor = max(entry_price, actionable) if setup["trigger_satisfied"] else entry_price
+    risk_per_share = anchor - stop_price
+    if risk_per_share < 0.01:
+        raise PlanInvariantError(
+            f"risk_per_share {risk_per_share} below 0.01 minimum"
+        )
 
     targets = _build_targets(setup, anchor, risk_per_share)
 
@@ -97,6 +123,8 @@ def _build_targets(
     seen: set[float] = set()
     for c in sorted(candidates, key=lambda x: x["price"]):
         price = round(c["price"], 2)
+        if not math.isfinite(price):
+            raise PlanInvariantError(f"target price not finite ({c['basis']})")
         if price in seen or price <= anchor:
             continue
         seen.add(price)

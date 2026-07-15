@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 import pytz
 
+import stock_analysis.tools.trade_setup.card as card_module
 from stock_analysis.tools.trade_setup.card import build_trade_setup_card
 from tests.test_tools.test_setup_detection import make_features, make_technicals
 
@@ -235,6 +236,27 @@ def test_v_recovery_is_not_a_falling_knife() -> None:
     card = build_card(technicals_data=t, features=f)
     assert card["action"] == "no_setup"
     assert "falling_knife" not in blocker_ids(card)
+
+
+def test_r10_plan_invariant_violation_downgrades_to_watch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """R10: build_plan raising PlanInvariantError (forced here via a
+    monkeypatched detect_setup, since the real detectors now guard this
+    geometry themselves) must downgrade an otherwise-actionable card to
+    watch with a plan_invariant_violation blocker — never propagate the
+    ZeroDivisionError that used to reach build_plan."""
+    forced_setup = {
+        "type": "pullback_in_uptrend", "quality": "C", "thesis": [],
+        "invalidation": [], "trigger_price": 101.0, "trigger_satisfied": False,
+        "trigger_condition": "x", "stop_price": 101.0, "stop_basis": "atr",
+        "target_primary": None,
+    }
+    monkeypatch.setattr(card_module, "detect_setup", lambda *a, **k: forced_setup)
+    card = build_card()
+    assert card["action"] == "watch"
+    assert card["plan"] is None
+    assert "plan_invariant_violation" in blocker_ids(card)
 
 
 class TestExpectedMove:

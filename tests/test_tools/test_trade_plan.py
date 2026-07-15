@@ -2,9 +2,10 @@
 
 from datetime import date, datetime
 
+import pytest
 import pytz
 
-from stock_analysis.tools.trade_setup.plan import build_plan
+from stock_analysis.tools.trade_setup.plan import PlanInvariantError, build_plan
 from stock_analysis.utils.market_calendar import add_trading_days
 
 ET = pytz.timezone("America/New_York")
@@ -25,6 +26,15 @@ def make_setup(**overrides):
     }
     base.update(overrides)
     return base
+
+
+def _forced_setup(trigger=0.40, stop=0.40):
+    return {
+        "type": "pullback_in_uptrend", "quality": "C", "thesis": [],
+        "invalidation": [], "trigger_price": trigger, "trigger_satisfied": False,
+        "trigger_condition": "x", "stop_price": stop, "stop_basis": "atr",
+        "target_primary": None,
+    }
 
 
 def test_add_trading_days_skips_weekends() -> None:
@@ -161,3 +171,19 @@ def test_breakout_structural_target_beats_tautological_1r() -> None:
                                   "basis": "r_multiple"}
     assert plan["reward_risk"] == 1.4
     assert plan["reward_risk"] != 1.0
+
+
+class TestPlanInvariants:
+    def test_r10_build_plan_rejects_equal_entry_stop(self) -> None:
+        with pytest.raises(PlanInvariantError):
+            build_plan(_forced_setup(), action="enter_on_trigger", session="regular",
+                      account_size=3000, risk_per_trade_pct=1.0, max_position_pct=10.0,
+                      now=NOW, actionable_price=0.398)
+
+    def test_r18_build_plan_rejects_infinite_target(self) -> None:
+        setup = _forced_setup(trigger=10.0, stop=9.0)
+        setup["target_primary"] = {"price": float("inf"), "basis": "measured_move"}
+        with pytest.raises(PlanInvariantError):
+            build_plan(setup, action="enter_on_trigger", session="regular",
+                      account_size=3000, risk_per_trade_pct=1.0, max_position_pct=10.0,
+                      now=NOW, actionable_price=9.5)
