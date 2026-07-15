@@ -383,6 +383,13 @@ def _format_date(value: Any) -> str | None:
     if value is None:
         return None
 
+    if not isinstance(value, str):
+        try:
+            if pd.isna(value):
+                return None
+        except (TypeError, ValueError):
+            pass
+
     if isinstance(value, str):
         try:
             value = pd.to_datetime(value)

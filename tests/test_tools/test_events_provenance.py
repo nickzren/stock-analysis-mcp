@@ -209,3 +209,57 @@ async def test_p1_invalid_dividend_ex_date_no_longer_passthrough(monkeypatch):
     ticker = FakeTicker(calendar={"Ex-Dividend Date": "not-a-date"})
     result = await _events(monkeypatch, ticker)
     assert result["dividends"]["ex_date"] is None  # OLD: "not-a-date"
+
+
+@pytest.mark.asyncio
+async def test_nat_dict_calendar_earnings_date_is_unavailable_not_crash(monkeypatch):
+    # pd.NaT is a truthy datetime subclass: isinstance(pd.NaT, datetime) is
+    # True but pd.NaT.strftime(...) raises ValueError("NaTType does not
+    # support strftime"). OLD: that ValueError propagated out of
+    # events_calendar and crashed the whole tool instead of degrading to
+    # sources_failed.
+    ticker = FakeTicker(calendar={"Earnings Date": [pd.NaT]})
+    earnings = await _earnings(monkeypatch, ticker)  # OLD: raised ValueError
+    assert earnings["next_date"] is None
+    assert earnings["next_date_status"] == "unavailable"
+    assert earnings["sources_failed"] == ["calendar"]
+
+
+@pytest.mark.asyncio
+async def test_nat_dataframe_calendar_earnings_date_is_unavailable_not_crash(monkeypatch):
+    # Same NaT defect via the DataFrame-shaped calendar path.
+    cal = pd.DataFrame({0: [pd.NaT]}, index=["Earnings Date"])
+    ticker = FakeTicker(calendar=cal)
+    earnings = await _earnings(monkeypatch, ticker)  # OLD: raised ValueError
+    assert earnings["next_date"] is None
+    assert earnings["next_date_status"] == "unavailable"
+    assert earnings["sources_failed"] == ["calendar"]
+
+
+@pytest.mark.asyncio
+async def test_nat_dividend_ex_date_does_not_poison_earnings_provenance(monkeypatch):
+    # A NaT Ex-Dividend Date must degrade only the dividends block; it must
+    # not crash the tool (OLD behavior) or contaminate earnings, which
+    # resolves independently from a separate, valid calendar field.
+    ticker = FakeTicker(
+        calendar={"Ex-Dividend Date": pd.NaT, "Earnings Date": ["2026-07-20"]}
+    )
+    result = await _events(monkeypatch, ticker)  # OLD: raised ValueError
+    assert result["dividends"]["ex_date"] is None
+    assert result["earnings"]["next_date"] == "2026-07-20"
+    assert result["earnings"]["sources_failed"] == []
+
+
+@pytest.mark.asyncio
+async def test_nat_only_earnings_dates_index_marks_source_failed(monkeypatch):
+    # Green pin: a NaT earnings_dates index never reaches _format_date (it
+    # takes the isinstance(idx, pd.Timestamp)-is-False str-fallback path,
+    # which already fails gracefully via date.fromisoformat("NaT")), so the
+    # existing mixed-row rule should already mark this malformed rather
+    # than crash or read as verified-empty.
+    idx = pd.DatetimeIndex([pd.NaT])
+    df = pd.DataFrame({"EPS Estimate": [1.0]}, index=idx)
+    ticker = FakeTicker(calendar={}, earnings_dates=df)
+    earnings = await _earnings(monkeypatch, ticker)
+    assert earnings["next_date"] is None
+    assert earnings["sources_failed"] == ["earnings_dates"]
