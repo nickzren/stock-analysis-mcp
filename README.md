@@ -77,6 +77,9 @@ Any swing setup on HOOD? Account size $3000.
 `no_setup`, `avoid`, `wait_for_data`) plus an executable plan when actionable.
 `trade_now` is only possible during regular market hours with fresh data; stale,
 delayed, or unverifiable data downgrades the action and explains why in `blockers`.
+Earnings provenance is explicit: `sources_failed` distinguishes a verified
+no-earnings state from unreadable sources (which cap the card at `watch`), and
+same-day earnings count as day 0.
 
 The default report is compact and decision-focused. It still computes the full
 underlying analysis before returning the shorter investor view.
@@ -145,7 +148,7 @@ If `account_size` is omitted, sizing remains percent-based. If a caller depends 
 | `search_symbol` | Search for stock symbols by company name or ticker |
 | `get_stock_summary` | Basic stock info (name, sector, price, market cap) |
 | `get_price_history` | Historical price data with summary and resource URI |
-| `get_technicals` | Technical indicators (SMA, EMA, RSI, MACD, ATR, Bollinger, Fibonacci, OBV) plus a `short_term` block (levels, gap, RVOL, compression); `timeframe="swing"` adds intraday VWAP, time-adjusted RVOL, hourly trend, and alignment with freshness disclosure |
+| `get_technicals` | Technical indicators (SMA, EMA, RSI, MACD, ATR, Bollinger, Fibonacci, OBV) plus a `short_term` block (levels, gap, RVOL, compression); `timeframe="swing"` adds intraday VWAP, time-adjusted RVOL, hourly trend, and alignment with freshness disclosure. Regular-session freshness requires both a fresh intraday quote and a current daily frame; `reason_code` names any failure cause. |
 | `get_fundamentals` | Financial metrics, valuation history, analyst estimates, dividends |
 | `get_events` | Earnings dates, dividends, splits |
 | `get_news` | Recent news headlines, earnings surprise data, and structured catalyst tags |
