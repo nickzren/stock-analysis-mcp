@@ -1,9 +1,50 @@
 """Pytest configuration and fixtures."""
 
+from collections.abc import Iterator
+from pathlib import Path
+
+import curl_cffi.requests
 import pandas as pd
 import pytest
+import requests
+import yfinance as yf
 
 from stock_analysis.utils.validators import FetchParams
+from tests.support.network_guard import blocked_request, violation_report
+from tests.support.transport import FakeSession, stubbed_yfinance_transport
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _isolated_yfinance_cache(tmp_path_factory: pytest.TempPathFactory) -> None:
+    """Keep yfinance's persistent cookie/tz/ISIN caches out of the developer's cache dir."""
+    yf.set_tz_cache_location(str(tmp_path_factory.mktemp("yfinance-cache")))
+
+
+@pytest.fixture(autouse=True)
+def _block_network(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[str]]:
+    """Fail any test that sends a request through a curl_cffi or requests session
+    (yfinance's transport), even if the error is swallowed."""
+    violations: list[str] = []
+    monkeypatch.setattr(
+        curl_cffi.requests.Session, "request", blocked_request("curl_cffi", violations)
+    )
+    monkeypatch.setattr(requests.Session, "request", blocked_request("requests", violations))
+    yield violations
+    if violations:
+        pytest.fail(violation_report(violations), pytrace=False)
+
+
+@pytest.fixture(autouse=True)
+def _isolated_data_dir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Keep watchlist/scan state out of the developer's real data directory."""
+    monkeypatch.setenv("STOCK_ANALYSIS_DATA_DIR", str(tmp_path / "stock-analysis-data"))
+
+
+@pytest.fixture
+def yf_transport() -> Iterator[FakeSession]:
+    """Real pinned yfinance over a stubbed transport, library-default error mode."""
+    with stubbed_yfinance_transport() as session:
+        yield session
 
 
 @pytest.fixture

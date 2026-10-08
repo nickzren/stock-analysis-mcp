@@ -1,0 +1,5 @@
+{
+  "status": 503,
+  "content_type": "text/html",
+  "body_file": "error_page.html"
+}

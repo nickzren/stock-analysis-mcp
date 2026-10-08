@@ -1,0 +1,158 @@
+"""Transport-level stub for contract tests against the real pinned yfinance.
+
+Only the HTTP session inside yfinance's ``YfData`` singleton (and its
+cookie/crumb acquisition) is replaced. Everything above it -- ``Ticker``
+properties, ``Search``, yfinance's error suppression, its ``cache_get`` LRU and
+its parsers -- runs for real, so these tests exercise the layer where the
+suppression, cache and parser defects live.
+"""
+
+import json
+from collections.abc import Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass
+from http import HTTPStatus
+from pathlib import Path
+from typing import Any
+
+from curl_cffi.requests.exceptions import HTTPError
+from yfinance.config import YfConfig
+from yfinance.data import YfData
+
+FIXTURE_ROOT = Path(__file__).resolve().parent.parent / "fixtures" / "transport"
+
+# Fixture source directory -> URL substring. "calendar" matches every quoteSummary
+# request (the module is a query param), not only calendarEvents.
+ROUTES: dict[str, str] = {
+    "calendar": "/v10/finance/quoteSummary/",
+    "earnings_page": "finance.yahoo.com/calendar/earnings",
+    "news": "/xhr/ncp",
+    "search": "/v1/finance/search",
+}
+
+
+def source_for_url(url: str) -> str | None:
+    for source, fragment in ROUTES.items():
+        if fragment in url:
+            return source
+    return None
+
+
+@dataclass(frozen=True)
+class TransportFixture:
+    status: int
+    body: str
+    content_type: str
+
+
+def load_fixture(source: str, name: str) -> TransportFixture:
+    """Load ``tests/fixtures/transport/<source>/<name>.json``.
+
+    The spec holds ``status`` plus exactly one of ``json`` (an object served as
+    a JSON body), ``body_file`` (a sibling file) or ``body`` (inline text).
+    """
+    path = FIXTURE_ROOT / source / f"{name}.json"
+    spec = json.loads(path.read_text())
+    if "json" in spec:
+        return TransportFixture(spec["status"], json.dumps(spec["json"]), "application/json")
+    if "body_file" in spec:
+        body = (path.parent / spec["body_file"]).read_text()
+        return TransportFixture(spec["status"], body, spec.get("content_type", "text/html"))
+    return TransportFixture(spec["status"], spec.get("body", ""), spec.get("content_type", "text/plain"))
+
+
+class FakeResponse:
+    """The subset of ``curl_cffi.requests.Response`` that yfinance and the recorder read."""
+
+    def __init__(self, fixture: TransportFixture, url: str):
+        self.status_code = fixture.status
+        self.reason = HTTPStatus(fixture.status).phrase
+        self.ok = fixture.status < 400
+        self.text = fixture.body
+        self.headers = {"content-type": fixture.content_type}
+        self.url = url
+
+    def json(self) -> Any:
+        return json.loads(self.text)
+
+    def raise_for_status(self) -> None:
+        if not self.ok:
+            raise HTTPError(f"HTTP Error {self.status_code}: {self.reason}", 0, self)
+
+
+class UnroutedRequestError(AssertionError):
+    """A stubbed-transport test made a request it did not route."""
+
+
+@dataclass(frozen=True)
+class RecordedCall:
+    url: str
+    source: str
+
+
+class FakeSession:
+    """Serves routed fixtures in order; the last fixture of a route repeats.
+
+    An unrouted request raises and is also recorded in ``unrouted``, because app
+    code may swallow the error; the context manager fails on exit if any occurred.
+    """
+
+    def __init__(self) -> None:
+        self.calls: list[RecordedCall] = []
+        self.unrouted: list[str] = []
+        self._queues: dict[str, list[TransportFixture]] = {}
+
+    def route(self, source: str, *names: str) -> None:
+        if source not in ROUTES:
+            raise ValueError(f"unknown source {source!r}")
+        self._queues[source] = [load_fixture(source, name) for name in names]
+
+    def calls_to(self, source: str) -> list[RecordedCall]:
+        return [call for call in self.calls if call.source == source]
+
+    def get(self, url: str, **kwargs: Any) -> FakeResponse:
+        return self._dispatch("GET", url)
+
+    def post(self, url: str, **kwargs: Any) -> FakeResponse:
+        return self._dispatch("POST", url)
+
+    def _dispatch(self, method: str, url: str) -> FakeResponse:
+        source = source_for_url(url)
+        queue = self._queues.get(source) if source else None
+        if source is None or not queue:
+            self.unrouted.append(f"{method} {url}")
+            raise UnroutedRequestError(f"unrouted {method} {url}")
+        self.calls.append(RecordedCall(url, source))
+        fixture = queue.pop(0) if len(queue) > 1 else queue[0]
+        return FakeResponse(fixture, url)
+
+
+@contextmanager
+def stubbed_yfinance_transport(*, hide_exceptions: bool | None = None) -> Iterator[FakeSession]:
+    """Swap ``YfData``'s session for a ``FakeSession`` and restore it afterwards.
+
+    Clears yfinance's ``cache_get`` LRU on entry and exit. ``hide_exceptions``
+    overrides yfinance's global flag for the duration (``None`` keeps the
+    library default) -- a test-only toggle, never a production pattern. Does not
+    nest: a nested stub would restore the outer fake as the "real" session.
+    """
+    data = YfData()
+    if isinstance(data._session, FakeSession):
+        raise RuntimeError("stubbed_yfinance_transport is already active; it does not nest")
+    saved = (data._session, data._cookie_strategy, data._cookie, data._crumb)
+    saved_hide = YfConfig.debug.hide_exceptions
+    session = FakeSession()
+    data._session = session
+    data._get_cookie_and_crumb = lambda timeout=30: ("test-crumb", "basic")
+    YfData.cache_get.cache_clear()
+    if hide_exceptions is not None:
+        YfConfig.debug.hide_exceptions = hide_exceptions
+    try:
+        yield session
+        if session.unrouted:
+            raise UnroutedRequestError("unrouted stub requests:\n  " + "\n  ".join(session.unrouted))
+    finally:
+        data._session, data._cookie_strategy, data._cookie, data._crumb = saved
+        data.__dict__.pop("_get_cookie_and_crumb", None)
+        YfConfig.debug.hide_exceptions = saved_hide
+        YfData.cache_get.cache_clear()

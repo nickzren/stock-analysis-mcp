@@ -1,0 +1,29 @@
+{
+  "status": 200,
+  "json": {
+    "quoteSummary": {
+      "result": [
+        {
+          "calendarEvents": {
+            "maxAge": 1,
+            "earnings": {
+              "earningsDate": [
+                1793131200,
+                1793476800
+              ],
+              "isEarningsDateEstimate": true,
+              "earningsCallDate": [],
+              "earningsAverage": 3.1,
+              "earningsLow": 2.9,
+              "earningsHigh": 3.3,
+              "revenueAverage": 70000000000,
+              "revenueLow": 68000000000,
+              "revenueHigh": 72000000000
+            }
+          }
+        }
+      ],
+      "error": null
+    }
+  }
+}

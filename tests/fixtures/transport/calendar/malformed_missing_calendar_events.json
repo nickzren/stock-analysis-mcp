@@ -1,0 +1,11 @@
+{
+  "status": 200,
+  "json": {
+    "quoteSummary": {
+      "result": [
+        {}
+      ],
+      "error": null
+    }
+  }
+}

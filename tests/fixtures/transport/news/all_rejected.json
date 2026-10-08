@@ -1,0 +1,36 @@
+{
+  "status": 200,
+  "json": {
+    "data": {
+      "tickerStream": {
+        "stream": [
+          {
+            "id": "ad1",
+            "content": {
+              "id": "ad1",
+              "contentType": "STORY",
+              "title": "Sponsored",
+              "pubDate": "2026-10-08T12:00:00Z"
+            },
+            "ad": [
+              {
+                "id": "ad1"
+              }
+            ]
+          },
+          {
+            "id": "n2",
+            "content": {
+              "id": "n2",
+              "contentType": "STORY",
+              "title": "Item without a publish date",
+              "provider": {
+                "displayName": "Example Wire"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

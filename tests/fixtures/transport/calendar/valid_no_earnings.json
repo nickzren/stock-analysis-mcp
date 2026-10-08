@@ -1,0 +1,15 @@
+{
+  "status": 200,
+  "json": {
+    "quoteSummary": {
+      "result": [
+        {
+          "calendarEvents": {
+            "maxAge": 1
+          }
+        }
+      ],
+      "error": null
+    }
+  }
+}

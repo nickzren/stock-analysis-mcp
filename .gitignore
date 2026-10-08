@@ -56,3 +56,6 @@ docs/plans/
 
 # Agent scratch (task briefs, reports, review packages)
 .superpowers/
+
+# Real Yahoo recordings from scripts/record_provider_fixtures.py (local only)
+tests/fixtures/_recorded/

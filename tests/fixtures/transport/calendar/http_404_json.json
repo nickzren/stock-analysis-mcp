@@ -1,0 +1,12 @@
+{
+  "status": 404,
+  "json": {
+    "quoteSummary": {
+      "result": null,
+      "error": {
+        "code": "Not Found",
+        "description": "Quote not found for symbol: EXMP"
+      }
+    }
+  }
+}

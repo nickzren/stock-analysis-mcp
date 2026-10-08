@@ -1,0 +1,12 @@
+{
+  "status": 404,
+  "json": {
+    "finance": {
+      "result": null,
+      "error": {
+        "code": "Not Found",
+        "description": "Not Found"
+      }
+    }
+  }
+}

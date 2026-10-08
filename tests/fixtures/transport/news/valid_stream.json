@@ -1,0 +1,27 @@
+{
+  "status": 200,
+  "json": {
+    "data": {
+      "tickerStream": {
+        "stream": [
+          {
+            "id": "n1",
+            "content": {
+              "id": "n1",
+              "contentType": "STORY",
+              "title": "Example Corp reports quarterly results",
+              "summary": "Synthetic summary.",
+              "pubDate": "2026-10-08T12:00:00Z",
+              "provider": {
+                "displayName": "Example Wire"
+              },
+              "canonicalUrl": {
+                "url": "https://example.com/news/n1"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
