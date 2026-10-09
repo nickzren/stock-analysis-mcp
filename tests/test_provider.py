@@ -11,7 +11,7 @@ import importlib.metadata
 import json
 import tomllib
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -62,7 +62,9 @@ analyze_orchestrator = importlib.import_module("stock_analysis.tools.analyze.orc
 SYMBOL = "EXMP"
 REPO = Path(__file__).resolve().parent.parent
 ET = pytz.timezone("America/New_York")
-VERIFIED_EMPTY_EVENTS = {"earnings": {"next_date": None, "days_until": None, "sources_failed": []}}
+VERIFIED_EMPTY_EVENTS = {
+    "earnings": {"next_date": None, "days_until": None, "verification": "verified_none", "sources_failed": []}
+}
 HISTORY_PARAMS = FetchParams(symbol=SYMBOL, period="1y", interval="1d", adjusted=True)
 
 
@@ -267,23 +269,47 @@ class TestEarningsVerification:
         assert (row["estimate"], row["actual"]) == (2.9, 3.05)
 
 
-class TestCalendarAdapterParity:
-    """Deviation (b): until WP2, the adapter matches yfinance's Ticker.calendar,
-    including its host-local date conversion."""
+class TestCalendarDatesThroughTransport:
+    """WP2 ends deviation (b): calendar dates no longer follow the host time zone."""
+
+    @pytest.mark.parametrize(("tz", "expected"), [("UTC", date(2026, 10, 9)), ("America/New_York", date(2026, 10, 8))])
+    def test_ticker_calendar_property_is_host_local(
+        self, yf_transport: FakeSession, host_tz: Callable[[str], None], tz: str, expected: date
+    ) -> None:
+        """Characterization (R2.6): why events reads raw epochs, not Ticker.calendar."""
+        host_tz(tz)
+        yf_transport.route("calendar", "valid_one_epoch")
+
+        assert yf.Ticker(SYMBOL).calendar["Earnings Date"] == [expected]
 
     @pytest.mark.parametrize("tz", ["UTC", "America/New_York"])
-    @pytest.mark.parametrize("name", ["valid_one_epoch", "valid_window", "valid_dividends"])
-    async def test_matches_ticker_calendar(
-        self, yf_transport: FakeSession, host_tz: Callable[[str], None], tz: str, name: str
+    async def test_window_dates_are_et(
+        self, yf_transport: FakeSession, events_env: None, host_tz: Callable[[str], None], tz: str
     ) -> None:
         host_tz(tz)
-        yf_transport.route("calendar", name)
+        yf_transport.route("calendar", "valid_window")
+        yf_transport.route("earnings_page", "past_only_table")
 
-        adapted = events._calendar_from_events((await provider.read_calendar_events(SYMBOL)).payload)
-        library = yf.Ticker(SYMBOL).calendar
+        earnings = (await _events(ET.localize(datetime(2026, 10, 6, 12, 0))))["earnings"]
 
-        assert adapted == {key: library[key] for key in adapted}
-        assert "Earnings Date" in adapted
+        assert (earnings["next_date"], earnings["days_until"]) == ("2026-10-27", 21)
+        window = earnings["next_window"]
+        assert (window["start"], window["end"], window["is_estimate"]) == ("2026-10-27", "2026-10-31", True)
+        # No info range to confirm the two entries are an interval.
+        assert (window["window_basis"], earnings["verification"]) == ("assumed", "unverifiable")
+
+    @pytest.mark.parametrize("tz", ["UTC", "America/New_York"])
+    async def test_dividend_dates_are_utc_and_earnings_dates_et(
+        self, yf_transport: FakeSession, events_env: None, host_tz: Callable[[str], None], tz: str
+    ) -> None:
+        host_tz(tz)
+        yf_transport.route("calendar", "valid_dividends")
+        yf_transport.route("earnings_page", "past_only_table")
+
+        result = await _events(ET.localize(datetime(2026, 10, 6, 12, 0)))
+
+        assert (result["dividends"]["ex_date"], result["dividends"]["pay_date"]) == ("2026-09-15", "2026-10-09")
+        assert result["earnings"]["next_date"] == "2026-10-08"
 
 
 class TestSourceReads:

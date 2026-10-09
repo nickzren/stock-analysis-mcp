@@ -1,284 +1,109 @@
-"""Red-first regressions R1/R2/R3/R4/R13/R17/R18/R19 + P1/P2/P3 post-merge fixes:
-earnings provenance, day math, strict/ET-normalized date parsing."""
+"""Red-first regressions R1/R2/R3/R4/R17/R18/R19: earnings provenance and day
+math, fed through the provider reads (WP2). Legacy Ticker.calendar shapes
+(DataFrame calendars, NaT or string dates) no longer reach the resolver: the
+provider validates calendarEvents and the earnings page first (WP1)."""
 
 from datetime import datetime
+from typing import Any
 
-import pandas as pd
 import pytest
 import pytz
 
+from stock_analysis.data.provider import SourceRead
 from stock_analysis.tools import events as events_mod
+from tests.support.fake_source import FakeSource
+from tests.support.fake_ticker import FakeTicker
 
 _ET = pytz.timezone("America/New_York")
 NOW = _ET.localize(datetime(2026, 7, 15, 14, 30))  # Wed, regular hours
 
-
-class FakeTicker:
-    def __init__(self, calendar=None, earnings_dates=None,
-                 calendar_raises=False, earnings_dates_raises=False):
-        self._calendar = calendar
-        self._earnings_dates = earnings_dates
-        self._calendar_raises = calendar_raises
-        self._earnings_dates_raises = earnings_dates_raises
-
-    @property
-    def calendar(self):
-        if self._calendar_raises:
-            raise ConnectionError("transport down")
-        return self._calendar
-
-    @property
-    def earnings_dates(self):
-        if self._earnings_dates_raises:
-            raise ConnectionError("transport down")
-        return self._earnings_dates
-
-    @property
-    def splits(self):
-        return pd.Series(dtype=float)
+NO_CALENDAR = FakeSource.empty("calendar", {})
+NO_PAGE = FakeSource.empty("earnings_page", [])
 
 
-def _patch(monkeypatch, ticker, info=None, info_raises=False):
-    async def fake_fetch_ticker(symbol):
-        return ticker
+def _calendar_at(when: datetime) -> FakeSource:
+    return FakeSource.ok("calendar", {"earnings": {"earningsDate": [int(when.timestamp())]}})
 
-    async def fake_fetch_info(symbol):
+
+def _page_at(when: datetime) -> FakeSource:
+    row = {"timestamp": when, "eps_estimate": 1.0, "reported_eps": None, "surprise_pct": None}
+    return FakeSource(SourceRead("earnings_page", "ok", payload=[row]))
+
+
+async def _earnings(
+    monkeypatch: pytest.MonkeyPatch,
+    cal: FakeSource = NO_CALENDAR,
+    pg: FakeSource = NO_PAGE,
+    info: dict[str, Any] | None = None,
+    info_raises: bool = False,
+) -> dict[str, Any]:
+    async def fake_fetch_ticker(symbol: str) -> FakeTicker:
+        return FakeTicker(symbol, splits=None)
+
+    async def fake_fetch_info(symbol: str) -> dict[str, Any]:
         if info_raises:
             raise ConnectionError("info down")
         return info or {}
 
-    # WP1: calendar/earnings_dates come from provider reads. These tests feed the
-    # legacy Ticker.calendar / earnings_dates property shapes straight into the
-    # parse/selection layer (some, e.g. DataFrame calendars, the adapter no longer
-    # produces), so they cover _resolve_next_earnings_date, not the adapter; the
-    # adapter is covered in tests/test_provider.py.
-    async def fake_read_calendar(symbol):
-        try:
-            return ticker.calendar, True
-        except Exception:
-            return {}, False
-
-    async def fake_read_earnings_dates(symbol):
-        try:
-            return ticker.earnings_dates, True
-        except Exception:
-            return None, False
-
     monkeypatch.setattr(events_mod, "fetch_ticker", fake_fetch_ticker)
     monkeypatch.setattr(events_mod, "fetch_info", fake_fetch_info)
-    monkeypatch.setattr(events_mod, "_read_calendar", fake_read_calendar)
-    monkeypatch.setattr(events_mod, "read_earnings_dates", fake_read_earnings_dates)
-
-
-async def _events(monkeypatch, ticker, **kw):
-    _patch(monkeypatch, ticker, **kw)
+    monkeypatch.setattr(events_mod, "read_calendar_events", cal)
+    monkeypatch.setattr(events_mod, "read_earnings_page", pg)
     result = await events_mod.events_calendar("TEST", _now=NOW)
     assert not result.get("error"), result
-    return result
-
-
-async def _earnings(monkeypatch, ticker, **kw):
-    result = await _events(monkeypatch, ticker, **kw)
     return result["earnings"]
 
 
-@pytest.mark.asyncio
 async def test_r1_same_day_earnings_is_day_zero(monkeypatch):
-    ticker = FakeTicker(calendar={"Earnings Date": [NOW.date()]})
-    earnings = await _earnings(monkeypatch, ticker)
+    earnings = await _earnings(monkeypatch, _calendar_at(_ET.localize(datetime(2026, 7, 15, 16, 0))))
     assert earnings["next_date"] == "2026-07-15"
     assert earnings["days_until"] == 0  # OLD: -1 (floor of negative timedelta)
 
 
-@pytest.mark.asyncio
 async def test_r2_transport_failures_populate_sources_failed(monkeypatch):
-    ticker = FakeTicker(calendar_raises=True, earnings_dates_raises=True)
-    earnings = await _earnings(monkeypatch, ticker)
+    earnings = await _earnings(
+        monkeypatch, FakeSource.failed("calendar"), FakeSource.failed("earnings_page")
+    )
     assert earnings["next_date"] is None
     assert earnings["sources_failed"] == ["calendar", "earnings_dates"]
 
 
-@pytest.mark.asyncio
 async def test_r3_verified_empty_has_no_failed_sources(monkeypatch):
-    ticker = FakeTicker(calendar={}, earnings_dates=None)
-    earnings = await _earnings(monkeypatch, ticker)
+    earnings = await _earnings(monkeypatch)
     assert earnings["next_date"] is None
     assert earnings["sources_failed"] == []
+    assert earnings["verification"] == "verified_none"
 
 
-@pytest.mark.asyncio
-async def test_r4_t5_vs_t6_boundary_via_earnings_dates(monkeypatch):
-    # T-5: 2026-07-20; T-6: 2026-07-21. earnings_dates is the resolving source.
-    for target, expected_days in (("2026-07-20", 5), ("2026-07-21", 6)):
-        idx = pd.DatetimeIndex([pd.Timestamp(f"{target} 16:30", tz="America/New_York")])
-        df = pd.DataFrame({"EPS Estimate": [1.0]}, index=idx)
-        ticker = FakeTicker(calendar={}, earnings_dates=df)
-        earnings = await _earnings(monkeypatch, ticker)
-        assert earnings["next_date"] == target
-        assert earnings["days_until"] == expected_days  # OLD: one less (wall-clock floor)
+@pytest.mark.parametrize(("target", "expected_days"), [("2026-07-20", 5), ("2026-07-21", 6)])
+async def test_r4_t5_vs_t6_boundary_via_earnings_dates(monkeypatch, target, expected_days):
+    when = _ET.localize(datetime.fromisoformat(f"{target} 16:30"))
+    earnings = await _earnings(monkeypatch, pg=_page_at(when))
+    assert earnings["next_date"] == target
+    assert earnings["days_until"] == expected_days  # OLD: one less (wall-clock floor)
 
 
-@pytest.mark.asyncio
-async def test_r13_dataframe_calendar_still_supported(monkeypatch):
-    cal = pd.DataFrame({0: [pd.Timestamp("2026-07-20")]}, index=["Earnings Date"])
-    ticker = FakeTicker(calendar=cal)
-    earnings = await _earnings(monkeypatch, ticker)
-    assert earnings["next_date"] == "2026-07-20"
-    assert earnings["sources_failed"] == []
-
-
-@pytest.mark.asyncio
 async def test_r17_invalid_info_timestamp_marks_info_failed(monkeypatch):
-    ticker = FakeTicker(calendar={}, earnings_dates=None)
-    earnings = await _earnings(
-        monkeypatch, ticker, info={"earningsTimestamp": "not-a-number"},
-    )
+    earnings = await _earnings(monkeypatch, info={"earningsTimestamp": "not-a-number"})
     assert earnings["next_date"] is None
     assert "info" in earnings["sources_failed"]
 
 
-@pytest.mark.asyncio
 async def test_info_fetch_raise_marks_info_failed(monkeypatch):
-    ticker = FakeTicker(calendar={}, earnings_dates=None)
-    earnings = await _earnings(monkeypatch, ticker, info_raises=True)
+    earnings = await _earnings(monkeypatch, info_raises=True)
     assert earnings["sources_failed"] == ["info"]
 
 
-@pytest.mark.asyncio
 async def test_r18_naive_earnings_timestamp_same_day_is_day_zero(monkeypatch):
-    # Naive index entries (no tzinfo) must be treated as exchange-local (ET)
-    # wall time. Localizing as UTC first shifts a pre-~04:00 ET wall time back
-    # one calendar day, so 00:30 on earnings day would resolve to yesterday
-    # and be filtered out by the `row_date >= cutoff` check below.
-    idx = pd.DatetimeIndex([pd.Timestamp("2026-07-15 00:30")])  # naive
-    df = pd.DataFrame({"EPS Estimate": [1.0]}, index=idx)
-    ticker = FakeTicker(calendar={}, earnings_dates=df)
-    earnings = await _earnings(monkeypatch, ticker)
+    # Naive timestamps are ET wall time. Localizing as UTC first would shift a
+    # pre-~04:00 ET wall time back one calendar day, so 00:30 on earnings day
+    # would resolve to yesterday and be filtered out.
+    earnings = await _earnings(monkeypatch, pg=_page_at(datetime(2026, 7, 15, 0, 30)))
     assert earnings["next_date"] == "2026-07-15"  # OLD: None (shifted to 07-14, filtered out)
     assert earnings["days_until"] == 0
 
 
-@pytest.mark.asyncio
 async def test_r19_naive_earnings_timestamp_t5_boundary(monkeypatch):
-    idx = pd.DatetimeIndex([pd.Timestamp("2026-07-20 16:30")])  # naive
-    df = pd.DataFrame({"EPS Estimate": [1.0]}, index=idx)
-    ticker = FakeTicker(calendar={}, earnings_dates=df)
-    earnings = await _earnings(monkeypatch, ticker)
+    earnings = await _earnings(monkeypatch, pg=_page_at(datetime(2026, 7, 20, 16, 30)))
     assert earnings["next_date"] == "2026-07-20"
     assert earnings["days_until"] == 5
-
-
-@pytest.mark.asyncio
-async def test_p1_invalid_dict_calendar_value_marks_calendar_failed(monkeypatch):
-    # OLD: _format_date's string branch passed "not-a-date" through unchanged
-    # on parse failure, so next_date came back truthy with status "available"
-    # and sources_failed empty -- a garbage date reached callers with no
-    # blocker. Present-but-uninterpretable must read as a source failure.
-    ticker = FakeTicker(calendar={"Earnings Date": ["not-a-date"]})
-    earnings = await _earnings(monkeypatch, ticker)
-    assert earnings["next_date"] is None  # OLD: "not-a-date"
-    assert earnings["next_date_status"] == "unavailable"  # OLD: "available"
-    assert earnings["sources_failed"] == ["calendar"]  # OLD: []
-
-
-@pytest.mark.asyncio
-async def test_p1_invalid_dataframe_calendar_value_marks_calendar_failed(monkeypatch):
-    cal = pd.DataFrame({0: ["garbage"]}, index=["Earnings Date"])
-    ticker = FakeTicker(calendar=cal)
-    earnings = await _earnings(monkeypatch, ticker)
-    assert earnings["next_date"] is None  # OLD: "garbage"
-    assert earnings["next_date_status"] == "unavailable"  # OLD: "available"
-    assert earnings["sources_failed"] == ["calendar"]  # OLD: []
-
-
-@pytest.mark.asyncio
-async def test_p2_mixed_earnings_dates_rows_marks_earnings_dates_failed(monkeypatch):
-    # OLD: the earnings_dates branch only marked the source failed when
-    # EVERY row was unparseable (rows_unparseable == rows_seen). A valid
-    # PAST row alongside one malformed row left next_date None with no
-    # failure recorded -- indistinguishable from a verified-empty result,
-    # even though the malformed row could have been the future earnings.
-    idx = pd.Index(
-        [pd.Timestamp("2026-01-15 16:30", tz="America/New_York"), "garbage-index"],
-        dtype=object,
-    )
-    df = pd.DataFrame({"EPS Estimate": [1.0, 1.0]}, index=idx)
-    ticker = FakeTicker(calendar={}, earnings_dates=df)
-    earnings = await _earnings(monkeypatch, ticker)
-    assert earnings["next_date"] is None
-    assert earnings["sources_failed"] == ["earnings_dates"]  # OLD: []
-
-
-@pytest.mark.asyncio
-async def test_p3_tz_aware_calendar_value_normalizes_to_et_date(monkeypatch):
-    # OLD: _format_date formatted tz-aware values with a bare strftime on
-    # the value's own (non-ET) wall clock, so a UTC 00:30 timestamp just
-    # after ET midnight rollover reported the UTC date/day count instead
-    # of the ET one -- shifting blackout boundaries by a day.
-    ticker = FakeTicker(calendar={"Earnings Date": [pd.Timestamp("2026-07-16 00:30", tz="UTC")]})
-    earnings = await _earnings(monkeypatch, ticker)
-    assert earnings["next_date"] == "2026-07-15"  # OLD: "2026-07-16"
-    assert earnings["days_until"] == 0  # OLD: 1
-
-
-@pytest.mark.asyncio
-async def test_p1_invalid_dividend_ex_date_no_longer_passthrough(monkeypatch):
-    # Dividends ripple: _build_dividends also calls _format_date, so the
-    # same strict-parsing fix must apply to the Ex-Dividend Date field.
-    ticker = FakeTicker(calendar={"Ex-Dividend Date": "not-a-date"})
-    result = await _events(monkeypatch, ticker)
-    assert result["dividends"]["ex_date"] is None  # OLD: "not-a-date"
-
-
-@pytest.mark.asyncio
-async def test_nat_dict_calendar_earnings_date_is_unavailable_not_crash(monkeypatch):
-    # pd.NaT is a truthy datetime subclass: isinstance(pd.NaT, datetime) is
-    # True but pd.NaT.strftime(...) raises ValueError("NaTType does not
-    # support strftime"). OLD: that ValueError propagated out of
-    # events_calendar and crashed the whole tool instead of degrading to
-    # sources_failed.
-    ticker = FakeTicker(calendar={"Earnings Date": [pd.NaT]})
-    earnings = await _earnings(monkeypatch, ticker)  # OLD: raised ValueError
-    assert earnings["next_date"] is None
-    assert earnings["next_date_status"] == "unavailable"
-    assert earnings["sources_failed"] == ["calendar"]
-
-
-@pytest.mark.asyncio
-async def test_nat_dataframe_calendar_earnings_date_is_unavailable_not_crash(monkeypatch):
-    # Same NaT defect via the DataFrame-shaped calendar path.
-    cal = pd.DataFrame({0: [pd.NaT]}, index=["Earnings Date"])
-    ticker = FakeTicker(calendar=cal)
-    earnings = await _earnings(monkeypatch, ticker)  # OLD: raised ValueError
-    assert earnings["next_date"] is None
-    assert earnings["next_date_status"] == "unavailable"
-    assert earnings["sources_failed"] == ["calendar"]
-
-
-@pytest.mark.asyncio
-async def test_nat_dividend_ex_date_does_not_poison_earnings_provenance(monkeypatch):
-    # A NaT Ex-Dividend Date must degrade only the dividends block; it must
-    # not crash the tool (OLD behavior) or contaminate earnings, which
-    # resolves independently from a separate, valid calendar field.
-    ticker = FakeTicker(
-        calendar={"Ex-Dividend Date": pd.NaT, "Earnings Date": ["2026-07-20"]}
-    )
-    result = await _events(monkeypatch, ticker)  # OLD: raised ValueError
-    assert result["dividends"]["ex_date"] is None
-    assert result["earnings"]["next_date"] == "2026-07-20"
-    assert result["earnings"]["sources_failed"] == []
-
-
-@pytest.mark.asyncio
-async def test_nat_only_earnings_dates_index_marks_source_failed(monkeypatch):
-    # Green pin: a NaT earnings_dates index never reaches _format_date (it
-    # takes the isinstance(idx, pd.Timestamp)-is-False str-fallback path,
-    # which already fails gracefully via date.fromisoformat("NaT")), so the
-    # existing mixed-row rule should already mark this malformed rather
-    # than crash or read as verified-empty.
-    idx = pd.DatetimeIndex([pd.NaT])
-    df = pd.DataFrame({"EPS Estimate": [1.0]}, index=idx)
-    ticker = FakeTicker(calendar={}, earnings_dates=df)
-    earnings = await _earnings(monkeypatch, ticker)
-    assert earnings["next_date"] is None
-    assert earnings["sources_failed"] == ["earnings_dates"]

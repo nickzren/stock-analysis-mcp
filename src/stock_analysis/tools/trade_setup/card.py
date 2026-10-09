@@ -91,9 +91,7 @@ def build_trade_setup_card(
         blockers.append(earnings_blocker)
     events_failed = any(tf.get("tool") == "events_calendar" for tf in tool_failures or [])
     earnings = (events_data.get("earnings") or {}) if events_data else {}
-    events_degraded = (
-        earnings.get("next_date") is None and bool(earnings.get("sources_failed"))
-    )
+    events_degraded = earnings.get("verification") == "unverifiable"
     events_unverifiable = events_failed or events_degraded
 
     setup: dict[str, Any] | None = None
@@ -109,10 +107,12 @@ def build_trade_setup_card(
             action = "no_setup"
         else:
             if events_unverifiable:
-                failed = ", ".join(earnings.get("sources_failed") or []) or "tool fetch"
                 blockers.append({
                     "id": "earnings_unverifiable",
-                    "reason": f"earnings calendar unverifiable ({failed}) — event risk unverified",
+                    "reason": (
+                        f"earnings calendar unverifiable ({_unverifiable_cause(earnings, events_failed)})"
+                        " — event risk unverified"
+                    ),
                 })
             if earnings_blackout or events_unverifiable:
                 action = "watch"
@@ -204,3 +204,13 @@ def _next_review(
         "date": add_trading_days(now.date(), DEFAULT_REVIEW_TRADING_DAYS).isoformat(),
         "reason": "setup re-check",
     }
+
+
+def _unverifiable_cause(earnings: dict[str, Any], events_failed: bool) -> str:
+    if events_failed:
+        return "tool fetch"
+    causes = [f"{name} failed" for name in earnings.get("sources_failed") or []]
+    causes += [f"{name} stale" for name in earnings.get("sources_stale") or []]
+    if (earnings.get("next_window") or {}).get("window_basis") == "assumed":
+        causes.append("estimate window assumed")
+    return ", ".join(causes) or "no verified source"

@@ -58,10 +58,9 @@
   render entry/stop/target/sizing structure and do not mix `analyze` fields into
   the card; forward-looking levels are conditions to watch, not a plan.
 - `analyze_trade_setup` caps the action at `watch` with an `earnings_unverifiable`
-  blocker when the earnings calendar cannot be fetched or a missing date is found
-  inside a successful calendar response with non-empty `sources_failed` (some
-  source failed or could not be verified); a verified-empty calendar (successful
-  response, empty `sources_failed`) avoids the blocker.
+  blocker when `events_calendar` fails or `earnings.verification` is
+  `unverifiable`; `verified_date` and `verified_none` avoid the blocker. The
+  blocker reason names the failed and stale sources and an assumed window.
 - `get_technicals` default response gained one additive `short_term` key;
   `intraday` exists only under `timeframe="swing"`. `prior_*` level fields
   exclude the current bar.
@@ -90,11 +89,24 @@
   error or malformed envelope, parse failure) or could not be verified: an
   earnings page with no table (an error page or no data) does not verify (D2).
   A verified absence -- a valid calendar envelope without earnings, an earnings
-  table with no future rows -- is NOT a failure. Calendar dates still use the
-  host time zone like yfinance did (WP2 switches to ET); the earnings page is
-  parsed with BeautifulSoup in page order (newest first), all or nothing (any
-  unparseable row fails the page), and the earliest future row wins. Naive
-  earnings timestamps are treated as exchange-local ET.
+  table with no future rows -- is NOT a failure. Calendar and info earnings
+  epochs convert to ET dates (never the host time zone, unlike
+  `Ticker.calendar`); dividend epochs are UTC midnight, so they convert to UTC
+  dates. The earnings page is parsed with BeautifulSoup in page order (newest
+  first), all or nothing (any unparseable row fails the page), and the earliest
+  future row wins. Naive earnings timestamps are treated as exchange-local ET.
+- `events_calendar` earnings verification (WP2 truth table): `verification` is
+  `verified_date` when any source has a verified future date, `verified_none`
+  when all three sources (calendar, earnings page, info `earningsTimestamp`)
+  verify no future date, else `unverifiable`. A calendar whose dates are all
+  past is stale (`sources_stale`) and does not verify. Two calendar entries are
+  an interval, disclosed as `next_window` (`window_basis` `confirmed` only when
+  `isEarningsDateEstimate` is true and info's `earningsTimestampStart/End`
+  match; otherwise `assumed`, with `metadata_conflict` when they contradict).
+  An assumed window still sets `next_date`/`days_until` (to its start, or `0`
+  while `window_active`) but never verifies on its own. `next_date` is the
+  earliest date across all sources; `candidate_dates` discloses each verified
+  source's date. `history` holds reported quarters only, newest first.
 - `get_news` adds `source_status` (`ok` | `empty` | `failed` | `unverified`),
   `source` (`news` feed or the `search` fallback) and `rejected_count` (ads and
   items without a usable publish date). The feed is read with status and

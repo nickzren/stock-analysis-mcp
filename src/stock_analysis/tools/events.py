@@ -1,7 +1,7 @@
 """Events calendar tool."""
 
 import asyncio
-import contextlib
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from time import perf_counter
 from typing import Any
@@ -9,7 +9,12 @@ from typing import Any
 import pandas as pd
 import pytz
 
-from stock_analysis.data.provider import read_attribute, read_calendar_events, read_earnings_page
+from stock_analysis.data.provider import (
+    is_epoch,
+    read_attribute,
+    read_calendar_events,
+    read_earnings_page,
+)
 from stock_analysis.data.yfinance_client import fetch_info, fetch_ticker
 from stock_analysis.utils.helpers import current_price_from_info, safe_float, safe_round
 from stock_analysis.utils.provenance import (
@@ -50,20 +55,19 @@ async def events_calendar(symbol: str, _now: datetime | None = None) -> dict[str
         info = {}
         info_ok = False
 
-    (calendar, calendar_ok), (earnings_dates, earnings_dates_ok) = await asyncio.gather(
+    (calendar_events, calendar_ok), (earnings_dates, earnings_dates_ok) = await asyncio.gather(
         _read_calendar(normalized_symbol), read_earnings_dates(normalized_symbol)
     )
 
-    read_failures: set[str] = set()
-    if not calendar_ok:
-        read_failures.add("calendar")
-    if not earnings_dates_ok:
-        read_failures.add("earnings_dates")
-    if not info_ok:
-        read_failures.add("info")
-
-    earnings = _build_earnings(calendar, earnings_dates, info, now, read_failures)
-    dividends = _build_dividends(calendar, info)
+    today = now.date()
+    earnings = _build_earnings(
+        _calendar_view(calendar_events, calendar_ok, info, today),
+        _page_view(earnings_dates, earnings_dates_ok, today),
+        _info_view(info, info_ok, today),
+        earnings_dates,
+        today,
+    )
+    dividends = _build_dividends(calendar_events, info)
     splits_info = _build_splits(ticker)
     analyst = _build_analyst(info)
 
@@ -86,37 +90,14 @@ async def events_calendar(symbol: str, _now: datetime | None = None) -> dict[str
 
 
 async def _read_calendar(symbol: str) -> tuple[dict[str, Any], bool]:
-    """(calendar, ok) in yfinance's ``Ticker.calendar`` shape.
+    """(quoteSummary calendarEvents payload with raw epochs, ok).
 
     ok=False when the read failed or its envelope was invalid (WP1).
     """
     read = await read_calendar_events(symbol)
     if not read.verified:
         return {}, False
-    try:
-        return _calendar_from_events(read.payload or {}), True
-    except (TypeError, ValueError, OverflowError, OSError):
-        return {}, False
-
-
-def _host_local_date(epoch: Any) -> date:
-    """Epoch -> date in the HOST time zone, matching yfinance's ``Ticker.calendar``.
-
-    Known defect kept for parity in WP1; WP2 replaces it with explicit ET (R2.6).
-    """
-    return datetime.fromtimestamp(epoch).date()
-
-
-def _calendar_from_events(events: dict[str, Any]) -> dict[str, Any]:
-    calendar: dict[str, Any] = {}
-    if events.get("dividendDate") is not None:
-        calendar["Dividend Date"] = _host_local_date(events["dividendDate"])
-    if events.get("exDividendDate") is not None:
-        calendar["Ex-Dividend Date"] = _host_local_date(events["exDividendDate"])
-    earnings = events.get("earnings")
-    if isinstance(earnings, dict):
-        calendar["Earnings Date"] = [_host_local_date(d) for d in earnings.get("earningsDate") or []]
-    return calendar
+    return read.payload or {}, True
 
 
 async def read_earnings_dates(symbol: str) -> tuple[pd.DataFrame | None, bool]:
@@ -143,197 +124,231 @@ def _earnings_frame(rows: list[dict[str, Any]]) -> pd.DataFrame:
     )
 
 
+def _et_date(epoch: float) -> date:
+    """An earnings epoch is a real time; its date is the ET calendar date."""
+    return datetime.fromtimestamp(epoch, tz=UTC).astimezone(_ET).date()
+
+
+def _utc_date(epoch: Any) -> str | None:
+    """Yahoo sends dividend dates as UTC midnight, so their date is the UTC date."""
+    if not is_epoch(epoch):
+        return None
+    try:
+        return datetime.fromtimestamp(epoch, tz=UTC).date().isoformat()
+    except (OverflowError, OSError, ValueError):
+        return None
+
+
+@dataclass(frozen=True)
+class _Candidate:
+    """A possible next earnings date from one source. ``verified`` is False for
+    an estimate window whose interval reading is only assumed."""
+
+    source: str
+    start: date
+    end: date
+    verified: bool
+    is_estimate: bool | None
+
+
+@dataclass(frozen=True)
+class _SourceView:
+    """One source's verdict: ``ok`` (has a future date), ``none`` (verified, no
+    future date), ``stale`` (only past dates) or ``failed`` (failed or could
+    not be verified)."""
+
+    state: str
+    candidate: _Candidate | None = None
+    window: dict[str, Any] | None = None
+
+
+def _as_bool(value: Any) -> bool | None:
+    return value if isinstance(value, bool) else None
+
+
+def _info_range(info: dict[str, Any]) -> tuple[date, date] | None:
+    start, end = info.get("earningsTimestampStart"), info.get("earningsTimestampEnd")
+    if not (is_epoch(start) and is_epoch(end)):
+        return None
+    try:
+        return _et_date(start), _et_date(end)
+    except (OverflowError, OSError, ValueError):
+        return None
+
+
+def _window_basis(start: date, end: date, is_estimate: bool | None, info: dict[str, Any]) -> tuple[str, bool]:
+    """(window_basis, metadata_conflict) for a two-date calendar entry (WP2, Q2).
+
+    Confirmed only when the estimate flag says "estimate" and the info range
+    matches the entries; absent metadata is assumed; contradicting metadata is
+    assumed and flagged.
+    """
+    info_range = _info_range(info)
+    if is_estimate is False or (info_range is not None and info_range != (start, end)):
+        return "assumed", True
+    if is_estimate is True and info_range == (start, end):
+        return "confirmed", False
+    return "assumed", False
+
+
+def _calendar_view(events: dict[str, Any], ok: bool, info: dict[str, Any], today: date) -> _SourceView:
+    if not ok:
+        return _SourceView("failed")
+    earnings = events.get("earnings") or {}
+    entries = earnings.get("earningsDate") or []
+    if not entries:
+        return _SourceView("none")
+    if len(entries) > 2:
+        return _SourceView("failed")
+    try:
+        start, end = _et_date(entries[0]), _et_date(entries[-1])
+    except (TypeError, OverflowError, OSError, ValueError):
+        return _SourceView("failed")
+    if end < start:
+        return _SourceView("failed")
+    if end < today:
+        return _SourceView("stale")
+    is_estimate = _as_bool(earnings.get("isEarningsDateEstimate"))
+    if is_estimate is None:
+        is_estimate = _as_bool(info.get("isEarningsDateEstimate"))
+    if start == end:
+        return _SourceView("ok", _Candidate("calendar", start, end, True, is_estimate))
+    basis, conflict = _window_basis(start, end, is_estimate, info)
+    window = {
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "is_estimate": is_estimate,
+        "window_basis": basis,
+        "metadata_conflict": conflict,
+        "window_active": start <= today <= end,
+    }
+    return _SourceView("ok", _Candidate("calendar", start, end, basis == "confirmed", is_estimate), window)
+
+
+def _row_et_date(index: Any) -> date:
+    """Earnings-page timestamp -> ET date; naive values are ET wall time."""
+    ts = pd.Timestamp(index)
+    ts = ts.tz_convert(_ET) if ts.tzinfo is not None else ts.tz_localize(_ET)
+    return ts.date()
+
+
+def _page_view(earnings_dates: pd.DataFrame | None, ok: bool, today: date) -> _SourceView:
+    if not ok:
+        return _SourceView("failed")
+    if earnings_dates is None or earnings_dates.empty:
+        return _SourceView("none")
+    try:
+        future = [day for day in map(_row_et_date, earnings_dates.index) if day >= today]
+    except (TypeError, ValueError):
+        return _SourceView("failed")
+    if not future:
+        return _SourceView("none")
+    nearest = min(future)  # rows come newest first
+    return _SourceView("ok", _Candidate("earnings_dates", nearest, nearest, True, None))
+
+
+def _info_view(info: dict[str, Any], ok: bool, today: date) -> _SourceView:
+    if not ok:
+        return _SourceView("failed")
+    timestamp = info.get("earningsTimestamp")
+    if timestamp is None:
+        return _SourceView("none")
+    if not is_epoch(timestamp):
+        return _SourceView("failed")
+    try:
+        day = _et_date(timestamp)
+    except (OverflowError, OSError, ValueError):
+        return _SourceView("failed")
+    if day < today:
+        return _SourceView("none")
+    is_estimate = _as_bool(info.get("isEarningsDateEstimate"))
+    return _SourceView("ok", _Candidate("info_timestamp", day, day, True, is_estimate))
+
+
+_SOURCE_NAMES = ("calendar", "earnings_dates", "info")
+
+
 def _build_earnings(
-    calendar: Any,
-    earnings_dates: Any,
-    info: dict[str, Any],
-    now: datetime,
-    read_failures: set[str],
+    calendar: _SourceView,
+    page: _SourceView,
+    info: _SourceView,
+    earnings_dates: pd.DataFrame | None,
+    today: date,
 ) -> dict[str, Any]:
-    """Build earnings history and next-earnings metadata."""
+    """Next earnings date, its verification (WP2 truth table) and history.
+
+    ``next_date`` is the earliest risk date across all candidates, so an
+    assumed window still drives the blackout; ``verification`` is
+    ``verified_date`` only when a verified candidate exists.
+    """
+    views = dict(zip(_SOURCE_NAMES, (calendar, page, info), strict=True))
+    candidates = [view.candidate for view in views.values() if view.candidate]
+    nearest = min(candidates, key=lambda c: max(c.start, today), default=None)
+    next_day = max(nearest.start, today) if nearest else None
+
+    if any(c.verified for c in candidates):
+        verification = "verified_date"
+    elif all(view.state == "none" for view in views.values()):
+        verification = "verified_none"
+    else:
+        verification = "unverifiable"
+
     earnings_history, beat_count, total_with_data = _build_earnings_history(earnings_dates)
-    next_earnings_date, days_until_earnings, earnings_date_source, earnings_date_status, parse_failures = (
-        _resolve_next_earnings_date(calendar, earnings_dates, info, now)
-    )
-    sources_failed = sorted(read_failures | parse_failures)
-
-    earnings_date_status_reason = None
-    if next_earnings_date is None:
-        earnings_date_status_reason = "calendar_missing_and_no_future_earnings_dates"
-
     beat_rate = beat_count / total_with_data if total_with_data > 0 else None
 
     return {
-        "next_date": next_earnings_date,
-        "next_date_source": earnings_date_source,
-        "next_date_status": earnings_date_status,
-        "next_date_status_reason": earnings_date_status_reason if earnings_date_status == "unavailable" else None,
-        "days_until": days_until_earnings,
-        "sources_failed": sources_failed,
+        "next_date": next_day.isoformat() if next_day else None,
+        "next_date_source": nearest.source if nearest else None,
+        "next_date_status": "available" if nearest else "unavailable",
+        "next_date_status_reason": None if nearest else "calendar_missing_and_no_future_earnings_dates",
+        "next_date_is_estimate": nearest.is_estimate if nearest else None,
+        "next_window": calendar.window,
+        "days_until": (next_day - today).days if next_day else None,
+        "verification": verification,
+        "candidate_dates": {c.source: c.start.isoformat() for c in candidates if c.verified},
+        "sources_failed": [name for name, view in views.items() if view.state == "failed"],
+        "sources_stale": [name for name, view in views.items() if view.state == "stale"],
         "history": earnings_history,
         "beat_rate": safe_round(beat_rate, 2),
     }
 
 
-def _build_earnings_history(earnings_dates: Any) -> tuple[list[dict[str, Any]], int, int]:
-    """Build recent earnings history plus beat-rate counters."""
+def _build_earnings_history(earnings_dates: pd.DataFrame | None) -> tuple[list[dict[str, Any]], int, int]:
+    """Reported quarters only, newest first (up to 8), plus beat-rate counters."""
+    if earnings_dates is None or earnings_dates.empty:
+        return [], 0, 0
+    reported = [
+        (ts, row)
+        for ts, row in earnings_dates.iterrows()
+        if isinstance(ts, pd.Timestamp) and safe_float(row.get("Reported EPS")) is not None
+    ]
+    reported.sort(key=lambda item: item[0], reverse=True)
+
     earnings_history: list[dict[str, Any]] = []
     beat_count = 0
     total_with_data = 0
-
-    try:
-        if earnings_dates is not None and len(earnings_dates) > 0:
-            # earnings_dates is a DataFrame with columns like 'EPS Estimate', 'Reported EPS', etc.
-            for date, row in earnings_dates.head(8).iterrows():
-                estimate = safe_float(row.get("EPS Estimate"))
-                actual = safe_float(row.get("Reported EPS"))
-
-                surprise = None
-                if estimate is not None and actual is not None and estimate != 0:
-                    surprise = (actual - estimate) / abs(estimate)
-                    total_with_data += 1
-                    if actual > estimate:
-                        beat_count += 1
-
-                # Convert date to string
-                if isinstance(date, pd.Timestamp):
-                    date_str = date.strftime("%Y-%m-%d")
-                else:
-                    date_str = str(date)
-
-                earnings_history.append(
-                    {
-                        "date": date_str,
-                        "estimate": estimate,
-                        "actual": actual,
-                        "surprise": safe_round(surprise, 4),
-                    }
-                )
-    except Exception:
-        pass
-
+    for ts, row in reported[:8]:
+        estimate = safe_float(row.get("EPS Estimate"))
+        actual = safe_float(row.get("Reported EPS"))
+        surprise = None
+        if estimate is not None and actual is not None and estimate != 0:
+            surprise = (actual - estimate) / abs(estimate)
+            total_with_data += 1
+            if actual > estimate:
+                beat_count += 1
+        earnings_history.append(
+            {
+                "date": ts.strftime("%Y-%m-%d"),
+                "estimate": estimate,
+                "actual": actual,
+                "surprise": safe_round(surprise, 4),
+            }
+        )
     return earnings_history, beat_count, total_with_data
 
 
-def _resolve_next_earnings_date(
-    calendar: Any,
-    earnings_dates: Any,
-    info: dict[str, Any],
-    now: datetime,
-) -> tuple[str | None, int | None, str | None, str, set[str]]:
-    """Resolve the next earnings date from calendar, earnings dates, then info."""
-    next_earnings_date = None
-    days_until_earnings = None
-    earnings_date_source: str | None = None
-    earnings_date_status: str = "unavailable"
-    parse_failures: set[str] = set()
-
-    # Source 1: Calendar (most reliable when present)
-    if isinstance(calendar, dict):
-        # Calendar might have 'Earnings Date' as a list
-        earnings_date_val = calendar.get("Earnings Date")
-        if earnings_date_val:
-            if isinstance(earnings_date_val, list) and len(earnings_date_val) > 0:
-                next_earnings_date = _format_date(earnings_date_val[0])
-            else:
-                next_earnings_date = _format_date(earnings_date_val)
-            if next_earnings_date:
-                earnings_date_source = "calendar"
-                earnings_date_status = "available"
-            else:
-                parse_failures.add("calendar")
-    elif isinstance(calendar, pd.DataFrame) and len(calendar) > 0:
-        # Some versions return DataFrame
-        if "Earnings Date" in calendar.index:
-            val = calendar.loc["Earnings Date"].iloc[0]
-            next_earnings_date = _format_date(val)
-            if next_earnings_date:
-                earnings_date_source = "calendar_dataframe"
-                earnings_date_status = "available"
-            else:
-                parse_failures.add("calendar")
-    elif calendar is not None and not isinstance(calendar, pd.DataFrame):
-        parse_failures.add("calendar")
-
-    # Source 2: Fallback to earnings_dates (future dates), filtered by ET
-    # calendar date (via the injected `now`) so same-day earnings survive
-    # instead of being floored to "past."
-    if next_earnings_date is None:
-        if earnings_dates is not None and not isinstance(earnings_dates, pd.DataFrame):
-            parse_failures.add("earnings_dates")
-        elif earnings_dates is not None and len(earnings_dates) > 0:
-            cutoff = now.date()
-            rows_unparseable = 0
-            try:
-                for idx, _row in earnings_dates.iterrows():
-                    if isinstance(idx, pd.Timestamp):
-                        # Naive entries are treated as exchange-local (ET) wall
-                        # time; tz-aware entries convert to ET.
-                        ts = idx if idx.tzinfo is not None else idx.tz_localize("America/New_York")
-                        row_date = ts.tz_convert("America/New_York").date()
-                    else:
-                        try:
-                            row_date = date.fromisoformat(str(idx)[:10])
-                        except ValueError:
-                            rows_unparseable += 1
-                            continue
-                    # Earliest qualifying row, whatever the order: the earnings
-                    # page lists rows newest first.
-                    if row_date >= cutoff and (
-                        next_earnings_date is None or row_date.isoformat() < next_earnings_date
-                    ):
-                        next_earnings_date = row_date.isoformat()
-                        earnings_date_source = "earnings_dates"
-                        earnings_date_status = "available"
-            except Exception:
-                parse_failures.add("earnings_dates")
-            # A malformed row could have been the future earnings date; a
-            # resolved valid date makes malformed siblings irrelevant.
-            if next_earnings_date is None and rows_unparseable > 0:
-                parse_failures.add("earnings_dates")
-
-    # Source 3: Fallback to info earningsTimestamp (rare)
-    if next_earnings_date is None and info:
-        if not isinstance(info, dict):
-            parse_failures.add("info")
-        else:
-            info_earnings = info.get("earningsTimestamp")
-            if info_earnings:
-                try:
-                    dt = datetime.fromtimestamp(info_earnings, tz=UTC)
-                    info_date = dt.astimezone(_ET).date()
-                    if info_date >= now.date():
-                        next_earnings_date = info_date.isoformat()
-                        earnings_date_source = "info_timestamp"
-                        earnings_date_status = "available"
-                except (ValueError, TypeError, OSError, OverflowError):
-                    parse_failures.add("info")
-
-    # Compute days until earnings if we have a date
-    if next_earnings_date:
-        with contextlib.suppress(ValueError):
-            days_until_earnings = (date.fromisoformat(next_earnings_date) - now.date()).days
-
-    return (
-        next_earnings_date,
-        days_until_earnings,
-        earnings_date_source,
-        earnings_date_status,
-        parse_failures,
-    )
-
-
-def _build_dividends(calendar: Any, info: dict[str, Any]) -> dict[str, Any]:
+def _build_dividends(calendar_events: dict[str, Any], info: dict[str, Any]) -> dict[str, Any]:
     """Build dividend dates and yield fields."""
-    ex_date = None
-    pay_date = None
-
-    if isinstance(calendar, dict):
-        ex_date = _format_date(calendar.get("Ex-Dividend Date"))
-        div_date = calendar.get("Dividend Date")
-        if div_date:
-            pay_date = _format_date(div_date)
-
     # Use pre-fetched info for dividend data
     dividend_amount = safe_float(info.get("lastDividendValue"))
     annual_dividend = safe_float(info.get("dividendRate"))
@@ -343,8 +358,8 @@ def _build_dividends(calendar: Any, info: dict[str, Any]) -> dict[str, Any]:
         dividend_yield = dividend_yield / 100
 
     return {
-        "ex_date": ex_date,
-        "pay_date": pay_date,
+        "ex_date": _utc_date(calendar_events.get("exDividendDate")),
+        "pay_date": _utc_date(calendar_events.get("dividendDate")),
         "amount": dividend_amount,
         "annual": annual_dividend,
         "yield": safe_round(dividend_yield, 4),
@@ -419,40 +434,3 @@ def _build_analyst(info: dict[str, Any]) -> dict[str, Any]:
         analyst["warnings"] = [analyst_warning]
 
     return analyst
-
-
-def _format_date(value: Any) -> str | None:
-    """Format a date value to its America/New_York calendar date as YYYY-MM-DD.
-
-    Returns None when the value is missing or cannot be interpreted as a
-    date -- an uninterpretable value is never passed through unchanged, since
-    a present-but-uninterpretable date must read as a source failure upstream.
-    """
-    if value is None:
-        return None
-
-    if not isinstance(value, str):
-        try:
-            if pd.isna(value):
-                return None
-        except (TypeError, ValueError):
-            pass
-
-    if isinstance(value, str):
-        try:
-            value = pd.to_datetime(value)
-        except Exception:
-            return None
-        if pd.isna(value):
-            return None
-
-    if isinstance(value, (pd.Timestamp, datetime)):
-        # Naive values are treated as exchange-local (ET) wall time;
-        # tz-aware values convert to ET first.
-        converted = value.astimezone(_ET) if value.tzinfo is not None else value
-        return converted.strftime("%Y-%m-%d")
-
-    if isinstance(value, date):
-        return value.isoformat()
-
-    return None

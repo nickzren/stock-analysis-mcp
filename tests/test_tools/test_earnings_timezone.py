@@ -6,11 +6,11 @@ producing 4-5 hour boundary errors at the cutoff window edges.
 """
 
 import warnings
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 import pandas as pd
 
-from stock_analysis.tools.events import _resolve_next_earnings_date
+from stock_analysis.tools.events import _page_view
 from stock_analysis.tools.news import _build_recent_earnings
 
 
@@ -89,19 +89,19 @@ class TestNewsEarningsTimezone:
         assert result is None
 
 
-class TestEventsResolveNextEarningsDate:
-    """_resolve_next_earnings_date must not emit deprecation warnings.
+class TestEventsPageView:
+    """_page_view must not emit deprecation warnings.
 
-    Regression: the helper previously used datetime.utcnow(), which emits a
+    Regression: the resolver previously used datetime.utcnow(), which emits a
     DeprecationWarning. Under `pytest -W error` that warning becomes an
     exception, gets swallowed by the surrounding broad try/except, and the
-    helper silently returns `next_date=None` even when a valid future
-    earnings date is present.
+    helper silently returns no date even when a valid future earnings date is
+    present.
     """
 
     def test_no_deprecation_warning_emitted(self) -> None:
         """The helper must not trigger any DeprecationWarning under strict mode."""
-        # Far-future ET timestamp, well after the injected `now` below.
+        # Far-future ET timestamp, well after the injected `today` below.
         future_ts = pd.Timestamp("2099-01-15 16:00:00", tz="America/New_York")
         earnings_dates = pd.DataFrame(
             {"EPS Estimate": [1.5]},
@@ -110,31 +110,20 @@ class TestEventsResolveNextEarningsDate:
 
         with warnings.catch_warnings():
             warnings.simplefilter("error", DeprecationWarning)
-            next_date, _days_until, source, status, _parse_failures = _resolve_next_earnings_date(
-                calendar=None,
-                earnings_dates=earnings_dates,
-                info={},
-                now=datetime(2026, 1, 15),
-            )
+            view = _page_view(earnings_dates, True, date(2026, 1, 15))
 
-        assert next_date is not None
-        assert source == "earnings_dates"
-        assert status == "available"
+        assert view.state == "ok"
+        assert view.candidate is not None
+        assert (view.candidate.source, view.candidate.start) == ("earnings_dates", date(2099, 1, 15))
 
     def test_returns_none_when_only_past_earnings(self) -> None:
-        # Far-past timestamp, well before the injected `now` below.
+        # Far-past timestamp, well before the injected `today` below.
         past_ts = pd.Timestamp("2000-01-15 16:00:00", tz="America/New_York")
         earnings_dates = pd.DataFrame(
             {"EPS Estimate": [1.5]},
             index=pd.DatetimeIndex([past_ts]),
         )
 
-        next_date, _days_until, _source, status, _parse_failures = _resolve_next_earnings_date(
-            calendar=None,
-            earnings_dates=earnings_dates,
-            info={},
-            now=datetime(2026, 1, 15),
-        )
+        view = _page_view(earnings_dates, True, date(2026, 1, 15))
 
-        assert next_date is None
-        assert status == "unavailable"
+        assert (view.state, view.candidate) == ("none", None)

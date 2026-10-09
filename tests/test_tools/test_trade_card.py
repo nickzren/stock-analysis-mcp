@@ -141,19 +141,22 @@ class TestPrecedence:
         card = build_card(
             actionable_price=101.5,
             events_data={"earnings": {
-                "next_date": None, "days_until": None,
+                "next_date": None, "days_until": None, "verification": "unverifiable",
                 "sources_failed": ["calendar", "earnings_dates"],
             }},
         )
         assert card["action"] == "watch"
         assert "earnings_unverifiable" in blocker_ids(card)
+        reason = next(b["reason"] for b in card["blockers"] if b["id"] == "earnings_unverifiable")
+        assert "(calendar failed, earnings_dates failed)" in reason
         assert card["plan"] is None
 
     def test_r3_verified_empty_events_do_not_block(self) -> None:
         card = build_card(
             actionable_price=101.5,
             events_data={"earnings": {
-                "next_date": None, "days_until": None, "sources_failed": [],
+                "next_date": None, "days_until": None, "verification": "verified_none",
+                "sources_failed": [],
             }},
         )
         assert card["action"] == "trade_now"
@@ -161,8 +164,8 @@ class TestPrecedence:
 
     def test_p1_garbage_calendar_source_failure_caps_watch_with_unverifiable(self) -> None:
         # Post-merge fix P1: a garbage calendar date now resolves to
-        # next_date=None with sources_failed=["calendar"] (events.py strict
-        # parsing) instead of passing the garbage string through as a valid
+        # next_date=None with sources_failed=["calendar"] (provider
+        # validation) instead of passing the garbage string through as a valid
         # date. This fixture is narrower than test_r2's dual-source-failure
         # case (single failed source, not two), so it isn't a duplicate --
         # it ties this specific defect's output shape to the same watch +
@@ -170,7 +173,8 @@ class TestPrecedence:
         card = build_card(
             actionable_price=101.5,
             events_data={"earnings": {
-                "next_date": None, "days_until": None, "sources_failed": ["calendar"],
+                "next_date": None, "days_until": None, "verification": "unverifiable",
+                "sources_failed": ["calendar"],
             }},
         )
         assert card["action"] == "watch"
@@ -184,7 +188,8 @@ class TestPrecedence:
         card = build_card(
             actionable_price=101.5,
             events_data={"earnings": {
-                "next_date": "2026-07-15", "days_until": 0, "sources_failed": [],
+                "next_date": "2026-07-15", "days_until": 0, "verification": "verified_date",
+                "sources_failed": [],
             }},
         )
         assert card["action"] == "watch"

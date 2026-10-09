@@ -77,9 +77,10 @@ Any swing setup on HOOD? Account size $3000.
 `no_setup`, `avoid`, `wait_for_data`) plus an executable plan when actionable.
 `trade_now` is only possible during regular market hours with fresh data; stale,
 delayed, or unverifiable data downgrades the action and explains why in `blockers`.
-Earnings provenance is explicit: `sources_failed` distinguishes a verified
-no-earnings state from unreadable sources (which cap the card at `watch`), and
-same-day earnings count as day 0.
+Earnings provenance is explicit: `earnings.verification` distinguishes a
+verified date or a verified no-earnings state from an unverifiable one (which
+caps the card at `watch`), dates are exchange-local (ET), and same-day earnings
+count as day 0.
 
 The default report is compact and decision-focused. It still computes the full
 underlying analysis before returning the shorter investor view.

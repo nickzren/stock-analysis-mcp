@@ -16,7 +16,7 @@ import math
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Literal, TypeVar
+from typing import Any, Literal, TypeGuard, TypeVar
 from zoneinfo import ZoneInfo
 
 from bs4 import BeautifulSoup
@@ -187,7 +187,7 @@ def _dig(value: Any, *keys: str) -> Any:
     return value
 
 
-def _is_epoch(value: Any) -> bool:
+def is_epoch(value: Any) -> TypeGuard[float]:
     return isinstance(value, int | float) and not isinstance(value, bool) and math.isfinite(value)
 
 
@@ -206,10 +206,10 @@ def _interpret_calendar(response: Any) -> _Interpretation:
     if earnings is not None and not isinstance(earnings, dict):
         return _Interpretation("failed", error_type="malformed")
     dates = (earnings or {}).get("earningsDate")
-    if dates is not None and (not isinstance(dates, list) or not all(_is_epoch(d) for d in dates)):
+    if dates is not None and (not isinstance(dates, list) or not all(is_epoch(d) for d in dates)):
         return _Interpretation("failed", error_type="malformed")
     dividends = [events[key] for key in ("dividendDate", "exDividendDate") if events.get(key) is not None]
-    if not all(_is_epoch(value) for value in dividends):
+    if not all(is_epoch(value) for value in dividends):
         return _Interpretation("failed", error_type="malformed")
     return _Interpretation("ok" if dates or dividends else "empty", payload=events)
 
