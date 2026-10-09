@@ -124,9 +124,14 @@ def _earnings_frame(rows: list[dict[str, Any]]) -> pd.DataFrame:
     )
 
 
-def _et_date(epoch: float) -> date:
+def _et_date(epoch: Any) -> date | None:
     """An earnings epoch is a real time; its date is the ET calendar date."""
-    return datetime.fromtimestamp(epoch, tz=UTC).astimezone(_ET).date()
+    if not is_epoch(epoch):
+        return None
+    try:
+        return datetime.fromtimestamp(epoch, tz=UTC).astimezone(_ET).date()
+    except (OverflowError, OSError, ValueError):
+        return None
 
 
 def _utc_date(epoch: Any) -> str | None:
@@ -167,13 +172,9 @@ def _as_bool(value: Any) -> bool | None:
 
 
 def _info_range(info: dict[str, Any]) -> tuple[date, date] | None:
-    start, end = info.get("earningsTimestampStart"), info.get("earningsTimestampEnd")
-    if not (is_epoch(start) and is_epoch(end)):
-        return None
-    try:
-        return _et_date(start), _et_date(end)
-    except (OverflowError, OSError, ValueError):
-        return None
+    start = _et_date(info.get("earningsTimestampStart"))
+    end = _et_date(info.get("earningsTimestampEnd"))
+    return (start, end) if start and end else None
 
 
 def _window_basis(start: date, end: date, is_estimate: bool | None, info: dict[str, Any]) -> tuple[str, bool]:
@@ -200,9 +201,8 @@ def _calendar_view(events: dict[str, Any], ok: bool, info: dict[str, Any], today
         return _SourceView("none")
     if len(entries) > 2 or entries[-1] < entries[0]:
         return _SourceView("failed")
-    try:
-        start, end = _et_date(entries[0]), _et_date(entries[-1])
-    except (TypeError, OverflowError, OSError, ValueError):
+    start, end = _et_date(entries[0]), _et_date(entries[-1])
+    if start is None or end is None:
         return _SourceView("failed")
     if end < today:
         return _SourceView("stale")
@@ -235,10 +235,7 @@ def _page_view(earnings_dates: pd.DataFrame | None, ok: bool, today: date) -> _S
         return _SourceView("failed")
     if earnings_dates is None or earnings_dates.empty:
         return _SourceView("none")
-    try:
-        future = [day for day in map(_row_et_date, earnings_dates.index) if day >= today]
-    except (TypeError, ValueError):
-        return _SourceView("failed")
+    future = [day for day in map(_row_et_date, earnings_dates.index) if day >= today]
     if not future:
         return _SourceView("none")
     nearest = min(future)  # rows come newest first
@@ -251,23 +248,17 @@ def _info_view(info: dict[str, Any], ok: bool, today: date) -> _SourceView:
     timestamp = info.get("earningsTimestamp")
     if timestamp is None:
         return _SourceView("none")
-    if not is_epoch(timestamp):
+    day = _et_date(timestamp)
+    if day is None:
         return _SourceView("failed")
-    try:
-        day = _et_date(timestamp)
-    except (OverflowError, OSError, ValueError):
-        return _SourceView("failed")
-    info_range = _info_range(info)
-    is_window = info_range is not None and info_range[0] != info_range[1]
-    end = max(day, info_range[1]) if info_range and is_window else day
+    range_start, range_end = _info_range(info) or (day, day)
+    is_window = range_start != range_end
+    end = max(day, range_end) if is_window else day
     if end < today:
         return _SourceView("none")
     is_estimate = _as_bool(info.get("isEarningsDateEstimate"))
     # Info's own multi-day range is an estimate window, never a verified date.
     return _SourceView("ok", _Candidate("info_timestamp", day, end, not is_window, is_estimate))
-
-
-_SOURCE_NAMES = ("calendar", "earnings_dates", "info")
 
 
 def _build_earnings(
@@ -288,7 +279,7 @@ def _build_earnings(
         # Info and calendarEvents carry the same Yahoo record, so an info date
         # inside an unconfirmed calendar window is not independent evidence.
         info = replace(info, candidate=replace(echo, verified=False))
-    views = dict(zip(_SOURCE_NAMES, (calendar, page, info), strict=True))
+    views = {"calendar": calendar, "earnings_dates": page, "info": info}
     candidates = [view.candidate for view in views.values() if view.candidate]
     nearest = min(candidates, key=lambda c: max(c.start, today), default=None)
     next_day = max(nearest.start, today) if nearest else None

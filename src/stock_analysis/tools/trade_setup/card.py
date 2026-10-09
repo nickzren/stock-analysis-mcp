@@ -107,12 +107,10 @@ def build_trade_setup_card(
             action = "no_setup"
         else:
             if events_unverifiable:
+                cause = _unverifiable_cause(earnings, events_failed)
                 blockers.append({
                     "id": "earnings_unverifiable",
-                    "reason": (
-                        f"earnings calendar unverifiable ({_unverifiable_cause(earnings, events_failed)})"
-                        " — event risk unverified"
-                    ),
+                    "reason": f"earnings calendar unverifiable ({cause}) — event risk unverified",
                 })
             if earnings_blackout or events_unverifiable:
                 action = "watch"
