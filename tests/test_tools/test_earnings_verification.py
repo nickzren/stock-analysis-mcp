@@ -221,8 +221,13 @@ class TestWindows:
             (calendar("2026-10-20", "2026-10-24", is_estimate=False), {}, "assumed", True),
             (calendar("2026-10-20", "2026-10-24", is_estimate=True), window_info("2026-10-21", "2026-10-24"),
              "assumed", True),
+            (calendar("2026-10-20", "2026-10-24", is_estimate=True),
+             window_info("2026-10-20", "2026-10-24", is_estimate=False), "assumed", True),
+            (calendar("2026-10-20", "2026-10-24", is_estimate=True),
+             {"earningsTimestampStart": epoch("2026-10-20"), "earningsTimestampEnd": "soon"}, "assumed", False),
         ],
-        ids=["consistent", "absent", "range_absent", "contradicts_estimate_flag", "contradicts_range"],
+        ids=["consistent", "absent", "range_absent", "contradicts_estimate_flag", "contradicts_range",
+             "flags_disagree", "malformed_range"],
     )
     async def test_r2_10_window_basis(
         self, run: Callable[..., Any], cal: FakeSource, info: dict[str, Any], basis: str, conflict: bool
@@ -289,6 +294,18 @@ class TestWindows:
         assert earnings["days_until"] == 0  # the active window still drives the blackout
         assert "earnings_unverifiable" not in blocker_ids(card)
         assert "earnings_blackout" in blocker_ids(card)
+
+    async def test_card_keeps_the_window_uncertainty(self, run: Callable[..., Any]) -> None:
+        """next_earnings_date is the earliest risk date; the card must still show
+        that it comes from an assumed window and which date was verified."""
+        earnings = (await run(calendar("2026-10-10", "2026-10-14"), page("2026-10-30")))["earnings"]
+        event_risk = build_card(actionable_price=101.5, events_data={"earnings": earnings})["event_risk"]
+
+        assert (event_risk["next_earnings_date"], event_risk["earnings_in_days"]) == ("2026-10-10", 2)
+        assert event_risk["earnings_verification"] == "verified_date"
+        assert event_risk["verified_earnings_dates"] == {"earnings_dates": "2026-10-30"}
+        window = event_risk["earnings_window"]
+        assert (window["start"], window["end"], window["window_basis"]) == ("2026-10-10", "2026-10-14", "assumed")
 
 
 class TestTimeZones:
@@ -386,6 +403,42 @@ class TestInfo:
         assert (earnings["next_date"], earnings["days_until"]) == (next_date, days_until)
         assert earnings["verification"] == "unverifiable"
         assert {"earnings_blackout", "earnings_unverifiable"} <= blocker_ids(card)
+
+    async def test_info_range_without_timestamp_still_blacks_out(self, run: Callable[..., Any]) -> None:
+        earnings = (await run(NO_CALENDAR_DATES, NO_PAGE_DATES, window_info("2026-10-07", "2026-10-20")))["earnings"]
+        card = build_card(actionable_price=101.5, events_data={"earnings": earnings})
+
+        assert (earnings["verification"], earnings["days_until"]) == ("unverifiable", 0)
+        assert card["action"] == "watch"
+        assert {"earnings_blackout", "earnings_unverifiable"} <= blocker_ids(card)
+
+    async def test_info_range_start_wins_over_its_timestamp(self, run: Callable[..., Any]) -> None:
+        info = {**window_info("2026-10-07", "2026-10-20"), "earningsTimestamp": epoch("2026-10-20")}
+
+        earnings = (await run(NO_CALENDAR_DATES, page("2026-10-30"), info))["earnings"]
+        card = build_card(actionable_price=101.5, events_data={"earnings": earnings})
+
+        assert (earnings["verification"], earnings["days_until"]) == ("verified_date", 0)
+        window = earnings["next_window"]
+        assert (window["source"], window["start"], window["end"]) == ("info_timestamp", "2026-10-07", "2026-10-20")
+        assert card["action"] == "watch"
+        assert "earnings_blackout" in blocker_ids(card)
+
+    @pytest.mark.parametrize(
+        "bad_range",
+        [
+            {"earningsTimestampStart": epoch("2026-10-20")},
+            {"earningsTimestampStart": "soon", "earningsTimestampEnd": epoch("2026-10-24")},
+            {"earningsTimestampStart": epoch("2026-10-24"), "earningsTimestampEnd": epoch("2026-10-20")},
+        ],
+        ids=["end_missing", "start_not_epoch", "reversed"],
+    )
+    async def test_malformed_info_range_fails_info(self, run: Callable[..., Any], bad_range: dict[str, Any]) -> None:
+        info = {**bad_range, "earningsTimestamp": epoch("2026-10-20")}
+
+        earnings = (await run(NO_CALENDAR_DATES, NO_PAGE_DATES, info))["earnings"]
+
+        assert (earnings["sources_failed"], earnings["verification"]) == (["info"], "unverifiable")
 
     async def test_info_window_alone_does_not_verify(self, run: Callable[..., Any]) -> None:
         info = {**window_info("2026-10-20", "2026-10-24"), "earningsTimestamp": epoch("2026-10-20")}

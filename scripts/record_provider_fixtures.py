@@ -42,17 +42,23 @@ class ConsentRequiredError(BaseException):
     handler -- the recorder's per-source one or yfinance's -- can swallow it."""
 
 
+def _without_query(url: str) -> str:
+    """Consent URLs carry session identifiers in the query; never repeat them."""
+    parts = urlsplit(url)
+    return f"{parts.scheme}://{parts.hostname or ''}{parts.path}"
+
+
 def _refuse_consent_submission(method: str, url: str) -> None:
     lowered = url.lower()
     host = urlsplit(lowered).hostname or ""
     submitting = any(fragment in lowered for fragment in _CONSENT_SUBMISSION_FRAGMENTS)
     if submitting or (method == "POST" and host.endswith(_CONSENT_HOSTS)):
-        raise ConsentRequiredError(f"consent submission blocked before sending: {method} {url}")
+        raise ConsentRequiredError(f"consent submission blocked before sending: {method} {_without_query(url)}")
 
 
 def _abort_on_consent_form(consent_resp: Any, timeout: int) -> Any:
     """Replaces ``YfData._accept_consent_form`` during a run."""
-    raise ConsentRequiredError(f"Yahoo redirected to a consent page: {getattr(consent_resp, 'url', '')}")
+    raise ConsentRequiredError(f"Yahoo redirected to a consent page: {_without_query(str(getattr(consent_resp, 'url', '')))}")
 
 READERS = {
     "calendar": lambda symbol: yf.Ticker(symbol).calendar,

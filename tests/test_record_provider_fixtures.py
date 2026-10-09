@@ -52,6 +52,12 @@ def test_reader_errors_are_noted_not_raised(
     assert outcome.startswith("error: YFRateLimitError")
 
 
+def assert_no_session_ids(message: str, out_root: Path) -> None:
+    """The synthetic consent fixtures carry ``sessionId=SID``; it must not leak."""
+    texts = [message] + [path.read_text() for path in out_root.rglob("*") if path.is_file()]
+    assert not [text for text in texts if "sessionId" in text or "SID" in text]
+
+
 @pytest.mark.parametrize(
     ("url", "final_url"),
     [
@@ -125,9 +131,10 @@ class TestConsentGuard:
         yf_transport.route("calendar", fixture)
         yf_transport.route("news", "valid_stream")
 
-        with pytest.raises(recorder.ConsentRequiredError, match="consent page"):
+        with pytest.raises(recorder.ConsentRequiredError, match="consent page") as aborted:
             recorder.record_symbol("EXMP", tmp_path, sources=("calendar", "news"))
 
+        assert_no_session_ids(str(aborted.value), tmp_path)
         assert [call.method for call in yf_transport.calls] == ["GET"]
         assert yf_transport.calls_to("news") == []  # later sources never ran
         (run,) = (tmp_path / "EXMP").iterdir()
@@ -158,9 +165,10 @@ class TestConsentGuard:
             "https://consent.yahoo.com/v2/consent?sessionId=SID",
         )
 
-        with pytest.raises(recorder.ConsentRequiredError, match="POST https://consent.yahoo.com/v2/consent"):
+        with pytest.raises(recorder.ConsentRequiredError, match="POST https://consent.yahoo.com/v2/consent") as aborted:
             YfData._accept_consent_form(data, consent, 30)
 
+        assert_no_session_ids(str(aborted.value), tmp_path)
         assert yf_transport.calls == []
 
     def test_csrf_cookie_path_is_blocked_before_collect_consent(
@@ -189,6 +197,25 @@ class TestConsentGuard:
             recorder.record_symbols(["EXMP", "EXMQ"], tmp_path)
 
         assert [p.name for p in tmp_path.iterdir()] == ["EXMP"]
+
+    def test_main_reports_a_redirect_without_session_ids(
+        self,
+        recorder: ModuleType,
+        yf_transport: FakeSession,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        yf_transport.route("calendar", "redirected_to_consent_form")
+        monkeypatch.setattr(recorder, "READERS", {"calendar": recorder.READERS["calendar"]})
+        monkeypatch.setattr("sys.argv", ["record", "EXMP", "--out", str(tmp_path)])
+
+        with pytest.raises(SystemExit) as stopped:
+            recorder.main()
+
+        captured = capsys.readouterr()
+        assert "consent.yahoo.com/v2/collectConsent" in str(stopped.value.code)
+        assert_no_session_ids(f"{stopped.value.code}{captured.out}{captured.err}", tmp_path)
 
     def test_main_exits_with_a_clear_message(
         self, recorder: ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path

@@ -176,6 +176,9 @@ def build_trade_setup_card(
         "event_risk": {
             "earnings_in_days": int(days_until) if isinstance(days_until, (int, float)) else None,
             "next_earnings_date": str(next_date) if next_date else None,
+            "earnings_verification": earnings.get("verification"),
+            "earnings_window": earnings.get("next_window"),
+            "verified_earnings_dates": earnings.get("candidate_dates") or {},
             "expected_move_pct": em_pct,
         },
         "notes": notes,

@@ -172,24 +172,54 @@ def _as_bool(value: Any) -> bool | None:
 
 
 def _info_range(info: dict[str, Any]) -> tuple[date, date] | None:
-    start = _et_date(info.get("earningsTimestampStart"))
-    end = _et_date(info.get("earningsTimestampEnd"))
-    return (start, end) if start and end else None
+    """Info's own ``earningsTimestampStart/End`` as ET dates; None when both are absent.
+
+    ValueError when either is present but the pair is not an ordered epoch range.
+    """
+    raw_start, raw_end = info.get("earningsTimestampStart"), info.get("earningsTimestampEnd")
+    if raw_start is None and raw_end is None:
+        return None
+    if not (is_epoch(raw_start) and is_epoch(raw_end)) or raw_end < raw_start:
+        raise ValueError("malformed earnings range")
+    start, end = _et_date(raw_start), _et_date(raw_end)
+    if start is None or end is None:
+        raise ValueError("unconvertible earnings range")
+    return start, end
 
 
-def _window_basis(start: date, end: date, is_estimate: bool | None, info: dict[str, Any]) -> tuple[str, bool]:
+def _window_basis(
+    start: date, end: date, flags: tuple[bool | None, bool | None], info: dict[str, Any]
+) -> tuple[str, bool]:
     """(window_basis, metadata_conflict) for a two-date calendar entry (WP2, Q2).
 
-    Confirmed only when the estimate flag says "estimate" and the info range
-    matches the entries; absent metadata is assumed; contradicting metadata is
-    assumed and flagged.
+    ``flags`` are the calendar's and info's ``isEarningsDateEstimate``. Confirmed
+    only when every present flag says "estimate" and the info range matches the
+    entries; absent or malformed metadata is assumed; contradicting metadata
+    (including flags that disagree) is assumed and flagged.
     """
-    info_range = _info_range(info)
-    if is_estimate is False or (info_range is not None and info_range != (start, end)):
+    present = {flag for flag in flags if flag is not None}
+    try:
+        info_range = _info_range(info)
+    except ValueError:
+        return "assumed", False
+    if False in present or (info_range is not None and info_range != (start, end)):
         return "assumed", True
-    if is_estimate is True and info_range == (start, end):
+    if present == {True} and info_range == (start, end):
         return "confirmed", False
     return "assumed", False
+
+
+def _window(source: str, start: date, end: date, is_estimate: bool | None, basis: str, conflict: bool,
+            today: date) -> dict[str, Any]:
+    return {
+        "source": source,
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "is_estimate": is_estimate,
+        "window_basis": basis,
+        "metadata_conflict": conflict,
+        "window_active": start <= today <= end,
+    }
 
 
 def _calendar_view(events: dict[str, Any], ok: bool, info: dict[str, Any], today: date) -> _SourceView:
@@ -206,20 +236,12 @@ def _calendar_view(events: dict[str, Any], ok: bool, info: dict[str, Any], today
         return _SourceView("failed")
     if end < today:
         return _SourceView("stale")
-    is_estimate = _as_bool(earnings.get("isEarningsDateEstimate"))
-    if is_estimate is None:
-        is_estimate = _as_bool(info.get("isEarningsDateEstimate"))
+    flags = (_as_bool(earnings.get("isEarningsDateEstimate")), _as_bool(info.get("isEarningsDateEstimate")))
+    is_estimate = flags[0] if flags[0] is not None else flags[1]
     if len(entries) == 1:
         return _SourceView("ok", _Candidate("calendar", start, end, True, is_estimate))
-    basis, conflict = _window_basis(start, end, is_estimate, info)
-    window = {
-        "start": start.isoformat(),
-        "end": end.isoformat(),
-        "is_estimate": is_estimate,
-        "window_basis": basis,
-        "metadata_conflict": conflict,
-        "window_active": start <= today <= end,
-    }
+    basis, conflict = _window_basis(start, end, flags, info)
+    window = _window("calendar", start, end, is_estimate, basis, conflict, today)
     return _SourceView("ok", _Candidate("calendar", start, end, basis == "confirmed", is_estimate), window)
 
 
@@ -246,19 +268,25 @@ def _info_view(info: dict[str, Any], ok: bool, today: date) -> _SourceView:
     if not ok:
         return _SourceView("failed")
     timestamp = info.get("earningsTimestamp")
-    if timestamp is None:
-        return _SourceView("none")
     day = _et_date(timestamp)
-    if day is None:
+    if timestamp is not None and day is None:
         return _SourceView("failed")
-    range_start, range_end = _info_range(info) or (day, day)
-    is_window = range_start != range_end
-    end = max(day, range_end) if is_window else day
+    try:
+        info_range = _info_range(info)
+    except ValueError:
+        return _SourceView("failed")
+    dates = [d for d in (day, *(info_range or ())) if d is not None]
+    if not dates:
+        return _SourceView("none")
+    start, end = min(dates), max(dates)
     if end < today:
         return _SourceView("none")
     is_estimate = _as_bool(info.get("isEarningsDateEstimate"))
+    if start == end:
+        return _SourceView("ok", _Candidate("info_timestamp", start, end, True, is_estimate))
     # Info's own multi-day range is an estimate window, never a verified date.
-    return _SourceView("ok", _Candidate("info_timestamp", day, end, not is_window, is_estimate))
+    window = _window("info_timestamp", start, end, is_estimate, "assumed", is_estimate is False, today)
+    return _SourceView("ok", _Candidate("info_timestamp", start, end, False, is_estimate), window)
 
 
 def _build_earnings(
@@ -300,7 +328,7 @@ def _build_earnings(
         "next_date_status": "available" if nearest else "unavailable",
         "next_date_status_reason": None if nearest else "calendar_missing_and_no_future_earnings_dates",
         "next_date_is_estimate": nearest.is_estimate if nearest else None,
-        "next_window": calendar.window,
+        "next_window": calendar.window or info.window,
         "days_until": (next_day - today).days if next_day else None,
         "verification": verification,
         "candidate_dates": {c.source: c.start.isoformat() for c in candidates if c.verified},
