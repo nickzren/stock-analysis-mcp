@@ -1,0 +1,23 @@
+{
+  "status": 200,
+  "json": {
+    "quoteSummary": {
+      "result": [
+        {
+          "calendarEvents": {
+            "maxAge": 1,
+            "dividendDate": 1791504000,
+            "exDividendDate": 1789430400,
+            "earnings": {
+              "earningsDate": [
+                1791505800
+              ],
+              "isEarningsDateEstimate": false
+            }
+          }
+        }
+      ],
+      "error": null
+    }
+  }
+}

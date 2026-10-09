@@ -1,49 +1,26 @@
 """Characterization of the pinned yfinance over a stubbed transport (Step 1 WP0).
 
-These tests pin CURRENT library behavior, including the defects Step 1 fixes in
-WP1/WP2 (marked "Defect"). They pass on today's code. When a later work package
-changes how we read one of these sources, update the affected test there.
+These tests pin the LIBRARY's behavior, including the defects Step 1 works around
+(marked "Defect"). The app sets ``hide_exceptions=False`` at import (WP1), so the
+``yf_transport`` fixture runs in that mode; tests about yfinance's hidden-error
+mode opt into it explicitly. When a work package changes how we read one of these
+sources, update the affected test there.
 """
 
 import importlib.util
-import os
-import time
-from collections.abc import Callable, Iterator
-from datetime import date, datetime
-from zoneinfo import ZoneInfo
+from collections.abc import Callable
+from datetime import date
 
 import pytest
 import yfinance as yf
 from curl_cffi.requests.exceptions import HTTPError
-from yfinance.config import YfConfig
 from yfinance.data import YfData
 from yfinance.exceptions import YFDataException, YFRateLimitError
 
-import stock_analysis.tools.events as events
 from tests.support.transport import FakeSession, stubbed_yfinance_transport
 
 SYMBOL = "EXMP"
 EARNINGS_PAGE_URL = "https://finance.yahoo.com/calendar/earnings?symbol=EXMP&offset=0&size=25"
-
-
-@pytest.fixture
-def host_tz() -> Iterator[Callable[[str], None]]:
-    original = os.environ.get("TZ")
-
-    def set_tz(name: str) -> None:
-        os.environ["TZ"] = name
-        time.tzset()
-
-    yield set_tz
-    if original is None:
-        os.environ.pop("TZ", None)
-    else:
-        os.environ["TZ"] = original
-    time.tzset()
-
-
-def test_library_hides_exceptions_by_default() -> None:
-    assert YfConfig.debug.hide_exceptions is True
 
 
 class TestCalendar:
@@ -82,15 +59,15 @@ class TestCalendar:
         assert yf.Ticker(SYMBOL).calendar == {}
 
     @pytest.mark.parametrize("name", ["http_401", "http_503", "http_404_json"])
-    def test_http_error_is_indistinguishable_from_empty_calendar(
-        self, yf_transport: FakeSession, name: str
-    ) -> None:
-        """Defect (WP1, DL#2): a failed read returns the same {} as a valid empty one."""
-        yf_transport.route("calendar", name)
+    def test_hidden_http_error_is_indistinguishable_from_empty_calendar(self, name: str) -> None:
+        """Defect (DL#2), worked around in WP1: with errors hidden (the library
+        default), a failed read returns the same {} as a valid empty one."""
+        with stubbed_yfinance_transport(hide_exceptions=True) as session:
+            session.route("calendar", name)
 
-        assert yf.Ticker(SYMBOL).calendar == {}
-        # yfinance re-requests once with the other cookie strategy on any status >= 400.
-        assert len(yf_transport.calls_to("calendar")) == 2
+            assert yf.Ticker(SYMBOL).calendar == {}
+            # yfinance re-requests once with the other cookie strategy on any status >= 400.
+            assert len(session.calls_to("calendar")) == 2
 
     @pytest.mark.parametrize(
         ("name", "status"), [("http_401", 401), ("http_503", 503), ("http_404_json", 404)]
@@ -104,11 +81,12 @@ class TestCalendar:
 
         assert raised.value.response.status_code == status
 
-    def test_rate_limit_raises_even_when_hidden(self, yf_transport: FakeSession) -> None:
-        yf_transport.route("calendar", "http_429")
+    def test_rate_limit_raises_even_when_hidden(self) -> None:
+        with stubbed_yfinance_transport(hide_exceptions=True) as session:
+            session.route("calendar", "http_429")
 
-        with pytest.raises(YFRateLimitError):
-            _ = yf.Ticker(SYMBOL).calendar
+            with pytest.raises(YFRateLimitError):
+                _ = yf.Ticker(SYMBOL).calendar
 
     @pytest.mark.parametrize(
         ("hide", "error"), [(True, YFDataException), (False, KeyError)]
@@ -232,36 +210,3 @@ class TestEarningsPage:
 
         with pytest.raises(ImportError, match="lxml"):
             yf.Ticker(SYMBOL).get_earnings_dates()
-
-
-class TestEventsChain:
-    """End to end: how today's events tool reports these library behaviors."""
-
-    @pytest.mark.parametrize(("hide", "sources_failed"), [(True, []), (False, ["calendar"])])
-    async def test_failed_calendar_and_error_page(
-        self, monkeypatch: pytest.MonkeyPatch, hide: bool, sources_failed: list[str]
-    ) -> None:
-        """Defect (WP1/WP2, DL#2 + D2): in hidden mode a failed calendar plus an
-        earnings error page reports no source failure, i.e. looks verified-empty.
-        Showing errors alone fixes the calendar half, not the earnings page."""
-
-        async def fake_fetch_ticker(symbol: str) -> yf.Ticker:
-            return yf.Ticker(symbol)
-
-        async def fake_fetch_info(symbol: str) -> dict[str, object]:
-            return {}
-
-        monkeypatch.setattr(events, "fetch_ticker", fake_fetch_ticker)
-        monkeypatch.setattr(events, "fetch_info", fake_fetch_info)
-        monkeypatch.setattr(events, "_build_splits", lambda ticker: {"last_date": None, "last_ratio": None})
-
-        with stubbed_yfinance_transport(hide_exceptions=hide) as session:
-            session.route("calendar", "http_401")
-            session.route("earnings_page", "error_page")
-
-            result = await events.events_calendar(
-                SYMBOL, _now=datetime(2026, 10, 8, 12, 0, tzinfo=ZoneInfo("America/New_York"))
-            )
-
-        assert result["earnings"]["next_date"] is None
-        assert result["earnings"]["sources_failed"] == sources_failed

@@ -50,22 +50,35 @@ def test_data_dir_is_isolated_per_test(tmp_path: Path) -> None:
     assert resolve_data_dir() == tmp_path / "stock-analysis-data"
 
 
-def test_stubbed_transport_rejects_and_records_unrouted_requests(yf_transport: FakeSession) -> None:
+def test_stubbed_transport_rejects_and_records_unrouted_requests(
+    yf_transport: FakeSession, _block_network: list[str]
+) -> None:
     with pytest.raises(UnroutedRequestError):
         yf_transport.get(CHART_URL)
 
     assert yf_transport.unrouted == [f"GET {CHART_URL}"]
     assert yf_transport.calls == []
-    yf_transport.unrouted.clear()  # recorded as expected; don't fail on exit
+    assert _block_network == [f"stub transport: unrouted GET {CHART_URL}"]
+    _block_network.clear()  # recorded as expected; don't fail this test at teardown
 
 
-def test_swallowed_unrouted_request_fails_on_exit() -> None:
-    with (
-        pytest.raises(UnroutedRequestError, match="unrouted stub requests"),
-        stubbed_yfinance_transport() as session,
-        contextlib.suppress(UnroutedRequestError),
-    ):
-        session.get(CHART_URL)
+def test_r1_13_error_caught_outside_the_stub_still_reports_unrouted(
+    _block_network: list[str],
+) -> None:
+    """R1.13: the test sees its own error unchanged, and the unrouted request is
+    still reported to the end-of-test check."""
+
+    class TestError(Exception):
+        pass
+
+    with pytest.raises(TestError):  # noqa: SIM117 - the stub must exit via the error
+        with stubbed_yfinance_transport() as session:
+            with contextlib.suppress(UnroutedRequestError):
+                session.get(CHART_URL)
+            raise TestError
+
+    assert _block_network == [f"stub transport: unrouted GET {CHART_URL}"]
+    _block_network.clear()
 
 
 def test_stub_does_not_nest(yf_transport: FakeSession) -> None:
@@ -85,3 +98,36 @@ class TestFakeTicker:
     def test_unconfigured_attribute_is_an_error(self) -> None:
         with pytest.raises(AttributeError, match="no configured attribute 'info'"):
             _ = FakeTicker().info
+
+
+R1_13_INNER = """
+import contextlib
+
+import pytest
+
+from tests.conftest import _block_network  # noqa: F401 - the autouse guard under test
+from tests.support.transport import UnroutedRequestError, stubbed_yfinance_transport
+
+
+class InnerError(Exception):
+    pass
+
+
+def test_inner():
+    with pytest.raises(InnerError, match="original"):
+        with stubbed_yfinance_transport() as session:
+            with contextlib.suppress(UnroutedRequestError):
+                session.get("https://query2.finance.yahoo.com/v8/finance/chart/EXMP")
+            raise InnerError("original")
+"""
+
+
+def test_r1_13_unrouted_request_fails_the_test_at_teardown(pytester: pytest.Pytester) -> None:
+    """R1.13 end to end: the inner test sees its own error and passes its body,
+    then fails at teardown naming the unrouted request."""
+    pytester.makepyfile(R1_13_INNER)
+
+    result = pytester.runpytest("-p", "no:cacheprovider", "-p", "no:asyncio")
+
+    result.assert_outcomes(passed=1, errors=1)
+    result.stdout.fnmatch_lines(["*stub transport: unrouted GET*chart/EXMP*"])

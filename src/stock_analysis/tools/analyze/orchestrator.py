@@ -269,6 +269,11 @@ async def _resolve_symbol_for_analysis(raw_symbol: str) -> str:
         return normalized
 
     search_result = await symbol_search(query=raw_symbol, limit=5)
+    if search_result.get("error"):
+        raise ValueError(
+            f"Unable to resolve symbol '{raw_symbol}': symbol search unavailable "
+            f"({search_result.get('message')}). Use a tradable ticker."
+        )
     exact_match = search_result.get("exact_match")
     if isinstance(exact_match, str) and exact_match:
         return exact_match.upper().strip()
@@ -380,6 +385,19 @@ async def analyze_stock(
             tool_results[name] = result
             if isinstance(result, dict) and "data_provenance" in result:
                 data_provenance.update(result["data_provenance"])
+
+    # A failed news feed returns a normal result (WP1), so report it here the way
+    # an error dict is reported; its recent_earnings stays usable.
+    news_status = (tool_results.get("stock_news") or {}).get("source_status")
+    if news_status == "failed":
+        tool_failures.append(
+            {
+                "tool": "stock_news",
+                "error": "news_source_failed",
+                "message": "; ".join((tool_results["stock_news"] or {}).get("warnings") or []),
+                "duration_ms": round(tool_timings.get("stock_news", 0.0), 1),
+            }
+        )
 
     summary_data = tool_results.get("stock_summary") or {}
     tech_data = tool_results.get("technicals") or {}
@@ -690,7 +708,8 @@ async def analyze_stock(
         "price": tool_results.get("technicals") is not None,
         "fundamentals": tool_results.get("fundamentals_snapshot") is not None,
         "risk": tool_results.get("risk_metrics") is not None,
-        "news": tool_results.get("stock_news") is not None,
+        "news": tool_results.get("stock_news") is not None
+        and news_status not in ("failed", "unverified"),
         "events": tool_results.get("events_calendar") is not None,
         "ownership": tool_results.get("ownership_analysis") is not None,
         "options": tool_results.get("options_signals") is not None,
@@ -803,6 +822,8 @@ async def analyze_stock(
         fundamentals_status = "available"
 
     data_gaps: list[str] = []
+    if news_status == "unverified":
+        data_gaps.append("news_unverified")
 
     burn_metrics_data = fundamentals_summary.get("burn_metrics") or {}
     burn_metrics_status: str | None = burn_metrics_data.get("status")

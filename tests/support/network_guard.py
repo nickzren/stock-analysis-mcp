@@ -27,6 +27,7 @@ def blocked_request(stack: str, violations: list[str]) -> Callable[..., Any]:
 
 def violation_report(violations: list[str]) -> str:
     return (
-        "Network access attempted in tests (tests must run offline; stub the "
-        "transport with tests.support.transport):\n  " + "\n  ".join(violations)
+        "Network access or unrouted stub requests in tests (tests must run offline; "
+        "stub and route the transport with tests.support.transport):\n  "
+        + "\n  ".join(violations)
     )

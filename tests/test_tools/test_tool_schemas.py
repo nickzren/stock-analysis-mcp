@@ -25,6 +25,7 @@ from stock_analysis.tools.price_history import price_history
 from stock_analysis.tools.risk_metrics import risk_metrics
 from stock_analysis.tools.technicals import technicals
 from stock_analysis.utils.provenance import build_error_response
+from tests.support.fake_source import FakeSource
 
 orchestrator_module = importlib.import_module("stock_analysis.tools.analyze.orchestrator")
 events_module = importlib.import_module("stock_analysis.tools.events")
@@ -118,23 +119,22 @@ class _FakeNewsTicker:
 
 class _FakeEventsTicker:
     def __init__(self) -> None:
-        self.earnings_dates_access_count = 0
-        self.calendar: dict[str, object] = {}
         self.splits = pd.Series(dtype=float)
-
-    @property
-    def earnings_dates(self) -> pd.DataFrame:
-        self.earnings_dates_access_count += 1
-        return pd.DataFrame(
+        # Earnings-page rows as the provider returns them (WP1).
+        self.earnings_rows = [
             {
-                "EPS Estimate": [1.0, 1.1],
-                "Reported EPS": [1.2, None],
+                "timestamp": pd.Timestamp("2025-01-01", tz="America/New_York"),
+                "eps_estimate": 1.0,
+                "reported_eps": 1.2,
+                "surprise_pct": None,
             },
-            index=[
-                pd.Timestamp("2025-01-01", tz="America/New_York"),
-                pd.Timestamp("2099-01-01", tz="America/New_York"),
-            ],
-        )
+            {
+                "timestamp": pd.Timestamp("2099-01-01", tz="America/New_York"),
+                "eps_estimate": 1.1,
+                "reported_eps": None,
+                "surprise_pct": None,
+            },
+        ]
 
 
 def _fundamentals_info() -> dict[str, object]:
@@ -1072,6 +1072,7 @@ class TestToolResponseSchemas:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         ticker = _FakeEventsTicker()
+        earnings_page = FakeSource.ok("earnings_page", ticker.earnings_rows)
 
         async def fake_fetch_ticker(symbol: str) -> _FakeEventsTicker:
             return ticker
@@ -1081,18 +1082,23 @@ class TestToolResponseSchemas:
 
         monkeypatch.setattr(events_module, "fetch_ticker", fake_fetch_ticker)
         monkeypatch.setattr(events_module, "fetch_info", fake_fetch_info)
+        monkeypatch.setattr(events_module, "read_calendar_events", FakeSource.empty("calendar", {}))
+        monkeypatch.setattr(events_module, "read_earnings_page", earnings_page)
 
         result = await events_calendar("TEST")
 
         assert result["earnings"]["next_date"] == "2099-01-01"
-        assert ticker.earnings_dates_access_count == 1
+        assert earnings_page.calls == ["TEST"]
 
     @pytest.mark.asyncio
     async def test_stock_news_schema(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        async def fake_fetch_ticker(symbol: str) -> _FakeNewsTicker:
-            return _FakeNewsTicker()
+        ticker = _FakeNewsTicker()
 
-        monkeypatch.setattr(news_module, "fetch_ticker", fake_fetch_ticker)
+        async def fake_read_earnings_dates(symbol: str) -> tuple[pd.DataFrame, bool]:
+            return ticker.earnings_dates, True
+
+        monkeypatch.setattr(news_module, "read_news", FakeSource.ok("news", ticker.news))
+        monkeypatch.setattr(news_module, "read_earnings_dates", fake_read_earnings_dates)
         monkeypatch.setattr(news_module, "datetime", _FixedNewsDateTime)
 
         result = await stock_news("TEST", days=7)

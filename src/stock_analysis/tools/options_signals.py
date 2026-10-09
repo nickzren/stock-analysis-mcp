@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from time import perf_counter
 from typing import Any, cast
 
+from stock_analysis.data.provider import read_attribute
 from stock_analysis.data.yfinance_client import fetch_info, fetch_ticker
 from stock_analysis.utils.helpers import current_price_from_info, safe_float, safe_round
 from stock_analysis.utils.provenance import (
@@ -43,7 +44,15 @@ async def options_signals(symbol: str) -> dict[str, Any]:
             symbol=normalized_symbol,
         )
 
-    expirations = _fetch_expirations(ticker)
+    try:
+        expirations = _fetch_expirations(ticker)
+    except Exception as e:
+        # A failed read is not "no options" (WP1: failures must not read as empty).
+        return build_error_response(
+            error_type="data_unavailable",
+            message=f"Failed to fetch option expirations: {e}",
+            symbol=normalized_symbol,
+        )
     if not expirations:
         return build_error_response(
             error_type="no_options",
@@ -96,16 +105,13 @@ async def _fetch_info_or_empty(symbol: str) -> dict[str, Any]:
 
 
 def _fetch_expirations(ticker: Any) -> tuple[str, ...] | list[str]:
-    """Fetch option expirations with the existing empty fallback."""
-    try:
-        return cast(tuple[str, ...] | list[str], ticker.options)
-    except Exception:
-        return ()
+    """Fetch option expirations; a failed read raises (and evicts the Ticker)."""
+    return cast(tuple[str, ...] | list[str], read_attribute(ticker, lambda: ticker.options))
 
 
 def _fetch_option_chain(ticker: Any, expiration: str) -> tuple[Any, Any]:
     """Fetch calls and puts for an expiration."""
-    chain = ticker.option_chain(expiration)
+    chain = read_attribute(ticker, lambda: ticker.option_chain(expiration))
     return chain.calls, chain.puts
 
 

@@ -7,7 +7,7 @@
 ## Key Paths
 - `src/stock_analysis/server.py`: MCP server entrypoint
 - `src/stock_analysis/tools/`: tool implementations
-- `src/stock_analysis/data/`: yfinance client and caching
+- `src/stock_analysis/data/`: yfinance client and caching; `provider.py` reads the sources whose failures yfinance would otherwise hide
 - `src/stock_analysis/resources/`: MCP resources
 - `tests/`: schema, invariants, and utility coverage
 - `README.md`: install, usage, and public-facing behavior
@@ -27,8 +27,8 @@
 - Run `uv run mypy` when touching typed Python code or schemas. `mypy` is available via the `dev` extra in `pyproject.toml`.
 
 ## Test Characteristics
-- The suite is unit-test focused and runs offline. An autouse guard in `tests/conftest.py` fails any test that sends a request through a `curl_cffi` or `requests` session (yfinance's transport), even when app code swallows the error. It also points `STOCK_ANALYSIS_DATA_DIR` at a per-test temp dir and yfinance's cookie/tz caches at a session temp dir.
-- To test yfinance behavior itself (error suppression, caching, parsing), drive the real pinned library with only its HTTP session stubbed: the `yf_transport` fixture or `stubbed_yfinance_transport()` in `tests/support/transport.py`, with synthetic fixtures under `tests/fixtures/transport/`. `tests/support/fake_ticker.py` is an app-level fake that skips yfinance internals.
+- The suite is unit-test focused and runs offline. An autouse guard in `tests/conftest.py` fails any test that sends a request through a `curl_cffi` or `requests` session (yfinance's transport), or makes an unrouted stub request, even when app code swallows the error. It also points `STOCK_ANALYSIS_DATA_DIR` at a per-test temp dir and yfinance's cookie/tz caches at a session temp dir, disables retry sleeps, and clears provider source caches between tests.
+- To test yfinance behavior itself (error suppression, caching, parsing), drive the real pinned library with only its HTTP session stubbed: the `yf_transport` fixture or `stubbed_yfinance_transport()` in `tests/support/transport.py`, with synthetic fixtures under `tests/fixtures/transport/`. `tests/support/fake_ticker.py` is an app-level fake that skips yfinance internals; `tests/support/fake_source.py` (`FakeSource`) stands in for one `provider` read in tool-level tests.
 - `tests/test_yfinance_transport_contract.py` pins current library behavior, including known defects; a change that alters how a source is read updates those tests deliberately.
 - `scripts/record_provider_fixtures.py` records real responses (manual, networked) to the gitignored `tests/fixtures/_recorded/`; never commit recordings.
 - Keep the suite fast enough for routine local validation.
@@ -59,9 +59,9 @@
   the card; forward-looking levels are conditions to watch, not a plan.
 - `analyze_trade_setup` caps the action at `watch` with an `earnings_unverifiable`
   blocker when the earnings calendar cannot be fetched or a missing date is found
-  inside a successful calendar response with non-empty `sources_failed` (indicating
-  some sources raised or returned uninterpretable payloads); a verified-empty
-  calendar (successful response, empty `sources_failed`) avoids the blocker.
+  inside a successful calendar response with non-empty `sources_failed` (some
+  source failed or could not be verified); a verified-empty calendar (successful
+  response, empty `sources_failed`) avoids the blocker.
 - `get_technicals` default response gained one additive `short_term` key;
   `intraday` exists only under `timeframe="swing"`. `prior_*` level fields
   exclude the current bar.
@@ -83,10 +83,37 @@
   daily-frame rules (regular two-leg vs off-hours) live in the
   `analyze_trade_setup.freshness` bullet below.
 - `events_calendar` earnings: `days_until` counts ET calendar days with day-of
-  earnings = `0` (same-day earnings count as day 0); `sources_failed` lists
-  sources whose read raised OR whose payload was present but uninterpretable
-  (`calendar` accepts dict AND DataFrame payloads); a well-formed absence is NOT
-  a failure. Naive earnings timestamps are treated as exchange-local ET.
+  earnings = `0` (same-day earnings count as day 0). The calendar
+  (quoteSummary `calendarEvents`) and the earnings page are read through
+  `data/provider.py` with HTTP status and envelope checks, not yfinance's
+  properties. `sources_failed` lists a source whose read failed (HTTP error,
+  error or malformed envelope, parse failure) or could not be verified: an
+  earnings page with no table (an error page or no data) does not verify (D2).
+  A verified absence -- a valid calendar envelope without earnings, an earnings
+  table with no future rows -- is NOT a failure. Calendar dates still use the
+  host time zone like yfinance did (WP2 switches to ET); the earnings page is
+  parsed with BeautifulSoup in page order (newest first), all or nothing (any
+  unparseable row fails the page), and the earliest future row wins. Naive
+  earnings timestamps are treated as exchange-local ET.
+- `get_news` adds `source_status` (`ok` | `empty` | `failed` | `unverified`),
+  `source` (`news` feed or the `search` fallback) and `rejected_count` (ads and
+  items without a usable publish date). The feed is read with status and
+  envelope checks and falls back to Search unless it returned items. A failed
+  or unverified feed warns instead of reporting "No news articles found";
+  `analyze` lists a failed feed in `tool_failures`, and a failed or unverified
+  feed does not count toward news coverage (`news_unverified` data gap).
+- Data layer: yfinance's `hide_exceptions` is set to `False` once, at import of
+  `data/yfinance_client.py` (never per call). Retries classify `curl_cffi`
+  HTTP status (401 once; 5xx with backoff; 429 and `YFRateLimitError` with
+  backoff and a shared cooldown; 404 never), timeouts, connection errors and
+  other transport errors; an unparseable history body is retried, not reported
+  as `invalid_symbol`. Provider reads stop retrying once backoff would exceed
+  4 s (at most three attempts), so a failing read returns `failed` inside
+  analyze's per-tool deadline, and cache only `ok`/`empty` results (calendar
+  1h, earnings page 6h, news and Search 15 min). An info quoteSummary 404 falls
+  back to the v7 quote endpoint like yfinance's hidden mode did. A `Ticker` or info cache miss clears yfinance's `cache_get`
+  LRU so the refetch does fresh I/O; a failed `Ticker` attribute read evicts
+  that Ticker. Supported range: `yfinance>=1.0,<2`.
 - `analyze_trade_setup.freshness` in regular session requires BOTH a fresh
   intraday bar and a current daily frame (`daily_bar_date >=
   daily_expected_date`, the previous completed session); daily-leg failure is

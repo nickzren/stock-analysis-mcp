@@ -151,7 +151,7 @@ If `account_size` is omitted, sizing remains percent-based. If a caller depends 
 | `get_technicals` | Technical indicators (SMA, EMA, RSI, MACD, ATR, Bollinger, Fibonacci, OBV) plus a `short_term` block (levels, gap, RVOL, compression); `timeframe="swing"` adds intraday VWAP, time-adjusted RVOL, hourly trend, and alignment with freshness disclosure. Regular-session freshness requires both a fresh intraday quote and a current daily frame; `reason_code` names any failure cause. |
 | `get_fundamentals` | Financial metrics, valuation history, analyst estimates, dividends |
 | `get_events` | Earnings dates, dividends, splits |
-| `get_news` | Recent news headlines, earnings surprise data, and structured catalyst tags |
+| `get_news` | Recent news headlines, earnings surprise data, and structured catalyst tags; `source_status` tells a quiet period (`empty`) apart from a feed that failed or could not be verified |
 | `get_ownership` | Insider transactions and institutional ownership trends |
 | `get_options_signals` | Options-derived signals (IV, put/call, unusual activity) |
 

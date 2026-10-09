@@ -1,6 +1,8 @@
 """Pytest configuration and fixtures."""
 
-from collections.abc import Iterator
+import os
+import time
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import curl_cffi.requests
@@ -9,9 +11,13 @@ import pytest
 import requests
 import yfinance as yf
 
+import tests.support.transport as transport
+from stock_analysis.data import provider, yfinance_client
 from stock_analysis.utils.validators import FetchParams
 from tests.support.network_guard import blocked_request, violation_report
 from tests.support.transport import FakeSession, stubbed_yfinance_transport
+
+pytest_plugins = ["pytester"]
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -23,12 +29,14 @@ def _isolated_yfinance_cache(tmp_path_factory: pytest.TempPathFactory) -> None:
 @pytest.fixture(autouse=True)
 def _block_network(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[str]]:
     """Fail any test that sends a request through a curl_cffi or requests session
-    (yfinance's transport), even if the error is swallowed."""
+    (yfinance's transport), or makes an unrouted stub request, even if the error
+    is swallowed."""
     violations: list[str] = []
     monkeypatch.setattr(
         curl_cffi.requests.Session, "request", blocked_request("curl_cffi", violations)
     )
     monkeypatch.setattr(requests.Session, "request", blocked_request("requests", violations))
+    monkeypatch.setattr(transport, "violation_sink", violations)
     yield violations
     if violations:
         pytest.fail(violation_report(violations), pytrace=False)
@@ -40,9 +48,42 @@ def _isolated_data_dir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("STOCK_ANALYSIS_DATA_DIR", str(tmp_path / "stock-analysis-data"))
 
 
+@pytest.fixture(autouse=True)
+def _provider_test_state(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """No real retry sleeps; no rate-limit cooldown or cached source reads leaking
+    between tests."""
+
+    async def no_sleep(delay: float) -> None:
+        return None
+
+    monkeypatch.setattr(provider, "_sleep", no_sleep)
+    monkeypatch.setattr(yfinance_client, "_sleep", no_sleep)
+    monkeypatch.setattr(yfinance_client, "_rate_limited_until", 0.0)
+    provider._source_cache.clear()
+    yield
+    provider._source_cache.clear()
+
+
+@pytest.fixture
+def host_tz() -> Iterator[Callable[[str], None]]:
+    """Set the process time zone for one test (host-local date conversions)."""
+    original = os.environ.get("TZ")
+
+    def set_tz(name: str) -> None:
+        os.environ["TZ"] = name
+        time.tzset()
+
+    yield set_tz
+    if original is None:
+        os.environ.pop("TZ", None)
+    else:
+        os.environ["TZ"] = original
+    time.tzset()
+
+
 @pytest.fixture
 def yf_transport() -> Iterator[FakeSession]:
-    """Real pinned yfinance over a stubbed transport, library-default error mode."""
+    """Real pinned yfinance over a stubbed transport, in the app's error mode."""
     with stubbed_yfinance_transport() as session:
         yield session
 

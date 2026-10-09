@@ -9,6 +9,7 @@ from typing import Any
 
 import pandas as pd
 
+from stock_analysis.data.provider import read_attribute
 from stock_analysis.data.yfinance_client import fetch_info, fetch_ticker
 from stock_analysis.utils.helpers import (
     current_price_from_info,
@@ -594,8 +595,10 @@ def _compute_valuation_history(ticker: Any, info: dict[str, Any]) -> dict[str, A
     # I/O: yfinance fetches can fail with network/parse errors. Narrow scope so any
     # compute-side bug surfaces loudly rather than being silently swallowed.
     try:
-        income_stmt = ticker.quarterly_income_stmt
-        price_hist = ticker.history(period="5y", interval="1d", auto_adjust=True)
+        income_stmt = read_attribute(ticker, lambda: ticker.quarterly_income_stmt)
+        price_hist = read_attribute(
+            ticker, lambda: ticker.history(period="5y", interval="1d", auto_adjust=True)
+        )
     except Exception as e:
         logger.debug("valuation_history fetch failed: %s", e)
         return None
@@ -695,7 +698,7 @@ def _compute_valuation_history(ticker: Any, info: dict[str, Any]) -> dict[str, A
 def _compute_fundamental_trends(ticker: Any) -> dict[str, Any] | None:
     """Compute multi-period fundamental trends from quarterly income statements."""
     try:
-        income_stmt = ticker.quarterly_income_stmt
+        income_stmt = read_attribute(ticker, lambda: ticker.quarterly_income_stmt)
     except Exception as e:
         logger.debug("fundamental_trends fetch failed: %s", e)
         return None
@@ -848,7 +851,7 @@ def _fetch_earnings_estimates(ticker: Any) -> dict[str, Any] | None:
     # transient error on one feed doesn't shadow the other.
     for attr, prefix in (("earnings_estimate", "eps"), ("revenue_estimate", "rev")):
         try:
-            est_df = getattr(ticker, attr)
+            est_df = read_attribute(ticker, lambda: getattr(ticker, attr))  # noqa: B023
         except Exception as e:
             logger.debug("earnings_estimates %s fetch failed: %s", attr, e)
             continue
@@ -858,7 +861,7 @@ def _fetch_earnings_estimates(ticker: Any) -> dict[str, Any] | None:
     # and accessing it can raise; isolate that failure so it doesn't kill the whole tool.
     forward_pe: float | None = None
     try:
-        info_attr = getattr(ticker, "info", None)
+        info_attr = read_attribute(ticker, lambda: getattr(ticker, "info", None))
     except Exception as e:
         logger.debug("earnings_estimates info fetch failed: %s", e)
         info_attr = None
@@ -936,7 +939,7 @@ def _analyze_dividend_history(ticker: Any, info: dict[str, Any]) -> dict[str, An
     far — would falsely break a multi-year increase streak.
     """
     try:
-        dividends = ticker.dividends
+        dividends = read_attribute(ticker, lambda: ticker.dividends)
     except Exception as e:
         logger.debug("dividend_history fetch failed: %s", e)
         return None
@@ -1124,11 +1127,14 @@ def _period_end_from_columns(columns: list[Any]) -> str | None:
 
 def _get_cashflow_df(ticker: Any, freq: str | None) -> pd.DataFrame | None:
     """Fetch cashflow DataFrame with yfinance fallbacks."""
-    try:
+    def read() -> pd.DataFrame | None:
         if hasattr(ticker, "get_cashflow"):
             return ticker.get_cashflow(freq=freq) if freq else ticker.get_cashflow()
         if freq == "quarterly":
             return ticker.quarterly_cashflow
         return ticker.cashflow
+
+    try:
+        return read_attribute(ticker, read)
     except Exception:
         return None

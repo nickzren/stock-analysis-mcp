@@ -47,8 +47,27 @@ def _patch(monkeypatch, ticker, info=None, info_raises=False):
             raise ConnectionError("info down")
         return info or {}
 
+    # WP1: calendar/earnings_dates come from provider reads. These tests feed the
+    # legacy Ticker.calendar / earnings_dates property shapes straight into the
+    # parse/selection layer (some, e.g. DataFrame calendars, the adapter no longer
+    # produces), so they cover _resolve_next_earnings_date, not the adapter; the
+    # adapter is covered in tests/test_provider.py.
+    async def fake_read_calendar(symbol):
+        try:
+            return ticker.calendar, True
+        except Exception:
+            return {}, False
+
+    async def fake_read_earnings_dates(symbol):
+        try:
+            return ticker.earnings_dates, True
+        except Exception:
+            return None, False
+
     monkeypatch.setattr(events_mod, "fetch_ticker", fake_fetch_ticker)
     monkeypatch.setattr(events_mod, "fetch_info", fake_fetch_info)
+    monkeypatch.setattr(events_mod, "_read_calendar", fake_read_calendar)
+    monkeypatch.setattr(events_mod, "read_earnings_dates", fake_read_earnings_dates)
 
 
 async def _events(monkeypatch, ticker, **kw):

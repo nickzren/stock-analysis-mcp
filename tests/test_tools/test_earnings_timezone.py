@@ -14,11 +14,6 @@ from stock_analysis.tools.events import _resolve_next_earnings_date
 from stock_analysis.tools.news import _build_recent_earnings
 
 
-class _TickerWithEarnings:
-    def __init__(self, frame: pd.DataFrame) -> None:
-        self.earnings_dates = frame
-
-
 class TestNewsEarningsTimezone:
     """_build_recent_earnings must convert tz-aware timestamps to UTC."""
 
@@ -36,7 +31,7 @@ class TestNewsEarningsTimezone:
             index=pd.DatetimeIndex([earnings_ts]),
         )
 
-        result = _build_recent_earnings(_TickerWithEarnings(frame), cutoff_date=cutoff, now=now)
+        result = _build_recent_earnings(frame, cutoff_date=cutoff, now=now)
 
         assert result is not None
         assert result["eps_estimate"] == 1.5
@@ -57,7 +52,7 @@ class TestNewsEarningsTimezone:
             index=pd.DatetimeIndex([earnings_ts]),
         )
 
-        result = _build_recent_earnings(_TickerWithEarnings(frame), cutoff_date=cutoff, now=now)
+        result = _build_recent_earnings(frame, cutoff_date=cutoff, now=now)
 
         assert result is not None
 
@@ -73,7 +68,7 @@ class TestNewsEarningsTimezone:
             index=pd.DatetimeIndex([earnings_ts]),
         )
 
-        result = _build_recent_earnings(_TickerWithEarnings(frame), cutoff_date=cutoff, now=now)
+        result = _build_recent_earnings(frame, cutoff_date=cutoff, now=now)
 
         assert result is None
 
@@ -89,7 +84,7 @@ class TestNewsEarningsTimezone:
             index=pd.DatetimeIndex([earnings_ts]),
         )
 
-        result = _build_recent_earnings(_TickerWithEarnings(frame), cutoff_date=cutoff, now=now)
+        result = _build_recent_earnings(frame, cutoff_date=cutoff, now=now)
 
         assert result is None
 

@@ -28,7 +28,14 @@ ROUTES: dict[str, str] = {
     "earnings_page": "finance.yahoo.com/calendar/earnings",
     "news": "/xhr/ncp",
     "search": "/v1/finance/search",
+    "timeseries": "/ws/fundamentals-timeseries/",
+    "quote_v7": "/v7/finance/quote",
 }
+
+# Set per test by the autouse guard in tests/conftest.py. Unrouted stub requests
+# are reported there as well, so they fail the test at teardown however the stub
+# context exits -- even when the error is raised inside and caught outside it.
+violation_sink: list[str] | None = None
 
 
 def source_for_url(url: str) -> str | None:
@@ -93,8 +100,8 @@ class RecordedCall:
 class FakeSession:
     """Serves routed fixtures in order; the last fixture of a route repeats.
 
-    An unrouted request raises and is also recorded in ``unrouted``, because app
-    code may swallow the error; the context manager fails on exit if any occurred.
+    An unrouted request raises and is also recorded, in ``unrouted`` and in the
+    per-test ``violation_sink``, because app code may swallow the error.
     """
 
     def __init__(self) -> None:
@@ -121,6 +128,8 @@ class FakeSession:
         queue = self._queues.get(source) if source else None
         if source is None or not queue:
             self.unrouted.append(f"{method} {url}")
+            if violation_sink is not None:
+                violation_sink.append(f"stub transport: unrouted {method} {url}")
             raise UnroutedRequestError(f"unrouted {method} {url}")
         self.calls.append(RecordedCall(url, source))
         fixture = queue.pop(0) if len(queue) > 1 else queue[0]
@@ -132,9 +141,11 @@ def stubbed_yfinance_transport(*, hide_exceptions: bool | None = None) -> Iterat
     """Swap ``YfData``'s session for a ``FakeSession`` and restore it afterwards.
 
     Clears yfinance's ``cache_get`` LRU on entry and exit. ``hide_exceptions``
-    overrides yfinance's global flag for the duration (``None`` keeps the
-    library default) -- a test-only toggle, never a production pattern. Does not
-    nest: a nested stub would restore the outer fake as the "real" session.
+    overrides yfinance's global flag for the duration (``None`` keeps the app's
+    policy, set at import by ``stock_analysis.data.yfinance_client``) -- a
+    test-only toggle, never a production pattern. Does not nest: a nested stub
+    would restore the outer fake as the "real" session. Unrouted requests are
+    reported through ``violation_sink``, not on exit.
     """
     data = YfData()
     if isinstance(data._session, FakeSession):
@@ -149,8 +160,6 @@ def stubbed_yfinance_transport(*, hide_exceptions: bool | None = None) -> Iterat
         YfConfig.debug.hide_exceptions = hide_exceptions
     try:
         yield session
-        if session.unrouted:
-            raise UnroutedRequestError("unrouted stub requests:\n  " + "\n  ".join(session.unrouted))
     finally:
         data._session, data._cookie_strategy, data._cookie, data._crumb = saved
         data.__dict__.pop("_get_cookie_and_crumb", None)

@@ -1,0 +1,24 @@
+{
+  "status": 200,
+  "json": {
+    "quotes": [],
+    "news": [
+      {
+        "uuid": "s1",
+        "title": "Example Corp news via search",
+        "publisher": "Example Wire",
+        "link": "https://example.com/news/s1",
+        "providerPublishTime": 1791460000,
+        "type": "STORY"
+      },
+      {
+        "uuid": "s2",
+        "title": "Bad epoch",
+        "publisher": "Example Wire",
+        "link": "https://example.com/news/s2",
+        "providerPublishTime": 1791460000000000,
+        "type": "STORY"
+      }
+    ]
+  }
+}

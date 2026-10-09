@@ -1,5 +1,6 @@
 """Stock news tool."""
 
+import asyncio
 from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from time import perf_counter
@@ -7,14 +8,12 @@ from typing import Any, cast
 
 import pandas as pd
 
-from stock_analysis.data.yfinance_client import fetch_ticker
+from stock_analysis.data.provider import read_news
+from stock_analysis.tools.events import read_earnings_dates
 from stock_analysis.utils.helpers import safe_float, safe_round
 from stock_analysis.utils.provenance import (
-    FetchError,
-    build_error_response,
     build_meta,
     build_provenance,
-    fetch_or_error,
     utcnow_isoformat_z,
 )
 from stock_analysis.utils.sanitize import sanitize_text
@@ -93,35 +92,32 @@ async def stock_news(symbol: str, days: int = 7) -> dict[str, Any]:
     start_time = perf_counter()
     normalized_symbol = symbol.upper().strip()
 
-    try:
-        ticker = await fetch_or_error(fetch_ticker(symbol), symbol)
-    except FetchError as fe:
-        return fe.response
-
-    # Get news
-    try:
-        news_data = ticker.news
-    except Exception as e:
-        return build_error_response(
-            error_type="data_unavailable",
-            message=f"Failed to fetch news: {e}",
-            symbol=symbol,
-        )
-
-    # Empty news is valid - just return empty list, don't error
-    if not news_data:
-        news_data = []
+    news_read, (earnings_dates, _) = await asyncio.gather(
+        read_news(normalized_symbol), read_earnings_dates(normalized_symbol)
+    )
+    items = news_read.payload or []
+    if news_read.source == "search":
+        items = [_search_item_as_story(item) for item in items]
 
     now = datetime.now(UTC).replace(tzinfo=None)
     cutoff_date = now - timedelta(days=days)
-    articles = _parse_articles(news_data, cutoff_date)
-    recent_earnings = _build_recent_earnings(ticker, cutoff_date, now)
+    articles, parse_rejected = _parse_articles(items, cutoff_date)
+    # Feed-level rejections (ads) plus items without a usable publish date.
+    rejected_count = news_read.rejected_count + parse_rejected
+    raw_count = len(items) + news_read.rejected_count
+    recent_earnings = _build_recent_earnings(earnings_dates, cutoff_date, now)
     sentiment_summary = _build_sentiment_summary(articles, now)
     catalyst_intelligence = _build_catalyst_intelligence(articles)
 
-    # Build warnings
+    # A failed or unverifiable feed must not read like a quiet news period.
     warnings: list[str] = []
-    if len(articles) == 0:
+    if news_read.status == "failed":
+        warnings.append(f"News feed unavailable ({news_read.error_type})")
+    elif news_read.status == "unverified":
+        warnings.append(f"News feed could not be verified ({news_read.error_type})")
+    elif raw_count and rejected_count == raw_count:
+        warnings.append("all_items_rejected: no feed item was a usable story (ad or missing publish date)")
+    elif len(articles) == 0:
         warnings.append(f"No news articles found in the past {days} days")
 
     duration_ms = (perf_counter() - start_time) * 1000
@@ -136,6 +132,9 @@ async def stock_news(symbol: str, days: int = 7) -> dict[str, Any]:
         },
         "symbol": normalized_symbol,
         "period_days": days,
+        "source_status": news_read.status,
+        "source": news_read.source,
+        "rejected_count": rejected_count,
         "article_count": len(articles),
         "articles": articles,
         "sentiment": sentiment_summary,
@@ -145,34 +144,61 @@ async def stock_news(symbol: str, days: int = 7) -> dict[str, Any]:
     }
 
 
-def _parse_articles(news_data: list[dict[str, Any]], cutoff_date: datetime) -> list[dict[str, Any]]:
-    """Parse, sanitize, score, and sort news articles."""
+def _search_item_as_story(item: dict[str, Any]) -> dict[str, Any]:
+    """Adapt a Search news item to the news-feed story shape ``_parse_articles`` reads."""
+    published = item.get("providerPublishTime")
+    pub_date = None
+    if isinstance(published, int | float):
+        # An out-of-range epoch leaves pubDate unset, so the item is rejected.
+        with suppress(ValueError, OverflowError, OSError):
+            pub_date = datetime.fromtimestamp(published, UTC).isoformat().replace("+00:00", "Z")
+    return {
+        "content": {
+            "title": item.get("title"),
+            "pubDate": pub_date,
+            "provider": {"displayName": item.get("publisher")},
+            "canonicalUrl": {"url": item.get("link")},
+        },
+    }
+
+
+def _parse_articles(
+    news_data: list[dict[str, Any]], cutoff_date: datetime
+) -> tuple[list[dict[str, Any]], int]:
+    """Parse, sanitize, score, and sort news articles.
+
+    Returns (articles, rejected_count); items without a usable publish date are
+    rejected, items older than the cutoff are simply out of range.
+    """
     articles: list[dict[str, Any]] = []
+    rejected = 0
 
     for item in news_data:
-        content = item.get("content", {})
-        pub_date_str = content.get("pubDate")
-        if not pub_date_str:
+        content = item.get("content") if isinstance(item, dict) else None
+        pub_date_str = content.get("pubDate") if isinstance(content, dict) else None
+        if not content or not pub_date_str:
+            rejected += 1
             continue
 
         try:
             pub_date = datetime.fromisoformat(pub_date_str.replace("Z", "+00:00"))
             pub_date_naive = pub_date.replace(tzinfo=None)
         except (ValueError, AttributeError):
+            rejected += 1
             continue
 
         if pub_date_naive < cutoff_date:
             continue
 
-        title = sanitize_text(content.get("title", ""), max_length=200)
-        summary = sanitize_text(content.get("summary", ""), max_length=500)
+        title = sanitize_text(content.get("title") or "", max_length=200)
+        summary = sanitize_text(content.get("summary") or "", max_length=500)
         provider = sanitize_text(
-            content.get("provider", {}).get("displayName", "Unknown"),
+            (content.get("provider") or {}).get("displayName") or "Unknown",
             max_length=50,
         )
 
         url = None
-        canonical = content.get("canonicalUrl", {})
+        canonical = content.get("canonicalUrl") or {}
         if canonical:
             url = canonical.get("url")
 
@@ -190,17 +216,16 @@ def _parse_articles(news_data: list[dict[str, Any]], cutoff_date: datetime) -> l
         })
 
     articles.sort(key=lambda x: x["date"], reverse=True)
-    return articles
+    return articles, rejected
 
 
 def _build_recent_earnings(
-    ticker: Any,
+    earnings_dates: pd.DataFrame | None,
     cutoff_date: datetime,
     now: datetime,
 ) -> dict[str, Any] | None:
     """Build the recent earnings report if it falls within the lookback window."""
     with suppress(Exception):
-        earnings_dates = ticker.earnings_dates
         if earnings_dates is None or len(earnings_dates) == 0:
             return None
 

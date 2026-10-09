@@ -6,6 +6,7 @@ from typing import Any, cast
 
 import pandas as pd
 
+from stock_analysis.data.provider import read_attribute
 from stock_analysis.data.yfinance_client import fetch_ticker
 from stock_analysis.utils.helpers import safe_float, safe_round
 from stock_analysis.utils.provenance import (
@@ -74,7 +75,7 @@ def _build_insider_activity(ticker: Any, warnings: list[str]) -> dict[str, Any]:
     }
 
     try:
-        txns = ticker.insider_transactions
+        txns = read_attribute(ticker, lambda: ticker.insider_transactions)
         if txns is None or not isinstance(txns, pd.DataFrame) or txns.empty:
             warnings.append("insider_transactions_unavailable")
             return result
@@ -116,7 +117,7 @@ def _build_institutional(ticker: Any, warnings: list[str]) -> dict[str, Any]:
     }
 
     try:
-        holders = ticker.institutional_holders
+        holders = read_attribute(ticker, lambda: ticker.institutional_holders)
         if holders is None or not isinstance(holders, pd.DataFrame) or holders.empty:
             warnings.append("institutional_holders_unavailable")
             return result
@@ -157,7 +158,7 @@ def _apply_major_holders(
 ) -> None:
     """Extract ownership percentages from major_holders and apply to results."""
     try:
-        major = ticker.major_holders
+        major = read_attribute(ticker, lambda: ticker.major_holders)
         if major is None or not isinstance(major, pd.DataFrame) or major.empty:
             warnings.append("major_holders_unavailable")
             return

@@ -1,5 +1,6 @@
 """Events calendar tool."""
 
+import asyncio
 import contextlib
 from datetime import UTC, date, datetime
 from time import perf_counter
@@ -8,6 +9,7 @@ from typing import Any
 import pandas as pd
 import pytz
 
+from stock_analysis.data.provider import read_attribute, read_calendar_events, read_earnings_page
 from stock_analysis.data.yfinance_client import fetch_info, fetch_ticker
 from stock_analysis.utils.helpers import current_price_from_info, safe_float, safe_round
 from stock_analysis.utils.provenance import (
@@ -48,8 +50,9 @@ async def events_calendar(symbol: str, _now: datetime | None = None) -> dict[str
         info = {}
         info_ok = False
 
-    calendar, calendar_ok = _fetch_calendar(ticker)
-    earnings_dates, earnings_dates_ok = _fetch_earnings_dates(ticker)
+    (calendar, calendar_ok), (earnings_dates, earnings_dates_ok) = await asyncio.gather(
+        _read_calendar(normalized_symbol), read_earnings_dates(normalized_symbol)
+    )
 
     read_failures: set[str] = set()
     if not calendar_ok:
@@ -82,20 +85,62 @@ async def events_calendar(symbol: str, _now: datetime | None = None) -> dict[str
     }
 
 
-def _fetch_calendar(ticker: Any) -> tuple[Any, bool]:
-    """(payload, ok). ok=False only when the read raised."""
+async def _read_calendar(symbol: str) -> tuple[dict[str, Any], bool]:
+    """(calendar, ok) in yfinance's ``Ticker.calendar`` shape.
+
+    ok=False when the read failed or its envelope was invalid (WP1).
+    """
+    read = await read_calendar_events(symbol)
+    if not read.verified:
+        return {}, False
     try:
-        return ticker.calendar, True
-    except Exception:
+        return _calendar_from_events(read.payload or {}), True
+    except (TypeError, ValueError, OverflowError, OSError):
         return {}, False
 
 
-def _fetch_earnings_dates(ticker: Any) -> tuple[Any, bool]:
-    """(payload, ok). ok=False only when the read raised."""
-    try:
-        return ticker.earnings_dates, True
-    except Exception:
+def _host_local_date(epoch: Any) -> date:
+    """Epoch -> date in the HOST time zone, matching yfinance's ``Ticker.calendar``.
+
+    Known defect kept for parity in WP1; WP2 replaces it with explicit ET (R2.6).
+    """
+    return datetime.fromtimestamp(epoch).date()
+
+
+def _calendar_from_events(events: dict[str, Any]) -> dict[str, Any]:
+    calendar: dict[str, Any] = {}
+    if "dividendDate" in events:
+        calendar["Dividend Date"] = _host_local_date(events["dividendDate"])
+    if "exDividendDate" in events:
+        calendar["Ex-Dividend Date"] = _host_local_date(events["exDividendDate"])
+    earnings = events.get("earnings")
+    if isinstance(earnings, dict):
+        calendar["Earnings Date"] = [_host_local_date(d) for d in earnings.get("earningsDate") or []]
+    return calendar
+
+
+async def read_earnings_dates(symbol: str) -> tuple[pd.DataFrame | None, bool]:
+    """(earnings_dates, ok) in yfinance's ``Ticker.earnings_dates`` shape, page order.
+
+    ok=False when the page failed, was malformed, or had no table: a page without
+    a table can't prove there is no data, so it does not verify (D2).
+    """
+    read = await read_earnings_page(symbol)
+    if not read.verified:
         return None, False
+    return _earnings_frame(read.payload or []), True
+
+
+def _earnings_frame(rows: list[dict[str, Any]]) -> pd.DataFrame:
+    index = pd.DatetimeIndex([row["timestamp"] for row in rows], name="Earnings Date")
+    return pd.DataFrame(
+        {
+            "EPS Estimate": [row["eps_estimate"] for row in rows],
+            "Reported EPS": [row["reported_eps"] for row in rows],
+            "Surprise(%)": [row["surprise_pct"] for row in rows],
+        },
+        index=index,
+    )
 
 
 def _build_earnings(
@@ -232,11 +277,14 @@ def _resolve_next_earnings_date(
                         except ValueError:
                             rows_unparseable += 1
                             continue
-                    if row_date >= cutoff:
+                    # Earliest qualifying row, whatever the order: the earnings
+                    # page lists rows newest first.
+                    if row_date >= cutoff and (
+                        next_earnings_date is None or row_date.isoformat() < next_earnings_date
+                    ):
                         next_earnings_date = row_date.isoformat()
                         earnings_date_source = "earnings_dates"
                         earnings_date_status = "available"
-                        break
             except Exception:
                 parse_failures.add("earnings_dates")
             # A malformed row could have been the future earnings date; a
@@ -309,7 +357,7 @@ def _build_splits(ticker: Any) -> dict[str, str | None]:
     last_split_ratio = None
 
     try:
-        splits = ticker.splits
+        splits = read_attribute(ticker, lambda: ticker.splits)
         if splits is not None and len(splits) > 0:
             last_split = splits.iloc[-1]
             last_split_date = splits.index[-1].strftime("%Y-%m-%d")

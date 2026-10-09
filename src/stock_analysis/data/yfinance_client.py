@@ -1,10 +1,12 @@
 """Async yfinance client with bounded concurrency and retry logic."""
 
 import asyncio
+import json
 import logging
 import math
 import os
 import random
+import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -14,7 +16,18 @@ from typing import Any, TypeVar
 import pandas as pd
 import pytz
 import yfinance as yf
+from curl_cffi.requests.exceptions import ConnectionError as CurlConnectionError
+from curl_cffi.requests.exceptions import HTTPError as CurlHTTPError
+from curl_cffi.requests.exceptions import Timeout as CurlTimeout
 from requests.exceptions import HTTPError
+from yfinance.config import YfConfig
+from yfinance.data import YfData
+from yfinance.exceptions import (
+    YFDataException,
+    YFInvalidPeriodError,
+    YFRateLimitError,
+    YFTickerMissingError,
+)
 
 from stock_analysis.data.cache_manager import (
     DataType,
@@ -29,6 +42,10 @@ from stock_analysis.utils.validators import FetchParams
 
 logger = logging.getLogger(__name__)
 
+# Error policy (Step 1, D1): surface yfinance read failures as exceptions instead
+# of letting them read as valid empty results. Set once here; never per call.
+YfConfig.debug.hide_exceptions = False
+
 # Bounded concurrency for yfinance calls
 _max_workers = int(os.environ.get("YF_MAX_WORKERS", "4"))
 _executor = ThreadPoolExecutor(max_workers=_max_workers)
@@ -38,6 +55,12 @@ _fetch_semaphore = asyncio.Semaphore(_max_workers)
 _max_retries = int(os.environ.get("YF_MAX_RETRIES", "3"))
 _base_delay = float(os.environ.get("YF_BASE_DELAY", "1.0"))  # seconds
 _max_delay = float(os.environ.get("YF_MAX_DELAY", "30.0"))  # seconds
+
+_V7_QUOTE_URL = "https://query1.finance.yahoo.com/v7/finance/quote"
+
+# Shared cooldown after Yahoo rate-limits any request (monotonic deadline)
+_rate_limited_until = 0.0
+_sleep = asyncio.sleep  # test seam: rate-limit cooldown wait
 
 # Shutdown coordination
 shutdown_event = asyncio.Event()
@@ -57,6 +80,11 @@ class YFinanceRetryError(Exception):
     def __init__(self, message: str, last_error: Exception | None = None):
         super().__init__(message)
         self.last_error = last_error
+
+
+class YFinanceUnreadableResponseError(RuntimeError):
+    """A read got a body yfinance could not parse (e.g. an HTML 5xx page):
+    a transient upstream failure, not a missing symbol."""
 
 
 class YFinanceIncompleteInfoError(RuntimeError):
@@ -204,6 +232,18 @@ def assess_info_completeness(info: dict[str, Any] | None) -> InfoCompleteness:
     )
 
 
+def http_status(error: BaseException) -> int | None:
+    """HTTP error status (>= 400) carried by a curl_cffi or requests HTTPError, else None."""
+    if isinstance(error, (CurlHTTPError, HTTPError)):
+        status = getattr(getattr(error, "response", None), "status_code", None)
+        return status if isinstance(status, int) and status >= 400 else None
+    return None
+
+
+def is_rate_limit(error: BaseException) -> bool:
+    return isinstance(error, YFRateLimitError) or http_status(error) == 429
+
+
 def _is_retryable_error(error: Exception) -> tuple[bool, int]:
     """
     Check if an error is retryable (transient).
@@ -217,22 +257,22 @@ def _is_retryable_error(error: Exception) -> tuple[bool, int]:
     if isinstance(error, YFinanceIncompleteInfoError):
         return (True, 2)
 
-    # HTTP 401 "Invalid Crumb" is the main one - retry once then fallback
-    if (
-        isinstance(error, HTTPError)
-        and hasattr(error, "response")
-        and error.response is not None
-    ):
-        status_code = error.response.status_code
-        if status_code == 401:
-            # 401 Invalid Crumb - retry once, then give up (fallback will handle)
+    if is_rate_limit(error) or isinstance(error, YFinanceUnreadableResponseError):
+        return (True, _max_retries)
+
+    status = http_status(error)
+    if status is not None:
+        if status == 401:
+            # 401 Invalid Crumb - retry once, then give up
             return (True, 1)
-        if status_code == 429:
-            # Rate limit - retry with full backoff
+        if 500 <= status < 600:
             return (True, _max_retries)
-        if 500 <= status_code < 600:
-            # Server errors - retry with full backoff
-            return (True, _max_retries)
+        return (False, 0)
+
+    # curl_cffi transport failures (DNSError subclasses ConnectionError); an
+    # HTTPError without an error status is one too (e.g. an incomplete transfer)
+    if isinstance(error, (CurlTimeout, CurlConnectionError, CurlHTTPError)):
+        return (True, _max_retries)
 
     # Also check for string patterns in wrapped errors
     error_str = str(error).lower()
@@ -252,6 +292,40 @@ def _is_retryable_error(error: Exception) -> tuple[bool, int]:
         return (True, _max_retries)
 
     return (False, 0)
+
+
+def note_rate_limit(delay: float) -> None:
+    """Start (or extend) the shared cooldown that every retry loop waits out."""
+    global _rate_limited_until
+    _rate_limited_until = max(_rate_limited_until, time.monotonic() + delay)
+
+
+async def wait_for_rate_limit_cooldown() -> None:
+    remaining = _rate_limited_until - time.monotonic()
+    if remaining > 0:
+        await _sleep(remaining)
+
+
+def expire_yfinance_response_cache() -> None:
+    """Drop yfinance's process-wide response LRU (``YfData.cache_get``).
+
+    Called whenever the app decides to refetch (a ticker or info cache miss, or
+    a history read that failed) so the refetch does fresh I/O. Without it, URLs
+    that embed the UTC day (statement time series, info's trailing-PEG lookup) or
+    never change (Search, the chart time-zone probe) keep serving the response
+    yfinance cached earlier, successful or failed.
+    """
+    YfData.cache_get.cache_clear()
+
+
+def evict_ticker(ticker: Any) -> None:
+    """Drop this Ticker from the cache (if still cached) so a failed read's partial
+    attribute state is not reused; a newer Ticker for the symbol is left alone."""
+    symbol = getattr(ticker, "ticker", None)
+    if isinstance(symbol, str) and symbol:
+        key = symbol.upper().strip()
+        if ticker_cache.get(key) is ticker:
+            ticker_cache.invalidate(key)
 
 
 def _calculate_backoff(attempt: int) -> float:
@@ -357,6 +431,7 @@ async def _retry_with_backoff(
     for attempt in range(max_retries + 1):
         if shutdown_event.is_set():
             raise ServerShuttingDownError("Server is shutting down")
+        await wait_for_rate_limit_cooldown()
 
         try:
             loop = asyncio.get_running_loop()
@@ -399,6 +474,12 @@ async def _retry_with_backoff(
             # Use the smaller of: global max_retries or error-specific limit
             effective_max_retries = min(max_retries, error_max_retries)
 
+            # Calculate backoff delay; every 429 starts the shared cooldown,
+            # including the one that exhausts the retries
+            delay = _calculate_backoff(attempt)
+            if is_rate_limit(e):
+                note_rate_limit(delay)
+
             # Don't retry if we've exhausted attempts for this error type
             if attempt >= effective_max_retries:
                 logger.warning(
@@ -410,8 +491,6 @@ async def _retry_with_backoff(
                     last_error=last_error,
                 ) from e
 
-            # Calculate backoff delay
-            delay = _calculate_backoff(attempt)
             total_backoff += delay
             # Update last trace entry with backoff
             retry_trace[-1].backoff_s = round(delay, 2)
@@ -419,7 +498,7 @@ async def _retry_with_backoff(
                 f"{operation_name}: Attempt {attempt + 1} failed ({e}). "
                 f"Retrying in {delay:.1f}s..."
             )
-            await asyncio.sleep(delay)
+            await _sleep(delay)
 
     # Should never reach here, but just in case
     raise YFinanceRetryError(
@@ -437,11 +516,33 @@ async def _fetch_history_retry(params: FetchParams) -> RetryResult:
         # Use per-symbol history instead of yf.download to avoid cross-symbol
         # contamination when multiple symbols are fetched concurrently.
         ticker = yf.Ticker(params.symbol)
-        df = ticker.history(
-            period=params.period,
-            interval=params.interval,
-            auto_adjust=params.adjusted,
-        )
+        try:
+            df = ticker.history(
+                period=params.period,
+                interval=params.interval,
+                auto_adjust=params.adjusted,
+            )
+        except (YFTickerMissingError, YFInvalidPeriodError) as e:
+            # yfinance raises these (errors not hidden) where it used to return
+            # an empty frame; keep them mapped to invalid_symbol.
+            raise ValueError(f"No data returned for {params.symbol}: {e}") from e
+        except (CurlHTTPError, HTTPError) as e:
+            # yfinance's time-zone probe falls back to quoteSummary, which 404s
+            # for an unknown symbol.
+            expire_yfinance_response_cache()
+            if http_status(e) == 404:
+                raise ValueError(f"No data returned for {params.symbol}: {e}") from e
+            raise
+        except (json.JSONDecodeError, YFDataException) as e:
+            # An unparseable body (e.g. an HTML 5xx page) is transient. Drop the
+            # cached response so the retry, and the next call, refetch it.
+            expire_yfinance_response_cache()
+            raise YFinanceUnreadableResponseError(
+                f"Unreadable price history response for {params.symbol}: {e}"
+            ) from e
+        except Exception:
+            expire_yfinance_response_cache()
+            raise
         if df.empty:
             raise ValueError(f"No data returned for {params.symbol}")
         # Standardize here - single place for both preview and cache
@@ -499,7 +600,17 @@ async def _fetch_info_raw(symbol: str) -> tuple[dict[str, Any], RetryResult]:
 
     def _fetch() -> tuple[dict[str, Any], InfoCompleteness]:
         ticker = yf.Ticker(normalized_symbol)
-        info = ticker.info
+        try:
+            info = ticker.info
+        except (CurlHTTPError, HTTPError) as e:
+            if http_status(e) != 404:
+                raise
+            # yfinance falls back to the v7 quote endpoint when quoteSummary
+            # fails, but only while errors are hidden; keep that fallback.
+            fallback = _info_from_quote_endpoint(normalized_symbol)
+            if fallback is None:
+                raise ValueError(f"Invalid symbol: {symbol}") from e
+            info = fallback
         if not info:
             raise ValueError(f"Invalid symbol: {symbol}")
 
@@ -516,6 +627,7 @@ async def _fetch_info_raw(symbol: str) -> tuple[dict[str, Any], RetryResult]:
             )
         return info, completeness
 
+    expire_yfinance_response_cache()
     async with _fetch_semaphore:
         retry_result = await _retry_with_backoff(
             f"fetch_info({normalized_symbol})",
@@ -528,6 +640,19 @@ async def _fetch_info_raw(symbol: str) -> tuple[dict[str, Any], RetryResult]:
         retry_result.info_completeness = completeness
 
         return info, retry_result
+
+
+def _info_from_quote_endpoint(symbol: str) -> dict[str, Any] | None:
+    """The v7 quote entry for ``symbol`` (non-null fields), or None if absent."""
+    response = YfData().get(_V7_QUOTE_URL, params={"symbols": symbol, "formatted": "false"})
+    response.raise_for_status()
+    results = (response.json().get("quoteResponse") or {}).get("result") or []
+    entry = next(
+        (r for r in results if isinstance(r, dict) and r.get("symbol") == symbol), None
+    )
+    if entry is None:
+        return None
+    return {key: value for key, value in entry.items() if value is not None}
 
 
 async def _fetch_info_with_singleflight(
@@ -653,6 +778,7 @@ async def fetch_ticker(symbol: str) -> yf.Ticker:
     def _fetch() -> yf.Ticker:
         return yf.Ticker(normalized_symbol)
 
+    expire_yfinance_response_cache()
     async with _fetch_semaphore:
         retry_result = await _retry_with_backoff(
             f"fetch_ticker({normalized_symbol})",

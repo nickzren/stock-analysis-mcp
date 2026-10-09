@@ -1,0 +1,18 @@
+{
+  "status": 200,
+  "json": {
+    "quoteResponse": {
+      "result": [
+        {
+          "symbol": "EXMP",
+          "quoteType": "ETF",
+          "shortName": "Example ETF",
+          "regularMarketPrice": 50.0,
+          "currency": "USD",
+          "trailingPE": null
+        }
+      ],
+      "error": null
+    }
+  }
+}

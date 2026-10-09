@@ -1,0 +1,352 @@
+"""Network reads that must tell a failed fetch apart from a valid empty result.
+
+Step 1 WP1. Four sources are read below yfinance's properties, through its shared
+session (``YfData``), so the HTTP status and the response envelope can be checked:
+quoteSummary ``calendarEvents``, the earnings page, the news feed (``/xhr/ncp``)
+and Search. They never go through ``YfData.cache_get`` or ``Ticker`` attribute
+caches. Each read returns a ``SourceRead``; only ``ok`` and ``empty`` results are
+cached, for ``SOURCE_TTL_SECONDS``. Property reads on a cached ``Ticker`` go through
+``read_attribute`` so a failure evicts that Ticker.
+
+Reads run inline for now; WP3 moves each attempt onto the executor.
+"""
+
+import asyncio
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Any, Literal, TypeVar
+from zoneinfo import ZoneInfo
+
+from bs4 import BeautifulSoup
+from curl_cffi.requests.exceptions import ConnectionError as CurlConnectionError
+from curl_cffi.requests.exceptions import HTTPError as CurlHTTPError
+from curl_cffi.requests.exceptions import Timeout as CurlTimeout
+from yfinance.data import YfData
+
+from stock_analysis.data.cache_manager import TTLCache
+from stock_analysis.data.yfinance_client import (
+    _calculate_backoff,
+    _is_retryable_error,
+    _max_retries,
+    evict_ticker,
+    http_status,
+    is_rate_limit,
+    note_rate_limit,
+    wait_for_rate_limit_cooldown,
+)
+from stock_analysis.utils.provenance import utcnow_isoformat_z
+
+T = TypeVar("T")
+SourceStatus = Literal["ok", "empty", "failed", "unverified"]
+
+_QUOTE_SUMMARY_URL = "https://query2.finance.yahoo.com/v10/finance/quoteSummary/{symbol}"
+_EARNINGS_PAGE_URL = "https://finance.yahoo.com/calendar/earnings"
+_NEWS_URL = "https://finance.yahoo.com/xhr/ncp?queryRef=latestNews&serviceKey=ncp_fin"
+_SEARCH_URL = "https://query2.finance.yahoo.com/v1/finance/search"
+_ET = ZoneInfo("America/New_York")
+
+SOURCE_TTL_SECONDS: dict[str, int] = {
+    "calendar": 3600,
+    "earnings_page": 21600,
+    "news": 900,
+    "search": 900,
+}
+
+# Total backoff one read may sleep. Keeps a failing read well inside analyze's
+# 10 s per-tool deadline (two reads can run back to back), so it returns a
+# structured ``failed`` instead of being cut off. With the client's 1 s base delay
+# this allows three attempts for 5xx/429/transport errors (jitter can't change it).
+_RETRY_BUDGET_SECONDS = 4.0
+_NEWS_COUNT = 10
+
+_source_cache = TTLCache()
+_sleep = asyncio.sleep  # test seam: retry backoff
+
+
+@dataclass(frozen=True)
+class SourceRead:
+    """Outcome of one source read.
+
+    ``empty`` means verified: a 2xx, a valid envelope and an explicitly empty
+    collection. ``unverified`` means success can't be proven (e.g. an earnings
+    page with no table). ``failed`` covers exceptions, HTTP >= 400, error
+    envelopes and malformed payloads.
+    """
+
+    source: str
+    status: SourceStatus
+    payload: Any = None
+    error_type: str | None = None
+    retryable: bool = False
+    attempts: int = 1
+    rejected_count: int = 0
+    fetched_at: str | None = None
+
+    @property
+    def verified(self) -> bool:
+        return self.status in ("ok", "empty")
+
+
+@dataclass(frozen=True)
+class _Interpretation:
+    status: SourceStatus
+    payload: Any = None
+    error_type: str | None = None
+    rejected_count: int = 0
+
+
+def read_attribute(ticker: Any, read: Callable[[], T]) -> T:
+    """Read a network-backed ``Ticker`` attribute; on failure evict the cached
+    Ticker (its partial attribute state must not be reused), then re-raise."""
+    try:
+        return read()
+    except Exception:
+        evict_ticker(ticker)
+        raise
+
+
+def _error_type(error: BaseException) -> str:
+    if is_rate_limit(error):
+        return "rate_limited"
+    status = http_status(error)
+    if status is not None:
+        return f"http_{status}"
+    if isinstance(error, CurlTimeout):
+        return "timeout"
+    if isinstance(error, CurlConnectionError):
+        return "connection"
+    if isinstance(error, CurlHTTPError):
+        return "transport"  # e.g. an incomplete transfer, no HTTP error status
+    return type(error).__name__
+
+
+async def _read(
+    source: str,
+    cache_key: str,
+    fetch: Callable[[], Any],
+    interpret: Callable[[Any], _Interpretation],
+) -> SourceRead:
+    cached = _source_cache.get(cache_key)
+    if cached is not None:
+        return cached  # type: ignore[no-any-return]
+
+    attempts = 0
+    slept = 0.0
+    for attempt in range(_max_retries + 1):
+        await wait_for_rate_limit_cooldown()
+        attempts += 1
+        try:
+            response = fetch()
+            response.raise_for_status()
+            break
+        except Exception as e:
+            retryable, limit = _is_retryable_error(e)
+            delay = _calculate_backoff(attempt)
+            if is_rate_limit(e):
+                note_rate_limit(delay)
+            exhausted = attempt >= min(_max_retries, limit) or slept + delay > _RETRY_BUDGET_SECONDS
+            if not retryable or exhausted:
+                return SourceRead(
+                    source,
+                    "failed",
+                    error_type=_error_type(e),
+                    retryable=retryable,
+                    attempts=attempts,
+                    fetched_at=utcnow_isoformat_z(),
+                )
+            slept += delay
+            await _sleep(delay)
+
+    try:
+        outcome = interpret(response)
+    except Exception:
+        outcome = _Interpretation("failed", error_type="malformed")
+    read = SourceRead(
+        source,
+        outcome.status,
+        payload=outcome.payload,
+        error_type=outcome.error_type,
+        attempts=attempts,
+        rejected_count=outcome.rejected_count,
+        fetched_at=utcnow_isoformat_z(),
+    )
+    if read.verified:
+        _source_cache.set(cache_key, read, SOURCE_TTL_SECONDS[source])
+    return read
+
+
+def _dig(value: Any, *keys: str) -> Any:
+    for key in keys:
+        if not isinstance(value, dict):
+            return None
+        value = value.get(key)
+    return value
+
+
+def _interpret_calendar(response: Any) -> _Interpretation:
+    summary = _dig(response.json(), "quoteSummary")
+    if not isinstance(summary, dict) or summary.get("error"):
+        return _Interpretation("failed", error_type="error_envelope")
+    result = summary.get("result")
+    events = result[0].get("calendarEvents") if isinstance(result, list) and result and isinstance(result[0], dict) else None
+    if not isinstance(events, dict):
+        return _Interpretation("failed", error_type="malformed")
+    has_content = bool(_dig(events, "earnings", "earningsDate")) or any(
+        key in events for key in ("dividendDate", "exDividendDate")
+    )
+    return _Interpretation("ok" if has_content else "empty", payload=events)
+
+
+def _parse_number(text: str) -> float | None:
+    try:
+        return float(text.replace(",", ""))
+    except ValueError:
+        return None
+
+
+def _parse_earnings_timestamp(text: str) -> datetime | None:
+    """'October 28, 2026 at 4 PM EDT' -> tz-aware ET datetime (yfinance's format)."""
+    wall, _, zone = text.rpartition(" ")
+    if zone not in ("EDT", "EST"):
+        return None
+    try:
+        return datetime.strptime(wall, "%B %d, %Y at %I %p").replace(tzinfo=_ET)
+    except ValueError:
+        return None
+
+
+def _interpret_earnings_page(response: Any) -> _Interpretation:
+    table = BeautifulSoup(response.text, "html.parser").find("table")
+    if table is None:
+        # No table could be an error page or genuinely no data (D2).
+        return _Interpretation("unverified", error_type="no_table")
+    header = [th.get_text(strip=True) for th in table.find_all("th")]
+    columns = ("Earnings Date", "EPS Estimate", "Reported EPS", "Surprise (%)")
+    if not all(column in header for column in columns):
+        return _Interpretation("failed", error_type="malformed")
+
+    # All or nothing, like yfinance's parse: a dropped row might be the nearest
+    # date, so a page with any unparseable row does not verify.
+    rows: list[dict[str, Any]] = []
+    rejected = 0
+    for tr in table.find_all("tr"):
+        cells = [td.get_text(strip=True) for td in tr.find_all("td")]
+        if not cells:
+            continue
+        record = dict(zip(header, cells, strict=False)) if len(cells) == len(header) else None
+        timestamp = _parse_earnings_timestamp(record["Earnings Date"]) if record else None
+        if record is None or timestamp is None:
+            rejected += 1
+            continue
+        rows.append({
+            "timestamp": timestamp,
+            "eps_estimate": _parse_number(record["EPS Estimate"]),
+            "reported_eps": _parse_number(record["Reported EPS"]),
+            "surprise_pct": _parse_number(record["Surprise (%)"]),
+        })
+    if rejected:
+        return _Interpretation("failed", error_type="malformed", rejected_count=rejected)
+    if not rows:
+        return _Interpretation("empty", payload=[])
+    return _Interpretation("ok", payload=rows)
+
+
+def _interpret_news(response: Any) -> _Interpretation:
+    stream = _dig(response.json(), "data", "tickerStream", "stream")
+    if not isinstance(stream, list):
+        return _Interpretation("failed", error_type="malformed")
+    if not stream:
+        return _Interpretation("empty", payload=[])
+    # Drop ads like yfinance does, but count them: an ads-only stream is not a
+    # healthy empty feed.
+    items = [item for item in stream if isinstance(item, dict) and not item.get("ad")]
+    return _Interpretation("ok", payload=items, rejected_count=len(stream) - len(items))
+
+
+def _interpret_search(response: Any) -> _Interpretation:
+    news = _dig(response.json(), "news")
+    if not isinstance(news, list):
+        return _Interpretation("failed", error_type="malformed")
+    items = [item for item in news if isinstance(item, dict)]
+    return _Interpretation("ok" if items else "empty", payload=items)
+
+
+def _normalize(symbol: str) -> str:
+    return symbol.upper().strip()
+
+
+async def read_calendar_events(symbol: str) -> SourceRead:
+    """quoteSummary ``calendarEvents`` with raw epochs (payload: the events dict)."""
+    sym = _normalize(symbol)
+    params = {"modules": "calendarEvents", "corsDomain": "finance.yahoo.com", "formatted": "false", "symbol": sym}
+    return await _read(
+        "calendar",
+        f"calendar:{sym}",
+        lambda: YfData().get(_QUOTE_SUMMARY_URL.format(symbol=sym), params=params),
+        _interpret_calendar,
+    )
+
+
+async def read_earnings_page(symbol: str) -> SourceRead:
+    """Earnings page rows in page order (newest first), timestamps in ET."""
+    sym = _normalize(symbol)
+    params = {"symbol": sym, "offset": 0, "size": 25}
+    return await _read(
+        "earnings_page",
+        f"earnings_page:{sym}",
+        lambda: YfData().get(_EARNINGS_PAGE_URL, params=params),
+        _interpret_earnings_page,
+    )
+
+
+async def read_news_feed(symbol: str) -> SourceRead:
+    """The ``/xhr/ncp`` news stream (payload: story items; ads removed and counted
+    in ``rejected_count``)."""
+    sym = _normalize(symbol)
+    body = {"serviceConfig": {"snippetCount": _NEWS_COUNT, "s": [sym]}}
+    return await _read(
+        "news",
+        f"news:{sym}",
+        lambda: YfData().post(_NEWS_URL, body=body),
+        _interpret_news,
+    )
+
+
+async def read_search_news(symbol: str) -> SourceRead:
+    """Search ``news`` items (a different schema from the news feed)."""
+    sym = _normalize(symbol)
+    params = {"q": sym, "quotesCount": 0, "newsCount": _NEWS_COUNT, "enableFuzzyQuery": False, "newsQueryId": "news_cie_vespa"}
+    return await _read(
+        "search",
+        f"search:{sym}",
+        lambda: YfData().get(_SEARCH_URL, params=params),
+        _interpret_search,
+    )
+
+
+async def read_news(symbol: str) -> SourceRead:
+    """News feed, falling back to Search unless the feed returned items.
+
+    An ``ok`` result keeps the source that produced it (``news`` or ``search``).
+    Otherwise: ``empty`` when both are verified empty, ``failed`` when both
+    failed, ``unverified`` for any other mix.
+    """
+    primary = await read_news_feed(symbol)
+    if primary.status == "ok":
+        return primary
+    fallback = await read_search_news(symbol)
+    if fallback.status == "ok":
+        return fallback
+    statuses = {primary.status, fallback.status}
+    status: SourceStatus = (
+        "empty" if statuses == {"empty"} else "failed" if statuses == {"failed"} else "unverified"
+    )
+    return SourceRead(
+        "news",
+        status,
+        payload=[],
+        error_type=primary.error_type or fallback.error_type,
+        attempts=primary.attempts + fallback.attempts,
+        fetched_at=fallback.fetched_at,
+    )

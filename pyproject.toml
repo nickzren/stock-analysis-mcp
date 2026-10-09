@@ -10,7 +10,8 @@ keywords = ["mcp", "stock", "analysis", "claude", "fastmcp"]
 
 dependencies = [
     "fastmcp>=3.0.2,<4",
-    "yfinance>=0.2.40",
+    "yfinance>=1.0,<2",
+    "beautifulsoup4>=4.11.1",
     "pandas>=2.0.0",
     "numpy>=1.24.0",
     "pytz>=2024.1",
@@ -52,3 +53,8 @@ ignore = ["E501"]
 python_version = "3.11"
 strict = true
 plugins = ["numpy.typing.mypy_plugin"]
+
+[[tool.mypy.overrides]]
+# yfinance ships no type information.
+module = ["yfinance", "yfinance.*"]
+ignore_missing_imports = true

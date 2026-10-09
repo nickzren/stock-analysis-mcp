@@ -5,9 +5,17 @@ from concurrent.futures import ThreadPoolExecutor
 from time import perf_counter
 from typing import Any
 
+from curl_cffi.requests.exceptions import RequestException
 from yfinance import Search
+from yfinance.exceptions import YFException
 
-from stock_analysis.utils.provenance import build_meta, build_provenance, utcnow_isoformat_z
+from stock_analysis.data.yfinance_client import expire_yfinance_response_cache
+from stock_analysis.utils.provenance import (
+    build_error_response,
+    build_meta,
+    build_provenance,
+    utcnow_isoformat_z,
+)
 from stock_analysis.utils.sanitize import sanitize_text
 
 # US exchanges we support
@@ -53,7 +61,16 @@ async def symbol_search(query: str, limit: int = 10) -> dict[str, Any]:
 
         return results
 
-    results = await loop.run_in_executor(_executor, _search)
+    try:
+        results = await loop.run_in_executor(_executor, _search)
+    except (ValueError, YFException, RequestException) as e:
+        # With errors not hidden, a failed Search raises (e.g. a non-JSON 5xx
+        # body). yfinance caches that response, so drop it before reporting.
+        expire_yfinance_response_cache()
+        return build_error_response(
+            error_type="data_unavailable",
+            message=f"Symbol search failed upstream: {type(e).__name__}",
+        )
 
     # Find exact match: compare normalized query to symbol
     # This fixes the issue where first result != exact ticker match
