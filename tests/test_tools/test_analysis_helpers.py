@@ -7,17 +7,6 @@ from stock_analysis.tools.analyze.decision_context import build_relative_perform
 from stock_analysis.tools.fundamentals import _compute_valuation_history
 
 
-class _FakeTicker:
-    """Minimal ticker stub for fundamentals helper tests."""
-
-    def __init__(self, income_stmt: pd.DataFrame, history_df: pd.DataFrame) -> None:
-        self.quarterly_income_stmt = income_stmt
-        self._history_df = history_df
-
-    def history(self, period: str, interval: str, auto_adjust: bool) -> pd.DataFrame:
-        return self._history_df
-
-
 def test_build_relative_performance_uses_benchmark_returns() -> None:
     tech_data = {
         "returns": {
@@ -62,10 +51,9 @@ def test_compute_valuation_history_reflects_historical_price_levels() -> None:
         index=history_index,
     )
 
-    ticker = _FakeTicker(income_stmt=income_stmt, history_df=history_df)
     info = {"sharesOutstanding": 1_000_000}
 
-    result = _compute_valuation_history(ticker=ticker, info=info)
+    result = _compute_valuation_history(income_stmt, history_df, info)
     assert result is not None
 
     pe_history = result.get("pe_history") or []

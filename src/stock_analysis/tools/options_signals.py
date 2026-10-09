@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from time import perf_counter
 from typing import Any, cast
 
-from stock_analysis.data.provider import read_attribute
+from stock_analysis.data.provider import read_property
 from stock_analysis.data.yfinance_client import fetch_info, fetch_ticker
 from stock_analysis.utils.helpers import current_price_from_info, safe_float, safe_round
 from stock_analysis.utils.provenance import (
@@ -44,15 +44,15 @@ async def options_signals(symbol: str) -> dict[str, Any]:
             symbol=normalized_symbol,
         )
 
-    try:
-        expirations = _fetch_expirations(ticker)
-    except Exception as e:
+    expirations_read = await read_property(ticker, "options", lambda: ticker.options)
+    if expirations_read.status == "failed":
         # A failed read is not "no options" (WP1: failures must not read as empty).
         return build_error_response(
             error_type="data_unavailable",
-            message=f"Failed to fetch option expirations: {e}",
+            message=f"Failed to fetch option expirations: {expirations_read.error_type}",
             symbol=normalized_symbol,
         )
+    expirations = cast(tuple[str, ...] | list[str], expirations_read.payload or ())
     if not expirations:
         return build_error_response(
             error_type="no_options",
@@ -69,14 +69,14 @@ async def options_signals(symbol: str) -> dict[str, Any]:
             symbol=normalized_symbol,
         )
 
-    try:
-        calls, puts = _fetch_option_chain(ticker, expiration)
-    except Exception as e:
+    chain_read = await read_property(ticker, "option_chain", lambda: ticker.option_chain(expiration))
+    if chain_read.status == "failed" or chain_read.payload is None:
         return build_error_response(
             error_type="data_unavailable",
-            message=f"Failed to fetch option chain: {e}",
+            message=f"Failed to fetch option chain: {chain_read.error_type}",
             symbol=normalized_symbol,
         )
+    calls, puts = chain_read.payload.calls, chain_read.payload.puts
 
     if calls.empty and puts.empty:
         return build_error_response(
@@ -102,17 +102,6 @@ async def _fetch_info_or_empty(symbol: str) -> dict[str, Any]:
         return await fetch_info(symbol)
     except Exception:
         return {}
-
-
-def _fetch_expirations(ticker: Any) -> tuple[str, ...] | list[str]:
-    """Fetch option expirations; a failed read raises (and evicts the Ticker)."""
-    return cast(tuple[str, ...] | list[str], read_attribute(ticker, lambda: ticker.options))
-
-
-def _fetch_option_chain(ticker: Any, expiration: str) -> tuple[Any, Any]:
-    """Fetch calls and puts for an expiration."""
-    chain = read_attribute(ticker, lambda: ticker.option_chain(expiration))
-    return chain.calls, chain.puts
 
 
 def _build_options_response(

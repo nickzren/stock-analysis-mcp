@@ -12,7 +12,7 @@ import requests
 import yfinance as yf
 
 import tests.support.transport as transport
-from stock_analysis.data import provider, yfinance_client
+from stock_analysis.data import jobs, provider, yfinance_client
 from stock_analysis.utils.validators import FetchParams
 from tests.support.network_guard import blocked_request, violation_report
 from tests.support.transport import FakeSession, stubbed_yfinance_transport
@@ -62,6 +62,10 @@ def _provider_test_state(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     provider._source_cache.clear()
     yield
     provider._source_cache.clear()
+    # A test that leaves a job blocked must release it itself; this only stops a
+    # finished test's permits, locks and in-flight entries leaking into the next.
+    jobs._gate.reset()
+    jobs.clear_flights()
 
 
 @pytest.fixture

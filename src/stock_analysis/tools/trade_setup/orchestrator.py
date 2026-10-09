@@ -12,7 +12,7 @@ import pandas as pd
 import pytz
 
 from stock_analysis.data.cache_manager import classify_session
-from stock_analysis.data.provider import read_attribute
+from stock_analysis.data.provider import read_property
 from stock_analysis.data.yfinance_client import fetch_history, fetch_ticker
 from stock_analysis.tools.events import events_calendar
 from stock_analysis.tools.risk_metrics import risk_metrics
@@ -196,12 +196,16 @@ async def _fetch_expected_move(
         return None
     try:
         ticker = await fetch_ticker(symbol)
-        expiration = select_event_expiration(
-            list(read_attribute(ticker, lambda: ticker.options)), earnings_date, now.date(),
-        )
+        expirations = await read_property(ticker, "options", lambda: ticker.options)
+        if expirations.status == "failed":
+            return None
+        expiration = select_event_expiration(list(expirations.payload or ()), earnings_date, now.date())
         if expiration is None:
             return None
-        option_chain = read_attribute(ticker, lambda: ticker.option_chain(expiration))
+        chain = await read_property(ticker, "option_chain", lambda: ticker.option_chain(expiration))
+        if chain.status == "failed" or chain.payload is None:
+            return None
+        option_chain = chain.payload
         result = compute_expected_move(
             option_chain.calls, option_chain.puts, float(spot),
         )

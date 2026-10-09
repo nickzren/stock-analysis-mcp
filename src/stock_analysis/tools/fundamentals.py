@@ -1,5 +1,6 @@
 """Fundamentals snapshot tool."""
 
+import asyncio
 import logging
 import operator
 import statistics
@@ -9,7 +10,7 @@ from typing import Any
 
 import pandas as pd
 
-from stock_analysis.data.provider import read_attribute
+from stock_analysis.data.provider import read_property
 from stock_analysis.data.yfinance_client import fetch_info, fetch_ticker
 from stock_analysis.utils.helpers import (
     current_price_from_info,
@@ -294,8 +295,16 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
         logger.debug("fundamentals ticker fetch failed: %s", e)
         ticker_obj = None
 
+    statements = await _read_statements(ticker_obj) if ticker_obj is not None else {}
+
     operating_cf, free_cash_flow, fcf_period, fcf_period_end, fcf_source = (
-        _resolve_cashflow_ttm(ticker_obj, operating_cf, free_cash_flow, fiscal_period)
+        _resolve_cashflow_ttm(
+            statements.get("cashflow_quarterly"),
+            statements.get("cashflow_yearly"),
+            operating_cf,
+            free_cash_flow,
+            fiscal_period,
+        )
     )
     market_cap = safe_float(info.get("marketCap"))
     revenue = safe_float(info.get("totalRevenue"))
@@ -356,10 +365,15 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
         warnings.append("using_trailing_data")
 
     # Enrichment: valuation history, trends, estimates, dividend analysis
-    valuation_history = _compute_valuation_history(ticker_obj, info) if ticker_obj else None
-    fundamental_trends = _compute_fundamental_trends(ticker_obj) if ticker_obj else None
-    analyst_estimates = _fetch_earnings_estimates(ticker_obj) if ticker_obj else None
-    dividend_analysis = _analyze_dividend_history(ticker_obj, info) if ticker_obj else None
+    income_stmt = statements.get("quarterly_income_stmt")
+    valuation_history = _compute_valuation_history(income_stmt, statements.get("price_history_5y"), info)
+    fundamental_trends = _compute_fundamental_trends(income_stmt)
+    analyst_estimates = (
+        _build_earnings_estimates(statements.get("earnings_estimate"), statements.get("revenue_estimate"), info)
+        if ticker_obj is not None
+        else None
+    )
+    dividend_analysis = _analyze_dividend_history(statements.get("dividends"), info)
 
     # Wire valuation history stats into valuation_context
     if valuation_history:
@@ -406,8 +420,28 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
     }
 
 
+async def _read_statements(ticker: Any) -> dict[str, Any]:
+    """The Ticker property reads fundamentals needs, each as executor jobs under the
+    symbol lock (WP3). A failed read maps to None, as before."""
+    reads = {
+        "cashflow_quarterly": lambda: _read_cashflow(ticker, "quarterly"),
+        "cashflow_yearly": lambda: _read_cashflow(ticker, None),
+        "quarterly_income_stmt": lambda: ticker.quarterly_income_stmt,
+        "price_history_5y": lambda: ticker.history(period="5y", interval="1d", auto_adjust=True),
+        "earnings_estimate": lambda: ticker.earnings_estimate,
+        "revenue_estimate": lambda: ticker.revenue_estimate,
+        "dividends": lambda: ticker.dividends,
+    }
+    results = await asyncio.gather(*(read_property(ticker, name, read) for name, read in reads.items()))
+    for read in results:
+        if read.status == "failed":
+            logger.debug("fundamentals %s read failed: %s", read.source, read.error_type)
+    return {read.source: None if read.status == "failed" else read.payload for read in results}
+
+
 def _resolve_cashflow_ttm(
-    ticker: Any | None,
+    quarterly_cf: pd.DataFrame | None,
+    yearly_cf: pd.DataFrame | None,
     operating_cf: float | None,
     free_cash_flow: float | None,
     fiscal_period: str | None,
@@ -417,11 +451,8 @@ def _resolve_cashflow_ttm(
     fcf_period_end: str | None = None
     fcf_source: str | None = None
 
-    if ticker is not None:
+    if quarterly_cf is not None or yearly_cf is not None:
         try:
-            quarterly_cf = _get_cashflow_df(ticker, freq="quarterly")
-            yearly_cf = _get_cashflow_df(ticker, freq=None)
-
             quarterly_cols = (
                 _sorted_cashflow_columns(quarterly_cf.columns)
                 if quarterly_cf is not None
@@ -484,7 +515,7 @@ def _resolve_cashflow_ttm(
             elif ocf_yearly is not None:
                 operating_cf = ocf_yearly
         except Exception as e:
-            logger.debug("cashflow statement fetch failed: %s", e)
+            logger.debug("cashflow statement parse failed: %s", e)
 
     if fcf_period is None and free_cash_flow is not None:
         fcf_period = "TTM"
@@ -586,21 +617,13 @@ def _build_yield_metrics(
 
 
 
-def _compute_valuation_history(ticker: Any, info: dict[str, Any]) -> dict[str, Any] | None:
-    """Compute historical P/E and P/S from quarterly income statements."""
+def _compute_valuation_history(
+    income_stmt: pd.DataFrame | None, price_hist: pd.DataFrame | None, info: dict[str, Any]
+) -> dict[str, Any] | None:
+    """Compute historical P/E and P/S from quarterly income statements (None inputs:
+    the read failed or returned nothing)."""
     shares_outstanding = safe_float(info.get("sharesOutstanding"))
     if shares_outstanding is None or shares_outstanding <= 0:
-        return None
-
-    # I/O: yfinance fetches can fail with network/parse errors. Narrow scope so any
-    # compute-side bug surfaces loudly rather than being silently swallowed.
-    try:
-        income_stmt = read_attribute(ticker, lambda: ticker.quarterly_income_stmt)
-        price_hist = read_attribute(
-            ticker, lambda: ticker.history(period="5y", interval="1d", auto_adjust=True)
-        )
-    except Exception as e:
-        logger.debug("valuation_history fetch failed: %s", e)
         return None
 
     if income_stmt is None or income_stmt.empty:
@@ -695,14 +718,8 @@ def _compute_valuation_history(ticker: Any, info: dict[str, Any]) -> dict[str, A
     }
 
 
-def _compute_fundamental_trends(ticker: Any) -> dict[str, Any] | None:
+def _compute_fundamental_trends(income_stmt: pd.DataFrame | None) -> dict[str, Any] | None:
     """Compute multi-period fundamental trends from quarterly income statements."""
-    try:
-        income_stmt = read_attribute(ticker, lambda: ticker.quarterly_income_stmt)
-    except Exception as e:
-        logger.debug("fundamental_trends fetch failed: %s", e)
-        return None
-
     if income_stmt is None or income_stmt.empty:
         return None
 
@@ -843,28 +860,16 @@ def _extract_estimate_rows(est_df: Any, key_prefix: str) -> dict[str, dict[str, 
     return out
 
 
-def _fetch_earnings_estimates(ticker: Any) -> dict[str, Any] | None:
-    """Fetch analyst earnings and revenue estimates."""
+def _build_earnings_estimates(
+    eps_estimates: pd.DataFrame | None, revenue_estimates: pd.DataFrame | None, info_attr: dict[str, Any]
+) -> dict[str, Any] | None:
+    """Analyst earnings and revenue estimates (each None when its read failed), plus a
+    forward P/E from the already-fetched info."""
     result: dict[str, Any] = {}
+    result.update(_extract_estimate_rows(eps_estimates, "eps"))
+    result.update(_extract_estimate_rows(revenue_estimates, "rev"))
 
-    # I/O: each yfinance attribute can independently fail; keep them isolated so a
-    # transient error on one feed doesn't shadow the other.
-    for attr, prefix in (("earnings_estimate", "eps"), ("revenue_estimate", "rev")):
-        try:
-            est_df = read_attribute(ticker, lambda: getattr(ticker, attr))  # noqa: B023
-        except Exception as e:
-            logger.debug("earnings_estimates %s fetch failed: %s", attr, e)
-            continue
-        result.update(_extract_estimate_rows(est_df, prefix))
-
-    # Forward P/E from next year EPS estimate. `ticker.info` is a property in yfinance
-    # and accessing it can raise; isolate that failure so it doesn't kill the whole tool.
     forward_pe: float | None = None
-    try:
-        info_attr = read_attribute(ticker, lambda: getattr(ticker, "info", None))
-    except Exception as e:
-        logger.debug("earnings_estimates info fetch failed: %s", e)
-        info_attr = None
     if isinstance(info_attr, dict):
         shares_out = safe_float(info_attr.get("sharesOutstanding"))
         next_year_eps = result.get("eps_next_year", {}).get("avg")
@@ -930,7 +935,7 @@ def _fcf_coverage_score(
     return 0
 
 
-def _analyze_dividend_history(ticker: Any, info: dict[str, Any]) -> dict[str, Any] | None:
+def _analyze_dividend_history(dividends: Any, info: dict[str, Any]) -> dict[str, Any] | None:
     """Analyze dividend payment history, streak, growth, and safety.
 
     The streak and CAGR calculations intentionally skip the current calendar year
@@ -938,12 +943,6 @@ def _analyze_dividend_history(ticker: Any, info: dict[str, Any]) -> dict[str, An
     today). Otherwise mid-year totals — which include only the dividends paid so
     far — would falsely break a multi-year increase streak.
     """
-    try:
-        dividends = read_attribute(ticker, lambda: ticker.dividends)
-    except Exception as e:
-        logger.debug("dividend_history fetch failed: %s", e)
-        return None
-
     if dividends is None or dividends.empty:
         return None
 
@@ -1125,16 +1124,10 @@ def _period_end_from_columns(columns: list[Any]) -> str | None:
     return dt.date().isoformat()
 
 
-def _get_cashflow_df(ticker: Any, freq: str | None) -> pd.DataFrame | None:
-    """Fetch cashflow DataFrame with yfinance fallbacks."""
-    def read() -> pd.DataFrame | None:
-        if hasattr(ticker, "get_cashflow"):
-            return ticker.get_cashflow(freq=freq) if freq else ticker.get_cashflow()
-        if freq == "quarterly":
-            return ticker.quarterly_cashflow
-        return ticker.cashflow
-
-    try:
-        return read_attribute(ticker, read)
-    except Exception:
-        return None
+def _read_cashflow(ticker: Any, freq: str | None) -> pd.DataFrame | None:
+    """Cashflow DataFrame with yfinance fallbacks (blocking; run as a job)."""
+    if hasattr(ticker, "get_cashflow"):
+        return ticker.get_cashflow(freq=freq) if freq else ticker.get_cashflow()
+    if freq == "quarterly":
+        return ticker.quarterly_cashflow
+    return ticker.cashflow

@@ -6,12 +6,16 @@ quoteSummary ``calendarEvents``, the earnings page, the news feed (``/xhr/ncp``)
 Search news and Search quotes (symbol search). They never go through ``YfData.cache_get`` or ``Ticker`` attribute
 caches. Each read returns a ``SourceRead``; only ``ok`` and ``empty`` results are
 cached, for ``SOURCE_TTL_SECONDS``. Property reads on a cached ``Ticker`` go through
-``read_attribute`` so a failure evicts that Ticker.
+``read_property``, which holds the symbol's lock and evicts the Ticker on failure.
 
-Reads run inline for now; WP3 moves each attempt onto the executor.
+WP3: every attempt is one executor job (``jobs.run_job``) that owns its admission
+permit (and, for property reads, the symbol lock) until its thread finishes; a
+read stops at ``jobs.read_deadline()``; concurrent reads of one source share a
+single in-flight fetch (``jobs.singleflight``).
 """
 
 import asyncio
+import json
 import math
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -24,16 +28,20 @@ from curl_cffi.requests.exceptions import ConnectionError as CurlConnectionError
 from curl_cffi.requests.exceptions import HTTPError as CurlHTTPError
 from curl_cffi.requests.exceptions import Timeout as CurlTimeout
 from yfinance.data import YfData
+from yfinance.exceptions import YFDataException
 
+from stock_analysis.data import jobs
 from stock_analysis.data.cache_manager import TTLCache
 from stock_analysis.data.yfinance_client import (
     _calculate_backoff,
     _is_retryable_error,
     _max_retries,
     evict_ticker,
+    expire_yfinance_response_cache,
     http_status,
     is_rate_limit,
     note_rate_limit,
+    rate_limit_cooldown_remaining,
     wait_for_rate_limit_cooldown,
 )
 from stock_analysis.utils.provenance import utcnow_isoformat_z
@@ -55,11 +63,10 @@ SOURCE_TTL_SECONDS: dict[str, int] = {
     "symbol_search": 3600,
 }
 
-# Total backoff one read may sleep, so retry sleeps alone can't push a failing
-# read past analyze's 10 s per-tool deadline. It bounds backoff, not request time:
-# synchronous reads keep their 30 s timeouts until WP3. With the client's 1 s base
-# delay this allows three attempts for 5xx/429/transport errors (jitter can't
-# change it).
+# Total backoff one read may sleep. With the client's 1 s base delay this allows
+# three attempts for 5xx/429/transport errors (jitter can't change it). Request
+# time is bounded separately: jobs.REQUEST_TIMEOUT_SECONDS per transport request
+# and jobs.read_deadline() for the whole read.
 _RETRY_BUDGET_SECONDS = 4.0
 _NEWS_COUNT = 10
 
@@ -99,16 +106,6 @@ class _Interpretation:
     rejected_count: int = 0
 
 
-def read_attribute(ticker: Any, read: Callable[[], T]) -> T:
-    """Read a network-backed ``Ticker`` attribute; on failure evict the cached
-    Ticker (its partial attribute state must not be reused), then re-raise."""
-    try:
-        return read()
-    except Exception:
-        evict_ticker(ticker)
-        raise
-
-
 def _error_type(error: BaseException) -> str:
     if is_rate_limit(error):
         return "rate_limited"
@@ -121,7 +118,80 @@ def _error_type(error: BaseException) -> str:
         return "connection"
     if isinstance(error, CurlHTTPError):
         return "transport"  # e.g. an incomplete transfer, no HTTP error status
+    if isinstance(error, json.JSONDecodeError | YFDataException):
+        return "unreadable_response"
     return type(error).__name__
+
+
+def _property_retryable(error: Exception) -> tuple[bool, int]:
+    """Property reads parse the body themselves, so an HTML error page (e.g. a 503)
+    surfaces as a JSON/parse error with its HTTP status hidden: retry it."""
+    if isinstance(error, json.JSONDecodeError | YFDataException):
+        return True, _max_retries
+    return _is_retryable_error(error)
+
+
+@dataclass(frozen=True)
+class _Outcome:
+    value: Any = None
+    attempts: int = 0
+    failure: SourceRead | None = None
+
+
+def _failed(source: str, error_type: str, attempts: int, retryable: bool) -> SourceRead:
+    return SourceRead(
+        source, "failed", error_type=error_type, retryable=retryable, attempts=attempts,
+        fetched_at=utcnow_isoformat_z(),
+    )
+
+
+async def _attempts(
+    source: str,
+    call: Callable[[], Any],
+    retryable: Callable[[Exception], tuple[bool, int]],
+    symbol_lock: str | None = None,
+) -> _Outcome:
+    """Run ``call`` as executor jobs, retrying retryable errors, until the read deadline.
+
+    Backoff and rate-limit cooldown sleeps happen between jobs, so no permit or
+    lock is held while sleeping.
+    """
+    deadline = jobs.read_deadline()
+    slept = 0.0
+    for attempt in range(_max_retries + 1):
+        if rate_limit_cooldown_remaining() >= jobs.remaining(deadline):
+            return _Outcome(attempts=attempt, failure=_failed(source, "rate_limited", attempt, True))
+        await wait_for_rate_limit_cooldown()
+        if attempt:
+            expire_yfinance_response_cache()  # a retry must do fresh I/O
+        try:
+            value = await jobs.run_job(call, deadline=deadline, symbol_lock=symbol_lock)
+            return _Outcome(value=value, attempts=attempt + 1)
+        except jobs.JobTimeoutError as e:
+            return _Outcome(attempts=attempt + 1, failure=_failed(source, e.reason, attempt + 1, True))
+        except Exception as e:
+            can_retry, limit = retryable(e)
+            delay = _calculate_backoff(attempt)
+            if is_rate_limit(e):
+                note_rate_limit(delay)
+            exhausted = (
+                attempt >= min(_max_retries, limit)
+                or slept + delay > _RETRY_BUDGET_SECONDS
+                or delay >= jobs.remaining(deadline)
+            )
+            if not can_retry or exhausted:
+                return _Outcome(
+                    attempts=attempt + 1, failure=_failed(source, _error_type(e), attempt + 1, can_retry)
+                )
+            slept += delay
+            await _sleep(delay)
+    raise AssertionError("unreachable: the last attempt always returns")
+
+
+def _checked(fetch: Callable[[], Any]) -> Any:
+    response = fetch()
+    response.raise_for_status()
+    return response
 
 
 async def _read(
@@ -133,50 +203,73 @@ async def _read(
     cached = _source_cache.get(cache_key)
     if cached is not None:
         return cached  # type: ignore[no-any-return]
+    read, _ = await jobs.singleflight(("source", cache_key), lambda: _fetch_source(source, cache_key, fetch, interpret))
+    return read
 
-    attempts = 0
-    slept = 0.0
-    for attempt in range(_max_retries + 1):
-        await wait_for_rate_limit_cooldown()
-        attempts += 1
-        try:
-            response = fetch()
-            response.raise_for_status()
-            break
-        except Exception as e:
-            retryable, limit = _is_retryable_error(e)
-            delay = _calculate_backoff(attempt)
-            if is_rate_limit(e):
-                note_rate_limit(delay)
-            exhausted = attempt >= min(_max_retries, limit) or slept + delay > _RETRY_BUDGET_SECONDS
-            if not retryable or exhausted:
-                return SourceRead(
-                    source,
-                    "failed",
-                    error_type=_error_type(e),
-                    retryable=retryable,
-                    attempts=attempts,
-                    fetched_at=utcnow_isoformat_z(),
-                )
-            slept += delay
-            await _sleep(delay)
 
+async def _fetch_source(
+    source: str,
+    cache_key: str,
+    fetch: Callable[[], Any],
+    interpret: Callable[[Any], _Interpretation],
+) -> SourceRead:
+    outcome = await _attempts(source, lambda: _checked(fetch), _is_retryable_error)
+    if outcome.failure is not None:
+        return outcome.failure
     try:
-        outcome = interpret(response)
+        interpretation = interpret(outcome.value)
     except Exception:
-        outcome = _Interpretation("failed", error_type="malformed")
+        interpretation = _Interpretation("failed", error_type="malformed")
     read = SourceRead(
         source,
-        outcome.status,
-        payload=outcome.payload,
-        error_type=outcome.error_type,
-        attempts=attempts,
-        rejected_count=outcome.rejected_count,
+        interpretation.status,
+        payload=interpretation.payload,
+        error_type=interpretation.error_type,
+        attempts=outcome.attempts,
+        rejected_count=interpretation.rejected_count,
         fetched_at=utcnow_isoformat_z(),
     )
     if read.verified:
         _source_cache.set(cache_key, read, SOURCE_TTL_SECONDS[source])
     return read
+
+
+def _is_empty(value: Any) -> bool:
+    if value is None:
+        return True
+    empty = getattr(value, "empty", None)
+    if isinstance(empty, bool):
+        return empty
+    try:
+        return len(value) == 0
+    except TypeError:
+        return False
+
+
+async def read_property(ticker: Any, source: str, read: Callable[[], T]) -> SourceRead:
+    """A network-backed ``Ticker`` property, read as executor jobs (WP3, R3.8).
+
+    Each attempt holds the symbol's lock (yfinance ``Ticker`` state is not
+    thread-safe) and its admission permit until the thread finishes. Retryable
+    errors, including an error page hidden behind a parse error, are retried.
+    ``ok``: a non-empty value. ``unverified``: ``None`` or empty, since a property
+    can't prove emptiness. ``failed``: the read failed or missed its deadline;
+    the cached Ticker is evicted so its partial state is not reused.
+    """
+    symbol = _normalize(str(getattr(ticker, "ticker", "") or "")) or None
+    outcome = await _attempts(source, read, _property_retryable, symbol_lock=symbol)
+    if outcome.failure is not None:
+        evict_ticker(ticker)
+        return outcome.failure
+    status: SourceStatus = "unverified" if _is_empty(outcome.value) else "ok"
+    return SourceRead(
+        source,
+        status,
+        payload=outcome.value,
+        error_type="empty_property" if status == "unverified" else None,
+        attempts=outcome.attempts,
+        fetched_at=utcnow_isoformat_z(),
+    )
 
 
 def _dig(value: Any, *keys: str) -> Any:
@@ -313,7 +406,7 @@ async def read_calendar_events(symbol: str) -> SourceRead:
     return await _read(
         "calendar",
         f"calendar:{sym}",
-        lambda: YfData().get(_QUOTE_SUMMARY_URL.format(symbol=sym), params=params),
+        lambda: YfData().get(_QUOTE_SUMMARY_URL.format(symbol=sym), params=params, timeout=jobs.REQUEST_TIMEOUT_SECONDS),
         _interpret_calendar,
     )
 
@@ -325,7 +418,7 @@ async def read_earnings_page(symbol: str) -> SourceRead:
     return await _read(
         "earnings_page",
         f"earnings_page:{sym}",
-        lambda: YfData().get(_EARNINGS_PAGE_URL, params=params),
+        lambda: YfData().get(_EARNINGS_PAGE_URL, params=params, timeout=jobs.REQUEST_TIMEOUT_SECONDS),
         _interpret_earnings_page,
     )
 
@@ -338,7 +431,7 @@ async def read_news_feed(symbol: str) -> SourceRead:
     return await _read(
         "news",
         f"news:{sym}",
-        lambda: YfData().post(_NEWS_URL, body=body),
+        lambda: YfData().post(_NEWS_URL, body=body, timeout=jobs.REQUEST_TIMEOUT_SECONDS),
         _interpret_news,
     )
 
@@ -350,7 +443,7 @@ async def read_search_news(symbol: str) -> SourceRead:
     return await _read(
         "search",
         f"search:{sym}",
-        lambda: YfData().get(_SEARCH_URL, params=params),
+        lambda: YfData().get(_SEARCH_URL, params=params, timeout=jobs.REQUEST_TIMEOUT_SECONDS),
         _interpret_search,
     )
 
@@ -363,7 +456,7 @@ async def read_symbol_matches(query: str) -> SourceRead:
     return await _read(
         "symbol_search",
         f"symbol_search:{q}",
-        lambda: YfData().get(_SEARCH_URL, params=params),
+        lambda: YfData().get(_SEARCH_URL, params=params, timeout=jobs.REQUEST_TIMEOUT_SECONDS),
         _interpret_search_list("quotes"),
     )
 

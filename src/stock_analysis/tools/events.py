@@ -11,9 +11,9 @@ import pandas as pd
 
 from stock_analysis.data.provider import (
     is_epoch,
-    read_attribute,
     read_calendar_events,
     read_earnings_page,
+    read_property,
 )
 from stock_analysis.data.yfinance_client import fetch_info, fetch_ticker
 from stock_analysis.utils.helpers import current_price_from_info, safe_float, safe_round
@@ -55,8 +55,10 @@ async def events_calendar(symbol: str, _now: datetime | None = None) -> dict[str
         info = {}
         info_ok = False
 
-    (calendar_events, calendar_ok), (earnings_dates, earnings_dates_ok) = await asyncio.gather(
-        _read_calendar(normalized_symbol), read_earnings_dates(normalized_symbol)
+    (calendar_events, calendar_ok), (earnings_dates, earnings_dates_ok), splits_read = await asyncio.gather(
+        _read_calendar(normalized_symbol),
+        read_earnings_dates(normalized_symbol),
+        read_property(ticker, "splits", lambda: ticker.splits),
     )
 
     today = now.date()
@@ -68,7 +70,7 @@ async def events_calendar(symbol: str, _now: datetime | None = None) -> dict[str
         today,
     )
     dividends = _build_dividends(calendar_events, info)
-    splits_info = _build_splits(ticker)
+    splits_info = _build_splits(splits_read.payload)
     analyst = _build_analyst(info)
 
     duration_ms = (perf_counter() - start_time) * 1000
@@ -392,13 +394,12 @@ def _build_dividends(calendar_events: dict[str, Any], info: dict[str, Any]) -> d
     }
 
 
-def _build_splits(ticker: Any) -> dict[str, str | None]:
-    """Build last split metadata."""
+def _build_splits(splits: Any) -> dict[str, str | None]:
+    """Build last split metadata (``splits`` is None when the read failed)."""
     last_split_date = None
     last_split_ratio = None
 
     try:
-        splits = read_attribute(ticker, lambda: ticker.splits)
         if splits is not None and len(splits) > 0:
             last_split = splits.iloc[-1]
             last_split_date = splits.index[-1].strftime("%Y-%m-%d")

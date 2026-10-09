@@ -1,12 +1,13 @@
 """Insider and institutional ownership analysis tool."""
 
+import asyncio
 from datetime import datetime, timedelta
 from time import perf_counter
 from typing import Any, cast
 
 import pandas as pd
 
-from stock_analysis.data.provider import read_attribute
+from stock_analysis.data.provider import SourceRead, read_property
 from stock_analysis.data.yfinance_client import fetch_ticker
 from stock_analysis.utils.helpers import safe_float, safe_round
 from stock_analysis.utils.provenance import (
@@ -38,14 +39,21 @@ async def ownership_analysis(symbol: str) -> dict[str, Any]:
     except FetchError as fe:
         return fe.response
 
+    # One symbol lock serializes these reads; each is its own executor job.
+    insider_read, institutional_read, major_read = await asyncio.gather(
+        read_property(ticker, "insider_transactions", lambda: ticker.insider_transactions),
+        read_property(ticker, "institutional_holders", lambda: ticker.institutional_holders),
+        read_property(ticker, "major_holders", lambda: ticker.major_holders),
+    )
+
     # --- Insider activity ---
-    insider_activity = _build_insider_activity(ticker, warnings)
+    insider_activity = _build_insider_activity(insider_read, warnings)
 
     # --- Institutional holders ---
-    institutional = _build_institutional(ticker, warnings)
+    institutional = _build_institutional(institutional_read, warnings)
 
     # --- Major holders (ownership percentages) ---
-    _apply_major_holders(ticker, insider_activity, institutional, warnings)
+    _apply_major_holders(major_read, insider_activity, institutional, warnings)
 
     duration_ms = (perf_counter() - start_time) * 1000
 
@@ -64,7 +72,7 @@ async def ownership_analysis(symbol: str) -> dict[str, Any]:
     }
 
 
-def _build_insider_activity(ticker: Any, warnings: list[str]) -> dict[str, Any]:
+def _build_insider_activity(read: SourceRead, warnings: list[str]) -> dict[str, Any]:
     """Extract and aggregate insider transaction data."""
     result: dict[str, Any] = {
         "net_shares_3m": None,
@@ -74,8 +82,11 @@ def _build_insider_activity(ticker: Any, warnings: list[str]) -> dict[str, Any]:
         "recent_transactions": [],
     }
 
+    if read.status == "failed":
+        warnings.append("insider_transactions_error")
+        return result
     try:
-        txns = read_attribute(ticker, lambda: ticker.insider_transactions)
+        txns = read.payload
         if txns is None or not isinstance(txns, pd.DataFrame) or txns.empty:
             warnings.append("insider_transactions_unavailable")
             return result
@@ -109,15 +120,18 @@ def _build_insider_activity(ticker: Any, warnings: list[str]) -> dict[str, Any]:
     return result
 
 
-def _build_institutional(ticker: Any, warnings: list[str]) -> dict[str, Any]:
+def _build_institutional(read: SourceRead, warnings: list[str]) -> dict[str, Any]:
     """Extract top institutional holders."""
     result: dict[str, Any] = {
         "top_holders": [],
         "total_institutional_pct": None,
     }
 
+    if read.status == "failed":
+        warnings.append("institutional_holders_error")
+        return result
     try:
-        holders = read_attribute(ticker, lambda: ticker.institutional_holders)
+        holders = read.payload
         if holders is None or not isinstance(holders, pd.DataFrame) or holders.empty:
             warnings.append("institutional_holders_unavailable")
             return result
@@ -151,14 +165,17 @@ def _build_institutional(ticker: Any, warnings: list[str]) -> dict[str, Any]:
 
 
 def _apply_major_holders(
-    ticker: Any,
+    read: SourceRead,
     insider_activity: dict[str, Any],
     institutional: dict[str, Any],
     warnings: list[str],
 ) -> None:
     """Extract ownership percentages from major_holders and apply to results."""
+    if read.status == "failed":
+        warnings.append("major_holders_error")
+        return
     try:
-        major = read_attribute(ticker, lambda: ticker.major_holders)
+        major = read.payload
         if major is None or not isinstance(major, pd.DataFrame) or major.empty:
             warnings.append("major_holders_unavailable")
             return

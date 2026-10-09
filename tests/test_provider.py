@@ -868,75 +868,153 @@ class TestSymbolSearch:
             await analyze_orchestrator._resolve_symbol_for_analysis("Example Corp")
 
 
-class TestReadAttributeSites:
-    """R1.11: each wrapped Ticker read keeps its degraded output and evicts the Ticker."""
+def _flaky(error: Exception, value: Any) -> Callable[[], Any]:
+    """A read that raises ``error`` once, then returns ``value``."""
+    calls = []
+
+    def read() -> Any:
+        calls.append(1)
+        if len(calls) == 1:
+            raise error
+        return value
+
+    return read
+
+
+class TestPropertyReadSites:
+    """R1.11 + R3.8: each Ticker property read runs as executor jobs, retries retryable
+    errors, becomes a SourceRead, keeps its site's degraded output and evicts the Ticker."""
+
+    async def test_failed_read_is_retried_converted_and_evicts(self) -> None:
+        ticker = FakeTicker(SYMBOL, splits=http_error(503))
+        ticker_cache.set(SYMBOL, ticker, 3600)
+
+        read = await provider.read_property(ticker, "splits", lambda: ticker.splits)
+
+        assert (read.status, read.error_type, read.retryable) == ("failed", "http_503", True)
+        assert read.attempts == ticker.reads["splits"] == 3
+        assert ticker_cache.get(SYMBOL) is None
 
     @pytest.mark.parametrize(
-        ("attributes", "call", "degraded"),
+        "error",
+        [json.JSONDecodeError("Expecting value", "<html>503 Service Unavailable</html>", 0),
+         YFDataException("unreadable response")],
+        ids=["json_decode", "yf_data_exception"],
+    )
+    async def test_status_hidden_behind_a_parse_error_is_retried(self, error: Exception) -> None:
+        ticker = FakeTicker(SYMBOL)
+
+        read = await provider.read_property(ticker, "options", _flaky(error, ("2026-11-20",)))
+
+        assert (read.status, read.payload, read.attempts) == ("ok", ("2026-11-20",), 2)
+
+    async def test_non_retryable_error_fails_once(self) -> None:
+        ticker = FakeTicker(SYMBOL, splits=http_error(404))
+
+        read = await provider.read_property(ticker, "splits", lambda: ticker.splits)
+
+        assert (read.status, read.error_type, read.attempts) == ("failed", "http_404", 1)
+
+    @pytest.mark.parametrize("value", [None, pd.DataFrame(), pd.Series(dtype=float), ()])
+    async def test_empty_value_is_unverified(self, value: Any) -> None:
+        read = await provider.read_property(FakeTicker(SYMBOL), "holders", lambda: value)
+
+        assert (read.status, read.error_type) == ("unverified", "empty_property")
+
+    async def test_fundamentals_reads_map_a_failure_to_none(self) -> None:
+        income = pd.DataFrame({pd.Timestamp("2026-06-30"): [1.0]}, index=["Net Income"])
+        ticker = FakeTicker(
+            SYMBOL,
+            get_cashflow=lambda freq=None: pd.DataFrame(),
+            quarterly_income_stmt=income,
+            history=_raiser(http_error(503)),
+            earnings_estimate=pd.DataFrame(),
+            revenue_estimate=pd.DataFrame(),
+            dividends=pd.Series(dtype=float),
+        )
+        ticker_cache.set(SYMBOL, ticker, 3600)
+
+        statements = await fundamentals._read_statements(ticker)
+
+        assert statements["price_history_5y"] is None
+        assert statements["quarterly_income_stmt"] is income
+        assert ticker_cache.get(SYMBOL) is None
+
+    @pytest.mark.parametrize(
+        ("call", "degraded"),
         [
-            ({"insider_transactions": http_error(503)}, lambda t: ownership._build_insider_activity(t, []),
-             lambda r: r["recent_transactions"] == []),
-            ({"institutional_holders": http_error(503)}, lambda t: ownership._build_institutional(t, []),
-             lambda r: r["top_holders"] == []),
-            ({"major_holders": http_error(503)}, lambda t: ownership._apply_major_holders(t, {}, {}, []),
-             lambda r: r is None),
-            ({"quarterly_income_stmt": http_error(503)},
-             lambda t: fundamentals._compute_valuation_history(t, {"sharesOutstanding": 1e6}), lambda r: r is None),
-            ({"quarterly_income_stmt": pd.DataFrame({pd.Timestamp("2026-06-30"): [1.0]}, index=["Net Income"]),
-              "history": _raiser(http_error(503))},
-             lambda t: fundamentals._compute_valuation_history(t, {"sharesOutstanding": 1e6}), lambda r: r is None),
-            ({"quarterly_income_stmt": http_error(503)}, fundamentals._compute_fundamental_trends, lambda r: r is None),
-            ({"earnings_estimate": http_error(503), "revenue_estimate": pd.DataFrame(), "info": {}},
-             fundamentals._fetch_earnings_estimates, lambda r: r is None),
-            ({"earnings_estimate": pd.DataFrame(), "revenue_estimate": http_error(503), "info": {}},
-             fundamentals._fetch_earnings_estimates, lambda r: r is None),
-            ({"earnings_estimate": pd.DataFrame(), "revenue_estimate": pd.DataFrame(), "info": http_error(503)},
-             fundamentals._fetch_earnings_estimates, lambda r: r is None),
-            ({"dividends": http_error(503)}, lambda t: fundamentals._analyze_dividend_history(t, {}),
-             lambda r: r is None),
-            ({"get_cashflow": _raiser(http_error(503))}, lambda t: fundamentals._get_cashflow_df(t, None),
-             lambda r: r is None),
-            ({"splits": http_error(503)}, events._build_splits,
-             lambda r: r == {"last_date": None, "last_ratio": None}),
+            (lambda: fundamentals._compute_valuation_history(None, pd.DataFrame({"Close": [1.0]}),
+                                                             {"sharesOutstanding": 1e6}), None),
+            (lambda: fundamentals._compute_valuation_history(
+                pd.DataFrame({pd.Timestamp("2026-06-30"): [1.0]}, index=["Net Income"]), None,
+                {"sharesOutstanding": 1e6}), None),
+            (lambda: fundamentals._compute_fundamental_trends(None), None),
+            (lambda: fundamentals._build_earnings_estimates(None, pd.DataFrame(), {}), None),
+            (lambda: fundamentals._build_earnings_estimates(pd.DataFrame(), None, {}), None),
+            (lambda: fundamentals._analyze_dividend_history(None, {}), None),
+            (lambda: fundamentals._resolve_cashflow_ttm(None, None, 1.0, 2.0, "FY 2025"),
+             (1.0, 2.0, "TTM", None, "info")),
+            (lambda: events._build_splits(None), {"last_date": None, "last_ratio": None}),
         ],
     )
-    def test_failure_degrades_and_evicts(
-        self, attributes: dict[str, Any], call: Callable[[Any], Any], degraded: Callable[[Any], bool]
+    def test_failed_input_keeps_the_degraded_output(self, call: Callable[[], Any], degraded: Any) -> None:
+        assert call() == degraded
+
+    @pytest.mark.parametrize(
+        ("failing", "warning"),
+        [
+            ("insider_transactions", "insider_transactions_error"),
+            ("institutional_holders", "institutional_holders_error"),
+            ("major_holders", "major_holders_error"),
+        ],
+    )
+    async def test_ownership_tool_degrades_and_evicts(
+        self, monkeypatch: pytest.MonkeyPatch, failing: str, warning: str
+    ) -> None:
+        attributes: dict[str, Any] = {
+            "insider_transactions": pd.DataFrame(),
+            "institutional_holders": pd.DataFrame(),
+            "major_holders": pd.DataFrame(),
+            failing: http_error(503),
+        }
+        ticker = FakeTicker(SYMBOL, **attributes)
+        ticker_cache.set(SYMBOL, ticker, 3600)
+
+        async def fake_fetch_ticker(symbol: str) -> FakeTicker:
+            return ticker
+
+        monkeypatch.setattr(ownership, "fetch_ticker", fake_fetch_ticker)
+
+        result = await ownership.ownership_analysis(SYMBOL)
+
+        assert warning in result["warnings"]
+        assert ticker_cache.get(SYMBOL) is None
+
+    @pytest.mark.parametrize(
+        "attributes",
+        [{"options": http_error(503)}, {"options": ("2026-11-20",), "option_chain": _raiser(http_error(503))}],
+        ids=["expirations", "chain"],
+    )
+    async def test_options_tool_reports_a_failed_read_and_evicts(
+        self, monkeypatch: pytest.MonkeyPatch, attributes: dict[str, Any]
     ) -> None:
         ticker = FakeTicker(SYMBOL, **attributes)
         ticker_cache.set(SYMBOL, ticker, 3600)
 
-        assert degraded(call(ticker))
-        assert ticker_cache.get(SYMBOL) is None
-
-    @pytest.mark.parametrize(
-        ("read", "attributes"),
-        [
-            (lambda t: options_signals._fetch_expirations(t), {"options": http_error(503)}),
-            (lambda t: options_signals._fetch_option_chain(t, "2026-11-20"), {"option_chain": _raiser(http_error(503))}),
-        ],
-    )
-    def test_options_failures_evict_and_reraise(self, read: Callable[[Any], Any], attributes: dict[str, Any]) -> None:
-        ticker = FakeTicker(SYMBOL, **attributes)
-        ticker_cache.set(SYMBOL, ticker, 3600)
-
-        with pytest.raises(Exception, match="HTTP Error 503"):
-            read(ticker)
-        assert ticker_cache.get(SYMBOL) is None
-
-    async def test_options_tool_reports_a_failed_expirations_read(self, monkeypatch: pytest.MonkeyPatch) -> None:
         async def fake_fetch_ticker(symbol: str) -> FakeTicker:
-            return FakeTicker(symbol, options=http_error(503))
+            return ticker
 
         async def fake_info(symbol: str) -> dict[str, Any]:
             return {"regularMarketPrice": 50.0}
 
         monkeypatch.setattr(options_signals, "fetch_ticker", fake_fetch_ticker)
         monkeypatch.setattr(options_signals, "_fetch_info_or_empty", fake_info)
+        monkeypatch.setattr(options_signals, "_pick_expiration", lambda expirations: expirations[0])
 
         result = await options_signals.options_signals(SYMBOL)
 
         assert result["error_type"] == "data_unavailable"
+        assert ticker_cache.get(SYMBOL) is None
 
     @pytest.mark.parametrize(
         "attributes",
@@ -953,22 +1031,23 @@ class TestReadAttributeSites:
         assert result is None
         assert ticker_cache.get(SYMBOL) is None
 
-    def test_eviction_spares_a_newer_ticker(self) -> None:
+    async def test_eviction_spares_a_newer_ticker(self) -> None:
         failed = FakeTicker(SYMBOL, splits=http_error(503))
         newer = FakeTicker(SYMBOL, splits=pd.Series(dtype=float))
         ticker_cache.set(SYMBOL, newer, 3600)
 
-        events._build_splits(failed)
+        await provider.read_property(failed, "splits", lambda: failed.splits)
 
         assert ticker_cache.get(SYMBOL) is newer
         ticker_cache.clear()
 
-    def test_successful_read_keeps_the_ticker(self) -> None:
-        ticker = FakeTicker(SYMBOL, splits=pd.Series(dtype=float))
+    async def test_successful_read_keeps_the_ticker(self) -> None:
+        ticker = FakeTicker(SYMBOL, splits=pd.Series([2.0], index=pd.DatetimeIndex(["2024-06-10"])))
         ticker_cache.set(SYMBOL, ticker, 3600)
 
-        events._build_splits(ticker)
+        read = await provider.read_property(ticker, "splits", lambda: ticker.splits)
 
+        assert read.status == "ok"
         assert ticker_cache.get(SYMBOL) is ticker
         ticker_cache.clear()
 

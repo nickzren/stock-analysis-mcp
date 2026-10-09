@@ -8,6 +8,7 @@ suppression, cache and parser defects live.
 """
 
 import json
+import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -103,6 +104,7 @@ class RecordedCall:
     method: str
     url: str
     source: str
+    timeout: float | None = None
 
 
 class FakeSession:
@@ -116,30 +118,46 @@ class FakeSession:
         self.calls: list[RecordedCall] = []
         self.unrouted: list[str] = []
         self._queues: dict[str, list[TransportFixture]] = {}
+        self._holds: dict[str, tuple[threading.Event, threading.Event]] = {}
 
     def route(self, source: str, *names: str) -> None:
         if source not in ROUTES:
             raise ValueError(f"unknown source {source!r}")
         self._queues[source] = [load_fixture(source, name) for name in names]
 
+    def hold(self, source: str) -> tuple[threading.Event, threading.Event]:
+        """Block requests to ``source`` in their worker thread until released.
+
+        Returns (entered, release): ``entered`` is set when a request arrives; set
+        ``release`` to let it (and later ones) through. Waits are capped so a
+        forgotten release can't hang the suite.
+        """
+        entered, release = threading.Event(), threading.Event()
+        self._holds[source] = (entered, release)
+        return entered, release
+
     def calls_to(self, source: str) -> list[RecordedCall]:
         return [call for call in self.calls if call.source == source]
 
     def get(self, url: str, **kwargs: Any) -> FakeResponse:
-        return self._dispatch("GET", url)
+        return self._dispatch("GET", url, kwargs.get("timeout"))
 
     def post(self, url: str, **kwargs: Any) -> FakeResponse:
-        return self._dispatch("POST", url)
+        return self._dispatch("POST", url, kwargs.get("timeout"))
 
-    def _dispatch(self, method: str, url: str) -> FakeResponse:
+    def _dispatch(self, method: str, url: str, timeout: float | None = None) -> FakeResponse:
         source = source_for_url(url)
+        if source in self._holds:
+            entered, release = self._holds[source]
+            entered.set()
+            release.wait(timeout=10)
         queue = self._queues.get(source) if source else None
         if source is None or not queue:
             self.unrouted.append(f"{method} {url}")
             if violation_sink is not None:
                 violation_sink.append(f"stub transport: unrouted {method} {url}")
             raise UnroutedRequestError(f"unrouted {method} {url}")
-        self.calls.append(RecordedCall(method, url, source))
+        self.calls.append(RecordedCall(method, url, source, timeout))
         fixture = queue.pop(0) if len(queue) > 1 else queue[0]
         return FakeResponse(fixture, fixture.final_url or url)
 

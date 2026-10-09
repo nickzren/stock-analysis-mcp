@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from time import perf_counter
 from typing import Any
 
+from stock_analysis.data import jobs
 from stock_analysis.reference_data import build_sector_comparison
 from stock_analysis.tools.analyze.action_zones import (
     apply_dip_gates_to_action_zones,
@@ -63,6 +64,9 @@ from stock_analysis.tools.technicals import technicals
 from stock_analysis.utils.helpers import fcf_label_from_cashflow, first_sentences, round_or_none
 from stock_analysis.utils.normalize import build_watchlist_snapshot
 from stock_analysis.utils.provenance import build_meta
+
+# Reads inside a tool share this fraction of the tool's deadline.
+_READ_SHARE_OF_TOOL_DEADLINE = 0.9
 
 
 def _compute_burn_metrics(
@@ -339,7 +343,10 @@ async def analyze_stock(
         tool_start = perf_counter()
         result: Any | Exception
         try:
-            result = await asyncio.wait_for(coro, timeout=TIMEOUT_SECONDS)
+            # Reads inside the tool stop a little earlier, so a failing read comes
+            # back as a structured failure and the tool can still return (R3.9).
+            with jobs.deadline_scope(TIMEOUT_SECONDS * _READ_SHARE_OF_TOOL_DEADLINE):
+                result = await asyncio.wait_for(coro, timeout=TIMEOUT_SECONDS)
         except TimeoutError:
             result = TimeoutError(f"exceeded {TIMEOUT_SECONDS}s")
         except Exception as e:
@@ -362,14 +369,16 @@ async def analyze_stock(
         tool_timings[name] = round(duration_ms, 1)
 
         if isinstance(result, Exception):
-            tool_failures.append(
-                {
-                    "tool": name,
-                    "error": type(result).__name__,
-                    "message": str(result),
-                    "duration_ms": round(duration_ms, 1),
-                }
-            )
+            failure = {
+                "tool": name,
+                "error": type(result).__name__,
+                "message": str(result),
+                "duration_ms": round(duration_ms, 1),
+            }
+            if isinstance(result, TimeoutError):
+                # A timeout can't stop a worker thread; disclose how many still run.
+                failure["in_flight_jobs"] = jobs.in_flight_jobs()
+            tool_failures.append(failure)
             tool_results[name] = None
         elif isinstance(result, dict) and result.get("error"):
             tool_failures.append(

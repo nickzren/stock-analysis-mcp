@@ -8,7 +8,6 @@ import os
 import random
 import time
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, TypeVar
@@ -29,6 +28,7 @@ from yfinance.exceptions import (
     YFTickerMissingError,
 )
 
+from stock_analysis.data import jobs
 from stock_analysis.data.cache_manager import (
     DataType,
     classify_session,
@@ -45,11 +45,6 @@ logger = logging.getLogger(__name__)
 # Error policy (Step 1, D1): surface yfinance read failures as exceptions instead
 # of letting them read as valid empty results. Set once here; never per call.
 YfConfig.debug.hide_exceptions = False
-
-# Bounded concurrency for yfinance calls
-_max_workers = int(os.environ.get("YF_MAX_WORKERS", "4"))
-_executor = ThreadPoolExecutor(max_workers=_max_workers)
-_fetch_semaphore = asyncio.Semaphore(_max_workers)
 
 # Retry configuration
 _max_retries = int(os.environ.get("YF_MAX_RETRIES", "3"))
@@ -168,13 +163,6 @@ def _has_value(v: Any) -> bool:
     if isinstance(v, float) and math.isnan(v):
         return False
     return not (isinstance(v, str) and v.strip() == "")
-
-# Singleflight cache for deduplicating concurrent fetch_info calls
-# Key: symbol (uppercase), Value: asyncio.Task returning (info, RetryResult)
-# Note: Using string annotation to avoid forward reference issue
-_info_singleflight: dict[str, "asyncio.Task[tuple[dict[str, Any], RetryResult]]"] = {}
-_info_singleflight_lock = asyncio.Lock()
-
 
 def assess_info_completeness(info: dict[str, Any] | None) -> InfoCompleteness:
     """
@@ -300,8 +288,12 @@ def note_rate_limit(delay: float) -> None:
     _rate_limited_until = max(_rate_limited_until, time.monotonic() + delay)
 
 
+def rate_limit_cooldown_remaining() -> float:
+    return max(_rate_limited_until - time.monotonic(), 0.0)
+
+
 async def wait_for_rate_limit_cooldown() -> None:
-    remaining = _rate_limited_until - time.monotonic()
+    remaining = rate_limit_cooldown_remaining()
     if remaining > 0:
         await _sleep(remaining)
 
@@ -410,6 +402,9 @@ async def _retry_with_backoff(
     """
     Execute a synchronous function with retry logic.
 
+    Each attempt is one executor job (``jobs.run_job``); backoff sleeps hold no
+    permit. The whole read, attempts and sleeps, stops at ``jobs.read_deadline()``.
+
     Args:
         operation_name: Name for logging (e.g., "fetch_history(AAPL)")
         sync_func: Synchronous function to execute
@@ -419,9 +414,10 @@ async def _retry_with_backoff(
         RetryResult with result and provenance info
 
     Raises:
-        YFinanceRetryError: If all retries exhausted
+        YFinanceRetryError: If all retries exhausted or the read deadline passed
         ServerShuttingDownError: If server is shutting down
     """
+    deadline = jobs.read_deadline()
     last_error: Exception | None = None
     total_backoff: float = 0.0
     effective_max_retries = max_retries
@@ -431,6 +427,8 @@ async def _retry_with_backoff(
     for attempt in range(max_retries + 1):
         if shutdown_event.is_set():
             raise ServerShuttingDownError("Server is shutting down")
+        if rate_limit_cooldown_remaining() >= jobs.remaining(deadline):
+            raise YFinanceRetryError("Read deadline passed: rate_limited", last_error=last_error)
         await wait_for_rate_limit_cooldown()
         if attempt:
             # A retry must do fresh I/O, not replay a response yfinance cached
@@ -438,8 +436,7 @@ async def _retry_with_backoff(
             expire_yfinance_response_cache()
 
         try:
-            loop = asyncio.get_running_loop()
-            result = await loop.run_in_executor(_executor, sync_func)
+            result = await jobs.run_job(sync_func, deadline=deadline)
             # Record successful attempt in trace
             retry_trace.append(RetryAttempt(attempt=attempt + 1, ok=True))
             return RetryResult(
@@ -450,6 +447,9 @@ async def _retry_with_backoff(
                 incomplete_detected=incomplete_detected,
                 retry_trace=retry_trace if len(retry_trace) > 1 else None,  # Only include if retries happened
             )
+        except jobs.JobTimeoutError as e:
+            logger.warning(f"{operation_name}: read deadline passed ({e.reason})")
+            raise YFinanceRetryError(f"Read deadline passed: {e.reason}", last_error=e) from e
         except Exception as e:
             last_error = e
 
@@ -484,8 +484,9 @@ async def _retry_with_backoff(
             if is_rate_limit(e):
                 note_rate_limit(delay)
 
-            # Don't retry if we've exhausted attempts for this error type
-            if attempt >= effective_max_retries:
+            # Don't retry if we've exhausted attempts for this error type, or
+            # if the backoff would run past the read deadline
+            if attempt >= effective_max_retries or delay >= jobs.remaining(deadline):
                 logger.warning(
                     f"{operation_name}: Failed after {attempt + 1} attempts "
                     f"(limit={effective_max_retries + 1}). Last error: {e}"
@@ -525,6 +526,7 @@ async def _fetch_history_retry(params: FetchParams) -> RetryResult:
                 period=params.period,
                 interval=params.interval,
                 auto_adjust=params.adjusted,
+                timeout=jobs.REQUEST_TIMEOUT_SECONDS,
             )
         except (YFTickerMissingError, YFInvalidPeriodError) as e:
             # yfinance raises these (errors not hidden) where it used to return
@@ -552,11 +554,7 @@ async def _fetch_history_retry(params: FetchParams) -> RetryResult:
         # Standardize here - single place for both preview and cache
         return standardize_ohlcv(df, params.adjusted)
 
-    async with _fetch_semaphore:
-        return await _retry_with_backoff(
-            f"fetch_history({params.symbol})",
-            _fetch,
-        )
+    return await _retry_with_backoff(f"fetch_history({params.symbol})", _fetch)
 
 
 async def fetch_history(params: FetchParams) -> pd.DataFrame:
@@ -632,23 +630,23 @@ async def _fetch_info_raw(symbol: str) -> tuple[dict[str, Any], RetryResult]:
         return info, completeness
 
     expire_yfinance_response_cache()
-    async with _fetch_semaphore:
-        retry_result = await _retry_with_backoff(
-            f"fetch_info({normalized_symbol})",
-            _fetch,
-        )
+    retry_result = await _retry_with_backoff(f"fetch_info({normalized_symbol})", _fetch)
 
-        # Add completeness info to result
-        info, completeness = retry_result.result
-        retry_result.result = info
-        retry_result.info_completeness = completeness
+    # Add completeness info to result
+    info, completeness = retry_result.result
+    retry_result.result = info
+    retry_result.info_completeness = completeness
 
-        return info, retry_result
+    return info, retry_result
 
 
 def _info_from_quote_endpoint(symbol: str) -> dict[str, Any] | None:
     """The v7 quote entry for ``symbol`` (non-null fields), or None if absent."""
-    response = YfData().get(_V7_QUOTE_URL, params={"symbols": symbol, "formatted": "false"})
+    response = YfData().get(
+        _V7_QUOTE_URL,
+        params={"symbols": symbol, "formatted": "false"},
+        timeout=jobs.REQUEST_TIMEOUT_SECONDS,
+    )
     response.raise_for_status()
     results = (response.json().get("quoteResponse") or {}).get("result") or []
     entry = next(
@@ -663,57 +661,25 @@ async def _fetch_info_with_singleflight(
     symbol: str,
 ) -> tuple[dict[str, Any], RetryResult, bool]:
     """
-    Fetch info with singleflight deduplication.
+    Fetch info, sharing one in-flight fetch among concurrent callers.
 
-    Uses singleflight to deduplicate concurrent requests for the same symbol,
-    preventing yfinance crumb collisions when multiple tools call fetch_info
-    in parallel (e.g., during analyze_stock).
-
-    The singleflight pattern is leak-proof and cancellation-safe:
-    - Cleanup happens in the caller's finally block, not the task
-    - Only removes entry if it's still THIS task (prevents stomping)
-    - Works correctly even if task is cancelled or throws
+    Deduplicates concurrent requests for the same symbol, preventing yfinance
+    crumb collisions when several tools call fetch_info in parallel (e.g. during
+    analyze). ``jobs.singleflight`` runs the fetch detached and shields every
+    caller, so a cancelled or timed-out caller never cancels it for the others.
 
     Returns:
         Tuple of (info_dict, retry_result, singleflight_joined)
-        - singleflight_joined: True if this caller awaited an existing in-flight task
+        - singleflight_joined: True if this caller awaited an existing in-flight fetch
     """
     if shutdown_event.is_set():
         raise ServerShuttingDownError("Server is shutting down")
 
     normalized_symbol = symbol.upper().strip()
-    singleflight_joined = False
-
-    # Singleflight: deduplicate concurrent requests for the same symbol
-    # Acquire lock to check/create task atomically
-    async with _info_singleflight_lock:
-        task = _info_singleflight.get(normalized_symbol)
-        if task is None:
-            # First caller - create the task
-            task = asyncio.create_task(_fetch_info_raw(normalized_symbol))
-            _info_singleflight[normalized_symbol] = task
-            logger.debug(f"fetch_info({normalized_symbol}): created singleflight task")
-        else:
-            singleflight_joined = True
-            logger.debug(f"fetch_info({normalized_symbol}): joining existing singleflight")
-
-    # Await outside the lock, cleanup in finally
-    # Use asyncio.shield() for joiners to prevent a single cancelled waiter
-    # from cancelling the shared underlying fetch task
-    try:
-        if singleflight_joined:
-            # Joiner: shield the shared task so our cancellation doesn't propagate
-            info, retry_result = await asyncio.shield(task)
-        else:
-            # Creator: don't shield - if we're cancelled, cancel the task
-            info, retry_result = await task
-        return info, retry_result, singleflight_joined
-    finally:
-        # Cleanup: only remove if entry is still THIS task
-        # (prevents stomping if a new task was created after this one failed)
-        async with _info_singleflight_lock:
-            if _info_singleflight.get(normalized_symbol) is task:
-                _info_singleflight.pop(normalized_symbol, None)
+    (info, retry_result), joined = await jobs.singleflight(
+        ("info", normalized_symbol), lambda: _fetch_info_raw(normalized_symbol)
+    )
+    return info, retry_result, joined
 
 
 async def fetch_info(symbol: str) -> dict[str, Any]:
@@ -783,14 +749,10 @@ async def fetch_ticker(symbol: str) -> yf.Ticker:
         return yf.Ticker(normalized_symbol)
 
     expire_yfinance_response_cache()
-    async with _fetch_semaphore:
-        retry_result = await _retry_with_backoff(
-            f"fetch_ticker({normalized_symbol})",
-            _fetch,
-        )
-        ticker_obj = retry_result.result
-        ticker_cache.set(normalized_symbol, ticker_obj, get_ttl(DataType.TICKER))
-        return ticker_obj
+    retry_result = await _retry_with_backoff(f"fetch_ticker({normalized_symbol})", _fetch)
+    ticker_obj = retry_result.result
+    ticker_cache.set(normalized_symbol, ticker_obj, get_ttl(DataType.TICKER))
+    return ticker_obj
 
 
 def get_market_state(tz: str = "America/New_York") -> dict[str, str]:
@@ -814,4 +776,4 @@ def get_market_state(tz: str = "America/New_York") -> dict[str, str]:
 async def shutdown_executor() -> None:
     """Cleanup on server shutdown."""
     shutdown_event.set()
-    _executor.shutdown(wait=False, cancel_futures=True)
+    await jobs.shutdown()

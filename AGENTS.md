@@ -7,7 +7,7 @@
 ## Key Paths
 - `src/stock_analysis/server.py`: MCP server entrypoint
 - `src/stock_analysis/tools/`: tool implementations
-- `src/stock_analysis/data/`: yfinance client and caching; `provider.py` reads the sources whose failures yfinance would otherwise hide (calendar, earnings page, news, Search news and quotes)
+- `src/stock_analysis/data/`: yfinance client and caching; `provider.py` reads the sources whose failures yfinance would otherwise hide (calendar, earnings page, news, Search news and quotes) and the `Ticker` property reads; `jobs.py` runs every blocking read as an executor job
 - `src/stock_analysis/resources/`: MCP resources
 - `tests/`: schema, invariants, and utility coverage
 - `README.md`: install, usage, and public-facing behavior
@@ -27,7 +27,7 @@
 - Run `uv run mypy` when touching typed Python code or schemas. `mypy` is available via the `dev` extra in `pyproject.toml`.
 
 ## Test Characteristics
-- The suite is unit-test focused and runs offline. An autouse guard in `tests/conftest.py` fails any test that sends a request through a `curl_cffi` or `requests` session (yfinance's transport), or makes an unrouted stub request, even when app code swallows the error. It also points `STOCK_ANALYSIS_DATA_DIR` at a per-test temp dir and yfinance's cookie/tz caches at a session temp dir, disables retry sleeps, and clears provider source caches between tests.
+- The suite is unit-test focused and runs offline. An autouse guard in `tests/conftest.py` fails any test that sends a request through a `curl_cffi` or `requests` session (yfinance's transport), or makes an unrouted stub request, even when app code swallows the error. It also points `STOCK_ANALYSIS_DATA_DIR` at a per-test temp dir and yfinance's cookie/tz caches at a session temp dir, disables retry sleeps, and clears provider source caches, job permits/locks and in-flight singleflight entries between tests. Concurrency tests (`tests/test_jobs.py`) block jobs on `threading.Event` barriers and must release them; `FakeSession.hold(source)` blocks a transport request the same way.
 - To test yfinance behavior itself (error suppression, caching, parsing), drive the real pinned library with only its HTTP session stubbed: the `yf_transport` fixture or `stubbed_yfinance_transport()` in `tests/support/transport.py`, with synthetic fixtures under `tests/fixtures/transport/`. `tests/support/fake_ticker.py` is an app-level fake that skips yfinance internals; `tests/support/fake_source.py` (`FakeSource`) stands in for one `provider` read in tool-level tests.
 - `tests/test_yfinance_transport_contract.py` pins current library behavior, including known defects; a change that alters how a source is read updates those tests deliberately.
 - `scripts/record_provider_fixtures.py` records real responses (manual, networked) to the gitignored `tests/fixtures/_recorded/`; never commit recordings.
@@ -136,8 +136,7 @@
   other transport errors; an unparseable history body is retried, not reported
   as `invalid_symbol`, and every retry attempt clears yfinance's `cache_get`
   LRU so it does fresh I/O. Provider reads cap retry backoff at 4 s (at most
-  three attempts); that bounds backoff, not request time (synchronous reads
-  keep 30 s timeouts until WP3). They cache only `ok`/`empty` results
+  three attempts). They cache only `ok`/`empty` results
   (calendar 1h, earnings page 6h, news and Search 15 min, symbol search 1h).
   Nested fields are validated too: a malformed calendar earnings/dividend
   field, or a non-object news/Search item, makes the read `failed`. Symbol
@@ -146,6 +145,31 @@
   404 falls back to the v7 quote endpoint like yfinance's hidden mode did. A `Ticker` or info cache miss clears yfinance's `cache_get`
   LRU so the refetch does fresh I/O; a failed `Ticker` attribute read evicts
   that Ticker. Supported range: `yfinance>=1.0,<2`.
+- Concurrency (WP3, `data/jobs.py`): no yfinance read runs on the event loop.
+  Each attempt is one executor job that takes an admission permit (at most
+  `YF_MAX_WORKERS`, default 4) -- plus the symbol's lock for `Ticker` property
+  reads, since `Ticker` state is not thread-safe -- when submitted, and gives
+  them back only when its thread finishes. A cancelled or timed-out waiter just
+  stops waiting; the orphaned job keeps its permit and lock, so the limit holds
+  and one symbol's property reads never overlap. Backoff and rate-limit
+  cooldown sleeps hold neither. Every read stops at its deadline
+  (`YF_READ_DEADLINE_SECONDS`, default 8, capped by an enclosing
+  `jobs.deadline_scope`); transport requests and history also carry
+  `YF_REQUEST_TIMEOUT_SECONDS` (default 5). A provider read past its deadline
+  is `failed` with `error_type` `timeout`, `queued_behind_symbol_lock` or
+  `queued_for_admission`. `Ticker` property reads (statements, estimates,
+  dividends, splits, holders, options) go through `provider.read_property`:
+  retried (an error page hidden behind a JSON/parse error counts as
+  retryable) and returned as a `SourceRead` (`ok`, `unverified` when empty,
+  `failed`), with each site keeping its existing degraded output. Concurrent
+  reads of one provider source, and concurrent `fetch_info` calls for one
+  symbol, share a single in-flight fetch (`jobs.singleflight`): a detached
+  task every caller awaits through `asyncio.shield`, removed when it lands, so
+  a failure is shared only while in flight and never cached. `analyze` runs
+  each tool under `TIMEOUT_SECONDS` (10) with its reads capped at 90% of it,
+  so a hung read fails structured and the tool still returns; a tool that does
+  time out reports `in_flight_jobs` in its `tool_failures` entry, since
+  threads can't be killed.
 - `analyze_trade_setup.freshness` in regular session requires BOTH a fresh
   intraday bar and a current daily frame (`daily_bar_date >=
   daily_expected_date`, the previous completed session); daily-leg failure is

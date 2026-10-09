@@ -7,13 +7,6 @@ import pandas as pd
 from stock_analysis.tools.fundamentals import _analyze_dividend_history
 
 
-class _FakeTicker:
-    """Minimal ticker stub exposing `.dividends` as a pandas Series."""
-
-    def __init__(self, dividends: pd.Series) -> None:
-        self.dividends = dividends
-
-
 def _build_dividends(yearly: dict[int, list[tuple[int, float]]]) -> pd.Series:
     """Build a dividends Series from {year: [(month, amount), ...]}."""
     rows: list[tuple[pd.Timestamp, float]] = []
@@ -46,7 +39,7 @@ class TestPartialYearHandling:
         })
 
         result = _analyze_dividend_history(
-            _FakeTicker(dividends),
+            dividends,
             info={"payoutRatio": 0.4},
         )
 
@@ -75,7 +68,7 @@ class TestPartialYearHandling:
         })
 
         result = _analyze_dividend_history(
-            _FakeTicker(dividends),
+            dividends,
             info={"payoutRatio": 0.5},
         )
 
@@ -97,7 +90,7 @@ class TestPartialYearHandling:
         })
 
         result = _analyze_dividend_history(
-            _FakeTicker(dividends),
+            dividends,
             info={"payoutRatio": 0.5},
         )
 
