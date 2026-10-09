@@ -67,6 +67,9 @@ def _provider_test_state(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 @pytest.fixture
 def host_tz() -> Iterator[Callable[[str], None]]:
     """Set the process time zone for one test (host-local date conversions)."""
+    if not hasattr(time, "tzset"):
+        # e.g. some uv-managed (python-build-standalone) builds
+        pytest.skip("time.tzset is unavailable on this Python build")
     original = os.environ.get("TZ")
 
     def set_tz(name: str) -> None:
