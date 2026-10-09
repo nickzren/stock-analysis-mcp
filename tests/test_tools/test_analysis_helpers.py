@@ -51,10 +51,20 @@ def test_compute_valuation_history_reflects_historical_price_levels() -> None:
         index=history_index,
     )
 
-    info = {"sharesOutstanding": 1_000_000}
+    info = {
+        "sharesOutstanding": 1_000_000,
+        "regularMarketPrice": 180.0,
+        "marketCap": 180_000_000,
+        "currency": "USD",
+        "financialCurrency": "USD",
+    }
 
     result = _compute_valuation_history(income_stmt, history_df, info)
     assert result is not None
+    # R4.9: two points are not enough for stats or *_5y values.
+    assert (result["status"], result["history_points"]) == ("insufficient_history", 2)
+    assert result["pe_stats"] is None and result["ps_stats"] is None
+    assert result["history_span_years"] < 5
 
     pe_history = result.get("pe_history") or []
     ps_history = result.get("ps_history") or []

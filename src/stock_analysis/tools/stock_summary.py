@@ -13,6 +13,7 @@ from stock_analysis.utils.provenance import (
     utcnow_isoformat_z,
 )
 from stock_analysis.utils.sanitize import sanitize_text
+from stock_analysis.utils.valuation_basis import classify_support, dividend_yields
 
 
 async def stock_summary(symbol: str) -> dict[str, Any]:
@@ -42,11 +43,9 @@ async def stock_summary(symbol: str) -> dict[str, Any]:
     # Volume
     avg_volume = info.get("averageVolume") or info.get("averageDailyVolume10Day")
 
-    # Dividend yield (convert to decimal if present)
-    div_yield = info.get("dividendYield")
-    # yfinance sometimes returns as decimal, sometimes as percent
-    if div_yield is not None and div_yield > 1:
-        div_yield = div_yield / 100
+    # Forward dividend yield as a fraction (WP4, Q3), the same value on every path.
+    dividends = dividend_yields(info, current_price)
+    name = sanitize_text(info.get("shortName") or info.get("longName"))
 
     duration_ms = (perf_counter() - start_time) * 1000
 
@@ -59,17 +58,24 @@ async def stock_summary(symbol: str) -> dict[str, Any]:
             ),
         },
         "symbol": normalized_symbol,
-        "name": sanitize_text(info.get("shortName") or info.get("longName")),
+        "name": name,
         "sector": sanitize_text(info.get("sector")),
         "industry": sanitize_text(info.get("industry")),
         "exchange": info.get("exchange"),
-        "currency": info.get("currency", "USD"),
+        "currency": info.get("currency"),
+        "financial_currency": info.get("financialCurrency"),
+        "quote_type": info.get("quoteType"),
+        "support": classify_support(
+            quote_type=info.get("quoteType"), currency=info.get("currency"), symbol=normalized_symbol, name=name
+        ),
         "current_price": current_price,
         "previous_close": safe_float(previous_close),
         "market_cap": safe_int(info.get("marketCap")),
         "avg_volume_30d": safe_int(avg_volume),
         "shares_outstanding": safe_int(info.get("sharesOutstanding")),
-        "dividend_yield": safe_round(div_yield, 4),
+        "dividend_yield": safe_round(dividends["yield"], 4),
+        "dividend_yield_basis": dividends["basis"],
+        "dividend_yield_trailing": safe_round(dividends["trailing"], 4),
         "employees": safe_int(info.get("fullTimeEmployees")),
         "website": sanitize_text(info.get("website")),
         "description": sanitize_text(info.get("longBusinessSummary"), max_length=500),

@@ -27,6 +27,18 @@ from stock_analysis.utils.provenance import (
     utcnow_isoformat_z,
 )
 from stock_analysis.utils.validators import check_rule
+from stock_analysis.utils.valuation_basis import (
+    PROVIDER,
+    UNVERIFIED,
+    UNVERIFIED_CURRENCY,
+    UNVERIFIED_SHARE_UNITS,
+    VERIFIED,
+    currency_basis,
+    dividend_yields,
+    metric_entry,
+    share_units_basis,
+    usable_metric,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +49,19 @@ _CAPEX_LABELS: tuple[str, ...] = ("capitalexpenditure", "capitalexpenditures")
 
 
 def _build_valuation(info: dict[str, Any]) -> dict[str, Any]:
-    """Build the valuation section from yfinance info."""
+    """Build the valuation section from yfinance info.
+
+    WP4: each ratio is kept only on a verified basis (``metric_status``): ratios
+    mixing price and statement data need one currency; P/E needs a positive EPS
+    of the same horizon; EV-based ratios need EV > 0 to be scored.
+    """
+    price = current_price_from_info(info)
+    currency = currency_basis(info.get("currency"), info.get("financialCurrency"))
+    status: dict[str, dict[str, Any]] = {}
+
+    pe_trailing = _pe(info, "trailingPE", "trailingEps", currency, status, "pe_trailing")
+    pe_forward = _pe(info, "forwardPE", "forwardEps", currency, status, "pe_forward")
+
     # P/S: try direct field first, then compute from market_cap / revenue
     ps_trailing = safe_float(info.get("priceToSalesTrailing12Months"))
     ps_source: str | None = None
@@ -49,33 +73,101 @@ def _build_valuation(info: dict[str, Any]) -> dict[str, Any]:
         if market_cap_val is not None and revenue_ttm is not None and revenue_ttm > 0:
             ps_trailing = market_cap_val / revenue_ttm
             ps_source = "computed"
+    if ps_trailing is not None and currency != VERIFIED:
+        ps_trailing = None
+        status["ps_trailing"] = metric_entry(currency, False, currency)
+    elif ps_trailing is not None:
+        status["ps_trailing"] = metric_entry(VERIFIED, ps_trailing > 0, None if ps_trailing > 0 else "ps_nonpositive")
 
     ps_explanation: str | None = None
     if ps_source == "computed":
         ps_explanation = "P/S computed from market_cap / revenue_ttm (priceToSalesTrailing12Months unavailable)"
 
-    # EV/Sales: compute from enterpriseValue / totalRevenue
+    pb_ratio = safe_float(info.get("priceToBook"))
+    if pb_ratio is not None:
+        pb_basis = currency if currency != VERIFIED else share_units_basis(info, price)
+        if pb_basis != VERIFIED:
+            pb_ratio = None
+            status["pb_ratio"] = metric_entry(pb_basis, False, pb_basis)
+        else:
+            status["pb_ratio"] = metric_entry(VERIFIED, pb_ratio > 0, None if pb_ratio > 0 else "pb_nonpositive")
+
+    # Provider PEG: kept whatever the growth figures say; only PEG > 0 is scored.
+    peg_ratio = safe_float(info.get("pegRatio"))
+    if peg_ratio is not None:
+        status["peg_ratio"] = metric_entry(PROVIDER, peg_ratio > 0, None if peg_ratio > 0 else "peg_nonpositive")
+
+    # EV can be negative (cash > market cap + debt); EV ratios are scored only when EV > 0.
     enterprise_value = safe_float(info.get("enterpriseValue"))
     revenue_ttm = safe_float(info.get("totalRevenue"))
     ev_to_sales: float | None = None
     ev_to_sales_source: str | None = None
     if enterprise_value is not None and revenue_ttm is not None and revenue_ttm > 0:
-        ev_to_sales = enterprise_value / revenue_ttm
-        ev_to_sales_source = "computed"
+        if currency != VERIFIED:
+            status["ev_to_sales"] = metric_entry(currency, False, currency)
+        else:
+            ev_to_sales = enterprise_value / revenue_ttm
+            ev_to_sales_source = "computed"
+            status["ev_to_sales"] = metric_entry(
+                VERIFIED, enterprise_value > 0, None if enterprise_value > 0 else "ev_nonpositive"
+            )
+
+    ev_to_ebitda = safe_float(info.get("enterpriseToEbitda"))
+    ebitda = safe_float(info.get("ebitda"))
+    if ev_to_ebitda is not None:
+        if ebitda is not None and ebitda <= 0:
+            ev_to_ebitda = None
+            status["ev_to_ebitda"] = metric_entry(currency, False, "undefined_ebitda_nonpositive")
+        elif currency != VERIFIED:
+            ev_to_ebitda = None
+            status["ev_to_ebitda"] = metric_entry(currency, False, currency)
+        else:
+            applicable = ev_to_ebitda > 0 and (enterprise_value is None or enterprise_value > 0)
+            status["ev_to_ebitda"] = metric_entry(VERIFIED, applicable, None if applicable else "ev_nonpositive")
 
     return {
-        "pe_trailing": safe_float(info.get("trailingPE")),
-        "pe_forward": safe_float(info.get("forwardPE")),
+        "pe_trailing": pe_trailing,
+        "pe_forward": pe_forward,
         "trailing_eps": safe_float(info.get("trailingEps")),
+        "forward_eps": safe_float(info.get("forwardEps")),
         "ps_trailing": safe_round(ps_trailing, 2),
         "ps_source": ps_source,
         "ps_explanation": ps_explanation,
-        "pb_ratio": safe_float(info.get("priceToBook")),
-        "peg_ratio": safe_float(info.get("pegRatio")),
-        "ev_to_ebitda": safe_float(info.get("enterpriseToEbitda")),
+        "pb_ratio": pb_ratio,
+        "peg_ratio": peg_ratio,
+        "enterprise_value": enterprise_value,
+        "ev_to_ebitda": ev_to_ebitda,
         "ev_to_sales": safe_round(ev_to_sales, 2),
         "ev_to_sales_source": ev_to_sales_source,
+        "metric_status": status,
     }
+
+
+def _pe(
+    info: dict[str, Any],
+    pe_key: str,
+    eps_key: str,
+    currency: str,
+    status: dict[str, dict[str, Any]],
+    name: str,
+) -> float | None:
+    """A provider P/E judged on its own EPS horizon: undefined when that EPS <= 0,
+    unverified when the EPS is unknown or its currency can't be shown to match."""
+    pe = safe_float(info.get(pe_key))
+    eps = safe_float(info.get(eps_key))
+    if pe is None and eps is None:
+        return None
+    if eps is not None and eps <= 0:
+        status[name] = metric_entry(currency, False, "undefined_eps_nonpositive")
+        return None
+    if currency != VERIFIED:
+        status[name] = metric_entry(currency, False, currency)
+        return None
+    if eps is None or pe is None or pe <= 0:
+        status[name] = metric_entry(UNVERIFIED, False, "eps_basis_unknown")
+        return None
+    status[name] = metric_entry(VERIFIED, True)
+    return pe
 
 
 def _build_growth(info: dict[str, Any]) -> dict[str, Any]:
@@ -137,10 +229,19 @@ def _build_financial_health(info: dict[str, Any]) -> dict[str, Any]:
         else None
     )
     current_ratio = safe_float(info.get("currentRatio"))
+    # Yahoo reports D/E as a percent, always (R4.1).
     debt_to_equity = safe_float(info.get("debtToEquity"))
-    # Convert D/E from percentage to ratio if needed (yfinance returns as percentage)
-    if debt_to_equity is not None and debt_to_equity > 10:
+    if debt_to_equity is not None:
         debt_to_equity = debt_to_equity / 100
+    price_to_book = safe_float(info.get("priceToBook"))
+    if (debt_to_equity is not None and debt_to_equity < 0) or (
+        debt_to_equity is None and price_to_book is not None and price_to_book < 0
+    ):
+        leverage_status = "negative_equity"  # never low debt (R4.2)
+    elif debt_to_equity is None:
+        leverage_status = "unavailable"
+    else:
+        leverage_status = "reported"
 
     return {
         "total_cash": total_cash,
@@ -149,6 +250,7 @@ def _build_financial_health(info: dict[str, Any]) -> dict[str, Any]:
         "net_cash": net_cash,
         "current_ratio": current_ratio,
         "debt_to_equity": debt_to_equity,
+        "leverage_status": leverage_status,
         "interest_coverage": None,  # Not directly available
         "rules": {
             "net_cash_positive": {
@@ -156,7 +258,9 @@ def _build_financial_health(info: dict[str, Any]) -> dict[str, Any]:
                 "threshold": 0,
             },
             "low_debt": {
-                "triggered": check_rule(debt_to_equity, 0.5, operator.lt),
+                "triggered": (
+                    False if leverage_status == "negative_equity" else check_rule(debt_to_equity, 0.5, operator.lt)
+                ),
                 "threshold": 0.5,
             },
             "adequate_liquidity": {
@@ -287,7 +391,6 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
     operating_cf = safe_float(info.get("operatingCashflow"))
     free_cash_flow = safe_float(info.get("freeCashflow"))
     financial_currency = info.get("financialCurrency")
-    price_currency = info.get("currency")
 
     try:
         ticker_obj = await fetch_ticker(symbol)
@@ -331,14 +434,7 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
         },
     }
 
-    yield_metrics = _build_yield_metrics(
-        info,
-        valuation,
-        free_cash_flow,
-        market_cap,
-        financial_currency,
-        price_currency,
-    )
+    yield_metrics = _build_yield_metrics(info, valuation, free_cash_flow, market_cap, current_price)
 
     analyst_coverage = _build_analyst_coverage(info, current_price)
     short_interest = _build_short_interest(info)
@@ -346,8 +442,8 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
     governance = _build_governance(info)
     quality = _build_quality(info)
 
-    pe_current = valuation.get("pe_trailing")
-    ps_current = valuation.get("ps_trailing")
+    pe_current = usable_metric(valuation, "pe_trailing")
+    ps_current = usable_metric(valuation, "ps_trailing")
     valuation_context_status = "partial" if pe_current is not None or ps_current is not None else "unavailable"
 
     valuation_context = {
@@ -356,6 +452,8 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
         "pe_percentile_5y": None,
         "ps_current": ps_current,
         "ps_5y_avg": None,
+        "history_points": 0,
+        "history_span_years": None,
         "status": valuation_context_status,
         "status_reason": "historical_pe_ps_unavailable",
     }
@@ -366,7 +464,9 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
 
     # Enrichment: valuation history, trends, estimates, dividend analysis
     income_stmt = statements.get("quarterly_income_stmt")
-    valuation_history = _compute_valuation_history(income_stmt, statements.get("price_history_5y"), info)
+    valuation_history = _compute_valuation_history(
+        income_stmt, statements.get("price_history_5y"), info, valuation
+    )
     fundamental_trends = _compute_fundamental_trends(income_stmt)
     analyst_estimates = (
         _build_earnings_estimates(statements.get("earnings_estimate"), statements.get("revenue_estimate"), info)
@@ -375,18 +475,26 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
     )
     dividend_analysis = _analyze_dividend_history(statements.get("dividends"), info)
 
-    # Wire valuation history stats into valuation_context
+    # Wire valuation history stats into valuation_context: *_5y only when the
+    # history is sufficient AND actually spans five years (R4.9).
     if valuation_history:
+        valuation_context["history_points"] = valuation_history.get("history_points", 0)
+        valuation_context["history_span_years"] = valuation_history.get("history_span_years")
         pe_stats = valuation_history.get("pe_stats")
         ps_stats = valuation_history.get("ps_stats")
-        if pe_stats:
-            valuation_context["pe_5y_avg"] = pe_stats.get("mean")
-            valuation_context["pe_percentile_5y"] = pe_stats.get("current_percentile")
-        if ps_stats:
-            valuation_context["ps_5y_avg"] = ps_stats.get("mean")
-        if pe_stats or ps_stats:
+        span = valuation_history.get("history_span_years") or 0
+        if (pe_stats or ps_stats) and span >= 5:
+            if pe_stats:
+                valuation_context["pe_5y_avg"] = pe_stats.get("mean")
+                valuation_context["pe_percentile_5y"] = pe_stats.get("current_percentile")
+            if ps_stats:
+                valuation_context["ps_5y_avg"] = ps_stats.get("mean")
             valuation_context["status"] = "available"
             valuation_context["status_reason"] = None
+        elif pe_stats or ps_stats:
+            valuation_context["status_reason"] = "history_span_under_5y"
+        elif valuation_history.get("status") != "unavailable":
+            valuation_context["status_reason"] = valuation_history.get("status")
 
     duration_ms = (perf_counter() - start_time) * 1000
 
@@ -529,15 +637,16 @@ def _build_yield_metrics(
     valuation: dict[str, Any],
     free_cash_flow: float | None,
     market_cap: float | None,
-    financial_currency: str | None,
-    price_currency: str | None,
+    price: float | None,
 ) -> dict[str, Any]:
-    """Build yield and dividend sustainability metrics."""
-    currency_mismatch = (
-        financial_currency is not None
-        and price_currency is not None
-        and financial_currency != price_currency
-    )
+    """Build yield and dividend sustainability metrics.
+
+    WP4: FCF yield and the payout ratios mix statement and price data, so they need
+    one currency; the forward dividend yield (Q3) is ``dividendRate / price``.
+    """
+    currency = currency_basis(info.get("currency"), info.get("financialCurrency"))
+    currency_mismatch = currency != VERIFIED
+    status: dict[str, dict[str, Any]] = {}
     fcf_yield = (
         free_cash_flow / market_cap
         if (
@@ -548,21 +657,25 @@ def _build_yield_metrics(
         )
         else None
     )
-    pe_trailing = valuation.get("pe_trailing")
+    if currency_mismatch and free_cash_flow is not None:
+        status["fcf_yield"] = metric_entry(currency, False, currency)
+    pe_trailing = usable_metric(valuation, "pe_trailing")
     earnings_yield = (
         1 / pe_trailing
         if pe_trailing is not None and pe_trailing > 0
         else None
     )
-    dividend_yield = safe_float(info.get("dividendYield"))
+    dividends = dividend_yields(info, price)
 
     dividend_rate = safe_float(info.get("dividendRate"))
     trailing_eps = valuation.get("trailing_eps")
     payout_ratio = (
         dividend_rate / trailing_eps
-        if dividend_rate is not None and trailing_eps is not None and trailing_eps > 0
+        if dividend_rate is not None and trailing_eps is not None and trailing_eps > 0 and not currency_mismatch
         else None
     )
+    if currency_mismatch and dividend_rate is not None:
+        status["dividend_payout_ratio"] = metric_entry(currency, False, currency)
     shares_outstanding = safe_float(info.get("sharesOutstanding"))
     fcf_payout = (
         (dividend_rate * shares_outstanding) / free_cash_flow
@@ -575,6 +688,11 @@ def _build_yield_metrics(
         )
         else None
     )
+    if dividends["basis"] == UNVERIFIED_CURRENCY:
+        status["dividend_yield"] = metric_entry(UNVERIFIED_CURRENCY, False, UNVERIFIED_CURRENCY)
+    trailing_rate = safe_float(info.get("trailingAnnualDividendRate"))
+    if trailing_rate and dividends["trailing"] is None:
+        status["dividend_yield_trailing"] = metric_entry(currency, False, currency if currency_mismatch else UNVERIFIED_SHARE_UNITS)
 
     yield_warnings: list[str] = []
     is_fcf_negative = free_cash_flow is not None and free_cash_flow <= 0
@@ -598,7 +716,9 @@ def _build_yield_metrics(
     return {
         "fcf_yield": safe_round(fcf_yield, 4),
         "earnings_yield": safe_round(earnings_yield, 4) if not is_eps_negative else None,
-        "dividend_yield": safe_round(dividend_yield, 4),
+        "dividend_yield": safe_round(dividends["yield"], 4),
+        "dividend_yield_basis": dividends["basis"],
+        "dividend_yield_trailing": safe_round(dividends["trailing"], 4),
         "dividend_payout_ratio": safe_round(payout_ratio, 4) if not is_eps_negative else None,
         "fcf_payout_ratio": safe_round(fcf_payout, 4) if not is_fcf_negative else None,
         "rules": {
@@ -612,16 +732,26 @@ def _build_yield_metrics(
             },
         },
         "warnings": yield_warnings if yield_warnings else None,
+        "metric_status": status,
     }
 
 
+_MIN_HISTORY_POINTS = 8  # sufficiency policy for valuation-history stats (WP4)
 
 
 def _compute_valuation_history(
-    income_stmt: pd.DataFrame | None, price_hist: pd.DataFrame | None, info: dict[str, Any]
+    income_stmt: pd.DataFrame | None,
+    price_hist: pd.DataFrame | None,
+    info: dict[str, Any],
+    valuation: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Compute historical P/E and P/S from quarterly income statements (None inputs:
-    the read failed or returned nothing)."""
+    the read failed or returned nothing).
+
+    WP4: entries need the same currency and share basis as current ratios; stats
+    need at least ``_MIN_HISTORY_POINTS`` points; ``current_percentile`` ranks the
+    current (usable) ratio against the history.
+    """
     shares_outstanding = safe_float(info.get("sharesOutstanding"))
     if shares_outstanding is None or shares_outstanding <= 0:
         return None
@@ -630,6 +760,15 @@ def _compute_valuation_history(
         return None
     if price_hist is None or price_hist.empty or "Close" not in price_hist:
         return None
+
+    basis = currency_basis(info.get("currency"), info.get("financialCurrency"))
+    if basis == VERIFIED:
+        basis = share_units_basis(info, current_price_from_info(info))
+    if basis != VERIFIED:
+        return {
+            "pe_history": None, "ps_history": None, "pe_stats": None, "ps_stats": None,
+            "history_points": 0, "history_span_years": None, "status": basis,
+        }
 
     close_series = pd.to_numeric(price_hist["Close"], errors="coerce").dropna()
     if close_series.empty:
@@ -691,17 +830,16 @@ def _compute_valuation_history(
                     ps_history.append({"quarter": quarter_label, "ps": ps})
 
     def _compute_stats(
-        history: list[dict[str, Any]], key: str,
+        history: list[dict[str, Any]], key: str, current: float | None,
     ) -> dict[str, Any] | None:
-        if not history:
-            return None
         values = [entry[key] for entry in history if entry.get(key) is not None]
-        if not values:
+        if len(values) < _MIN_HISTORY_POINTS:
             return None
-        sorted_vals = sorted(values)
-        current = values[0]
-        below_count = sum(1 for v in sorted_vals if v < current)
-        percentile = safe_round(below_count / len(sorted_vals) * 100, 1) if sorted_vals else None
+        percentile = (
+            safe_round(sum(1 for v in values if v < current) / len(values) * 100, 1)
+            if current is not None
+            else None
+        )
         return {
             "min": safe_round(min(values), 2),
             "max": safe_round(max(values), 2),
@@ -710,11 +848,28 @@ def _compute_valuation_history(
             "current_percentile": percentile,
         }
 
+    quarters = sorted({entry["quarter"] for entry in pe_history + ps_history})
+    span_years = (
+        safe_round((pd.Timestamp(quarters[-1]) - pd.Timestamp(quarters[0])).days / 365.25, 2)
+        if len(quarters) > 1
+        else (0.0 if quarters else None)
+    )
+    pe_stats = _compute_stats(pe_history, "pe", usable_metric(valuation, "pe_trailing"))
+    ps_stats = _compute_stats(ps_history, "ps", usable_metric(valuation, "ps_trailing"))
+    if pe_stats or ps_stats:
+        status = "available"
+    elif quarters:
+        status = "insufficient_history"
+    else:
+        status = "unavailable"
     return {
         "pe_history": pe_history if pe_history else None,
         "ps_history": ps_history if ps_history else None,
-        "pe_stats": _compute_stats(pe_history, "pe"),
-        "ps_stats": _compute_stats(ps_history, "ps"),
+        "pe_stats": pe_stats,
+        "ps_stats": ps_stats,
+        "history_points": len(quarters),
+        "history_span_years": span_years,
+        "status": status,
     }
 
 
@@ -870,7 +1025,7 @@ def _build_earnings_estimates(
     result.update(_extract_estimate_rows(revenue_estimates, "rev"))
 
     forward_pe: float | None = None
-    if isinstance(info, dict):
+    if isinstance(info, dict) and currency_basis(info.get("currency"), info.get("financialCurrency")) == VERIFIED:
         shares_out = safe_float(info.get("sharesOutstanding"))
         next_year_eps = result.get("eps_next_year", {}).get("avg")
         if (

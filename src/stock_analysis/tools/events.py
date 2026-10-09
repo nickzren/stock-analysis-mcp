@@ -24,6 +24,7 @@ from stock_analysis.utils.provenance import (
     fetch_or_error,
     utcnow_isoformat_z,
 )
+from stock_analysis.utils.valuation_basis import dividend_yields
 
 _ET = ZoneInfo("America/New_York")
 
@@ -380,17 +381,16 @@ def _build_dividends(calendar_events: dict[str, Any], info: dict[str, Any]) -> d
     # Use pre-fetched info for dividend data
     dividend_amount = safe_float(info.get("lastDividendValue"))
     annual_dividend = safe_float(info.get("dividendRate"))
-    dividend_yield = safe_float(info.get("dividendYield"))
-    # Convert yield to decimal if it's in percentage form
-    if dividend_yield is not None and dividend_yield > 1:
-        dividend_yield = dividend_yield / 100
+    dividends = dividend_yields(info, current_price_from_info(info))
 
     return {
         "ex_date": _utc_date(calendar_events.get("exDividendDate")),
         "pay_date": _utc_date(calendar_events.get("dividendDate")),
         "amount": dividend_amount,
         "annual": annual_dividend,
-        "yield": safe_round(dividend_yield, 4),
+        "yield": safe_round(dividends["yield"], 4),
+        "yield_basis": dividends["basis"],
+        "yield_trailing": safe_round(dividends["trailing"], 4),
     }
 
 
