@@ -251,13 +251,16 @@ async def read_property(ticker: Any, source: str, read: Callable[[], T]) -> Sour
     errors are retried; when yfinance parsed an HTTP error page instead of
     raising it, the page's status decides (``preserving_http_status``).
     ``ok``: a non-empty value. ``unverified``: ``None`` or empty, since a property
-    can't prove emptiness. ``failed``: the read failed or missed its deadline;
-    the cached Ticker is evicted so its partial state is not reused.
+    can't prove emptiness. ``failed``: the read failed (an HTTP error response
+    counts even when yfinance returned a result) or missed its deadline; the
+    cached Ticker is evicted and yfinance's response cache cleared, so neither
+    is reused.
     """
     symbol = _normalize(str(getattr(ticker, "ticker", "") or "")) or None
     outcome = await _attempts(source, preserving_http_status(read), _is_retryable_error, symbol_lock=symbol)
     if outcome.failure is not None:
         evict_ticker(ticker)
+        expire_yfinance_response_cache()  # a failed response must not be served to the next read
         return outcome.failure
     status: SourceStatus = "unverified" if _is_empty(outcome.value) else "ok"
     return SourceRead(

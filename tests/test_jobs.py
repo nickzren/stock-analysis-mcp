@@ -223,7 +223,7 @@ class TestR33R34Singleflight:
 
         waiters = [asyncio.create_task(jobs.singleflight("key", start)) for _ in range(3)]
         await barrier.until_started(1)
-        flight = jobs._flights["key"]
+        flight = jobs._flights["key"].task
         for waiter in waiters:
             await cancel(waiter)
 
@@ -651,6 +651,72 @@ class TestRequestPathsAreCapped:
 
 class _StopError(Exception):
     """Ends a request path once its first request is recorded."""
+
+
+class TestHttpErrorsNeverBecomeResults:
+    async def test_an_option_chain_built_from_a_503_fails(self, yf_transport: FakeSession) -> None:
+        """yfinance turns a JSON 503 into an empty chain without raising; it is a failure."""
+        yf_transport.route("options", "http_503_json")
+        ticker = yfinance_client.yf.Ticker(SYMBOL)
+
+        read = await provider.read_property(ticker, "option_chain", lambda: ticker.option_chain())
+
+        assert (read.status, read.error_type) == ("failed", "http_503")
+
+    async def test_the_read_after_a_failed_statement_fetches_again(self, yf_transport: FakeSession) -> None:
+        # yfinance re-requests once on >= 400, so one attempt sees two 404s.
+        yf_transport.route("timeseries", "http_404_html", "http_404_html", "quarterly_revenue_100")
+        failing = yfinance_client.yf.Ticker(SYMBOL)
+        failed = await provider.read_property(failing, "income", lambda: failing.quarterly_income_stmt)
+
+        recovered_ticker = yfinance_client.yf.Ticker(SYMBOL)
+        recovered = await provider.read_property(
+            recovered_ticker, "income", lambda: recovered_ticker.quarterly_income_stmt
+        )
+
+        assert (failed.status, failed.error_type) == ("failed", "http_404")
+        assert recovered.status == "ok" and recovered.payload.iloc[0, 0] == 100
+        assert len(yf_transport.calls_to("timeseries")) == 3  # fresh I/O, not the cached 404
+
+
+class TestSharedReadClocks:
+    async def test_queueing_for_a_slot_does_not_spend_a_shared_reads_budget(
+        self, monkeypatch: pytest.MonkeyPatch, barrier: Barrier, yf_transport: FakeSession
+    ) -> None:
+        monkeypatch.setattr(jobs, "READ_DEADLINE_SECONDS", 0.05)
+        yf_transport.route("calendar", "valid_one_epoch")
+        blocked = [asyncio.create_task(jobs.run_job(barrier.job(f"j{i}"), clock=jobs.ReadClock()))
+                   for i in range(jobs._gate.permits)]
+        await barrier.until_started(jobs._gate.permits)
+
+        read = asyncio.create_task(provider.read_calendar_events(SYMBOL))
+        await asyncio.sleep(0.15)  # queued well past the 0.05 s read budget
+        assert yf_transport.calls_to("calendar") == []
+        barrier.release.set()
+
+        assert (await read).status == "ok"
+        await asyncio.gather(*blocked, return_exceptions=True)
+        await drain()
+
+    async def test_an_expired_caller_starts_no_new_shared_work(self, yf_transport: FakeSession) -> None:
+        with jobs.deadline_scope(0):
+            read = await provider.read_search_news(SYMBOL)
+
+        assert (read.status, read.error_type) == ("failed", "timeout")
+        assert yf_transport.calls == [] and jobs._flights == {}
+
+    async def test_a_timed_out_news_feed_starts_no_search_fallback(self, yf_transport: FakeSession) -> None:
+        entered, release = yf_transport.hold("news")
+        yf_transport.route("news", "valid_stream")
+        yf_transport.route("search", "valid_news")  # recorded if the fallback ever ran
+
+        with jobs.deadline_scope(0.1):
+            result = await provider.read_news(SYMBOL)
+        release.set()
+
+        assert entered.is_set() and result.status == "failed"
+        assert yf_transport.calls_to("search") == []
+        await drain()
 
 
 class TestR310SharedSourceReads:

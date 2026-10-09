@@ -31,6 +31,7 @@ ROUTES: dict[str, str] = {
     "search": "/v1/finance/search",
     "timeseries": "/ws/fundamentals-timeseries/",
     "quote_v7": "/v7/finance/quote",
+    "options": "/v7/finance/options/",
     "consent_page": "guce.yahoo.com/consent",
 }
 

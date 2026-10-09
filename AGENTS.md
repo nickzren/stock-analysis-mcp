@@ -167,17 +167,23 @@
   `queued_for_admission` (`rate_limited` only while a cooldown is actually
   active); a job that finished is never reported as timed out. `Ticker` property reads (statements, estimates, dividends,
   splits, holders, options) go through `provider.read_property`: retried by
-  status -- when yfinance parsed an HTTP error page instead of raising it, the
-  job records the response's status (`preserving_http_status`), so a JSON 503
-  is retried and an HTML 404 or an unparseable 200 is not -- and returned as a
-  `SourceRead` (`ok`, `unverified` when empty, `failed`), with each site
-  keeping its existing degraded output. Concurrent reads of one provider
+  status -- the job records any HTTP error response yfinance received without
+  raising it (`preserving_http_status`), whether yfinance then failed to parse
+  it or built a result from it (e.g. an empty option chain from a 503), so a
+  JSON 503 is retried and an HTML 404 or an unparseable 200 is not -- and
+  returned as a `SourceRead` (`ok`, `unverified` when empty, `failed`), with
+  each site keeping its existing degraded output. A failed property read evicts
+  the Ticker and clears yfinance's response cache, so the next read fetches
+  again. Concurrent reads of one provider
   source, and concurrent `fetch_info` calls for one symbol, share a single
   in-flight fetch (`jobs.singleflight`): a detached task with no read budget,
   so the source stays owned until the fetch really finishes, that every caller
-  awaits through `asyncio.shield`, each only within its own clock (budget from
-  joining, capped by its scope); it is removed when it lands, so a failure is
-  shared only while in flight and never cached. `analyze` runs each tool under `TIMEOUT_SECONDS`
+  awaits through `asyncio.shield`, each only within its own clock (while the
+  fetch is queued for a slot only the caller's scope counts; its read budget
+  starts when the fetch is admitted). A caller already out of time may join a
+  fetch in flight but never starts a new one (so a timed-out news feed starts
+  no Search fallback). The entry is removed when the fetch lands, so a failure
+  is shared only while in flight and never cached. `analyze` runs each tool under `TIMEOUT_SECONDS`
   (10) with its reads capped at 90% of it, so a hung read fails structured and
   the tool still returns; `data_quality.in_flight_jobs`, kept at every
   `detail` level, (and a timed-out tool's `tool_failures` entry) reports threads

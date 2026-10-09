@@ -71,11 +71,13 @@ _job_responses = threading.local()
 
 
 class HiddenHTTPError(Exception):
-    """A read failed after yfinance received an HTTP error response without raising it
-    (e.g. it parsed a JSON or HTML 503 body). ``status`` is that response's status."""
+    """yfinance received an HTTP error response without raising it: it failed parsing
+    the body (``cause``), or turned it into an ordinary-looking result (no cause,
+    e.g. an empty option chain from a 503). ``status`` is that response's status."""
 
-    def __init__(self, status: int, cause: Exception):
-        super().__init__(f"HTTP {status} behind {type(cause).__name__}: {cause}")
+    def __init__(self, status: int, cause: Exception | None = None):
+        detail = f"behind {type(cause).__name__}: {cause}" if cause else "returned as a result"
+        super().__init__(f"HTTP {status} {detail}")
         self.status = status
 
 
@@ -111,20 +113,24 @@ _cap_yfinance_request_timeouts()
 
 
 def preserving_http_status(call: Callable[[], T]) -> Callable[[], T]:
-    """Wrap a blocking yfinance read (run on a worker thread) so that, when it fails
-    after receiving an HTTP error response yfinance didn't raise, the failure is a
-    ``HiddenHTTPError`` carrying that status, and retries follow the status, not
-    the parser error."""
+    """Wrap a blocking yfinance read (run on a worker thread) so that an HTTP error
+    response yfinance didn't raise becomes a ``HiddenHTTPError`` carrying that
+    status -- whether yfinance then failed to parse it or returned something
+    built from it -- and retries follow the status, not the parser error."""
 
     def run() -> T:
         _job_responses.statuses = []
         try:
-            return call()
+            result = call()
         except Exception as e:
             statuses = _job_responses.statuses
             if statuses and http_status(e) is None and not isinstance(e, YFRateLimitError):
                 raise HiddenHTTPError(statuses[-1], e) from e
             raise
+        else:
+            if _job_responses.statuses:
+                raise HiddenHTTPError(_job_responses.statuses[-1])
+            return result
         finally:
             _job_responses.statuses = None
 

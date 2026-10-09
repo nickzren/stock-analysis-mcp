@@ -43,6 +43,11 @@ _scope_deadline: contextvars.ContextVar[float | None] = contextvars.ContextVar("
 # False inside a singleflight's shared work: it runs until its fetch finishes, so a
 # source stays owned by one fetch; each caller waits only within its own clock.
 _budgeted: contextvars.ContextVar[bool] = contextvars.ContextVar("_budgeted", default=True)
+# Set inside a singleflight's shared work: resolved when its first job is admitted,
+# which is when its callers' read budgets start.
+_flight_started: contextvars.ContextVar["asyncio.Future[None] | None"] = contextvars.ContextVar(
+    "_flight_started", default=None
+)
 
 
 class JobTimeoutError(TimeoutError):
@@ -231,6 +236,9 @@ async def run_job(fn: Callable[[], T], *, clock: ReadClock, symbol_lock: str | N
         raise JobTimeoutError(queued_reason or "timeout")
     future = _gate.start(fn, symbol_lock)
     clock.admitted()
+    started = _flight_started.get()
+    if started is not None and not started.done():
+        started.set_result(None)
     try:
         async with asyncio.timeout(clock.timeout()):
             return await asyncio.wrap_future(future)
@@ -240,7 +248,13 @@ async def run_job(fn: Callable[[], T], *, clock: ReadClock, symbol_lock: str | N
         raise JobTimeoutError("timeout") from None
 
 
-_flights: dict[Any, "asyncio.Task[Any]"] = {}
+@dataclass
+class _Flight:
+    task: "asyncio.Task[Any]"
+    started: "asyncio.Future[None]"  # its first job was admitted, or it ended
+
+
+_flights: dict[Any, _Flight] = {}
 
 
 async def singleflight(key: Any, start: Callable[[], Coroutine[Any, Any, T]]) -> tuple[T, bool]:
@@ -250,37 +264,49 @@ async def singleflight(key: Any, start: Callable[[], Coroutine[Any, Any, T]]) ->
     and outside its creator's scope, so the key stays owned until the underlying
     fetch actually finishes (each HTTP request is still capped). Every caller, the
     creator included, awaits it through ``asyncio.shield``, so a cancelled caller
-    never cancels it, and waits only within its own ``ReadClock`` (budget from
-    joining, capped by its scope); on expiry it gets ``JobTimeoutError`` and the
-    work goes on for the others. A done-callback removes the entry and retrieves
-    any exception, so an outcome nobody awaited is never logged as unretrieved.
-    The entry lives only while in flight: nothing, failed results included, is
-    cached.
+    never cancels it, and waits only within its own ``ReadClock``: while the work
+    is queued for a slot only the caller's scope counts, and its read budget starts
+    when the work is admitted. On expiry the caller gets ``JobTimeoutError`` and
+    the work goes on for the others. A caller already out of time may join work in
+    flight but never starts new work. A done-callback removes the entry and
+    retrieves any exception, so an outcome nobody awaited is never logged as
+    unretrieved. The entry lives only while in flight: nothing, failed results
+    included, is cached.
     """
     loop = asyncio.get_running_loop()
-    task = _flights.get(key)
-    joined = task is not None and task.get_loop() is loop and not task.done()
-    if task is None or not joined:
+    clock = ReadClock()
+    flight = _flights.get(key)
+    joined = flight is not None and flight.task.get_loop() is loop and not flight.task.done()
+    if flight is None or not joined:
+        if clock.remaining() <= 0:
+            raise JobTimeoutError("timeout")
+        started: asyncio.Future[None] = loop.create_future()
         context = contextvars.copy_context()
         context.run(_scope_deadline.set, None)
         context.run(_budgeted.set, False)
-        task = loop.create_task(start(), context=context)
-        _flights[key] = task
-        task.add_done_callback(lambda t: _land(key, t))
-    clock = ReadClock()
-    clock.admitted()
+        context.run(_flight_started.set, started)
+        flight = _Flight(loop.create_task(start(), context=context), started)
+        _flights[key] = flight
+        flight.task.add_done_callback(lambda t: _land(key, t, started))
     try:
+        if not flight.started.done():
+            async with asyncio.timeout(clock.timeout()):  # queued: only the scope counts
+                await asyncio.shield(flight.started)
+        clock.admitted()
         async with asyncio.timeout(clock.timeout()):
-            return await asyncio.shield(task), joined
+            return await asyncio.shield(flight.task), joined
     except TimeoutError:
-        if task.done() and not task.cancelled():
-            return task.result(), joined
-        raise JobTimeoutError("timeout") from None
+        if flight.task.done() and not flight.task.cancelled():
+            return flight.task.result(), joined
+        raise JobTimeoutError("timeout" if flight.started.done() else "queued_for_admission") from None
 
 
-def _land(key: Any, task: "asyncio.Task[Any]") -> None:
-    if _flights.get(key) is task:
+def _land(key: Any, task: "asyncio.Task[Any]", started: "asyncio.Future[None]") -> None:
+    flight = _flights.get(key)
+    if flight is not None and flight.task is task:
         del _flights[key]
+    if not started.done():
+        started.set_result(None)
     if not task.cancelled():
         task.exception()
 
