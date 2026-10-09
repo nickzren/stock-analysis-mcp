@@ -2,11 +2,13 @@
 
 import asyncio
 import functools
+import inspect
 import json
 import logging
 import math
 import os
 import random
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -48,28 +50,85 @@ logger = logging.getLogger(__name__)
 YfConfig.debug.hide_exceptions = False
 
 
+T = TypeVar("T")
+
+# Every YfData method that sends a request (data, cookie, crumb, consent) and the
+# argument carrying its timeout.
+_REQUEST_METHODS = (
+    "_make_request",
+    "_get_cookie_and_crumb",
+    "_get_cookie_and_crumb_basic",
+    "_get_cookie_basic",
+    "_get_crumb_basic",
+    "_get_cookie_csrf",
+    "_get_crumb_csrf",
+    "_accept_consent_form",
+)
+
+# Per worker thread: HTTP error statuses of the responses a job received, so a
+# parse failure behind an error page keeps that status (preserving_http_status).
+_job_responses = threading.local()
+
+
+class HiddenHTTPError(Exception):
+    """A read failed after yfinance received an HTTP error response without raising it
+    (e.g. it parsed a JSON or HTML 503 body). ``status`` is that response's status."""
+
+    def __init__(self, status: int, cause: Exception):
+        super().__init__(f"HTTP {status} behind {type(cause).__name__}: {cause}")
+        self.status = status
+
+
+def _capped(method: Callable[..., Any]) -> Callable[..., Any]:
+    signature = inspect.signature(method)
+
+    @functools.wraps(method)
+    def call(*args: Any, **kwargs: Any) -> Any:
+        bound = signature.bind(*args, **kwargs)
+        bound.apply_defaults()
+        bound.arguments["timeout"] = min(bound.arguments["timeout"], jobs.REQUEST_TIMEOUT_SECONDS)
+        response = method(*bound.args, **bound.kwargs)
+        statuses = getattr(_job_responses, "statuses", None)
+        status = getattr(response, "status_code", None)
+        if statuses is not None and isinstance(status, int) and status >= 400:
+            statuses.append(status)
+        return response
+
+    return call
+
+
 def _cap_yfinance_request_timeouts() -> None:
-    """Cap every yfinance request (data, cookie and crumb) at the job request timeout
-    (Step 1 WP3, R3.9), so an orphaned job gives back its permit and symbol lock
-    within that bound instead of yfinance's 30 s defaults. Installed once, here."""
-    make_request = YfData._make_request
-    get_cookie_and_crumb = YfData._get_cookie_and_crumb
-
-    @functools.wraps(make_request)
-    def capped_make_request(self: YfData, url: str, request_method: Any, body: Any = None,
-                            params: Any = None, timeout: float = 30, data: Any = None) -> Any:
-        return make_request(self, url, request_method, body=body, params=params,
-                            timeout=min(timeout, jobs.REQUEST_TIMEOUT_SECONDS), data=data)
-
-    @functools.wraps(get_cookie_and_crumb)
-    def capped_get_cookie_and_crumb(self: YfData, timeout: float = 30) -> Any:
-        return get_cookie_and_crumb(self, min(timeout, jobs.REQUEST_TIMEOUT_SECONDS))
-
-    YfData._make_request = capped_make_request
-    YfData._get_cookie_and_crumb = capped_get_cookie_and_crumb
+    """Cap every yfinance request at the job request timeout (Step 1 WP3, R3.9), so an
+    orphaned job's requests end within that bound instead of yfinance's 30 s
+    defaults, and note error statuses for ``preserving_http_status``. Installed
+    once, here. A job that makes several requests can still take several times
+    the cap."""
+    for name in _REQUEST_METHODS:
+        setattr(YfData, name, _capped(getattr(YfData, name)))
 
 
 _cap_yfinance_request_timeouts()
+
+
+def preserving_http_status(call: Callable[[], T]) -> Callable[[], T]:
+    """Wrap a blocking yfinance read (run on a worker thread) so that, when it fails
+    after receiving an HTTP error response yfinance didn't raise, the failure is a
+    ``HiddenHTTPError`` carrying that status, and retries follow the status, not
+    the parser error."""
+
+    def run() -> T:
+        _job_responses.statuses = []
+        try:
+            return call()
+        except Exception as e:
+            statuses = _job_responses.statuses
+            if statuses and http_status(e) is None and not isinstance(e, YFRateLimitError):
+                raise HiddenHTTPError(statuses[-1], e) from e
+            raise
+        finally:
+            _job_responses.statuses = None
+
+    return run
 
 # Retry configuration
 _max_retries = int(os.environ.get("YF_MAX_RETRIES", "3"))
@@ -85,7 +144,6 @@ _sleep = asyncio.sleep  # test seam: rate-limit cooldown wait
 # Shutdown coordination
 shutdown_event = asyncio.Event()
 
-T = TypeVar("T")
 
 
 class ServerShuttingDownError(Exception):
@@ -246,7 +304,10 @@ def assess_info_completeness(info: dict[str, Any] | None) -> InfoCompleteness:
 
 
 def http_status(error: BaseException) -> int | None:
-    """HTTP error status (>= 400) carried by a curl_cffi or requests HTTPError, else None."""
+    """HTTP error status (>= 400) carried by a curl_cffi or requests HTTPError, or
+    recovered by ``preserving_http_status``, else None."""
+    if isinstance(error, HiddenHTTPError):
+        return error.status
     if isinstance(error, (CurlHTTPError, HTTPError)):
         status = getattr(getattr(error, "response", None), "status_code", None)
         return status if isinstance(status, int) and status >= 400 else None

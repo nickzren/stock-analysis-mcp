@@ -10,7 +10,9 @@ symbol's lock at once. Slots go to waiters in arrival order.
 A read's time limit is a ``ReadClock``: ``READ_DEADLINE_SECONDS`` from its first
 admission, capped by any enclosing ``deadline_scope`` (analyze's per-tool
 deadline). Time spent queued for a slot counts only against the scope, so a
-batch tool's healthy reads aren't dropped just for waiting their turn.
+batch tool's healthy reads aren't dropped just for waiting their turn; without a
+scope, that queue wait is unbounded (it ends when running jobs finish). The
+per-request timeout bounds each HTTP request, not a job that makes several.
 
 Shared by ``yfinance_client`` and ``provider``; it lives in its own module because
 the provider imports the client.
@@ -38,6 +40,9 @@ REQUEST_TIMEOUT_SECONDS = float(os.environ.get("YF_REQUEST_TIMEOUT_SECONDS", "5"
 
 _executor = ThreadPoolExecutor(max_workers=MAX_WORKERS)
 _scope_deadline: contextvars.ContextVar[float | None] = contextvars.ContextVar("_scope_deadline", default=None)
+# False inside a singleflight's shared work: it runs until its fetch finishes, so a
+# source stays owned by one fetch; each caller waits only within its own clock.
+_budgeted: contextvars.ContextVar[bool] = contextvars.ContextVar("_budgeted", default=True)
 
 
 class JobTimeoutError(TimeoutError):
@@ -54,6 +59,7 @@ class ReadClock:
     """One read's time limit; create it when the read starts."""
 
     scope: float | None = field(default_factory=_scope_deadline.get)
+    budgeted: bool = field(default_factory=_budgeted.get)
     budget_end: float | None = None
 
     def remaining(self) -> float:
@@ -61,7 +67,7 @@ class ReadClock:
         return min(ends) - time.monotonic() if ends else math.inf
 
     def admitted(self) -> None:
-        if self.budget_end is None:
+        if self.budgeted and self.budget_end is None:
             self.budget_end = time.monotonic() + READ_DEADLINE_SECONDS
 
     def timeout(self) -> float | None:
@@ -134,12 +140,14 @@ class _Gate:
             self._take(waiter.symbol)
             waiter.granted = True
 
-    async def _acquire(self, symbol: str | None) -> None:
+    async def acquire(self, symbol: str | None) -> str | None:
+        """Take a slot, queueing behind earlier waiters; returns why it queued, if it did."""
         loop = asyncio.get_running_loop()
         with self._lock:
-            if self._blocked_reason(symbol) is None:
+            reason = self._blocked_reason(symbol)
+            if reason is None:
                 self._take(symbol)
-                return
+                return None
             waiter = _Waiter(loop, loop.create_future(), symbol)
             self._queue.append(waiter)
         try:
@@ -151,17 +159,20 @@ class _Gate:
                 elif waiter in self._queue:
                     self._queue.remove(waiter)
             raise
+        return reason
 
     def release(self, symbol: str | None) -> None:
         with self._lock:
             self._give_back(symbol)
 
-    async def submit(self, fn: Callable[[], T], symbol: str | None) -> "Future[T]":
-        await self._acquire(symbol)
-        # From here to add_done_callback there is no await, so a cancelled waiter
-        # can't leak the slot. ``ThreadPoolExecutor.submit`` queues the work before
-        # it may fail to start a thread, so the job waits for ``go`` and runs ``fn``
-        # only if it was submitted cleanly and owns the slot.
+    def start(self, fn: Callable[[], T], symbol: str | None) -> "Future[T]":
+        """Run ``fn`` on the slot ``acquire`` took; the slot is released when it finishes.
+
+        Synchronous, so nothing can cancel the caller between taking the slot and
+        attaching the release. ``ThreadPoolExecutor.submit`` queues the work before
+        it may fail to start a thread, so the job waits for ``go`` and runs ``fn``
+        only if it was submitted cleanly and owns the slot.
+        """
         go = threading.Event()
         owned: list[bool] = []
 
@@ -212,9 +223,13 @@ async def run_job(fn: Callable[[], T], *, clock: ReadClock, symbol_lock: str | N
         raise JobTimeoutError(_gate.blocked_reason(symbol_lock) or "timeout")
     try:
         async with asyncio.timeout(clock.timeout()):
-            future = await _gate.submit(fn, symbol_lock)
+            queued_reason = await _gate.acquire(symbol_lock)
     except TimeoutError:
         raise JobTimeoutError(_gate.blocked_reason(symbol_lock) or "queued_for_admission") from None
+    if clock.remaining() <= 0:  # admitted, but woken after the deadline: don't start late
+        _gate.release(symbol_lock)
+        raise JobTimeoutError(queued_reason or "timeout")
+    future = _gate.start(fn, symbol_lock)
     clock.admitted()
     try:
         async with asyncio.timeout(clock.timeout()):
@@ -231,13 +246,16 @@ _flights: dict[Any, "asyncio.Task[Any]"] = {}
 async def singleflight(key: Any, start: Callable[[], Coroutine[Any, Any, T]]) -> tuple[T, bool]:
     """Share one in-flight ``start()`` among concurrent callers with the same key.
 
-    Returns (result, joined). The work runs in a detached task on its own read
-    budget (not its creator's scope) and every caller, the creator included, awaits
-    it through ``asyncio.shield``, so a cancelled caller never cancels it. Each
-    caller waits only until its own scope ends (``JobTimeoutError``); the work
-    goes on for the others. A done-callback removes the entry and retrieves any
-    exception, so an outcome nobody awaited is never logged as unretrieved. The
-    entry lives only while in flight: nothing, failed results included, is cached.
+    Returns (result, joined). The work runs in a detached task with no read budget
+    and outside its creator's scope, so the key stays owned until the underlying
+    fetch actually finishes (each HTTP request is still capped). Every caller, the
+    creator included, awaits it through ``asyncio.shield``, so a cancelled caller
+    never cancels it, and waits only within its own ``ReadClock`` (budget from
+    joining, capped by its scope); on expiry it gets ``JobTimeoutError`` and the
+    work goes on for the others. A done-callback removes the entry and retrieves
+    any exception, so an outcome nobody awaited is never logged as unretrieved.
+    The entry lives only while in flight: nothing, failed results included, is
+    cached.
     """
     loop = asyncio.get_running_loop()
     task = _flights.get(key)
@@ -245,10 +263,12 @@ async def singleflight(key: Any, start: Callable[[], Coroutine[Any, Any, T]]) ->
     if task is None or not joined:
         context = contextvars.copy_context()
         context.run(_scope_deadline.set, None)
+        context.run(_budgeted.set, False)
         task = loop.create_task(start(), context=context)
         _flights[key] = task
         task.add_done_callback(lambda t: _land(key, t))
     clock = ReadClock()
+    clock.admitted()
     try:
         async with asyncio.timeout(clock.timeout()):
             return await asyncio.shield(task), joined

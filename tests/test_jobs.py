@@ -13,13 +13,15 @@ from collections.abc import Callable, Iterator
 from typing import Any
 
 import pytest
+from yfinance.data import YfData
 
 from stock_analysis.data import jobs, provider, yfinance_client
 from stock_analysis.data.cache_manager import ticker_cache
 from tests.support.fake_ticker import FakeTicker, http_error
-from tests.support.transport import FakeSession
+from tests.support.transport import FakeResponse, FakeSession, load_fixture
 
 analyze_orchestrator = importlib.import_module("stock_analysis.tools.analyze.orchestrator")
+projection = importlib.import_module("stock_analysis.tools.analyze.projection")
 options_signals = importlib.import_module("stock_analysis.tools.options_signals")
 
 SYMBOL = "EXMP"
@@ -130,6 +132,9 @@ class TestR31IndependentTools:
         assert [f["tool"] for f in failures] == ["options_signals"]
         assert "timeout" in failures[0]["message"]
         assert result["data_quality"]["in_flight_jobs"] == 1  # A's thread was still running
+        for detail in ("decision", "standard", "full"):
+            projected = projection.project_analyze_result(result, detail)
+            assert projected["data_quality"]["in_flight_jobs"] == 1, detail
         await drain()
 
     async def test_a_tool_timeout_discloses_in_flight_jobs(
@@ -338,6 +343,35 @@ class TestRunJobOutcomes:
 
         assert ran == []
         assert (jobs.in_flight_jobs(), SYMBOL in jobs._gate.locked_symbols) == (0, False)
+
+
+class TestLateWakeups:
+    async def test_a_queued_read_woken_after_its_deadline_never_starts(self, barrier: Barrier) -> None:
+        ran: list[str] = []
+        holder = asyncio.create_task(
+            jobs.run_job(barrier.job("holder", SYMBOL), clock=jobs.ReadClock(), symbol_lock=SYMBOL)
+        )
+        await barrier.until_started(1)
+        with jobs.deadline_scope(0.1):
+            waiter = asyncio.create_task(
+                jobs.run_job(lambda: ran.append("late"), clock=jobs.ReadClock(), symbol_lock=SYMBOL)
+            )
+        await asyncio.sleep(0)  # queued behind the holder
+
+        barrier.release.set()
+        while "end:holder" not in barrier.order:
+            time.sleep(0.001)
+        time.sleep(0.01)  # the lock is granted to the waiter and its wakeup queued ...
+        asyncio.get_running_loop().call_soon(time.sleep, 0.2)  # ... then the loop stalls past its deadline
+
+        with pytest.raises(jobs.JobTimeoutError) as timed_out:
+            await waiter
+        await holder
+
+        assert timed_out.value.reason == "queued_behind_symbol_lock"
+        assert ran == []
+        assert SYMBOL not in jobs._gate.locked_symbols
+        await drain()
 
 
 class TestGateOrder:
@@ -571,7 +605,75 @@ class TestR39Deadlines:
         await drain()
 
 
+class TestRequestPathsAreCapped:
+    """Every yfinance request path, not just data requests, carries the capped timeout."""
+
+    class _Recorder:
+        def __init__(self) -> None:
+            self.timeouts: list[float | None] = []
+
+        def get(self, url: str = "", **kwargs: Any) -> Any:
+            self.timeouts.append(kwargs.get("timeout"))
+            raise _StopError()
+
+        post = get
+
+    @pytest.mark.parametrize(
+        "call",
+        [
+            lambda data: YfData._get_crumb_csrf(data),
+            lambda data: YfData._get_crumb_basic(data),
+            lambda data: YfData._get_cookie_basic(data),
+            lambda data: YfData._accept_consent_form(
+                data,
+                FakeResponse(load_fixture("calendar", "redirected_to_consent_form"),
+                             "https://consent.yahoo.com/v2/collectConsent?sessionId=SID"),
+                30,
+            ),
+        ],
+        ids=["csrf_crumb", "basic_crumb", "basic_cookie", "consent_post"],
+    )
+    def test_cookie_crumb_and_consent_requests(
+        self, yf_transport: FakeSession, monkeypatch: pytest.MonkeyPatch, call: Callable[[Any], Any]
+    ) -> None:
+        recorder = self._Recorder()
+        data = YfData()
+        data._session = recorder
+        data._cookie = None
+        data._crumb = None
+        monkeypatch.setattr(data, "_load_cookie_curlCffi", lambda: False)
+
+        with pytest.raises(_StopError):
+            call(data)
+
+        assert recorder.timeouts and set(recorder.timeouts) == {jobs.REQUEST_TIMEOUT_SECONDS}
+
+
+class _StopError(Exception):
+    """Ends a request path once its first request is recorded."""
+
+
 class TestR310SharedSourceReads:
+    async def test_a_timed_out_fetch_keeps_its_source_until_it_finishes(
+        self, monkeypatch: pytest.MonkeyPatch, yf_transport: FakeSession
+    ) -> None:
+        """Past the read deadline the caller gets `timeout`, but the fetch still owns the
+        source: an identical read joins it instead of starting a second fetch."""
+        monkeypatch.setattr(jobs, "READ_DEADLINE_SECONDS", 0.05)
+        entered, release = yf_transport.hold("calendar")
+        yf_transport.route("calendar", "valid_one_epoch")
+
+        first = await provider.read_calendar_events(SYMBOL)
+        assert entered.is_set() and jobs.in_flight_jobs() == 1  # the fetch is still running
+        monkeypatch.setattr(jobs, "READ_DEADLINE_SECONDS", 5.0)
+        second = asyncio.create_task(provider.read_calendar_events(SYMBOL))
+        await asyncio.sleep(0)
+        release.set()
+
+        assert (first.status, first.error_type) == ("failed", "timeout")
+        assert (await second).status == "ok"
+        assert len(yf_transport.calls_to("calendar")) == 1
+
     async def test_concurrent_reads_share_one_fetch(self, yf_transport: FakeSession) -> None:
         yf_transport.route("earnings_page", "valid_table")
 

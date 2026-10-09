@@ -41,6 +41,7 @@ from stock_analysis.data.yfinance_client import (
     http_status,
     is_rate_limit,
     note_rate_limit,
+    preserving_http_status,
     rate_limit_cooldown_remaining,
     wait_for_rate_limit_cooldown,
 )
@@ -121,14 +122,6 @@ def _error_type(error: BaseException) -> str:
     if isinstance(error, json.JSONDecodeError | YFDataException):
         return "unreadable_response"
     return type(error).__name__
-
-
-def _property_retryable(error: Exception) -> tuple[bool, int]:
-    """Property reads parse the body themselves, so an HTML error page (e.g. a 503)
-    surfaces as a JSON/parse error with its HTTP status hidden: retry it."""
-    if isinstance(error, json.JSONDecodeError | YFDataException):
-        return True, _max_retries
-    return _is_retryable_error(error)
 
 
 @dataclass(frozen=True)
@@ -255,13 +248,14 @@ async def read_property(ticker: Any, source: str, read: Callable[[], T]) -> Sour
 
     Each attempt holds the symbol's lock (yfinance ``Ticker`` state is not
     thread-safe) and its admission permit until the thread finishes. Retryable
-    errors, including an error page hidden behind a parse error, are retried.
+    errors are retried; when yfinance parsed an HTTP error page instead of
+    raising it, the page's status decides (``preserving_http_status``).
     ``ok``: a non-empty value. ``unverified``: ``None`` or empty, since a property
     can't prove emptiness. ``failed``: the read failed or missed its deadline;
     the cached Ticker is evicted so its partial state is not reused.
     """
     symbol = _normalize(str(getattr(ticker, "ticker", "") or "")) or None
-    outcome = await _attempts(source, read, _property_retryable, symbol_lock=symbol)
+    outcome = await _attempts(source, preserving_http_status(read), _is_retryable_error, symbol_lock=symbol)
     if outcome.failure is not None:
         evict_ticker(ticker)
         return outcome.failure

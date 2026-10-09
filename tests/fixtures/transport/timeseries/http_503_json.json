@@ -1,0 +1,12 @@
+{
+  "status": 503,
+  "json": {
+    "finance": {
+      "result": null,
+      "error": {
+        "code": "Service Unavailable",
+        "description": "synthetic: Yahoo's JSON error envelope on a 5xx"
+      }
+    }
+  }
+}

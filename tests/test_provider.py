@@ -895,18 +895,31 @@ class TestPropertyReadSites:
         assert read.attempts == ticker.reads["splits"] == 3
         assert ticker_cache.get(SYMBOL) is None
 
+    async def test_an_error_status_hidden_behind_a_parse_error_is_retried(self, yf_transport: FakeSession) -> None:
+        """yfinance parses a JSON 503 body instead of raising; its status still drives
+        the retry, so the healthy second response is used."""
+        # yfinance re-requests once on >= 400 inside one attempt.
+        yf_transport.route("timeseries", "http_503_json", "http_503_json", "quarterly_revenue_100")
+        ticker = yf.Ticker(SYMBOL)
+
+        read = await provider.read_property(ticker, "quarterly_income_stmt", lambda: ticker.quarterly_income_stmt)
+
+        assert (read.status, read.attempts) == ("ok", 2)
+        assert read.payload.iloc[0, 0] == 100
+
     @pytest.mark.parametrize(
-        "error",
-        [json.JSONDecodeError("Expecting value", "<html>503 Service Unavailable</html>", 0),
-         YFDataException("unreadable response")],
-        ids=["json_decode", "yf_data_exception"],
+        ("fixture", "error_type"),
+        [("http_404_html", "http_404"), ("unparseable_200", "unreadable_response")],
     )
-    async def test_status_hidden_behind_a_parse_error_is_retried(self, error: Exception) -> None:
-        ticker = FakeTicker(SYMBOL)
+    async def test_a_parse_error_without_a_retryable_status_fails_once(
+        self, yf_transport: FakeSession, fixture: str, error_type: str
+    ) -> None:
+        yf_transport.route("timeseries", fixture)
+        ticker = yf.Ticker(SYMBOL)
 
-        read = await provider.read_property(ticker, "options", _flaky(error, ("2026-11-20",)))
+        read = await provider.read_property(ticker, "quarterly_income_stmt", lambda: ticker.quarterly_income_stmt)
 
-        assert (read.status, read.payload, read.attempts) == ("ok", ("2026-11-20",), 2)
+        assert (read.status, read.error_type, read.attempts) == ("failed", error_type, 1)
 
     async def test_non_retryable_error_fails_once(self) -> None:
         ticker = FakeTicker(SYMBOL, splits=http_error(404))
