@@ -35,7 +35,7 @@ UNVERIFIABLE = {"as_of": None, "basis": "unverifiable", "session": "regular",
 def build_card(**overrides: Any) -> dict[str, Any]:
     kwargs: dict[str, Any] = {
         "symbol": "TEST",
-        "summary_data": {"currency": "USD", "name": "Test Co"},
+        "summary_data": {"currency": "USD", "quote_type": "EQUITY", "name": "Test Co"},
         "technicals_data": make_technicals(),
         "risk_data": {"liquidity": {"avg_dollar_volume": 50_000_000}},
         "events_data": {"earnings": {"days_until": 40, "next_date": "2026-04-19"}},

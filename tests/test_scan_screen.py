@@ -36,8 +36,11 @@ def make_df(closes, highs=None, lows=None, volumes=None):
     lows = lows or [c - 1.0 for c in closes]
     volumes = volumes or [1_000_000.0] * n
     dates = pd.date_range("2025-06-02", periods=n, freq="B").strftime("%Y-%m-%d")
-    return pd.DataFrame({"date": list(dates), "open": closes, "high": highs,
-                         "low": lows, "close": closes, "volume": volumes})
+    df = pd.DataFrame({"date": list(dates), "open": closes, "high": highs,
+                       "low": lows, "close": closes, "volume": volumes})
+    # fetch_history carries these from the chart metadata (WP4); a US equity here.
+    df.attrs.update({"symbol": "EXMP", "currency": "USD", "instrument_type": "EQUITY"})
+    return df
 
 
 def uptrend_breakout_df():

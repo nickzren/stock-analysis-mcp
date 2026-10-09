@@ -19,6 +19,7 @@ from stock_analysis.tools.analyze.gates import (
     check_earnings_blackout,
     check_liquidity,
 )
+from stock_analysis.utils.valuation_basis import currency_supported, support_blockers
 
 # Default look-ahead for "next_review.date" when no earnings date is near.
 _DEFAULT_REVIEW_HORIZON_DAYS = 30
@@ -30,8 +31,13 @@ def _compute_hard_gates(
     dip_assessment: dict[str, Any] | None,
     fundamentals_summary: dict[str, Any],
     risk_data: dict[str, Any],
+    support: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Collect blocking conditions that must override any bullish recommendation."""
+    """Collect blocking conditions that must override any bullish recommendation.
+
+    ``support`` (WP4, D5): an unsupported or unverified instrument/currency blocks
+    new money, and a non-USD price makes no dollar-liquidity claim.
+    """
     earnings_blackout, earnings_blocker = check_earnings_blackout(events_data)
     data_quality_critical, data_quality_blocker = check_data_quality(data_quality)
 
@@ -46,7 +52,11 @@ def _compute_hard_gates(
     is_unprofitable = valuation_summary.get("valuation_note") == "pe_not_meaningful"
     missing_runway = is_unprofitable and burn_status == "unavailable"
 
-    weak_liquidity, liquidity_missing, liquidity_blockers = check_liquidity(risk_data)
+    if support is None or currency_supported(support):
+        weak_liquidity, liquidity_missing, liquidity_blockers = check_liquidity(risk_data)
+    else:
+        weak_liquidity, liquidity_missing, liquidity_blockers = False, False, []
+    support_gates = support_blockers(support) if support is not None else []
 
     blocking: list[dict[str, str]] = []
     if earnings_blocker:
@@ -64,6 +74,8 @@ def _compute_hard_gates(
             "reason": "unprofitable company with no usable runway data — uninvestable for sizing",
         })
     blocking.extend(liquidity_blockers)
+    blocking.extend(support_gates)
+    support_ids = {gate["id"] for gate in support_gates}
 
     return {
         "any_blocking": bool(blocking),
@@ -75,6 +87,8 @@ def _compute_hard_gates(
             "missing_runway": missing_runway,
             "weak_liquidity": weak_liquidity,
             "liquidity_missing": liquidity_missing,
+            "unsupported_instrument": "unsupported_instrument" in support_ids,
+            "unsupported_currency": "unsupported_currency" in support_ids,
         },
     }
 
@@ -98,6 +112,7 @@ _MID_TERM_TO_ACTION: dict[str, str] = {
 
 # Actions that allow new money in (subject to hard gates).
 _NEW_MONEY_ACTIONS = frozenset({"buy", "starter", "hold_or_add"})
+_SUPPORT_GATE_IDS = frozenset({"unsupported_instrument", "unsupported_currency"})
 
 
 def _resolve_action_now(
@@ -117,6 +132,10 @@ def _resolve_action_now(
     # become "wait_for_data" so the user re-evaluates after the gate clears.
     if hard_gates["any_blocking"] and base_action in _NEW_MONEY_ACTIONS:
         gate_ids = ",".join(g["id"] for g in hard_gates["blocking"])
+        if any(g["id"] in _SUPPORT_GATE_IDS for g in hard_gates["blocking"]):
+            # A permanent boundary, not missing data (WP4, D5).
+            rationale.append(f"hard_gates fired ({gate_ids}); unsupported, capping at watch")
+            return "watch", rationale
         rationale.append(f"hard_gates fired ({gate_ids}); downgrading to wait_for_data")
         return "wait_for_data", rationale
 
@@ -159,6 +178,7 @@ def _build_sizing(
         "whole_shares": whole_shares,
         "fractional_shares": fractional_shares,
         "at_price": at_price,
+        "unavailable_reason": position_sizing.get("unavailable_reason"),
     }
 
 
@@ -283,6 +303,7 @@ def build_decision_card(
         dip_assessment=dip_assessment,
         fundamentals_summary=fundamentals_summary,
         risk_data=risk_data,
+        support=summary.get("support"),
     )
     action_now, rationale = _resolve_action_now(policy_action, hard_gates)
 

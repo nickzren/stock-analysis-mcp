@@ -7,7 +7,13 @@ from stock_analysis.utils.helpers import (
     format_level_distance_label,
     safe_round,
 )
-from stock_analysis.utils.valuation_basis import is_unverified, metric_reason, usable_metric
+from stock_analysis.utils.valuation_basis import (
+    currency_supported,
+    instrument_supported,
+    is_unverified,
+    metric_reason,
+    usable_metric,
+)
 
 
 def build_position_sizing_range(
@@ -15,8 +21,13 @@ def build_position_sizing_range(
     stop_calculation: dict[str, Any] | None,
     regime_classification: str | None,
     investor_profile: dict[str, Any] | None = None,
+    currency_supported: bool = True,
 ) -> dict[str, Any]:
-    """Build a position sizing range from risk regime and profile inputs."""
+    """Build a position sizing range from risk regime and profile inputs.
+
+    WP4 (D5): with an unsupported or unverified price currency, dollar and share
+    amounts are null with ``unavailable_reason`` (no FX in step 1); percentages stay.
+    """
     normalized_regime = "medium" if regime_classification == "moderate" else regime_classification
     investor_profile = investor_profile or {}
     account_size = investor_profile.get("account_size")
@@ -38,6 +49,10 @@ def build_position_sizing_range(
     position_sizing_range["starter_pct"] = pct_min
     position_sizing_range["risk_per_trade_pct"] = round(float(risk_per_trade_pct), 2)
     position_sizing_range["profile_cap_pct"] = profile_max_position_pct
+
+    if not currency_supported:
+        account_size = None
+        position_sizing_range["unavailable_reason"] = "unsupported_currency"
 
     dollar_min: float | None = None
     dollar_max: float | None = None
@@ -433,9 +448,14 @@ def build_action_zones(
     risk_regime: dict[str, Any] | None = None,
     signals: dict[str, list[str]] | None = None,
     investor_profile: dict[str, Any] | None = None,
+    support: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Build action zones with ATR-based price levels.
+
+    ``support`` (WP4, D5): an unsupported instrument gets a ``not_applicable``
+    valuation gate; an unsupported or unverified currency gets no dollar or share
+    sizing. None keeps the pre-WP4 behavior (direct callers and tests).
 
     Zones are volatility-adjusted using ATR, not arbitrary percentages.
     Risk regime affects zone interpretation and warnings.
@@ -503,10 +523,19 @@ def build_action_zones(
         current_zone = "accumulate"
         zone_warnings.append("zone_capped_due_to_extreme_risk")
 
-    valuation_assessment, valuation_warnings = _build_valuation_assessment(
-        fund_data=fund_data,
-        signals=signals,
-    )
+    if support is not None and not instrument_supported(support):
+        valuation_assessment: dict[str, Any] = {
+            "gate": "not_applicable",
+            "basis": None,
+            "reasons": [(support.get("instrument") or {}).get("reason") or "unsupported_instrument"],
+            "is_unprofitable": False,
+        }
+        valuation_warnings: list[str] = []
+    else:
+        valuation_assessment, valuation_warnings = _build_valuation_assessment(
+            fund_data=fund_data,
+            signals=signals,
+        )
     zone_warnings.extend(valuation_warnings)
 
     current_zone, valuation_zone_warning = _apply_valuation_gate_to_zone(
@@ -533,6 +562,7 @@ def build_action_zones(
         stop_calculation=stop_calculation,
         regime_classification=regime_classification,
         investor_profile=investor_profile,
+        currency_supported=support is None or currency_supported(support),
     )
 
     return {

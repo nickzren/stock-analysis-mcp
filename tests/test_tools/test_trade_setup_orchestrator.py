@@ -69,7 +69,7 @@ def breakout_probe_df() -> pd.DataFrame:
 @pytest.fixture
 def patched(monkeypatch: pytest.MonkeyPatch) -> None:
     async def fake_summary(symbol: str) -> dict[str, Any]:
-        return {"symbol": symbol, "name": "Test Co", "currency": "USD",
+        return {"symbol": symbol, "name": "Test Co", "currency": "USD", "quote_type": "EQUITY",
                 "current_price": 101.8}
 
     async def fake_technicals(symbol: str, **kwargs: Any) -> dict[str, Any]:
@@ -142,7 +142,7 @@ async def test_regular_session_fresh_satisfied_trigger_is_trade_now(
     """End-to-end: regular session, fresh 5m probe above the breakout trigger
     with qualifying volume -> trade_now with a market entry."""
     async def fake_summary(symbol: str) -> dict[str, Any]:
-        return {"symbol": symbol, "name": "Test Co", "currency": "USD",
+        return {"symbol": symbol, "name": "Test Co", "currency": "USD", "quote_type": "EQUITY",
                 "current_price": 96.7}
 
     breakout_technicals = make_technicals(
@@ -209,7 +209,7 @@ async def test_r5_stale_daily_blocks_trade_now(
     volume, but the daily frame's last bar is ~5 sessions stale -> the daily
     leg of the freshness gate must block trade_now."""
     async def fake_summary(symbol: str) -> dict[str, Any]:
-        return {"symbol": symbol, "name": "Test Co", "currency": "USD",
+        return {"symbol": symbol, "name": "Test Co", "currency": "USD", "quote_type": "EQUITY",
                 "current_price": 96.7}
 
     breakout_technicals = make_technicals(

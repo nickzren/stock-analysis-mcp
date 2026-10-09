@@ -41,6 +41,42 @@
 ## Common Schema Gotchas
 - `technicals` returns `current_price` at the top level, not under a `summary` object.
 - `analyze` returns price, name, sector, market cap, and currency under `summary`, not as duplicated top-level fields.
+- Support boundaries (WP4, D5): `summary.support` (and the trade card's
+  `support`) is `{instrument: {status, quote_type, reason}, currency: {status,
+  code, reason}}`, status `supported` / `unsupported` / `unverified`. Only
+  `EQUITY` (not a detected preferred: Yahoo `-P` / `-P<letter>` suffix or a
+  Preferred/Pfd/Depositary name) priced in `USD` is supported; unknown values
+  fail closed. Unsupported or unverified means: no share/dollar sizing
+  (`unavailable_reason="unsupported_currency"`), no dollar-liquidity gate, and
+  new-money actions capped at `watch` (`unsupported_instrument` /
+  `unsupported_currency` hard gates and blockers; hold/reduce/sell pass
+  through). An unsupported instrument also skips the fundamentals rubric, dip
+  and dislocation (`not_applicable`). The scan reads currency and instrument
+  type from the daily history's chart metadata (`df.attrs`, no extra request)
+  and never promotes an unsupported row. `stock_summary.currency` no longer
+  defaults to USD; it adds `quote_type`, `financial_currency` and `support`.
+- Valuation basis (WP4): ratios stay scalars; each section carrying them has a
+  sibling `metric_status` `{metric: {basis_status, scoring_applicable,
+  reason}}`. A ratio mixing price and statement data (P/E, P/S, P/B, EV/S,
+  EV/EBITDA, FCF yield, trailing dividend, valuation history) is kept only when
+  the price and financial currencies are identical (`GBp` != `GBP`), else null
+  with `unverified_currency` (a USD ADR reporting in TWD loses all of them);
+  P/B and the trailing dividend also need `marketCap ≈ price ×
+  sharesOutstanding`. P/E is undefined when its own EPS <= 0 (forward P/E
+  survives a negative trailing EPS). Yahoo's PEG is basis `provider` and only
+  PEG > 0 is scored. EV can be negative: EV/S is kept but unscored when EV <=
+  0; EV/EBITDA is undefined when EBITDA <= 0. P/B <= 0 is kept, unscored.
+  Consumers (valuation gate, verdict, prose, decision context, sector
+  comparison, `compare`) read ratios only through
+  `valuation_basis.usable_metric`. D/E is always Yahoo's percent / 100;
+  `financial_health.leverage_status` is `negative_equity` when D/E < 0 or D/E is
+  null with P/B < 0, and is never low debt. Dividend yield is one forward
+  fraction (`dividendRate / price`) on all three paths, with
+  `dividend_yield_basis` (`forward` or `no_dividend`, 0.0) and
+  `dividend_yield_trailing` (`dividends.yield_basis` / `yield_trailing` in
+  events). Valuation-history stats need >= 8 points (`insufficient_history`),
+  `*_5y` fields need a 5-year span, and `current_percentile` ranks the current
+  usable ratio; `history_points` and `history_span_years` are always exposed.
 - `analyze` returns the `standard` projection by default; deep audit fields such as `decision_context`, `dip_assessment`, and full `verdict` / `data_quality` require `detail="full"`.
 - `options_signals` returns put/call data at `put_call_ratio.volume_based` and `put_call_ratio.oi_based`, not under `summary.*`.
 - In `analyze`, raw options output is nested under `options_signals`, while derived narrative fields appear elsewhere such as `section_summaries`, `signals`, and `decision_context`.

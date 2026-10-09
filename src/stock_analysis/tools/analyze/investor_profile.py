@@ -9,6 +9,7 @@ from stock_analysis.tools.analyze.dislocation_framework import (
     classify_dislocation_opportunity,
 )
 from stock_analysis.utils.helpers import format_compact_number
+from stock_analysis.utils.valuation_basis import currency_supported
 
 _PROFILE_PRESETS: dict[str, dict[str, Any]] = {
     "core": {
@@ -147,10 +148,15 @@ def build_decision_modes(
     def _format_tag(tag: str) -> str:
         return tag.replace("_", " ")
 
+    support = summary.get("support")
+    sizing_allowed = support is None or currency_supported(support)
+
     def _position_block(sizing: dict[str, Any], field: str) -> dict[str, Any]:
         use_pct = sizing.get(field)
         block: dict[str, Any] = {"pct": use_pct}
-        if account_size is not None and use_pct is not None:
+        if not sizing_allowed:
+            block["unavailable_reason"] = "unsupported_currency"
+        elif account_size is not None and use_pct is not None:
             dollars = round(account_size * use_pct / 100, 2)
             block["dollars"] = dollars
             block["shares"] = None
@@ -171,6 +177,7 @@ def build_decision_modes(
             stop_calculation=stop_calculation,
             regime_classification=normalized_risk_label,
             investor_profile=profile,
+            currency_supported=sizing_allowed,
         )
         for name, profile in mode_profiles.items()
     }

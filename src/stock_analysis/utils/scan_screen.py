@@ -27,6 +27,11 @@ from stock_analysis.utils.indicators import (
 )
 from stock_analysis.utils.swing_features import compute_setup_features
 from stock_analysis.utils.validators import check_rule_expr
+from stock_analysis.utils.valuation_basis import (
+    classify_support,
+    currency_supported,
+    support_blockers,
+)
 
 MIN_SCREEN_BARS = 21  # matches compute_setup_features' floor
 
@@ -121,12 +126,29 @@ def screen_symbol(df: pd.DataFrame | None) -> dict[str, Any]:
     if knife:
         blocker_ids.append("falling_knife")
 
-    dollar_volume = _avg_dollar_volume(df)
-    weak, missing, liq_blockers = check_liquidity(
-        {"liquidity": {"avg_dollar_volume": dollar_volume}}
+    # WP4 (D5): instrument and currency come with the daily history; unknown is
+    # unverified (fail closed). A non-USD price makes no dollar-liquidity claim.
+    attrs = df.attrs if df is not None else {}
+    support = classify_support(
+        quote_type=attrs.get("instrument_type"), currency=attrs.get("currency"), symbol=attrs.get("symbol")
     )
-    blocker_ids.extend(b["id"] for b in liq_blockers)
+    support_ids = [b["id"] for b in support_blockers(support)]
 
+    weak = missing = False
+    if currency_supported(support):
+        dollar_volume = _avg_dollar_volume(df)
+        weak, missing, liq_blockers = check_liquidity(
+            {"liquidity": {"avg_dollar_volume": dollar_volume}}
+        )
+        blocker_ids.extend(b["id"] for b in liq_blockers)
+    blocker_ids.extend(support_ids)
+
+    if support_ids and not (knife or weak or missing):
+        return {
+            "promote": False, "action_hint": "watch", "setup_type": None,
+            "trigger_price": None, "last_close": payload["current_price"],
+            "blocker_ids": blocker_ids,
+        }
     if knife or weak or missing:
         return {
             "promote": False, "action_hint": "avoid", "setup_type": None,

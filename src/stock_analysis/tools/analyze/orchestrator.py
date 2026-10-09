@@ -64,10 +64,41 @@ from stock_analysis.tools.technicals import technicals
 from stock_analysis.utils.helpers import fcf_label_from_cashflow, first_sentences, round_or_none
 from stock_analysis.utils.normalize import build_watchlist_snapshot
 from stock_analysis.utils.provenance import build_meta
-from stock_analysis.utils.valuation_basis import is_unverified, metric_reason, usable_metric
+from stock_analysis.utils.valuation_basis import (
+    classify_support,
+    currency_supported,
+    instrument_supported,
+    is_unverified,
+    metric_reason,
+    support_blockers,
+    usable_metric,
+)
 
 # Reads inside a tool share this fraction of the tool's deadline.
 _READ_SHARE_OF_TOOL_DEADLINE = 0.9
+
+
+# New-money codes in policy_action horizons and decision_modes actions.
+_NEW_MONEY_POLICY_CODES = frozenset({
+    "buy", "hold_or_add", "accumulate", "speculative_small_position",
+    "speculative_with_thesis", "speculative_only", "small_position_with_stops",
+})
+_NEW_MONEY_MODE_CODES = frozenset({"build_position", "starter_position_only", "starter_then_add"})
+
+
+def _cap_new_money_at_watch(
+    policy_action: dict[str, Any], decision_modes: dict[str, Any], support: dict[str, Any]
+) -> None:
+    """WP4 (D5): an unsupported or unverified instrument/currency produces no
+    new-money action anywhere; hold/reduce/avoid codes pass through."""
+    gate_ids = [gate["id"] for gate in support_blockers(support)]
+    for horizon in ("mid_term", "long_term"):
+        if policy_action.get(horizon) in _NEW_MONEY_POLICY_CODES:
+            policy_action[horizon] = "watch"
+    policy_action["support_gates"] = gate_ids
+    for mode in decision_modes.values():
+        if isinstance(mode, dict) and mode.get("action") in _NEW_MONEY_MODE_CODES:
+            mode["action"] = "watch"
 
 
 def _compute_burn_metrics(
@@ -415,6 +446,17 @@ async def analyze_stock(
     summary_data = tool_results.get("stock_summary") or {}
     tech_data = tool_results.get("technicals") or {}
     fund_data = tool_results.get("fundamentals_snapshot") or {}
+    # WP4 (D5): fail closed -- an unknown quoteType or currency is unverified.
+    support = summary_data.get("support") or classify_support(
+        quote_type=summary_data.get("quote_type"),
+        currency=summary_data.get("currency"),
+        symbol=normalized_symbol,
+        name=summary_data.get("name"),
+    )
+    instrument_ok = instrument_supported(support)
+    instrument_reason = (support.get("instrument") or {}).get("reason")
+    if not instrument_ok:
+        fund_data = {}  # stock-only rules (fundamentals rubric, dislocation, dip) don't apply
     risk_data = tool_results.get("risk_metrics") or {}
     events_data = tool_results.get("events_calendar") or {}
     news_data = tool_results.get("stock_news") or {}
@@ -422,13 +464,14 @@ async def analyze_stock(
     options_data = tool_results.get("options_signals") or {}
 
     # Summary section
-    summary = {
+    summary: dict[str, Any] = {
         "name": summary_data.get("name"),
         "sector": summary_data.get("sector"),
         "industry": summary_data.get("industry"),
         "market_cap": summary_data.get("market_cap"),
         "currency": summary_data.get("currency"),
         "current_price": summary_data.get("current_price") or tech_data.get("current_price"),
+        "support": support,
     }
 
     company_profile = {
@@ -591,6 +634,9 @@ async def analyze_stock(
         if fundamentals_fetched
         else "Fundamentals unavailable (data fetch failed)."
     )
+    if not instrument_ok:
+        fundamentals_summary["status"] = "not_applicable"
+        fundamentals_summary["summary"] = None
 
     analyst_coverage = fund_data.get("analyst_coverage") or {}
     short_interest = fund_data.get("short_interest") or {}
@@ -758,6 +804,7 @@ async def analyze_stock(
         risk_regime=risk_regime,
         signals=signals,
         investor_profile=investor_profile,
+        support=support,
     )
 
     relative_performance = build_relative_performance(
@@ -767,12 +814,16 @@ async def analyze_stock(
 
     market_context = risk_data.get("market_context", {})
 
-    dip_assessment = build_dip_assessment(
-        tech_data=tech_data,
-        risk_data=risk_data,
-        fund_data=fund_data,
-        market_context=market_context,
-        signals=signals,
+    dip_assessment = (
+        build_dip_assessment(
+            tech_data=tech_data,
+            risk_data=risk_data,
+            fund_data=fund_data,
+            market_context=market_context,
+            signals=signals,
+        )
+        if instrument_ok
+        else {}
     )
     if dip_assessment:
         dip_assessment["summary"] = build_dip_summary_text(dip_assessment)
@@ -834,7 +885,10 @@ async def analyze_stock(
     profit_summary = fundamentals_summary.get("profitability") or {}
     net_margin_value = profit_summary.get("net_margin")
 
-    if fund_tool_failed:
+    if not instrument_ok:
+        fundamentals_status = "not_applicable"
+        fundamentals_status_reason = instrument_reason
+    elif fund_tool_failed:
         fundamentals_status = "missing"
         fundamentals_status_reason = "data_fetch_failed"
     elif pe_value is None and (net_margin_value is not None and net_margin_value < 0):
@@ -969,6 +1023,13 @@ async def analyze_stock(
         can_start_now=bool((dislocation_framework.get("action") or {}).get("can_start_now")),
         add_only_if=(dislocation_framework.get("action") or {}).get("add_only_if"),
     )
+    if not instrument_ok:
+        dislocation_framework = {
+            "status": "not_applicable",
+            "reason": instrument_reason,
+            "summary": None,
+            "action": {"can_start_now": False},
+        }
     section_summaries["dislocation"] = dislocation_framework.get("summary")
 
     decision_card = build_decision_card(
@@ -983,6 +1044,9 @@ async def analyze_stock(
         dip_assessment=dip_assessment,
         dislocation_framework=dislocation_framework,
     )
+
+    if not (instrument_ok and currency_supported(support)):
+        _cap_new_money_at_watch(policy_action, decision_modes, support)
 
     # Top-level error signaling for invalid/unanalyzable symbols.
     # Keep partial payload for diagnostics, but mark as error for callers.

@@ -20,6 +20,11 @@ from stock_analysis.tools.trade_setup.setup_rules import (
 )
 from stock_analysis.tools.trade_setup.setups import detect_setup
 from stock_analysis.utils.market_calendar import add_trading_days
+from stock_analysis.utils.valuation_basis import (
+    classify_support,
+    currency_supported,
+    support_blockers,
+)
 
 _ACTIONABLE = frozenset({"trade_now", "enter_on_trigger"})
 _CONFIDENCE_BY_QUALITY = {"A": "high", "B": "medium", "C": "low"}
@@ -82,8 +87,21 @@ def build_trade_setup_card(
                 "id": "falling_knife",
                 "reason": "severe decline with broken trends — wait for stabilization",
             })
-    weak_liquidity, liquidity_missing, liquidity_blockers = check_liquidity(risk_data)
+    # WP4 (D5): fail closed on an unknown instrument or currency; a non-USD price
+    # makes no dollar-liquidity claim and gets no executable plan.
+    support = summary_data.get("support") or classify_support(
+        quote_type=summary_data.get("quote_type"),
+        currency=summary_data.get("currency"),
+        symbol=symbol,
+        name=summary_data.get("name"),
+    )
+    support_gates = support_blockers(support)
+    if currency_supported(support):
+        weak_liquidity, liquidity_missing, liquidity_blockers = check_liquidity(risk_data)
+    else:
+        weak_liquidity, liquidity_missing, liquidity_blockers = False, False, []
     blockers.extend(liquidity_blockers)
+    blockers.extend(support_gates)
 
     # Event risk is evaluable regardless of the final action.
     earnings_blackout, earnings_blocker = check_earnings_blackout(events_data)
@@ -124,6 +142,8 @@ def build_trade_setup_card(
                         "reason": "market not in regular session — trade_now unavailable",
                     })
             else:
+                action = "watch"
+            if support_gates and action in _ACTIONABLE:
                 action = "watch"
 
     if action in _ACTIONABLE and setup is not None:
@@ -168,6 +188,7 @@ def build_trade_setup_card(
     return {
         "symbol": symbol,
         "currency": summary_data.get("currency"),
+        "support": support,
         "freshness": freshness,
         "action": action,
         "setup": setup,

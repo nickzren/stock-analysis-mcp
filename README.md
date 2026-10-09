@@ -85,6 +85,15 @@ count as day 0.
 The default report is compact and decision-focused. It still computes the full
 underlying analysis before returning the shorter investor view.
 
+Supported: US-dollar-priced common stocks (`quoteType` EQUITY, including USD
+ADRs). ETFs, funds, indices, crypto, futures, preferreds, and anything priced in
+another currency (including GBp/ZAc minor units) get a `support` block marking
+them unsupported: no share or dollar sizing, no dollar-liquidity claims, and no
+new-money action (capped at `watch`). Ratios that mix the trading price with
+statements in another currency (e.g. a USD ADR reporting in TWD) are left null
+with `basis_status: unverified_currency` rather than shown wrong. Yields are
+fractions (0.005 = 0.5%); the dividend yield is forward (`dividendRate / price`).
+
 ## What It Checks
 
 - **Action now:** buy, starter, hold, wait, avoid, or wait for data

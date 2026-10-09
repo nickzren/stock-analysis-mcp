@@ -609,6 +609,14 @@ async def _retry_with_backoff(
     )
 
 
+def _history_metadata(ticker: Any) -> dict[str, Any]:
+    """The chart metadata yfinance stored while fetching history (``currency``,
+    ``instrumentType``), read without the extra request ``get_history_metadata()``
+    would make."""
+    metadata = getattr(getattr(ticker, "_price_history", None), "_history_metadata", None)
+    return metadata if isinstance(metadata, dict) else {}
+
+
 async def _fetch_history_retry(params: FetchParams) -> RetryResult:
     """Shared retry-wrapped history fetch used by both public fetch_history* helpers."""
     if shutdown_event.is_set():
@@ -649,7 +657,16 @@ async def _fetch_history_retry(params: FetchParams) -> RetryResult:
         if df.empty:
             raise ValueError(f"No data returned for {params.symbol}")
         # Standardize here - single place for both preview and cache
-        return standardize_ohlcv(df, params.adjusted)
+        standardized = standardize_ohlcv(df, params.adjusted)
+        # WP4 (D5): the scan's phase 1 needs currency and instrument type; yfinance
+        # already received them with this history, so no extra request is made.
+        metadata = _history_metadata(ticker)
+        standardized.attrs.update({
+            "symbol": params.symbol,
+            "currency": metadata.get("currency"),
+            "instrument_type": metadata.get("instrumentType"),
+        })
+        return standardized
 
     return await _retry_with_backoff(f"fetch_history({params.symbol})", _fetch)
 
