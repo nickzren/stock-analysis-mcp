@@ -127,6 +127,9 @@ def _build_dislocation_check(result: dict[str, Any]) -> dict[str, Any] | None:
     framework = result.get("dislocation_framework")
     if not isinstance(framework, dict):
         return None
+    if framework.get("status") == "not_applicable":
+        return {"overall_status": "not_applicable", "overall_read": None,
+                "reason": framework.get("reason"), "questions": []}
 
     questions: list[dict[str, Any]] = []
     for question_id, question, section_key, answers in DISLOCATION_QUESTIONS:

@@ -271,6 +271,37 @@ class TestBasisRules:
         assert history["history_span_years"] < 5
         assert history["pe_stats"]["current_percentile"] is not None  # current P/E ranked against history
 
+    async def test_p3_each_metric_needs_its_own_five_year_span(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Six years of P/S but only ~2.5 years of positive earnings: no pe_5y_avg."""
+        quarters = pd.date_range("2019-03-31", periods=28, freq="QE")
+        net_income = [-50.0] * 16 + [100.0] * 12
+        income = pd.DataFrame([list(reversed(net_income)), [1000.0] * 28], index=["Net Income", "Total Revenue"],
+                              columns=list(reversed(quarters)))
+        days = pd.bdate_range("2018-06-01", "2026-01-10")
+        prices = pd.DataFrame({"Close": [50.0 + i * 0.02 for i in range(len(days))]}, index=days)
+        info = {**USD, "regularMarketPrice": 100.0, "marketCap": 1e8, "sharesOutstanding": 1e6,
+                "trailingPE": 250.0, "trailingEps": 0.4, "priceToSalesTrailing12Months": 25.0}
+
+        async def fake_info(symbol: str) -> dict[str, Any]:
+            return dict(info)
+
+        async def fake_ticker(symbol: str) -> FakeTicker:
+            return FakeTicker(symbol)
+
+        async def statements(ticker: Any) -> dict[str, Any]:
+            return {"quarterly_income_stmt": income, "price_history_5y": prices}
+
+        monkeypatch.setattr(fundamentals, "fetch_info", fake_info)
+        monkeypatch.setattr(fundamentals, "fetch_ticker", fake_ticker)
+        monkeypatch.setattr(fundamentals, "_read_statements", statements)
+
+        snapshot = await fundamentals.fundamentals_snapshot("EXMP")
+        context, history = snapshot["valuation_context"], snapshot["valuation_history"]
+
+        assert history["ps_stats"]["span_years"] >= 5 > history["pe_stats"]["span_years"]
+        assert context["ps_5y_avg"] is not None
+        assert (context["pe_5y_avg"], context["pe_percentile_5y"]) == (None, None)
+
     async def test_r4_9_valuation_context_names_the_short_span(self, monkeypatch: pytest.MonkeyPatch) -> None:
         quarters = pd.date_range("2023-03-31", periods=12, freq="QE")
         income = pd.DataFrame([[100.0] * 12, [1000.0] * 12], index=["Net Income", "Total Revenue"],
@@ -311,7 +342,10 @@ class TestSupport:
             ("EQUITY", "USD", "XYZ", "XYZ 6.5% Pfd", "unsupported", "supported"),
             ("EQUITY", "USD", "BRK-B", "Berkshire Hathaway", "supported", "supported"),
             ("EQUITY", "USD", "PFBC", "Preferred Bank", "supported", "supported"),
-            ("EQUITY", "USD", "XYZ", "XYZ Corp Depositary Shares Series A", "unsupported", "supported"),
+            ("EQUITY", "USD", "TSM", "Taiwan Semiconductor Manufacturing Company Limited American Depositary Shares",
+             "supported", "supported"),
+            ("EQUITY", "USD", "XYZ", "XYZ Corp 6.50% Non-Cumulative Preferred Stock, Series A",
+             "unsupported", "supported"),
             (None, None, "EXMP", None, "unverified", "unverified"),
         ],
     )

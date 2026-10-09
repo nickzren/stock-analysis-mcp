@@ -26,9 +26,10 @@ _SHARE_UNIT_TOLERANCE = 0.10
 
 # Yahoo preferred tickers: BAC-PL, WFC-PY, ABR-PD. Class shares (BRK-B, BF-B) don't match.
 _PREFERRED_SUFFIX = re.compile(r"-P[A-Z]?$")
-# Preferred-security phrasing only, so a common stock named "Preferred Bank" isn't caught.
+# Preferred-security phrasing only: a common stock named "Preferred Bank" and an
+# ordinary ADR ("American Depositary Shares") must not match.
 _PREFERRED_NAME = re.compile(
-    r"\b(pfd|preferred\s+(stock|shares?|securities)|depositary\s+shares?)\b", re.IGNORECASE
+    r"\b(pfd|preferred\s+(stock|shares?|securities)|non-?cumulative)\b", re.IGNORECASE
 )
 
 

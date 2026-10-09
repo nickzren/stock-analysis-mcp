@@ -537,7 +537,7 @@ def build_policy_action(
         if "unverified" in gate_reasons:
             conditions_to_upgrade.append("valuation inputs on one verified currency basis")
         elif "ev_nonpositive" in gate_reasons:
-            conditions_to_upgrade.append("positive enterprise value, or a verified P/S")
+            conditions_to_upgrade.append("positive enterprise value")
         else:
             conditions_to_upgrade.append("revenue data available for valuation")
 

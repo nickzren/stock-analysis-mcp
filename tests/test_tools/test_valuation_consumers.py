@@ -126,6 +126,31 @@ class TestValuationGate:
         assert gate["is_unprofitable"] is False
 
 
+class TestConditionsFollowTheGate:
+    async def test_r4_5_negative_ev_conditions_name_only_what_the_gate_lacks(self, analyze: Any) -> None:
+        result = await analyze({**UNPROFITABLE_NEGATIVE_EV, "marketCap": 100.0})
+
+        assert result["action_zones"]["valuation_assessment"]["gate"] == "unknown"
+        upgrades = result["policy_action"]["conditions_to_upgrade"]
+        assert "positive enterprise value" in upgrades
+        assert not any("P/S" in condition for condition in upgrades)
+        valuation = result["decision_context"]["valuation"]
+        conditions = (valuation["bullish_if"] or []) + (valuation["bearish_if"] or [])
+        assert not [c for c in conditions if "ps_" in json.dumps(c)]
+
+    def test_rerate_milestone_names_the_metric_that_made_the_gate_attractive(self) -> None:
+        from stock_analysis.tools.analyze.decision_context import _build_thesis_checkpoints
+
+        thesis = _build_thesis_checkpoints(
+            is_unprofitable=False, net_margin=0.4, fcf=None, cash_runway_quarters=None, revenue_yoy=0.2,
+            valuation_gate="attractive", risk_label="medium", business_quality="strong", valuation_basis="peg_ratio",
+        )
+
+        milestone = next(c for c in thesis["checkpoints"] if c["id"] == "valuation_rerates")
+        assert milestone["target"] == "PEG rises toward sector median"
+        assert "P/E" not in milestone["target"] and "P/S" not in milestone["target"]
+
+
 class TestAnalyzeTiers:
     @pytest.mark.parametrize(
         "info", [UNPROFITABLE_NEGATIVE_EV, NEGATIVE_PEG, NEGATIVE_EQUITY], ids=["r4_5", "r4_4", "r4_2"]

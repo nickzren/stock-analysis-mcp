@@ -59,6 +59,17 @@ class TestTradeCard:
         assert card["action"] == "watch"
 
 
+class TestOrdinaryAdr:
+    def test_an_ordinary_adr_is_a_supported_stock_on_the_trade_card(self) -> None:
+        name = "Taiwan Semiconductor Manufacturing Company Limited American Depositary Shares"
+
+        card = build_card(summary_data={"currency": "USD", "quote_type": "EQUITY", "name": name},
+                          actionable_price=101.5)
+
+        assert card["action"] == "trade_now" and card["plan"] is not None
+        assert card["support"]["instrument"]["status"] == "supported"
+
+
 class TestAnalyzeDecision:
     def test_r4_7_decision_card_caps_new_money_at_watch_and_skips_liquidity(self) -> None:
         gates = _compute_hard_gates(
@@ -180,6 +191,12 @@ class TestAnalyzeCaps:
 
         assert result["dip_assessment"]["status"] == "not_applicable"
         assert result["decision_context"]["fundamentals"]["status"] == "not_applicable"
+        thesis = result["decision_context"]["thesis_checkpoints"]
+        assert (thesis["hold_thesis"], thesis["checkpoints"], thesis["thesis_stop_triggers"]) == (
+            "not_applicable", [], None
+        )
+        check = project_analyze_result(result, "standard")["dislocation_check"]
+        assert (check["overall_status"], check["questions"]) == ("not_applicable", [])
         for detail in ("decision", "standard", "full"):
             text = json.dumps(project_analyze_result(result, detail))
             for phrase in ("net_margin turns negative", "net_margin >", "guidance cut",

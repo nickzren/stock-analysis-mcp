@@ -44,9 +44,10 @@
 - Support boundaries (WP4, D5): `summary.support` (and the trade card's
   `support`) is `{instrument: {status, quote_type, reason}, currency: {status,
   code, reason}}`, status `supported` / `unsupported` / `unverified`. Only
-  `EQUITY` (not a detected preferred: Yahoo `-P` / `-P<letter>` suffix or a
-  Preferred/Pfd/Depositary name) priced in `USD` is supported; unknown values
-  fail closed. Unsupported or unverified (instrument or currency) means: no
+  `EQUITY` (not a detected preferred: Yahoo `-P` / `-P<letter>` suffix, or a
+  name with `Pfd`, `Preferred Stock/Shares/Securities` or `Non-Cumulative`;
+  ordinary ADRs named "American Depositary Shares" stay supported) priced in
+  `USD` is supported; unknown values fail closed. Unsupported or unverified (instrument or currency) means: no
   share/dollar sizing (`unavailable_reason` names the failing side), no
   dollar-liquidity gate, and new-money actions capped at `watch`
   (`unsupported_instrument` / `unsupported_currency` hard gates and blockers;
@@ -54,8 +55,9 @@
   anything copies it (executive summary, decision modes and their
   `long_term_view`, dislocation, decision-card `horizon_fit`). An unsupported
   instrument also skips the fundamentals rubric, dip and dislocation
-  (`not_applicable`, including the verdict's fundamentals exclusion and
-  `decision_context.fundamentals`), with no stock-only conditions. The scan reads currency and instrument
+  (`not_applicable`, including the verdict's fundamentals exclusion,
+  `decision_context.fundamentals`, its `thesis_checkpoints` and the standard
+  tier's `dislocation_check`), with no stock-only conditions. The scan reads currency and instrument
   type from the daily history's chart metadata (`df.attrs`, no extra request)
   and never promotes an unsupported row. `stock_summary.currency` no longer
   defaults to USD; it adds `quote_type`, `financial_currency` and `support`.
@@ -86,8 +88,11 @@
   dividend data or no price) and
   `dividend_yield_trailing` (`dividends.yield_basis` / `yield_trailing` in
   events). Valuation-history stats need >= 8 points (`insufficient_history`),
-  `*_5y` fields need a 5-year span, and `current_percentile` ranks the current
-  usable ratio; `history_points` and `history_span_years` are always exposed.
+  each metric's `*_5y` fields need that metric's own 5-year span
+  (`pe_stats.span_years` / `ps_stats.span_years`), and `current_percentile`
+  ranks the current usable ratio; `history_points` and `history_span_years`
+  are always exposed. Valuation conditions and thesis milestones follow the
+  gate's own basis (no P/S condition when EV <= 0 left the gate `unknown`).
 - `analyze` returns the `standard` projection by default; deep audit fields such as `decision_context`, `dip_assessment`, and full `verdict` / `data_quality` require `detail="full"`.
 - `options_signals` returns put/call data at `put_call_ratio.volume_based` and `put_call_ratio.oi_based`, not under `summary.*`.
 - In `analyze`, raw options output is nested under `options_signals`, while derived narrative fields appear elsewhere such as `section_summaries`, `signals`, and `decision_context`.

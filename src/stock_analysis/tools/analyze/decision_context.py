@@ -749,8 +749,8 @@ def build_decision_context(
                 threshold_str="ev_to_sales >= 10",
                 current_str=f"ev_to_sales = {ev_to_sales:.1f}",
             ))
-        elif ps_trailing is not None:
-            # Fallback to P/S if EV/S unavailable
+        elif val_basis == "ps_trailing" and ps_trailing is not None:
+            # P/S only when the gate itself fell back to it (never with EV <= 0)
             valuation_bullish.append(_make_condition(
                 id="ps_contracts",
                 condition="ps_contracts",
@@ -932,17 +932,28 @@ def build_decision_context(
         }
 
     # === THESIS CHECKPOINTS (2-year framework for long-term investors) ===
-    thesis_checkpoints = _build_thesis_checkpoints(
-        is_unprofitable=is_unprofitable,
-        net_margin=net_margin,
-        fcf=fcf,
-        cash_runway_quarters=cash_runway_quarters,
-        revenue_yoy=growth.get("revenue_yoy") if growth else None,
-        valuation_gate=valuation_gate,
-        risk_label=risk_label,
-        business_quality=business_quality,
-        next_earnings_date=next_earnings_date,
-    )
+    if business_quality_status == "not_applicable":
+        # Unsupported instrument (WP4, D5): no business thesis to track.
+        thesis_checkpoints: dict[str, Any] = {
+            "hold_thesis": "not_applicable",
+            "checkpoints": [],
+            "review_triggers": [],
+            "thesis_stop_triggers": None,
+            "review_frequency": None,
+        }
+    else:
+        thesis_checkpoints = _build_thesis_checkpoints(
+            is_unprofitable=is_unprofitable,
+            net_margin=net_margin,
+            fcf=fcf,
+            cash_runway_quarters=cash_runway_quarters,
+            revenue_yoy=growth.get("revenue_yoy") if growth else None,
+            valuation_gate=valuation_gate,
+            risk_label=risk_label,
+            business_quality=business_quality,
+            next_earnings_date=next_earnings_date,
+            valuation_basis=valuation_assessment.get("basis"),
+        )
 
     # === APPLY PER-CATEGORY LIMITS FOR CLEANER OUTPUT ===
     max_per_category = 2
@@ -1159,6 +1170,16 @@ def build_decision_context(
     }
 
 
+_RERATE_MILESTONES: dict[str, tuple[str, str]] = {
+    "pe_trailing": ("P/E expands toward sector median", "yfinance.info.trailingPE"),
+    "earnings_yield": ("P/E expands toward sector median", "yfinance.info.trailingPE"),
+    "fcf_yield": ("FCF yield compresses toward sector median", "yfinance.info.{freeCashflow,marketCap}"),
+    "peg_ratio": ("PEG rises toward sector median", "yfinance.info.pegRatio"),
+    "ps_trailing": ("P/S expands toward sector median", "yfinance.info.priceToSalesTrailing12Months"),
+    "ev_to_sales": ("EV/S expands toward sector median", "computed.ev_to_sales"),
+}
+
+
 def _build_thesis_checkpoints(
     is_unprofitable: bool,
     net_margin: float | None,
@@ -1169,6 +1190,7 @@ def _build_thesis_checkpoints(
     risk_label: str | None,
     business_quality: str | None,
     next_earnings_date: str | None = None,
+    valuation_basis: str | None = None,
 ) -> dict[str, Any]:
     """
     Build thesis checkpoints for 2-year investment framework.
@@ -1288,11 +1310,13 @@ def _build_thesis_checkpoints(
         # Profitable company checkpoints
         if valuation_gate == "attractive":
             hold_thesis = "undervalued_quality"
+            # Track the metric that made the gate attractive, never an unverified one (WP4).
+            target, source = _RERATE_MILESTONES.get(valuation_basis or "", _RERATE_MILESTONES["pe_trailing"])
             checkpoints.append({
                 "id": "valuation_rerates",
                 "milestone": "valuation_rerates",
-                "target": "P/E or P/S expands toward sector median",
-                "data_source": "yfinance.info.{trailingPE,priceToSalesTrailing12Months}",
+                "target": target,
+                "data_source": source,
                 "update_on": "weekly",
                 "next_check": None,  # Price-based, check weekly
                 "priority": "medium",

@@ -487,15 +487,17 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
     if valuation_history:
         valuation_context["history_points"] = valuation_history.get("history_points", 0)
         valuation_context["history_span_years"] = valuation_history.get("history_span_years")
+        # Each metric needs its own five-year span (P/E and P/S dates can differ).
         pe_stats = valuation_history.get("pe_stats")
         ps_stats = valuation_history.get("ps_stats")
-        span = valuation_history.get("history_span_years") or 0
-        if (pe_stats or ps_stats) and span >= 5:
-            if pe_stats:
-                valuation_context["pe_5y_avg"] = pe_stats.get("mean")
-                valuation_context["pe_percentile_5y"] = pe_stats.get("current_percentile")
-            if ps_stats:
-                valuation_context["ps_5y_avg"] = ps_stats.get("mean")
+        pe_5y = pe_stats if pe_stats and (pe_stats.get("span_years") or 0) >= 5 else None
+        ps_5y = ps_stats if ps_stats and (ps_stats.get("span_years") or 0) >= 5 else None
+        if pe_5y or ps_5y:
+            if pe_5y:
+                valuation_context["pe_5y_avg"] = pe_5y.get("mean")
+                valuation_context["pe_percentile_5y"] = pe_5y.get("current_percentile")
+            if ps_5y:
+                valuation_context["ps_5y_avg"] = ps_5y.get("mean")
             valuation_context["status"] = "available"
             valuation_context["status_reason"] = None
         elif pe_stats or ps_stats:
@@ -840,9 +842,11 @@ def _compute_valuation_history(
     def _compute_stats(
         history: list[dict[str, Any]], key: str, current: float | None,
     ) -> dict[str, Any] | None:
-        values = [entry[key] for entry in history if entry.get(key) is not None]
+        points = [entry for entry in history if entry.get(key) is not None]
+        values = [entry[key] for entry in points]
         if len(values) < _MIN_HISTORY_POINTS:
             return None
+        dates = sorted(pd.Timestamp(entry["quarter"]) for entry in points)
         percentile = (
             safe_round(sum(1 for v in values if v < current) / len(values) * 100, 1)
             if current is not None
@@ -854,6 +858,7 @@ def _compute_valuation_history(
             "mean": safe_round(statistics.mean(values), 2),
             "median": safe_round(statistics.median(values), 2),
             "current_percentile": percentile,
+            "span_years": safe_round((dates[-1] - dates[0]).days / 365.25, 2),
         }
 
     quarters = sorted({entry["quarter"] for entry in pe_history + ps_history})
