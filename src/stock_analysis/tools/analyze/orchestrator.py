@@ -65,11 +65,11 @@ from stock_analysis.utils.helpers import fcf_label_from_cashflow, first_sentence
 from stock_analysis.utils.normalize import build_watchlist_snapshot
 from stock_analysis.utils.provenance import build_meta
 from stock_analysis.utils.valuation_basis import (
-    classify_support,
     currency_supported,
     instrument_supported,
     is_unverified,
     metric_reason,
+    summary_support,
     support_blockers,
     usable_metric,
 )
@@ -78,12 +78,13 @@ from stock_analysis.utils.valuation_basis import (
 _READ_SHARE_OF_TOOL_DEADLINE = 0.9
 
 
-# New-money codes in policy_action horizons and decision_modes actions.
+# New-money codes: policy_action horizons use the policy codes, decision_modes
+# actions the mode codes (a superset).
 _NEW_MONEY_POLICY_CODES = frozenset({
     "buy", "hold_or_add", "accumulate", "speculative_small_position",
     "speculative_with_thesis", "speculative_only", "small_position_with_stops",
 })
-_NEW_MONEY_MODE_CODES = frozenset({"build_position", "starter_position_only", "starter_then_add"})
+_NEW_MONEY_MODE_CODES = _NEW_MONEY_POLICY_CODES | {"build_position", "starter_position_only", "starter_then_add"}
 
 
 def _cap_policy_at_watch(policy_action: dict[str, Any], support: dict[str, Any]) -> None:
@@ -99,7 +100,7 @@ def _cap_modes_at_watch(decision_modes: dict[str, Any]) -> None:
     for mode in decision_modes.values():
         if not isinstance(mode, dict):
             continue
-        if mode.get("action") in _NEW_MONEY_MODE_CODES | _NEW_MONEY_POLICY_CODES:
+        if mode.get("action") in _NEW_MONEY_MODE_CODES:
             mode["action"] = "watch"
         if mode.get("long_term_view") in _NEW_MONEY_POLICY_CODES:
             mode["long_term_view"] = "watch"
@@ -451,12 +452,7 @@ async def analyze_stock(
     tech_data = tool_results.get("technicals") or {}
     fund_data = tool_results.get("fundamentals_snapshot") or {}
     # WP4 (D5): fail closed -- an unknown quoteType or currency is unverified.
-    support = summary_data.get("support") or classify_support(
-        quote_type=summary_data.get("quote_type"),
-        currency=summary_data.get("currency"),
-        symbol=normalized_symbol,
-        name=summary_data.get("name"),
-    )
+    support = summary_support(summary_data, normalized_symbol)
     instrument_ok = instrument_supported(support)
     instrument_reason = (support.get("instrument") or {}).get("reason")
     if not instrument_ok:

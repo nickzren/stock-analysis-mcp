@@ -542,7 +542,7 @@ def build_policy_action(
             conditions_to_upgrade.append("revenue data available for valuation")
 
     # Business quality conditions
-    health = (fundamentals_summary or {}).get("health") or {}
+    health = fundamentals_summary.get("health") or {}
     if business_quality == "poor":
         conditions_to_upgrade.append("net_margin > 0%")
         conditions_to_upgrade.append(
@@ -567,7 +567,7 @@ def build_policy_action(
         conditions_to_downgrade.append(
             f"volatility spike > {VOLATILITY_REGIME_THRESHOLDS['medium'] * 100:.0f}%"
         )
-    stock_rules_apply = (fundamentals_summary or {}).get("status") != "not_applicable"
+    stock_rules_apply = fundamentals_summary.get("status") != "not_applicable"
     if not is_unprofitable and stock_rules_apply:
         conditions_to_downgrade.append("guidance cut or profit warning")
         conditions_to_downgrade.append("net_margin turns negative")

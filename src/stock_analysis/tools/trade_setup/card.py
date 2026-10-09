@@ -21,8 +21,8 @@ from stock_analysis.tools.trade_setup.setup_rules import (
 from stock_analysis.tools.trade_setup.setups import detect_setup
 from stock_analysis.utils.market_calendar import add_trading_days
 from stock_analysis.utils.valuation_basis import (
-    classify_support,
     sizing_unavailable_reason,
+    summary_support,
     support_blockers,
 )
 
@@ -89,12 +89,7 @@ def build_trade_setup_card(
             })
     # WP4 (D5): fail closed on an unknown instrument or currency; a non-USD price
     # makes no dollar-liquidity claim and gets no executable plan.
-    support = summary_data.get("support") or classify_support(
-        quote_type=summary_data.get("quote_type"),
-        currency=summary_data.get("currency"),
-        symbol=symbol,
-        name=summary_data.get("name"),
-    )
+    support = summary_support(summary_data, symbol)
     support_gates = support_blockers(support)
     if sizing_unavailable_reason(support) is None:
         weak_liquidity, liquidity_missing, liquidity_blockers = check_liquidity(risk_data)

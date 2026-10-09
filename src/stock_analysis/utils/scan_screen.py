@@ -143,15 +143,10 @@ def screen_symbol(df: pd.DataFrame | None) -> dict[str, Any]:
         blocker_ids.extend(b["id"] for b in liq_blockers)
     blocker_ids.extend(support_ids)
 
-    if support_ids and not (knife or weak or missing):
+    blocked = knife or weak or missing
+    if blocked or support_ids:
         return {
-            "promote": False, "action_hint": "watch", "setup_type": None,
-            "trigger_price": None, "last_close": payload["current_price"],
-            "blocker_ids": blocker_ids,
-        }
-    if knife or weak or missing:
-        return {
-            "promote": False, "action_hint": "avoid", "setup_type": None,
+            "promote": False, "action_hint": "avoid" if blocked else "watch", "setup_type": None,
             "trigger_price": None, "last_close": payload["current_price"],
             "blocker_ids": blocker_ids,
         }

@@ -130,7 +130,7 @@ def dividend_yields(info: dict[str, Any], price: float | None) -> dict[str, Any]
         if trailing_rate == 0:
             trailing = 0.0
         elif (
-            currency_basis(info.get("currency"), info.get("financialCurrency")) == VERIFIED
+            currency_basis(currency, info.get("financialCurrency")) == VERIFIED
             and share_units_basis(info, price) == VERIFIED
         ):
             trailing = trailing_rate / price  # type: ignore[operator]
@@ -159,6 +159,16 @@ def classify_support(
         reason = "minor_unit_currency_not_supported" if currency in MINOR_UNIT_CURRENCIES else "non_usd_currency_not_supported"
         currency_block = {"status": "unsupported", "code": currency, "reason": reason}
     return {"instrument": instrument, "currency": currency_block}
+
+
+def summary_support(summary: dict[str, Any], symbol: Any) -> dict[str, Any]:
+    """A stock summary's ``support``, else classified from its fields (unknown fails closed)."""
+    return summary.get("support") or classify_support(
+        quote_type=summary.get("quote_type"),
+        currency=summary.get("currency"),
+        symbol=symbol,
+        name=summary.get("name"),
+    )
 
 
 def _is_preferred(symbol: Any, name: Any) -> bool:

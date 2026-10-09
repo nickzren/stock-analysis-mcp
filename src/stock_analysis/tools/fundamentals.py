@@ -72,11 +72,12 @@ def _build_valuation(info: dict[str, Any]) -> dict[str, Any]:
         if market_cap_val is not None and revenue_ttm is not None and revenue_ttm > 0:
             ps_trailing = market_cap_val / revenue_ttm
             ps_source = "computed"
-    if ps_trailing is not None and currency != VERIFIED:
-        ps_trailing = None
-        status["ps_trailing"] = metric_entry(currency, False, currency)
-    elif ps_trailing is not None:
-        status["ps_trailing"] = metric_entry(VERIFIED, ps_trailing > 0, None if ps_trailing > 0 else "ps_nonpositive")
+    if ps_trailing is not None:
+        if currency != VERIFIED:
+            ps_trailing = None
+            status["ps_trailing"] = metric_entry(currency, False, currency)
+        else:
+            status["ps_trailing"] = metric_entry(VERIFIED, ps_trailing > 0, None if ps_trailing > 0 else "ps_nonpositive")
 
     ps_explanation: str | None = None
     if ps_source == "computed":
@@ -84,7 +85,7 @@ def _build_valuation(info: dict[str, Any]) -> dict[str, Any]:
 
     pb_ratio = safe_float(info.get("priceToBook"))
     if pb_ratio is not None:
-        pb_basis = currency if currency != VERIFIED else share_units_basis(info, price)
+        pb_basis = _per_share_basis(info, price)
         if pb_basis != VERIFIED:
             pb_ratio = None
             status["pb_ratio"] = metric_entry(pb_basis, False, pb_basis)
@@ -161,8 +162,6 @@ def _pe(
     unverified when the EPS is unknown or its currency can't be shown to match."""
     pe = safe_float(info.get(pe_key))
     eps = safe_float(info.get(eps_key))
-    if pe is None and eps is None:
-        return None
     if eps is not None and eps <= 0:
         status[name] = metric_entry(currency, False, "undefined_eps_nonpositive")
         return None
@@ -772,9 +771,7 @@ def _compute_valuation_history(
     if price_hist is None or price_hist.empty or "Close" not in price_hist:
         return None
 
-    basis = currency_basis(info.get("currency"), info.get("financialCurrency"))
-    if basis == VERIFIED:
-        basis = share_units_basis(info, current_price_from_info(info))
+    basis = _per_share_basis(info, current_price_from_info(info))
     if basis != VERIFIED:
         return {
             "pe_history": None, "ps_history": None, "pe_stats": None, "ps_stats": None,
