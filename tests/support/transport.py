@@ -30,6 +30,7 @@ ROUTES: dict[str, str] = {
     "search": "/v1/finance/search",
     "timeseries": "/ws/fundamentals-timeseries/",
     "quote_v7": "/v7/finance/quote",
+    "consent_page": "guce.yahoo.com/consent",
 }
 
 # Set per test by the autouse guard in tests/conftest.py. Unrouted stub requests
@@ -50,22 +51,27 @@ class TransportFixture:
     status: int
     body: str
     content_type: str
+    final_url: str | None = None  # where the request ended up after redirects
 
 
 def load_fixture(source: str, name: str) -> TransportFixture:
     """Load ``tests/fixtures/transport/<source>/<name>.json``.
 
     The spec holds ``status`` plus exactly one of ``json`` (an object served as
-    a JSON body), ``body_file`` (a sibling file) or ``body`` (inline text).
+    a JSON body), ``body_file`` (a sibling file) or ``body`` (inline text), and
+    optionally ``final_url`` (a redirect target, e.g. Yahoo's consent page).
     """
     path = FIXTURE_ROOT / source / f"{name}.json"
     spec = json.loads(path.read_text())
+    final_url = spec.get("final_url")
     if "json" in spec:
-        return TransportFixture(spec["status"], json.dumps(spec["json"]), "application/json")
+        return TransportFixture(spec["status"], json.dumps(spec["json"]), "application/json", final_url)
     if "body_file" in spec:
         body = (path.parent / spec["body_file"]).read_text()
-        return TransportFixture(spec["status"], body, spec.get("content_type", "text/html"))
-    return TransportFixture(spec["status"], spec.get("body", ""), spec.get("content_type", "text/plain"))
+        return TransportFixture(spec["status"], body, spec.get("content_type", "text/html"), final_url)
+    return TransportFixture(
+        spec["status"], spec.get("body", ""), spec.get("content_type", "text/plain"), final_url
+    )
 
 
 class FakeResponse:
@@ -76,6 +82,7 @@ class FakeResponse:
         self.reason = HTTPStatus(fixture.status).phrase
         self.ok = fixture.status < 400
         self.text = fixture.body
+        self.content = fixture.body.encode()
         self.headers = {"content-type": fixture.content_type}
         self.url = url
 
@@ -93,6 +100,7 @@ class UnroutedRequestError(AssertionError):
 
 @dataclass(frozen=True)
 class RecordedCall:
+    method: str
     url: str
     source: str
 
@@ -131,9 +139,9 @@ class FakeSession:
             if violation_sink is not None:
                 violation_sink.append(f"stub transport: unrouted {method} {url}")
             raise UnroutedRequestError(f"unrouted {method} {url}")
-        self.calls.append(RecordedCall(url, source))
+        self.calls.append(RecordedCall(method, url, source))
         fixture = queue.pop(0) if len(queue) > 1 else queue[0]
-        return FakeResponse(fixture, url)
+        return FakeResponse(fixture, fixture.final_url or url)
 
 
 @contextmanager

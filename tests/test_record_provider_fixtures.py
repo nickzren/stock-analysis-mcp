@@ -6,8 +6,9 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
+from yfinance.data import YfData
 
-from tests.support.transport import FakeResponse, FakeSession, TransportFixture
+from tests.support.transport import FakeResponse, FakeSession, TransportFixture, load_fixture
 
 SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "record_provider_fixtures.py"
 
@@ -86,3 +87,117 @@ def test_each_run_gets_its_own_directory(
     for run in (first, second):
         manifest = json.loads((run / "manifest.json").read_text())
         assert sorted(p.name for p in run.iterdir()) == sorted([*manifest["files"], "manifest.json"])
+
+
+class TestConsentGuard:
+    """The recorder is read-only: it stops before submitting any cookie consent."""
+
+    @pytest.mark.parametrize(
+        ("method", "url"),
+        [
+            ("GET", "https://fc.yahoo.com"),
+            ("GET", "https://query1.finance.yahoo.com/v1/test/getcrumb"),
+            ("GET", "https://guce.yahoo.com/consent"),
+            ("GET", "https://query2.finance.yahoo.com/v10/finance/quoteSummary/EXMP"),
+            ("POST", "https://finance.yahoo.com/xhr/ncp?queryRef=latestNews"),
+        ],
+    )
+    def test_reads_and_cookie_requests_are_allowed(self, recorder: ModuleType, method: str, url: str) -> None:
+        recorder._refuse_consent_submission(method, url)
+
+    @pytest.mark.parametrize(
+        ("method", "url"),
+        [
+            ("POST", "https://consent.yahoo.com/v2/collectConsent?sessionId=SID"),
+            ("GET", "https://guce.yahoo.com/copyConsent?sessionId=SID"),
+            ("POST", "https://consent.yahoo.com/v2/consent?sessionId=SID"),
+            ("POST", "https://guce.yahoo.com/anything"),
+        ],
+    )
+    def test_consent_submissions_are_refused(self, recorder: ModuleType, method: str, url: str) -> None:
+        with pytest.raises(recorder.ConsentRequiredError):
+            recorder._refuse_consent_submission(method, url)
+
+    @pytest.mark.parametrize("fixture", ["redirected_to_consent_form", "redirected_to_consent_no_action"])
+    def test_redirect_to_consent_aborts_the_run_before_any_post(
+        self, recorder: ModuleType, yf_transport: FakeSession, tmp_path: Path, fixture: str
+    ) -> None:
+        yf_transport.route("calendar", fixture)
+        yf_transport.route("news", "valid_stream")
+
+        with pytest.raises(recorder.ConsentRequiredError, match="consent page"):
+            recorder.record_symbol("EXMP", tmp_path, sources=("calendar", "news"))
+
+        assert [call.method for call in yf_transport.calls] == ["GET"]
+        assert yf_transport.calls_to("news") == []  # later sources never ran
+        (run,) = (tmp_path / "EXMP").iterdir()
+        sources = json.loads((run / "manifest.json").read_text())["sources"]
+        assert list(sources) == ["calendar"] and sources["calendar"].startswith("aborted:")
+
+    def test_original_handler_and_session_are_restored_after_an_abort(
+        self, recorder: ModuleType, yf_transport: FakeSession, tmp_path: Path
+    ) -> None:
+        yf_transport.route("calendar", "redirected_to_consent_form")
+
+        with pytest.raises(recorder.ConsentRequiredError):
+            recorder.record_symbol("EXMP", tmp_path, sources=("calendar",))
+
+        data = YfData()
+        assert data._session is yf_transport
+        assert "_accept_consent_form" not in data.__dict__
+
+    def test_form_without_action_is_blocked_at_the_session(
+        self, recorder: ModuleType, yf_transport: FakeSession, tmp_path: Path
+    ) -> None:
+        """Defense in depth: yfinance's own handler posts a no-action form back to
+        the consent page itself; the session guard refuses it before sending."""
+        data = YfData()
+        data._session = recorder.RecordingSession(yf_transport, tmp_path)
+        consent = FakeResponse(
+            load_fixture("calendar", "redirected_to_consent_no_action"),
+            "https://consent.yahoo.com/v2/consent?sessionId=SID",
+        )
+
+        with pytest.raises(recorder.ConsentRequiredError, match="POST https://consent.yahoo.com/v2/consent"):
+            YfData._accept_consent_form(data, consent, 30)
+
+        assert yf_transport.calls == []
+
+    def test_csrf_cookie_path_is_blocked_before_collect_consent(
+        self, recorder: ModuleType, yf_transport: FakeSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        yf_transport.route("consent_page", "csrf_form")
+        data = YfData()
+        data._session = recorder.RecordingSession(yf_transport, tmp_path)
+        data._cookie = None
+        monkeypatch.setattr(data, "_load_cookie_curlCffi", lambda: False)
+
+        with pytest.raises(recorder.ConsentRequiredError, match="collectConsent"):
+            data._get_cookie_csrf(30)
+
+        assert [(call.method, call.url) for call in yf_transport.calls] == [
+            ("GET", "https://guce.yahoo.com/consent")
+        ]
+
+    def test_an_abort_stops_the_remaining_symbols(
+        self, recorder: ModuleType, yf_transport: FakeSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        yf_transport.route("calendar", "redirected_to_consent_form")
+        monkeypatch.setattr(recorder, "READERS", {"calendar": recorder.READERS["calendar"]})
+
+        with pytest.raises(recorder.ConsentRequiredError):
+            recorder.record_symbols(["EXMP", "EXMQ"], tmp_path)
+
+        assert [p.name for p in tmp_path.iterdir()] == ["EXMP"]
+
+    def test_main_exits_with_a_clear_message(
+        self, recorder: ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        def abort(symbols: list[str], out_root: Path) -> list[Path]:
+            raise recorder.ConsentRequiredError("consent submission blocked before sending: POST x")
+
+        monkeypatch.setattr(recorder, "record_symbols", abort)
+        monkeypatch.setattr("sys.argv", ["record", "EXMP", "--out", str(tmp_path)])
+
+        with pytest.raises(SystemExit, match="Nothing was submitted"):
+            recorder.main()

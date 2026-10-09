@@ -6,14 +6,19 @@ it against the network. Output goes to the gitignored
 data and must not be committed. Committed test fixtures are synthetic
 (``tests/fixtures/transport/``).
 
-    uv run python scripts/record_provider_fixtures.py MSFT KO TSM
+Read-only: if Yahoo asks for cookie consent, the run stops before anything is
+submitted (``ConsentRequiredError``); consent is never accepted on your behalf.
+
+    uv run --frozen python scripts/record_provider_fixtures.py MSFT KO TSM
 """
 
 import argparse
 import json
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
 import yfinance as yf
@@ -24,6 +29,30 @@ DEFAULT_OUT = REPO_ROOT / "tests" / "fixtures" / "_recorded"
 # Cookie, crumb and consent exchanges carry session tokens; never write them,
 # whether requested directly or reached by redirect. Matched case-insensitively.
 _SKIP_URL_FRAGMENTS = ("getcrumb", "fc.yahoo.com", "consent")
+# Consent submissions: yfinance's csrf cookie path posts collectConsent and gets
+# copyConsent; its redirect path posts the consent form wherever its action (or
+# the page itself) points, so any POST to a consent host is refused too.
+_CONSENT_SUBMISSION_FRAGMENTS = ("collectconsent", "copyconsent")
+_CONSENT_HOSTS = ("consent.yahoo.com", "guce.yahoo.com")
+
+
+class ConsentRequiredError(BaseException):
+    """Yahoo asked for cookie consent. Accepting it is outside this read-only tool,
+    so the whole run stops. A ``BaseException`` so that no ``except Exception``
+    handler -- the recorder's per-source one or yfinance's -- can swallow it."""
+
+
+def _refuse_consent_submission(method: str, url: str) -> None:
+    lowered = url.lower()
+    host = urlsplit(lowered).hostname or ""
+    submitting = any(fragment in lowered for fragment in _CONSENT_SUBMISSION_FRAGMENTS)
+    if submitting or (method == "POST" and host.endswith(_CONSENT_HOSTS)):
+        raise ConsentRequiredError(f"consent submission blocked before sending: {method} {url}")
+
+
+def _abort_on_consent_form(consent_resp: Any, timeout: int) -> Any:
+    """Replaces ``YfData._accept_consent_form`` during a run."""
+    raise ConsentRequiredError(f"Yahoo redirected to a consent page: {getattr(consent_resp, 'url', '')}")
 
 READERS = {
     "calendar": lambda symbol: yf.Ticker(symbol).calendar,
@@ -54,9 +83,11 @@ class RecordingSession:
         setattr(self._inner, name, value)
 
     def get(self, url: str, **kwargs: Any) -> Any:
+        _refuse_consent_submission("GET", url)
         return self._record("GET", url, kwargs, self._inner.get(url, **kwargs))
 
     def post(self, url: str, **kwargs: Any) -> Any:
+        _refuse_consent_submission("POST", url)
         return self._record("POST", url, kwargs, self._inner.post(url, **kwargs))
 
     def _record(self, method: str, url: str, kwargs: dict[str, Any], response: Any) -> Any:
@@ -91,6 +122,7 @@ def record_symbol(
     original = data._session
     recorder = RecordingSession(original, out_dir)
     data._session = recorder
+    data._accept_consent_form = _abort_on_consent_form
     YfData.cache_get.cache_clear()
     outcomes: dict[str, str] = {}
     try:
@@ -101,19 +133,27 @@ def record_symbol(
                 outcomes[source] = "ok"
             except Exception as exc:  # recorded for drift review, not raised
                 outcomes[source] = f"error: {type(exc).__name__}: {exc}"
+            except ConsentRequiredError as exc:
+                outcomes[source] = f"aborted: {exc}"
+                raise
     finally:
         data._session = original
+        data.__dict__.pop("_accept_consent_form", None)
         YfData.cache_get.cache_clear()
-
-    manifest = {
-        "symbol": symbol.upper(),
-        "captured_at": captured_at.isoformat(),
-        "yfinance_version": yf.__version__,
-        "sources": outcomes,
-        "files": recorder.files,
-    }
-    (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+        manifest = {
+            "symbol": symbol.upper(),
+            "captured_at": captured_at.isoformat(),
+            "yfinance_version": yf.__version__,
+            "sources": outcomes,
+            "files": recorder.files,
+        }
+        (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     return out_dir
+
+
+def record_symbols(symbols: list[str], out_root: Path = DEFAULT_OUT) -> list[Path]:
+    """Record each symbol in turn; a ConsentRequiredError stops the whole run."""
+    return [record_symbol(symbol, out_root) for symbol in symbols]
 
 
 def main() -> None:
@@ -121,8 +161,11 @@ def main() -> None:
     parser.add_argument("symbols", nargs="+")
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     args = parser.parse_args()
-    for symbol in args.symbols:
-        print(record_symbol(symbol, args.out))
+    try:
+        for out_dir in record_symbols(args.symbols, args.out):
+            print(out_dir)
+    except ConsentRequiredError as exc:
+        sys.exit(f"Stopped: {exc}. Nothing was submitted; consent is out of scope.")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,6 @@
+{
+  "status": 200,
+  "content_type": "text/html",
+  "final_url": "https://consent.yahoo.com/v2/collectConsent?sessionId=SID",
+  "body_file": "consent_form.html"
+}
