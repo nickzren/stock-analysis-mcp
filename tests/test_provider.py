@@ -202,6 +202,20 @@ class TestEarningsVerification:
         assert card["action"] == "watch"
         assert "earnings_unverifiable" in blocker_ids(card)
 
+    async def test_malformed_earnings_field_does_not_verify(
+        self, yf_transport: FakeSession, events_env: None
+    ) -> None:
+        """A malformed nested earnings field must not read as a verified absence."""
+        yf_transport.route("calendar", "malformed_earnings_field")
+        yf_transport.route("earnings_page", "past_only_table")
+
+        earnings = (await _events())["earnings"]
+        card = build_card(actionable_price=101.5, events_data={"earnings": earnings})
+
+        assert earnings["sources_failed"] == ["calendar"]
+        assert card["action"] == "watch"
+        assert "earnings_unverifiable" in blocker_ids(card)
+
     async def test_calendar_date_flows_through_the_adapter(
         self, yf_transport: FakeSession, events_env: None, host_tz: Callable[[str], None]
     ) -> None:
@@ -275,6 +289,9 @@ class TestSourceReads:
             ("valid_no_earnings", "empty", None),
             ("http_404_json", "failed", "http_404"),
             ("http_429", "failed", "rate_limited"),
+            ("malformed_earnings_field", "failed", "malformed"),
+            ("malformed_earnings_dates", "failed", "malformed"),
+            ("malformed_dividend_date", "failed", "malformed"),
         ],
     )
     async def test_calendar_statuses(
@@ -327,7 +344,9 @@ class TestFreshness:
     """R1.6: after an application TTL expires, the next read does fresh I/O."""
 
     def test_source_ttls(self) -> None:
-        assert provider.SOURCE_TTL_SECONDS == {"calendar": 3600, "earnings_page": 21600, "news": 900, "search": 900}
+        assert provider.SOURCE_TTL_SECONDS == {
+            "calendar": 3600, "earnings_page": 21600, "news": 900, "search": 900, "symbol_search": 3600,
+        }
 
     @pytest.mark.parametrize(
         ("read", "source", "fixture"),
@@ -456,6 +475,7 @@ class TestNewsReads:
             ("malformed_envelope", "failed", "malformed"),
             ("valid_empty_stream", "empty", None),
             ("valid_stream", "ok", None),
+            ("null_item", "failed", "malformed"),
         ],
     )
     async def test_r1_8_news_feed(
@@ -474,6 +494,7 @@ class TestNewsReads:
             ("missing_news_key", "failed", "malformed"),
             ("valid_empty_news", "empty", None),
             ("valid_news", "ok", None),
+            ("null_item", "failed", "malformed"),
         ],
     )
     async def test_r1_9_search(
@@ -538,6 +559,17 @@ class TestNewsReads:
         assert result["warnings"] == [
             "all_items_rejected: no feed item was a usable story (ad or missing publish date)"
         ]
+
+    async def test_malformed_search_does_not_read_as_a_quiet_feed(
+        self, yf_transport: FakeSession, news_env: None
+    ) -> None:
+        yf_transport.route("news", "valid_empty_stream")
+        yf_transport.route("search", "null_item")
+
+        result = await news.stock_news(SYMBOL, days=7)
+
+        assert result["source_status"] == "unverified"
+        assert result["warnings"] == ["News feed could not be verified (malformed)"]
 
     async def test_failed_feed_does_not_read_as_a_quiet_period(self, yf_transport: FakeSession, news_env: None) -> None:
         yf_transport.route("news", "http_404_json")
@@ -665,6 +697,22 @@ class TestRetries:
 
         assert (result.result, result.attempts) == ("ok", 2)
 
+    async def test_each_retry_does_fresh_io(self, yf_transport: FakeSession) -> None:
+        """A retry must not replay a response yfinance cached in cache_get."""
+        url = "https://query2.finance.yahoo.com/ws/fundamentals-timeseries/v1/finance/timeseries/EXMP?symbol=EXMP"
+        # Two 503s: yfinance re-requests once on >= 400 inside one attempt.
+        yf_transport.route("timeseries", "http_503", "http_503", "quarterly_revenue_100")
+
+        def read() -> int:
+            response = YfData().cache_get(url)
+            response.raise_for_status()
+            return int(response.status_code)
+
+        result = await yfinance_client._retry_with_backoff("probe", read)
+
+        assert (result.result, result.attempts) == (200, 2)
+        assert len(yf_transport.calls_to("timeseries")) == 3
+
     async def test_rate_limit_cooldown_delays_other_reads(
         self, yf_transport: FakeSession, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -712,7 +760,9 @@ class TestRetries:
             await fetch_or_error(fetch_history(HISTORY_PARAMS), SYMBOL)
 
         assert raised.value.response["error_type"] == "data_unavailable"
-        assert len(expired) == yfinance_client._max_retries + 1
+        # Once per failed attempt in the history read, plus before each retry.
+        attempts = yfinance_client._max_retries + 1
+        assert len(expired) == attempts + (attempts - 1)
 
 
 class TestInfoFallback:
@@ -736,12 +786,23 @@ class TestInfoFallback:
 
 
 class TestSymbolSearch:
-    async def test_upstream_failure_is_a_structured_error(self, yf_transport: FakeSession) -> None:
-        yf_transport.route("search", "http_503_html")
+    @pytest.mark.parametrize("name", ["http_503_html", "http_404_json", "null_quote"])
+    async def test_upstream_failure_is_a_structured_error(self, yf_transport: FakeSession, name: str) -> None:
+        yf_transport.route("search", name)
 
         result = await symbol_search("Example Corp")
 
         assert (result["error"], result["error_type"]) == (True, "data_unavailable")
+
+    async def test_recovers_after_a_failed_search(self, yf_transport: FakeSession) -> None:
+        """A failed search is not cached anywhere, so the next call sees recovery."""
+        yf_transport.route("search", "http_404_json")
+        await symbol_search("Example Corp")
+        yf_transport.route("search", "valid_news")
+
+        result = await symbol_search("Example Corp")
+
+        assert [r["symbol"] for r in result["results"]] == ["EXMP"]
         assert YfData.cache_get.cache_info().currsize == 0
 
     async def test_analyze_explains_a_search_outage(self, monkeypatch: pytest.MonkeyPatch) -> None:

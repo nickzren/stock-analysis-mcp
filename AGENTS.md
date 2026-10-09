@@ -7,7 +7,7 @@
 ## Key Paths
 - `src/stock_analysis/server.py`: MCP server entrypoint
 - `src/stock_analysis/tools/`: tool implementations
-- `src/stock_analysis/data/`: yfinance client and caching; `provider.py` reads the sources whose failures yfinance would otherwise hide
+- `src/stock_analysis/data/`: yfinance client and caching; `provider.py` reads the sources whose failures yfinance would otherwise hide (calendar, earnings page, news, Search news and quotes)
 - `src/stock_analysis/resources/`: MCP resources
 - `tests/`: schema, invariants, and utility coverage
 - `README.md`: install, usage, and public-facing behavior
@@ -107,11 +107,16 @@
   HTTP status (401 once; 5xx with backoff; 429 and `YFRateLimitError` with
   backoff and a shared cooldown; 404 never), timeouts, connection errors and
   other transport errors; an unparseable history body is retried, not reported
-  as `invalid_symbol`. Provider reads stop retrying once backoff would exceed
-  4 s (at most three attempts), so a failing read returns `failed` inside
-  analyze's per-tool deadline, and cache only `ok`/`empty` results (calendar
-  1h, earnings page 6h, news and Search 15 min). An info quoteSummary 404 falls
-  back to the v7 quote endpoint like yfinance's hidden mode did. A `Ticker` or info cache miss clears yfinance's `cache_get`
+  as `invalid_symbol`, and every retry attempt clears yfinance's `cache_get`
+  LRU so it does fresh I/O. Provider reads cap retry backoff at 4 s (at most
+  three attempts); that bounds backoff, not request time (synchronous reads
+  keep 30 s timeouts until WP3). They cache only `ok`/`empty` results
+  (calendar 1h, earnings page 6h, news and Search 15 min, symbol search 1h).
+  Nested fields are validated too: a malformed calendar earnings/dividend
+  field, or a non-object news/Search item, makes the read `failed`. Symbol
+  search reads Search quotes the same way, so a failed search is a
+  `data_unavailable` error, never a cached empty result. An info quoteSummary
+  404 falls back to the v7 quote endpoint like yfinance's hidden mode did. A `Ticker` or info cache miss clears yfinance's `cache_get`
   LRU so the refetch does fresh I/O; a failed `Ticker` attribute read evicts
   that Ticker. Supported range: `yfinance>=1.0,<2`.
 - `analyze_trade_setup.freshness` in regular session requires BOTH a fresh

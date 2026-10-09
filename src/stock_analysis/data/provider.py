@@ -1,9 +1,9 @@
 """Network reads that must tell a failed fetch apart from a valid empty result.
 
-Step 1 WP1. Four sources are read below yfinance's properties, through its shared
+Step 1 WP1. These sources are read below yfinance's properties, through its shared
 session (``YfData``), so the HTTP status and the response envelope can be checked:
-quoteSummary ``calendarEvents``, the earnings page, the news feed (``/xhr/ncp``)
-and Search. They never go through ``YfData.cache_get`` or ``Ticker`` attribute
+quoteSummary ``calendarEvents``, the earnings page, the news feed (``/xhr/ncp``),
+Search news and Search quotes (symbol search). They never go through ``YfData.cache_get`` or ``Ticker`` attribute
 caches. Each read returns a ``SourceRead``; only ``ok`` and ``empty`` results are
 cached, for ``SOURCE_TTL_SECONDS``. Property reads on a cached ``Ticker`` go through
 ``read_attribute`` so a failure evicts that Ticker.
@@ -12,6 +12,7 @@ Reads run inline for now; WP3 moves each attempt onto the executor.
 """
 
 import asyncio
+import math
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -51,12 +52,14 @@ SOURCE_TTL_SECONDS: dict[str, int] = {
     "earnings_page": 21600,
     "news": 900,
     "search": 900,
+    "symbol_search": 3600,
 }
 
-# Total backoff one read may sleep. Keeps a failing read well inside analyze's
-# 10 s per-tool deadline (two reads can run back to back), so it returns a
-# structured ``failed`` instead of being cut off. With the client's 1 s base delay
-# this allows three attempts for 5xx/429/transport errors (jitter can't change it).
+# Total backoff one read may sleep, so retry sleeps alone can't push a failing
+# read past analyze's 10 s per-tool deadline. It bounds backoff, not request time:
+# synchronous reads keep their 30 s timeouts until WP3. With the client's 1 s base
+# delay this allows three attempts for 5xx/429/transport errors (jitter can't
+# change it).
 _RETRY_BUDGET_SECONDS = 4.0
 _NEWS_COUNT = 10
 
@@ -184,6 +187,10 @@ def _dig(value: Any, *keys: str) -> Any:
     return value
 
 
+def _is_epoch(value: Any) -> bool:
+    return isinstance(value, int | float) and not isinstance(value, bool) and math.isfinite(value)
+
+
 def _interpret_calendar(response: Any) -> _Interpretation:
     summary = _dig(response.json(), "quoteSummary")
     if not isinstance(summary, dict) or summary.get("error"):
@@ -192,10 +199,20 @@ def _interpret_calendar(response: Any) -> _Interpretation:
     events = result[0].get("calendarEvents") if isinstance(result, list) and result and isinstance(result[0], dict) else None
     if not isinstance(events, dict):
         return _Interpretation("failed", error_type="malformed")
-    has_content = bool(_dig(events, "earnings", "earningsDate")) or any(
-        key in events for key in ("dividendDate", "exDividendDate")
-    )
-    return _Interpretation("ok" if has_content else "empty", payload=events)
+    # Nested fields must have the expected shape too: a malformed earnings field
+    # must not read as a verified absence.
+    earnings = events.get("earnings")
+    if earnings is not None and not isinstance(earnings, dict):
+        return _Interpretation("failed", error_type="malformed")
+    dates = (earnings or {}).get("earningsDate") or []
+    dividend_keys = [key for key in ("dividendDate", "exDividendDate") if key in events]
+    if (
+        not isinstance(dates, list)
+        or not all(_is_epoch(d) for d in dates)
+        or not all(_is_epoch(events[key]) for key in dividend_keys)
+    ):
+        return _Interpretation("failed", error_type="malformed")
+    return _Interpretation("ok" if dates or dividend_keys else "empty", payload=events)
 
 
 def _parse_number(text: str) -> float | None:
@@ -256,20 +273,29 @@ def _interpret_news(response: Any) -> _Interpretation:
     stream = _dig(response.json(), "data", "tickerStream", "stream")
     if not isinstance(stream, list):
         return _Interpretation("failed", error_type="malformed")
+    if not all(isinstance(item, dict) for item in stream):
+        return _Interpretation("failed", error_type="malformed")
     if not stream:
         return _Interpretation("empty", payload=[])
     # Drop ads like yfinance does, but count them: an ads-only stream is not a
     # healthy empty feed.
-    items = [item for item in stream if isinstance(item, dict) and not item.get("ad")]
+    items = [item for item in stream if not item.get("ad")]
     return _Interpretation("ok", payload=items, rejected_count=len(stream) - len(items))
 
 
-def _interpret_search(response: Any) -> _Interpretation:
-    news = _dig(response.json(), "news")
-    if not isinstance(news, list):
-        return _Interpretation("failed", error_type="malformed")
-    items = [item for item in news if isinstance(item, dict)]
-    return _Interpretation("ok" if items else "empty", payload=items)
+def _interpret_search_list(key: str) -> Callable[[Any], _Interpretation]:
+    """Search ``news`` or ``quotes``: a list of objects (any other item is malformed)."""
+
+    def interpret(response: Any) -> _Interpretation:
+        items = _dig(response.json(), key)
+        if not isinstance(items, list) or not all(isinstance(item, dict) for item in items):
+            return _Interpretation("failed", error_type="malformed")
+        return _Interpretation("ok" if items else "empty", payload=items)
+
+    return interpret
+
+
+_interpret_search = _interpret_search_list("news")
 
 
 def _normalize(symbol: str) -> str:
@@ -322,6 +348,19 @@ async def read_search_news(symbol: str) -> SourceRead:
         f"search:{sym}",
         lambda: YfData().get(_SEARCH_URL, params=params),
         _interpret_search,
+    )
+
+
+async def read_symbol_matches(query: str) -> SourceRead:
+    """Search ``quotes`` for a ticker or company name (yfinance's ``Search.quotes``
+    request, without its cached, unchecked read)."""
+    q = query.strip()
+    params = {"q": q, "quotesCount": 8, "newsCount": 0, "enableFuzzyQuery": False, "quotesQueryId": "tss_match_phrase_query"}
+    return await _read(
+        "symbol_search",
+        f"symbol_search:{q}",
+        lambda: YfData().get(_SEARCH_URL, params=params),
+        _interpret_search_list("quotes"),
     )
 
 

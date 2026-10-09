@@ -432,6 +432,10 @@ async def _retry_with_backoff(
         if shutdown_event.is_set():
             raise ServerShuttingDownError("Server is shutting down")
         await wait_for_rate_limit_cooldown()
+        if attempt:
+            # A retry must do fresh I/O, not replay a response yfinance cached
+            # (e.g. info's trailing-PEG time series reads through cache_get).
+            expire_yfinance_response_cache()
 
         try:
             loop = asyncio.get_running_loop()

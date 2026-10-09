@@ -1,15 +1,9 @@
 """Symbol search tool."""
 
-import asyncio
-from concurrent.futures import ThreadPoolExecutor
 from time import perf_counter
 from typing import Any
 
-from curl_cffi.requests.exceptions import RequestException
-from yfinance import Search
-from yfinance.exceptions import YFException
-
-from stock_analysis.data.yfinance_client import expire_yfinance_response_cache
+from stock_analysis.data.provider import read_symbol_matches
 from stock_analysis.utils.provenance import (
     build_error_response,
     build_meta,
@@ -20,8 +14,6 @@ from stock_analysis.utils.sanitize import sanitize_text
 
 # US exchanges we support
 US_EXCHANGES = {"NYSE", "NASDAQ", "NMS", "NYQ", "NGM", "PCX", "AMEX", "BTS", "NCM"}
-
-_executor = ThreadPoolExecutor(max_workers=2)
 
 
 async def symbol_search(query: str, limit: int = 10) -> dict[str, Any]:
@@ -37,40 +29,31 @@ async def symbol_search(query: str, limit: int = 10) -> dict[str, Any]:
     """
     start_time = perf_counter()
 
-    loop = asyncio.get_running_loop()
-
-    def _search() -> list[dict[str, Any]]:
-        search = Search(query)
-        results = []
-
-        for quote in search.quotes[:limit]:
-            exchange = quote.get("exchange", "")
-            if exchange in US_EXCHANGES:
-                quote_type = quote.get("quoteType", "")
-                results.append(
-                    {
-                        "symbol": quote.get("symbol"),
-                        "name": sanitize_text(
-                            quote.get("shortname") or quote.get("longname")
-                        ),
-                        "exchange": exchange,
-                        "type": "etf" if quote_type == "ETF" else "equity",
-                        "is_valid": True,
-                    }
-                )
-
-        return results
-
-    try:
-        results = await loop.run_in_executor(_executor, _search)
-    except (ValueError, YFException, RequestException) as e:
-        # With errors not hidden, a failed Search raises (e.g. a non-JSON 5xx
-        # body). yfinance caches that response, so drop it before reporting.
-        expire_yfinance_response_cache()
+    # Read with HTTP status and envelope checks (WP1): a failed search is an
+    # error, never an empty result.
+    read = await read_symbol_matches(query)
+    if not read.verified:
         return build_error_response(
             error_type="data_unavailable",
-            message=f"Symbol search failed upstream: {type(e).__name__}",
+            message=f"Symbol search failed upstream ({read.error_type})",
         )
+
+    results = []
+    for quote in [q for q in read.payload if "symbol" in q][:limit]:
+        exchange = quote.get("exchange", "")
+        if exchange in US_EXCHANGES:
+            quote_type = quote.get("quoteType", "")
+            results.append(
+                {
+                    "symbol": quote.get("symbol"),
+                    "name": sanitize_text(
+                        quote.get("shortname") or quote.get("longname")
+                    ),
+                    "exchange": exchange,
+                    "type": "etf" if quote_type == "ETF" else "equity",
+                    "is_valid": True,
+                }
+            )
 
     # Find exact match: compare normalized query to symbol
     # This fixes the issue where first result != exact ticker match

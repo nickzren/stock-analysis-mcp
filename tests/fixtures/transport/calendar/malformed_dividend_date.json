@@ -1,0 +1,16 @@
+{
+  "status": 200,
+  "json": {
+    "quoteSummary": {
+      "result": [
+        {
+          "calendarEvents": {
+            "maxAge": 1,
+            "exDividendDate": "2026-09-15"
+          }
+        }
+      ],
+      "error": null
+    }
+  }
+}
