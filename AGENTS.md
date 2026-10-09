@@ -46,12 +46,16 @@
   code, reason}}`, status `supported` / `unsupported` / `unverified`. Only
   `EQUITY` (not a detected preferred: Yahoo `-P` / `-P<letter>` suffix or a
   Preferred/Pfd/Depositary name) priced in `USD` is supported; unknown values
-  fail closed. Unsupported or unverified means: no share/dollar sizing
-  (`unavailable_reason="unsupported_currency"`), no dollar-liquidity gate, and
-  new-money actions capped at `watch` (`unsupported_instrument` /
-  `unsupported_currency` hard gates and blockers; hold/reduce/sell pass
-  through). An unsupported instrument also skips the fundamentals rubric, dip
-  and dislocation (`not_applicable`). The scan reads currency and instrument
+  fail closed. Unsupported or unverified (instrument or currency) means: no
+  share/dollar sizing (`unavailable_reason` names the failing side), no
+  dollar-liquidity gate, and new-money actions capped at `watch`
+  (`unsupported_instrument` / `unsupported_currency` hard gates and blockers;
+  hold/reduce/sell pass through). The cap is applied to `policy_action` before
+  anything copies it (executive summary, decision modes and their
+  `long_term_view`, dislocation, decision-card `horizon_fit`). An unsupported
+  instrument also skips the fundamentals rubric, dip and dislocation
+  (`not_applicable`, including the verdict's fundamentals exclusion and
+  `decision_context.fundamentals`), with no stock-only conditions. The scan reads currency and instrument
   type from the daily history's chart metadata (`df.attrs`, no extra request)
   and never promotes an unsupported row. `stock_summary.currency` no longer
   defaults to USD; it adds `quote_type`, `financial_currency` and `support`.
@@ -65,14 +69,21 @@
   sharesOutstanding`. P/E is undefined when its own EPS <= 0 (forward P/E
   survives a negative trailing EPS). Yahoo's PEG is basis `provider` and only
   PEG > 0 is scored. EV can be negative: EV/S is kept but unscored when EV <=
-  0; EV/EBITDA is undefined when EBITDA <= 0. P/B <= 0 is kept, unscored.
+  0, and the unprofitable gate is then `unknown` (no P/S fallback; P/S stands in
+  only when EV/S is absent); EV/EBITDA is undefined when EBITDA <= 0. P/B <= 0
+  is kept, unscored. A gate with no usable metric names each excluded one
+  (e.g. `pe_trailing_unverified_currency`). A P/E that Yahoo omits is absent
+  (no status), not unverified. FCF payout and the dividend safety score's FCF
+  coverage need one currency and consistent share units.
   Consumers (valuation gate, verdict, prose, decision context, sector
   comparison, `compare`) read ratios only through
   `valuation_basis.usable_metric`. D/E is always Yahoo's percent / 100;
   `financial_health.leverage_status` is `negative_equity` when D/E < 0 or D/E is
   null with P/B < 0, and is never low debt. Dividend yield is one forward
   fraction (`dividendRate / price`) on all three paths, with
-  `dividend_yield_basis` (`forward` or `no_dividend`, 0.0) and
+  `dividend_yield_basis` (`forward`; `no_dividend` with 0.0; `unverified_currency`
+  with null for a minor-unit or unknown price currency; null when there is no
+  dividend data or no price) and
   `dividend_yield_trailing` (`dividends.yield_basis` / `yield_trailing` in
   events). Valuation-history stats need >= 8 points (`insufficient_history`),
   `*_5y` fields need a 5-year span, and `current_percentile` ranks the current

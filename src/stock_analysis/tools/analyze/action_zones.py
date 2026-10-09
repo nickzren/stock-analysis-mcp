@@ -8,10 +8,10 @@ from stock_analysis.utils.helpers import (
     safe_round,
 )
 from stock_analysis.utils.valuation_basis import (
-    currency_supported,
     instrument_supported,
     is_unverified,
     metric_reason,
+    sizing_unavailable_reason,
     usable_metric,
 )
 
@@ -21,12 +21,12 @@ def build_position_sizing_range(
     stop_calculation: dict[str, Any] | None,
     regime_classification: str | None,
     investor_profile: dict[str, Any] | None = None,
-    currency_supported: bool = True,
+    unavailable_reason: str | None = None,
 ) -> dict[str, Any]:
     """Build a position sizing range from risk regime and profile inputs.
 
-    WP4 (D5): with an unsupported or unverified price currency, dollar and share
-    amounts are null with ``unavailable_reason`` (no FX in step 1); percentages stay.
+    WP4 (D5): for an unsupported or unverified instrument or currency
+    (``unavailable_reason``), dollar and share amounts are null; percentages stay.
     """
     normalized_regime = "medium" if regime_classification == "moderate" else regime_classification
     investor_profile = investor_profile or {}
@@ -50,9 +50,9 @@ def build_position_sizing_range(
     position_sizing_range["risk_per_trade_pct"] = round(float(risk_per_trade_pct), 2)
     position_sizing_range["profile_cap_pct"] = profile_max_position_pct
 
-    if not currency_supported:
+    if unavailable_reason:
         account_size = None
-        position_sizing_range["unavailable_reason"] = "unsupported_currency"
+        position_sizing_range["unavailable_reason"] = unavailable_reason
 
     dollar_min: float | None = None
     dollar_max: float | None = None
@@ -293,10 +293,13 @@ def _build_valuation_assessment(
 
     if is_unprofitable:
         sales_multiple: float | None = None
+        # EV <= 0 (cash exceeds cap + debt): the sales multiple says nothing about
+        # cheapness, so P/S is not a fallback either (R4.5).
+        ev_nonpositive = metric_reason(val, "ev_to_sales") == "ev_nonpositive"
         if ev_to_sales is not None:
             sales_multiple = ev_to_sales
             valuation_basis = "ev_to_sales"
-        elif ps is not None:
+        elif ps is not None and not ev_nonpositive:
             sales_multiple = ps
             valuation_basis = "ps_trailing"
 
@@ -371,7 +374,12 @@ def _build_valuation_assessment(
         ):
             valuation_gate = "unknown"
             valuation_basis = "unknown"
-            valuation_gate_reasons.append("insufficient_valuation_data")
+            excluded = [
+                f"{key}_{reason}"
+                for section, key in ((val, "pe_trailing"), (yield_m, "fcf_yield"), (val, "ps_trailing"))
+                if (reason := metric_reason(section, key))
+            ]
+            valuation_gate_reasons.extend(excluded or ["insufficient_valuation_data"])
             warnings.append("valuation_gate_unknown_no_metrics")
 
     return {
@@ -562,7 +570,7 @@ def build_action_zones(
         stop_calculation=stop_calculation,
         regime_classification=regime_classification,
         investor_profile=investor_profile,
-        currency_supported=support is None or currency_supported(support),
+        unavailable_reason=sizing_unavailable_reason(support) if support is not None else None,
     )
 
     return {

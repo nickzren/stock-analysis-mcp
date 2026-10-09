@@ -218,7 +218,10 @@ def build_verdict(
         or _unprofitable.by_pe_not_meaningful
     )
 
-    if not coverage.get("fundamentals", False):
+    if fundamentals_summary.get("status") == "not_applicable":
+        # Unsupported instrument (WP4, D5): the stock rubric doesn't apply.
+        business_quality_status = "not_applicable"
+    elif not coverage.get("fundamentals", False):
         business_quality_status = "data_missing"
     elif has_explicit_unprofitable_signal:
         # Explicit signal confirms unprofitable - we HAVE evaluated business quality
@@ -378,6 +381,8 @@ def build_verdict(
             # This is NOT an exclusion - fundamentals WAS scored, just using different method
             # Only add to exclusions if no signals triggered
             component_exclusions["fundamentals"] = "no_fundamental_signals_fired"
+        elif business_quality_status == "not_applicable":
+            component_exclusions["fundamentals"] = "not_applicable"
         elif business_quality_status == "data_missing":
             # Coverage says we have fundamentals, but key inputs (margin, EPS, PE) are all None
             component_exclusions["fundamentals"] = "fundamentals_key_inputs_missing"

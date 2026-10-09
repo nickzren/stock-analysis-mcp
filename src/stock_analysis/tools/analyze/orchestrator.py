@@ -86,19 +86,23 @@ _NEW_MONEY_POLICY_CODES = frozenset({
 _NEW_MONEY_MODE_CODES = frozenset({"build_position", "starter_position_only", "starter_then_add"})
 
 
-def _cap_new_money_at_watch(
-    policy_action: dict[str, Any], decision_modes: dict[str, Any], support: dict[str, Any]
-) -> None:
+def _cap_policy_at_watch(policy_action: dict[str, Any], support: dict[str, Any]) -> None:
     """WP4 (D5): an unsupported or unverified instrument/currency produces no
-    new-money action anywhere; hold/reduce/avoid codes pass through."""
-    gate_ids = [gate["id"] for gate in support_blockers(support)]
+    new-money action; hold/reduce/avoid codes pass through."""
     for horizon in ("mid_term", "long_term"):
         if policy_action.get(horizon) in _NEW_MONEY_POLICY_CODES:
             policy_action[horizon] = "watch"
-    policy_action["support_gates"] = gate_ids
+    policy_action["support_gates"] = [gate["id"] for gate in support_blockers(support)]
+
+
+def _cap_modes_at_watch(decision_modes: dict[str, Any]) -> None:
     for mode in decision_modes.values():
-        if isinstance(mode, dict) and mode.get("action") in _NEW_MONEY_MODE_CODES:
+        if not isinstance(mode, dict):
+            continue
+        if mode.get("action") in _NEW_MONEY_MODE_CODES | _NEW_MONEY_POLICY_CODES:
             mode["action"] = "watch"
+        if mode.get("long_term_view") in _NEW_MONEY_POLICY_CODES:
+            mode["long_term_view"] = "watch"
 
 
 def _compute_burn_metrics(
@@ -814,19 +818,18 @@ async def analyze_stock(
 
     market_context = risk_data.get("market_context", {})
 
-    dip_assessment = (
-        build_dip_assessment(
+    if instrument_ok:
+        dip_assessment = build_dip_assessment(
             tech_data=tech_data,
             risk_data=risk_data,
             fund_data=fund_data,
             market_context=market_context,
             signals=signals,
         )
-        if instrument_ok
-        else {}
-    )
-    if dip_assessment:
-        dip_assessment["summary"] = build_dip_summary_text(dip_assessment)
+        if dip_assessment:
+            dip_assessment["summary"] = build_dip_summary_text(dip_assessment)
+    else:
+        dip_assessment = {"status": "not_applicable", "reason": instrument_reason}
 
     action_zones = apply_dip_gates_to_action_zones(
         action_zones=action_zones,
@@ -983,6 +986,11 @@ async def analyze_stock(
         fundamentals_summary=fundamentals_summary,
         investor_profile=investor_profile,
     )
+    # WP4 (D5): cap before anything copies the policy (executive summary, decision
+    # modes, dislocation, decision card horizon fit).
+    supported = instrument_ok and currency_supported(support)
+    if not supported:
+        _cap_policy_at_watch(policy_action, support)
 
     executive_summary = build_executive_summary(
         summary=summary,
@@ -1008,6 +1016,8 @@ async def analyze_stock(
         events_summary=events_summary,
         account_size=investor_profile.get("account_size"),
     )
+    if not supported:
+        _cap_modes_at_watch(decision_modes)
     dislocation_framework = build_dislocation_framework(
         verdict=verdict,
         action_zones=action_zones,
@@ -1044,9 +1054,6 @@ async def analyze_stock(
         dip_assessment=dip_assessment,
         dislocation_framework=dislocation_framework,
     )
-
-    if not (instrument_ok and currency_supported(support)):
-        _cap_new_money_at_watch(policy_action, decision_modes, support)
 
     # Top-level error signaling for invalid/unanalyzable symbols.
     # Keep partial payload for diagnostics, but mark as error for callers.

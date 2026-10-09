@@ -3,11 +3,12 @@
 import importlib
 from typing import Any
 
+import pandas as pd
 import pytest
 
 import stock_analysis.tools.events as events
 import stock_analysis.tools.fundamentals as fundamentals
-from stock_analysis.utils.valuation_basis import classify_support, usable_metric
+from stock_analysis.utils.valuation_basis import classify_support, dividend_yields, usable_metric
 from tests.support.fake_source import FakeSource
 from tests.support.fake_ticker import FakeTicker
 
@@ -203,6 +204,101 @@ class TestDividendYield:
         assert yields["metric_status"]["dividend_yield_trailing"]["basis_status"] == "unverified_currency"
 
 
+class TestBasisRules:
+    def test_pe_absent_with_positive_eps_is_absent_not_unverified(self) -> None:
+        section = valuation(trailingEps=2.0)
+
+        assert section["pe_trailing"] is None
+        assert "pe_trailing" not in section["metric_status"]
+
+    def test_valuation_history_needs_one_currency(self) -> None:
+        income = pd.DataFrame({pd.Timestamp("2026-06-30"): [1.0]}, index=["Net Income"])
+        prices = pd.DataFrame({"Close": [1.0]}, index=pd.DatetimeIndex(["2026-06-30"]))
+
+        history = fundamentals._compute_valuation_history(income, prices, dict(TestCurrencyBasis.TSM))
+
+        assert (history["status"], history["pe_history"]) == ("unverified_currency", None)
+
+    def test_trailing_dividend_and_fcf_payout_need_share_units(self) -> None:
+        multi_class = {**USD, "regularMarketPrice": 100.0, "marketCap": 1e6, "sharesOutstanding": 5000.0,
+                       "dividendRate": 2.0, "trailingAnnualDividendRate": 2.0, "trailingEps": 8.0, "trailingPE": 12.5}
+
+        yields = fundamentals._build_yield_metrics(
+            multi_class, fundamentals._build_valuation(multi_class), 40_000.0, 1e6, 100.0
+        )
+
+        assert yields["dividend_yield"] == 0.02  # forward: per share over price, no share count
+        assert (yields["dividend_yield_trailing"], yields["fcf_payout_ratio"]) == (None, None)
+        assert yields["metric_status"]["dividend_yield_trailing"]["basis_status"] == "unverified_share_units"
+        assert yields["metric_status"]["fcf_payout_ratio"]["basis_status"] == "unverified_share_units"
+
+    @pytest.mark.parametrize(
+        ("info", "price", "expected"),
+        [({"currency": "GBp", "dividendRate": 5.0}, 2500.0, (None, "unverified_currency")),
+         ({"currency": None, "dividendRate": 5.0}, 2500.0, (None, "unverified_currency")),
+         ({"currency": "USD", "dividendRate": 1.0}, None, (None, None))],
+        ids=["minor_unit", "unknown_currency", "missing_price"],
+    )
+    def test_forward_yield_basis(self, info: dict[str, Any], price: Any, expected: tuple[Any, Any]) -> None:
+        result = dividend_yields(info, price)
+
+        assert (result["yield"], result["basis"]) == expected
+
+    def test_dividend_safety_skips_cross_currency_fcf_coverage(self) -> None:
+        tsm = {**TestCurrencyBasis.TSM, "freeCashflow": 7.3e11, "dividendRate": 3.77, "payoutRatio": 0.7}
+        dividends = pd.Series([1.0, 1.0, 1.0, 1.0, 1.1],
+                              index=pd.DatetimeIndex(["2021-06-01", "2022-06-01", "2023-06-01", "2024-06-01",
+                                                      "2025-06-01"]))
+
+        analysis = fundamentals._analyze_dividend_history(dividends, tsm)
+
+        # Payout band only: the TWD-FCF / USD-dividend coverage (about 37x, score 100) is skipped.
+        assert analysis["safety_score"] == fundamentals._payout_ratio_score(0.7) < 100
+
+    def test_r4_9_sufficient_history_under_5y_leaves_5y_fields_null(self) -> None:
+        quarters = pd.date_range("2023-03-31", periods=12, freq="QE")
+        income = pd.DataFrame([[100.0] * 12, [1000.0] * 12], index=["Net Income", "Total Revenue"],
+                              columns=list(reversed(quarters)))
+        days = pd.bdate_range("2023-01-02", "2026-01-10")
+        prices = pd.DataFrame({"Close": [50.0 + i * 0.05 for i in range(len(days))]}, index=days)
+        info = {**USD, "regularMarketPrice": 100.0, "marketCap": 1e8, "sharesOutstanding": 1e6,
+                "trailingPE": 250.0, "trailingEps": 0.4}
+
+        section = fundamentals._build_valuation(info)
+        history = fundamentals._compute_valuation_history(income, prices, info, section)
+
+        assert history["status"] == "available" and history["history_points"] >= 8
+        assert history["history_span_years"] < 5
+        assert history["pe_stats"]["current_percentile"] is not None  # current P/E ranked against history
+
+    async def test_r4_9_valuation_context_names_the_short_span(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        quarters = pd.date_range("2023-03-31", periods=12, freq="QE")
+        income = pd.DataFrame([[100.0] * 12, [1000.0] * 12], index=["Net Income", "Total Revenue"],
+                              columns=list(reversed(quarters)))
+        days = pd.bdate_range("2023-01-02", "2026-01-10")
+        prices = pd.DataFrame({"Close": [50.0 + i * 0.05 for i in range(len(days))]}, index=days)
+        info = {**USD, "regularMarketPrice": 100.0, "marketCap": 1e8, "sharesOutstanding": 1e6,
+                "trailingPE": 250.0, "trailingEps": 0.4}
+
+        async def fake_info(symbol: str) -> dict[str, Any]:
+            return dict(info)
+
+        async def fake_ticker(symbol: str) -> FakeTicker:
+            return FakeTicker(symbol)
+
+        async def statements(ticker: Any) -> dict[str, Any]:
+            return {"quarterly_income_stmt": income, "price_history_5y": prices}
+
+        monkeypatch.setattr(fundamentals, "fetch_info", fake_info)
+        monkeypatch.setattr(fundamentals, "fetch_ticker", fake_ticker)
+        monkeypatch.setattr(fundamentals, "_read_statements", statements)
+
+        context = (await fundamentals.fundamentals_snapshot("EXMP"))["valuation_context"]
+
+        assert (context["pe_5y_avg"], context["pe_percentile_5y"], context["ps_5y_avg"]) == (None, None, None)
+        assert context["status_reason"] == "history_span_under_5y"
+
+
 class TestSupport:
     @pytest.mark.parametrize(
         ("quote_type", "currency", "symbol", "name", "instrument", "currency_status"),
@@ -214,6 +310,8 @@ class TestSupport:
             ("EQUITY", "USD", "BAC-PL", "Bank of America", "unsupported", "supported"),
             ("EQUITY", "USD", "XYZ", "XYZ 6.5% Pfd", "unsupported", "supported"),
             ("EQUITY", "USD", "BRK-B", "Berkshire Hathaway", "supported", "supported"),
+            ("EQUITY", "USD", "PFBC", "Preferred Bank", "supported", "supported"),
+            ("EQUITY", "USD", "XYZ", "XYZ Corp Depositary Shares Series A", "unsupported", "supported"),
             (None, None, "EXMP", None, "unverified", "unverified"),
         ],
     )

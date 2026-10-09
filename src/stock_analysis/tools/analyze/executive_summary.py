@@ -567,7 +567,8 @@ def build_policy_action(
         conditions_to_downgrade.append(
             f"volatility spike > {VOLATILITY_REGIME_THRESHOLDS['medium'] * 100:.0f}%"
         )
-    if not is_unprofitable:
+    stock_rules_apply = (fundamentals_summary or {}).get("status") != "not_applicable"
+    if not is_unprofitable and stock_rules_apply:
         conditions_to_downgrade.append("guidance cut or profit warning")
         conditions_to_downgrade.append("net_margin turns negative")
     if valuation_gate == "attractive":

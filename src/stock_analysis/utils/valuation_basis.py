@@ -26,7 +26,10 @@ _SHARE_UNIT_TOLERANCE = 0.10
 
 # Yahoo preferred tickers: BAC-PL, WFC-PY, ABR-PD. Class shares (BRK-B, BF-B) don't match.
 _PREFERRED_SUFFIX = re.compile(r"-P[A-Z]?$")
-_PREFERRED_NAME = re.compile(r"\b(preferred|pfd|depositary)\b", re.IGNORECASE)
+# Preferred-security phrasing only, so a common stock named "Preferred Bank" isn't caught.
+_PREFERRED_NAME = re.compile(
+    r"\b(pfd|preferred\s+(stock|shares?|securities)|depositary\s+shares?)\b", re.IGNORECASE
+)
 
 
 def metric_entry(basis_status: str, scoring_applicable: bool, reason: str | None = None) -> dict[str, Any]:
@@ -105,14 +108,19 @@ def dividend_yields(info: dict[str, Any], price: float | None) -> dict[str, Any]
     rate = safe_float(info.get("dividendRate"))
     trailing_rate = safe_float(info.get("trailingAnnualDividendRate"))
     reported_yield = safe_float(info.get("dividendYield"))
-    price_ok = price is not None and price > 0 and info.get("currency") not in MINOR_UNIT_CURRENCIES
+    has_price = price is not None and price > 0
+    # The quote's dividend and price share a currency unless the price is in a
+    # minor unit (pence vs pounds) -- or the currency is unknown (fail closed).
+    currency = info.get("currency")
+    currency_ok = isinstance(currency, str) and bool(currency) and currency not in MINOR_UNIT_CURRENCIES
+    price_ok = has_price and currency_ok
 
     forward: float | None = None
     basis: str | None = None
     if rate is not None and rate > 0:
         if price_ok:
             forward, basis = rate / price, "forward"  # type: ignore[operator]
-        else:
+        elif has_price:
             basis = UNVERIFIED_CURRENCY
     elif rate == 0 or (rate is None and (trailing_rate == 0 or reported_yield == 0)):
         forward, basis = 0.0, "no_dividend"
@@ -165,6 +173,15 @@ def instrument_supported(support: Any) -> bool:
 
 def currency_supported(support: Any) -> bool:
     return bool(_status(support, "currency") == "supported")
+
+
+def sizing_unavailable_reason(support: Any) -> str | None:
+    """Why share/dollar sizing and dollar-liquidity checks don't apply, or None."""
+    if not instrument_supported(support):
+        return "unsupported_instrument"
+    if not currency_supported(support):
+        return "unsupported_currency"
+    return None
 
 
 def support_blockers(support: Any) -> list[dict[str, str]]:

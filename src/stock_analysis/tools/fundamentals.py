@@ -31,7 +31,6 @@ from stock_analysis.utils.valuation_basis import (
     PROVIDER,
     UNVERIFIED,
     UNVERIFIED_CURRENCY,
-    UNVERIFIED_SHARE_UNITS,
     VERIFIED,
     currency_basis,
     dividend_yields,
@@ -143,6 +142,13 @@ def _build_valuation(info: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _per_share_basis(info: dict[str, Any], price: float | None) -> str:
+    """Basis for a figure mixing statement totals with per-share quote data: one
+    currency, then consistent share units."""
+    basis = currency_basis(info.get("currency"), info.get("financialCurrency"))
+    return basis if basis != VERIFIED else share_units_basis(info, price)
+
+
 def _pe(
     info: dict[str, Any],
     pe_key: str,
@@ -160,10 +166,12 @@ def _pe(
     if eps is not None and eps <= 0:
         status[name] = metric_entry(currency, False, "undefined_eps_nonpositive")
         return None
+    if pe is None:
+        return None  # absent, not unverified
     if currency != VERIFIED:
         status[name] = metric_entry(currency, False, currency)
         return None
-    if eps is None or pe is None or pe <= 0:
+    if eps is None or pe <= 0:
         status[name] = metric_entry(UNVERIFIED, False, "eps_basis_unknown")
         return None
     status[name] = metric_entry(VERIFIED, True)
@@ -677,6 +685,7 @@ def _build_yield_metrics(
     if currency_mismatch and dividend_rate is not None:
         status["dividend_payout_ratio"] = metric_entry(currency, False, currency)
     shares_outstanding = safe_float(info.get("sharesOutstanding"))
+    per_share_basis = _per_share_basis(info, price)
     fcf_payout = (
         (dividend_rate * shares_outstanding) / free_cash_flow
         if (
@@ -684,15 +693,17 @@ def _build_yield_metrics(
             and shares_outstanding is not None
             and free_cash_flow is not None
             and free_cash_flow > 0
-            and not currency_mismatch
+            and per_share_basis == VERIFIED
         )
         else None
     )
+    if per_share_basis != VERIFIED and dividend_rate is not None and free_cash_flow is not None:
+        status["fcf_payout_ratio"] = metric_entry(per_share_basis, False, per_share_basis)
     if dividends["basis"] == UNVERIFIED_CURRENCY:
         status["dividend_yield"] = metric_entry(UNVERIFIED_CURRENCY, False, UNVERIFIED_CURRENCY)
     trailing_rate = safe_float(info.get("trailingAnnualDividendRate"))
-    if trailing_rate and dividends["trailing"] is None:
-        status["dividend_yield_trailing"] = metric_entry(currency, False, currency if currency_mismatch else UNVERIFIED_SHARE_UNITS)
+    if trailing_rate and dividends["trailing"] is None and price is not None and per_share_basis != VERIFIED:
+        status["dividend_yield_trailing"] = metric_entry(per_share_basis, False, per_share_basis)
 
     yield_warnings: list[str] = []
     is_fcf_negative = free_cash_flow is not None and free_cash_flow <= 0
@@ -1155,10 +1166,15 @@ def _analyze_dividend_history(dividends: Any, info: dict[str, Any]) -> dict[str,
 
     # Safety score (0-100): blend payout-ratio and FCF-coverage bands
     payout_score = _payout_ratio_score(safe_float(info.get("payoutRatio")))
-    fcf_score = _fcf_coverage_score(
-        safe_float(info.get("freeCashflow")),
-        safe_float(info.get("dividendRate")),
-        safe_float(info.get("sharesOutstanding")),
+    # FCF (statement) vs dividend per share x shares (quote): one basis only (WP4).
+    fcf_score = (
+        _fcf_coverage_score(
+            safe_float(info.get("freeCashflow")),
+            safe_float(info.get("dividendRate")),
+            safe_float(info.get("sharesOutstanding")),
+        )
+        if _per_share_basis(info, current_price_from_info(info)) == VERIFIED
+        else None
     )
     scores = [s for s in (payout_score, fcf_score) if s is not None]
     safety_score = safe_round(statistics.mean(scores), 0) if scores else None

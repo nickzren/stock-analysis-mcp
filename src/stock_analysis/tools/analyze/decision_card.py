@@ -19,7 +19,7 @@ from stock_analysis.tools.analyze.gates import (
     check_earnings_blackout,
     check_liquidity,
 )
-from stock_analysis.utils.valuation_basis import currency_supported, support_blockers
+from stock_analysis.utils.valuation_basis import sizing_unavailable_reason, support_blockers
 
 # Default look-ahead for "next_review.date" when no earnings date is near.
 _DEFAULT_REVIEW_HORIZON_DAYS = 30
@@ -52,7 +52,7 @@ def _compute_hard_gates(
     is_unprofitable = valuation_summary.get("valuation_note") == "pe_not_meaningful"
     missing_runway = is_unprofitable and burn_status == "unavailable"
 
-    if support is None or currency_supported(support):
+    if support is None or sizing_unavailable_reason(support) is None:
         weak_liquidity, liquidity_missing, liquidity_blockers = check_liquidity(risk_data)
     else:
         weak_liquidity, liquidity_missing, liquidity_blockers = False, False, []

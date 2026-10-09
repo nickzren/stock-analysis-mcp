@@ -22,7 +22,7 @@ from stock_analysis.tools.trade_setup.setups import detect_setup
 from stock_analysis.utils.market_calendar import add_trading_days
 from stock_analysis.utils.valuation_basis import (
     classify_support,
-    currency_supported,
+    sizing_unavailable_reason,
     support_blockers,
 )
 
@@ -96,7 +96,7 @@ def build_trade_setup_card(
         name=summary_data.get("name"),
     )
     support_gates = support_blockers(support)
-    if currency_supported(support):
+    if sizing_unavailable_reason(support) is None:
         weak_liquidity, liquidity_missing, liquidity_blockers = check_liquidity(risk_data)
     else:
         weak_liquidity, liquidity_missing, liquidity_blockers = False, False, []

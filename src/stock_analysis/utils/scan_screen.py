@@ -29,7 +29,7 @@ from stock_analysis.utils.swing_features import compute_setup_features
 from stock_analysis.utils.validators import check_rule_expr
 from stock_analysis.utils.valuation_basis import (
     classify_support,
-    currency_supported,
+    sizing_unavailable_reason,
     support_blockers,
 )
 
@@ -135,7 +135,7 @@ def screen_symbol(df: pd.DataFrame | None) -> dict[str, Any]:
     support_ids = [b["id"] for b in support_blockers(support)]
 
     weak = missing = False
-    if currency_supported(support):
+    if sizing_unavailable_reason(support) is None:
         dollar_volume = _avg_dollar_volume(df)
         weak, missing, liq_blockers = check_liquidity(
             {"liquidity": {"avg_dollar_volume": dollar_volume}}

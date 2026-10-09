@@ -88,12 +88,29 @@ class TestValuationGate:
         assert gate["gate"] == "unknown"
         assert gate["reasons"] == ["ev_to_sales_ev_nonpositive"]
 
-    def test_r4_5_falls_back_to_a_verified_ps(self) -> None:
-        info = {**UNPROFITABLE_NEGATIVE_EV, "priceToSalesTrailing12Months": 12.0}
+    def test_r4_5_plan_example_is_not_attractive_through_ps(self) -> None:
+        """Cap 100 + debt 0 - cash 150 = EV -50 on sales 100: P/S 1.0 must not stand in."""
+        info = {**UNPROFITABLE_NEGATIVE_EV, "marketCap": 100.0}
+
+        gate, _ = _build_valuation_assessment(fund_data(info), {"bearish": ["unprofitable"]})
+
+        assert gate["gate"] == "unknown"
+        assert gate["reasons"] == ["ev_to_sales_ev_nonpositive"]
+
+    def test_ps_is_the_fallback_when_ev_sales_is_absent(self) -> None:
+        info = {**UNPROFITABLE_NEGATIVE_EV, "enterpriseValue": None, "priceToSalesTrailing12Months": 12.0}
 
         gate, _ = _build_valuation_assessment(fund_data(info), {"bearish": ["unprofitable"]})
 
         assert (gate["gate"], gate["basis"]) == ("headwind", "ps_trailing")
+
+    def test_all_unverified_ratios_name_their_basis(self) -> None:
+        info = {**TSM_LIKE, "freeCashflow": 7e11}
+
+        gate, _ = _build_valuation_assessment(fund_data(info), {})
+
+        assert gate["gate"] == "unknown"
+        assert gate["reasons"] == ["pe_trailing_unverified_currency", "ps_trailing_unverified_currency"]
 
     def test_r4_4_negative_peg_is_never_attractive(self) -> None:
         gate, _ = _build_valuation_assessment(fund_data(NEGATIVE_PEG), {})
@@ -146,7 +163,10 @@ class TestCompare:
         [
             ("peg_ratio", {**NEGATIVE_PEG, "pegRatio": 1.5}, NEGATIVE_PEG),
             ("debt_to_equity", {**NEGATIVE_EQUITY, "debtToEquity": 80.0, "priceToBook": 3.0}, NEGATIVE_EQUITY),
+            ("debt_to_equity", {**NEGATIVE_EQUITY, "debtToEquity": 80.0, "priceToBook": 3.0},
+             {**NEGATIVE_EQUITY, "debtToEquity": -40.0, "priceToBook": 3.0}),
         ],
+        ids=["negative_peg", "de_missing_negative_pb", "negative_de"],
     )
     def test_r4_2_r4_4_an_inapplicable_value_is_never_ranked_best(
         self, metric: str, best_info: dict[str, Any], bad_info: dict[str, Any]

@@ -955,7 +955,11 @@ def build_decision_context(
     valuation_pe_status: str
     valuation_pe_explanation: str | None = None
 
-    if business_quality_status == "data_missing":
+    if business_quality_status == "not_applicable":
+        fundamentals_fetch_status = "not_applicable"
+        fundamentals_status_explanation = "Fundamentals not applicable to this instrument"
+        valuation_pe_status = "not_applicable"
+    elif business_quality_status == "data_missing":
         fundamentals_fetch_status = "missing"
         fundamentals_status_explanation = "Fundamental data unavailable - cannot assess business quality"
         valuation_pe_status = "unavailable"
