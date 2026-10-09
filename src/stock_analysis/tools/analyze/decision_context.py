@@ -6,6 +6,7 @@ from stock_analysis.tools.analyze.signals import (
     vol_threshold_for_improvement,
 )
 from stock_analysis.utils.helpers import fcf_label_from_cashflow, safe_float
+from stock_analysis.utils.valuation_basis import metric_reason, usable_metric
 
 
 def build_relative_performance(
@@ -305,11 +306,12 @@ def build_decision_context(
     profit = fund_data.get("profitability", {})
     cf = fund_data.get("cash_flow", {})
     growth = fund_data.get("growth", {})
-    ps_trailing = val.get("ps_trailing")
+    # WP4: reasons and conditions cite only usable metrics.
+    ps_trailing = usable_metric(val, "ps_trailing")
     ps_source = val.get("ps_source")
-    ev_to_sales = val.get("ev_to_sales")
+    ev_to_sales = usable_metric(val, "ev_to_sales")
     ev_to_sales_source = val.get("ev_to_sales_source")
-    pe_trailing = val.get("pe_trailing")
+    pe_trailing = usable_metric(val, "pe_trailing")
     net_margin = profit.get("net_margin")
     fcf = cf.get("free_cash_flow_ttm")
     fcf_label = fcf_label_from_cashflow(cf)
@@ -504,9 +506,9 @@ def build_decision_context(
             else:
                 reason = "valuation_attractive (unprofitable)"
         else:
-            fcf_yield = yield_m.get("fcf_yield")
-            earnings_yield = yield_m.get("earnings_yield")
-            peg_ratio = val.get("peg_ratio")
+            fcf_yield = usable_metric(yield_m, "fcf_yield")
+            earnings_yield = usable_metric(yield_m, "earnings_yield")
+            peg_ratio = usable_metric(val, "peg_ratio")
             if val_basis == "fcf_yield" and fcf_yield is not None:
                 reason = f"fcf_yield={fcf_yield*100:.1f}%"
             elif val_basis == "earnings_yield" and earnings_yield is not None:
@@ -717,9 +719,9 @@ def build_decision_context(
     valuation_bearish: list[dict[str, Any]] = []
 
     # Get valuation metrics for thresholds (reuse val/yield_m from above)
-    fcf_yield_val = yield_m.get("fcf_yield")
-    pe_forward = val.get("pe_forward")
-    peg_ratio = val.get("peg_ratio")
+    fcf_yield_val = usable_metric(yield_m, "fcf_yield")
+    pe_forward = usable_metric(val, "pe_forward")
+    peg_ratio = usable_metric(val, "peg_ratio")
 
     # For unprofitable companies, prefer EV/S over P/S thresholds
     if is_unprofitable:
@@ -974,6 +976,16 @@ def build_decision_context(
     else:
         fundamentals_fetch_status = "available"
         valuation_pe_status = "valid"
+        pe_reason = metric_reason(val, "pe_trailing")
+        if pe_trailing is None and pe_reason:
+            if pe_reason.startswith("undefined"):
+                valuation_pe_status = "not_meaningful"
+                valuation_pe_explanation = "Trailing P/E undefined (trailing EPS <= 0)" + (
+                    f"; forward P/E {pe_forward:.1f}x kept" if pe_forward is not None else ""
+                )
+            else:
+                valuation_pe_status = pe_reason  # e.g. unverified_currency
+                valuation_pe_explanation = f"P/E not used: basis {pe_reason}"
 
     # EV/S status (preferred for unprofitable companies when debt/cash is material)
     valuation_evs_status: str
@@ -982,6 +994,9 @@ def build_decision_context(
         valuation_evs_status = "available"
         if ev_to_sales_source == "computed":
             valuation_evs_explanation = "EV/S computed from enterprise_value / revenue_ttm"
+    elif evs_reason := metric_reason(val, "ev_to_sales"):
+        valuation_evs_status = "not_applicable" if evs_reason == "ev_nonpositive" else evs_reason
+        valuation_evs_explanation = f"EV/S not used: {evs_reason}"
     else:
         valuation_evs_status = "unavailable"
 
@@ -992,6 +1007,9 @@ def build_decision_context(
         valuation_ps_status = "available"
         if ps_source == "computed":
             valuation_ps_explanation = "P/S computed from market_cap / revenue_ttm"
+    elif ps_reason := metric_reason(val, "ps_trailing"):
+        valuation_ps_status = ps_reason
+        valuation_ps_explanation = f"P/S not used: {ps_reason}"
     else:
         valuation_ps_status = "unavailable"
         if is_unprofitable and valuation_evs_status == "unavailable":

@@ -64,6 +64,7 @@ from stock_analysis.tools.technicals import technicals
 from stock_analysis.utils.helpers import fcf_label_from_cashflow, first_sentences, round_or_none
 from stock_analysis.utils.normalize import build_watchlist_snapshot
 from stock_analysis.utils.provenance import build_meta
+from stock_analysis.utils.valuation_basis import is_unverified, metric_reason, usable_metric
 
 # Reads inside a tool share this fraction of the tool's deadline.
 _READ_SHARE_OF_TOOL_DEADLINE = 0.9
@@ -489,7 +490,8 @@ async def analyze_stock(
 
     fundamentals_fetched = tool_results.get("fundamentals_snapshot") is not None
 
-    pe_trailing = val.get("pe_trailing")
+    # WP4: the summary carries only usable ratios; metric_status explains the rest.
+    pe_trailing = usable_metric(val, "pe_trailing")
     trailing_eps = val.get("trailing_eps")
     net_margin = profit.get("net_margin")
     # Orchestrator uses margin/EPS only (drift documented in classify_unprofitability docstring).
@@ -503,14 +505,22 @@ async def analyze_stock(
 
     valuation_summary: dict[str, Any] = {
         "pe_trailing": pe_trailing,
-        "peg_ratio": val.get("peg_ratio"),
+        "pe_forward": usable_metric(val, "pe_forward"),
+        "peg_ratio": usable_metric(val, "peg_ratio"),
     }
 
-    ps_trailing = val.get("ps_trailing")
+    ps_trailing = usable_metric(val, "ps_trailing")
     ps_source = val.get("ps_source")
     ps_explanation = val.get("ps_explanation")
-    ev_to_ebitda = val.get("ev_to_ebitda")
-    ev_to_sales = val.get("ev_to_sales")
+    ev_to_ebitda = usable_metric(val, "ev_to_ebitda")
+    ev_to_sales = usable_metric(val, "ev_to_sales")
+    excluded = {
+        key: entry
+        for key, entry in (val.get("metric_status") or {}).items()
+        if isinstance(entry, dict) and not entry.get("scoring_applicable")
+    }
+    if excluded:
+        valuation_summary["metric_status"] = excluded
 
     if fundamentals_fetched and (is_unprofitable_company or pe_trailing is None):
         valuation_summary["ps_trailing"] = ps_trailing
@@ -567,6 +577,7 @@ async def analyze_stock(
         },
         "health": {
             "debt_to_equity": health.get("debt_to_equity"),
+            "leverage_status": health.get("leverage_status"),
             "net_cash_positive": get_rule_triggered(health, "net_cash_positive"),
         },
         "burn_metrics": burn_metrics,
@@ -713,7 +724,9 @@ async def analyze_stock(
         ps=ps_trailing,
         net_margin=net_margin,
         revenue_growth=growth.get("revenue_yoy"),
-        debt_to_equity=health.get("debt_to_equity"),
+        debt_to_equity=(
+            None if health.get("leverage_status") == "negative_equity" else health.get("debt_to_equity")
+        ),
     )
 
     coverage = {
@@ -827,6 +840,11 @@ async def analyze_stock(
     elif pe_value is None and (net_margin_value is not None and net_margin_value < 0):
         fundamentals_status = "not_meaningful"
         fundamentals_status_reason = "unprofitable_pe_invalid"
+    elif pe_value is None and is_unverified(val, "pe_trailing"):
+        # The P/E exists but its basis can't be verified (e.g. a USD ADR reporting
+        # in TWD): name that, rather than calling it not meaningful.
+        fundamentals_status = "not_meaningful"
+        fundamentals_status_reason = f"pe_{metric_reason(val, 'pe_trailing')}"
     elif pe_value is None:
         fundamentals_status = "not_meaningful"
         fundamentals_status_reason = "pe_unavailable"
@@ -847,7 +865,8 @@ async def analyze_stock(
             data_gaps.append(f"burn_metrics_reason:{burn_reason}")
 
     if fundamentals_status == "not_meaningful":
-        data_gaps.append("pe_not_meaningful")
+        pe_gap = fundamentals_status_reason if is_unverified(val, "pe_trailing") else None
+        data_gaps.append(pe_gap or "pe_not_meaningful")
 
     # Staleness tracking
     component_freshness: dict[str, dict[str, Any]] = {}

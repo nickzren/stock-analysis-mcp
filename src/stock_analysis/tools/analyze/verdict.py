@@ -8,6 +8,7 @@ from stock_analysis.tools.analyze.signals import (
     vol_threshold_for_improvement,
 )
 from stock_analysis.utils.helpers import fcf_label_from_cashflow
+from stock_analysis.utils.valuation_basis import usable_metric
 
 logger = logging.getLogger(__name__)
 
@@ -115,9 +116,9 @@ def build_verdict(
 
     # Add fundamental-specific context (beyond signals)
     val = fundamentals_data.get("valuation", {})
-    peg = val.get("peg_ratio")
+    peg = usable_metric(val, "peg_ratio")
     if peg is not None:
-        if peg < 1.0:
+        if 0 < peg < 1.0:
             if "PEG ratio suggests undervaluation" not in pros:
                 pros.append("PEG ratio suggests undervaluation")
         elif peg > 2.5 and "PEG ratio suggests overvaluation" not in cons:
@@ -183,6 +184,8 @@ def build_verdict(
     fcf_value = cf.get("free_cash_flow_ttm")
     fcf_value_label = fcf_label_from_cashflow(cf)
     low_debt = health.get("rules", {}).get("low_debt", {}).get("triggered")
+    if health.get("leverage_status") == "negative_equity":
+        low_debt = False  # never low debt (WP4, R4.2)
 
     # Check if we can assess business quality
     # Use multiple signals to detect unprofitability when data is sparse
@@ -448,11 +451,11 @@ def build_verdict(
     yield_m = fundamentals_data.get("yield_metrics", {})
     health = fundamentals_data.get("financial_health", {})
 
-    inputs_used["pe_trailing"] = vol.get("pe_trailing")
-    inputs_used["peg_ratio"] = vol.get("peg_ratio")
+    inputs_used["pe_trailing"] = usable_metric(vol, "pe_trailing")
+    inputs_used["peg_ratio"] = usable_metric(vol, "peg_ratio")
     inputs_used["revenue_yoy"] = growth.get("revenue_yoy")
     inputs_used["net_margin"] = profit.get("net_margin")
-    inputs_used["fcf_yield"] = yield_m.get("fcf_yield")
+    inputs_used["fcf_yield"] = usable_metric(yield_m, "fcf_yield")
     inputs_used["debt_to_equity"] = health.get("debt_to_equity")
 
     # Get key values from risk data

@@ -293,7 +293,9 @@ def _build_balance_sheet_safety(
     else:
         net_cash_status = "unknown"
 
-    if debt_to_equity is None:
+    if health.get("leverage_status") == "negative_equity":
+        debt_status = "fail"  # negative equity is never low debt (WP4, R4.2)
+    elif debt_to_equity is None:
         debt_status = "unknown"
     elif debt_to_equity <= 1.5:
         debt_status = "pass"

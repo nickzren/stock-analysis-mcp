@@ -82,6 +82,18 @@ def metric_reason(section: Any, key: str) -> str | None:
     return reason if isinstance(reason, str) else None
 
 
+def is_unverified(section: Any, key: str) -> bool:
+    """The metric exists but its basis couldn't be verified (not undefined, not
+    merely inapplicable): consumers must not read it as a missing value."""
+    if not isinstance(section, dict):
+        return False
+    status = (section.get("metric_status") or {}).get(key)
+    if not isinstance(status, dict):
+        return False
+    reason = str(status.get("reason") or "")
+    return status.get("basis_status") not in (VERIFIED, PROVIDER) and not reason.startswith("undefined")
+
+
 def dividend_yields(info: dict[str, Any], price: float | None) -> dict[str, Any]:
     """Forward and trailing dividend yields as fractions (Q3: forward is primary).
 

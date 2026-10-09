@@ -3,6 +3,7 @@
 from typing import Any
 
 from stock_analysis.utils.helpers import format_compact_number, format_pct, format_price
+from stock_analysis.utils.valuation_basis import usable_metric
 
 
 def build_technicals_summary_text(technicals_summary: dict[str, Any]) -> str | None:
@@ -101,8 +102,8 @@ def build_fundamentals_summary_text(fundamentals_summary: dict[str, Any]) -> str
     if eps_yoy is not None:
         sentence_two_parts.append(f"EPS {eps_yoy * 100:+.1f}% YoY")
 
-    pe = valuation.get("pe_trailing")
-    ps = valuation.get("ps_trailing")
+    pe = usable_metric(valuation, "pe_trailing")
+    ps = usable_metric(valuation, "ps_trailing")
     if pe is not None:
         sentence_two_parts.append(f"P/E {pe:.1f}x")
     elif ps is not None:
@@ -270,8 +271,12 @@ def build_valuation_context_summary_text(valuation_context: dict[str, Any]) -> s
     if not parts:
         return None
     summary = "; ".join(parts)
-    summary = f"{summary}. History unavailable." if status_reason else f"{summary}."
-    return summary
+    if status_reason == "insufficient_history":
+        points = valuation_context.get("history_points") or 0
+        return f"{summary}. History too short to compare ({points} points)."
+    if status_reason == "history_span_under_5y":
+        return f"{summary}. History spans under 5 years."
+    return f"{summary}. History unavailable." if status_reason else f"{summary}."
 
 
 def build_news_summary_text(news_summary: dict[str, Any]) -> str | None:

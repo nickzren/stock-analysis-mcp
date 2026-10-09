@@ -9,6 +9,7 @@ from stock_analysis.tools.stock_summary import stock_summary
 from stock_analysis.tools.technicals import technicals
 from stock_analysis.utils.helpers import safe_float, safe_round
 from stock_analysis.utils.provenance import build_error_response, build_meta
+from stock_analysis.utils.valuation_basis import usable_metric
 
 # Metrics where lower values are better (rank 1 = lowest)
 _LOWER_IS_BETTER = {"pe_trailing", "ps_trailing", "peg_ratio", "debt_to_equity"}
@@ -29,6 +30,9 @@ _HIGHER_IS_BETTER = {
 }
 
 _ALL_METRICS = _LOWER_IS_BETTER | _HIGHER_IS_BETTER
+
+# Multiples that only mean something when positive (WP4: never ranked best when <= 0).
+_POSITIVE_ONLY = {"pe_trailing", "ps_trailing", "peg_ratio"}
 
 # Metrics that are reported per-symbol but not directionally rankable.
 # These are wrapped with `rank: None` for schema consistency with ranked metrics.
@@ -254,8 +258,16 @@ def _extract_metrics(
     roots = {"fund": fund, "tech": tech}
     out: dict[str, float | None] = {}
     for metric, (root, section, key) in _METRIC_SOURCES.items():
-        section_data = roots[root].get(section, {})
-        out[metric] = safe_float(section_data.get(key))
+        section_data = roots[root].get(section) or {}
+        # WP4: rank only usable values; inapplicable, undefined or unverified ones are absent.
+        value = usable_metric(section_data, key) if root == "fund" else safe_float(section_data.get(key))
+        if metric in _POSITIVE_ONLY and value is not None and value <= 0:
+            value = None
+        if metric == "debt_to_equity" and (
+            section_data.get("leverage_status") == "negative_equity" or (value is not None and value < 0)
+        ):
+            value = None
+        out[metric] = value
     return out
 
 

@@ -7,6 +7,7 @@ from stock_analysis.utils.helpers import (
     format_level_distance_label,
     safe_round,
 )
+from stock_analysis.utils.valuation_basis import is_unverified, metric_reason, usable_metric
 
 
 def build_position_sizing_range(
@@ -245,12 +246,13 @@ def _build_valuation_assessment(
     yield_m = fund_data.get("yield_metrics", {})
     profit = fund_data.get("profitability", {})
 
-    pe = val.get("pe_trailing")
-    peg = val.get("peg_ratio")
-    ps = val.get("ps_trailing")
-    ev_to_sales = val.get("ev_to_sales")
-    fcf_yield = yield_m.get("fcf_yield")
-    earnings_yield = yield_m.get("earnings_yield")
+    # WP4: only usable metrics (defined, applicable, verified basis) reach the gate.
+    pe = usable_metric(val, "pe_trailing")
+    peg = usable_metric(val, "peg_ratio")
+    ps = usable_metric(val, "ps_trailing")
+    ev_to_sales = usable_metric(val, "ev_to_sales")
+    fcf_yield = usable_metric(yield_m, "fcf_yield")
+    earnings_yield = usable_metric(yield_m, "earnings_yield")
     net_margin = profit.get("net_margin")
 
     bearish_signals = signals.get("bearish", []) if signals else []
@@ -259,6 +261,7 @@ def _build_valuation_assessment(
         trailing_eps=val.get("trailing_eps"),
         signaled_unprofitable="unprofitable" in bearish_signals,
         pe_trailing=pe,
+        pe_unverified=is_unverified(val, "pe_trailing"),
         has_negative_fcf_signal="negative_free_cash_flow" in bearish_signals,
     )
     is_unprofitable = (
@@ -284,7 +287,7 @@ def _build_valuation_assessment(
 
         if sales_multiple is not None:
             metric_label = "EV/S" if valuation_basis == "ev_to_sales" else "P/S"
-            if sales_multiple < 3:
+            if 0 < sales_multiple < 3:
                 valuation_gate = "attractive"
                 valuation_gate_reasons.append(
                     f"{metric_label} {sales_multiple:.1f} reasonable for growth"
@@ -300,7 +303,12 @@ def _build_valuation_assessment(
         else:
             valuation_gate = "unknown"
             valuation_basis = "unknown"
-            valuation_gate_reasons.append("sales_multiple_unavailable_cannot_evaluate")
+            excluded = [
+                f"{key}_{reason}"
+                for key in ("ev_to_sales", "ps_trailing")
+                if (reason := metric_reason(val, key))
+            ]
+            valuation_gate_reasons.extend(excluded or ["sales_multiple_unavailable_cannot_evaluate"])
             warnings.append("valuation_gate_unknown_sales_multiple_missing")
     else:
         if fcf_yield is not None and fcf_yield > 0.05:
@@ -311,7 +319,7 @@ def _build_valuation_assessment(
             valuation_gate = "attractive"
             valuation_basis = "earnings_yield"
             valuation_gate_reasons.append(f"Earnings yield {earnings_yield*100:.1f}% reasonable")
-        elif peg is not None and peg < 1.0:
+        elif peg is not None and 0 < peg < 1.0:
             valuation_gate = "attractive"
             valuation_basis = "peg_ratio"
             valuation_gate_reasons.append(f"PEG {peg:.2f} suggests undervaluation")

@@ -55,6 +55,7 @@ def classify_unprofitability(
     signaled_unprofitable: bool = False,
     pe_not_meaningful: bool = False,
     pe_trailing: float | None = None,
+    pe_unverified: bool = False,
     has_negative_fcf_signal: bool = False,
 ) -> UnprofitabilityResult:
     """Classify whether a company exhibits unprofitability signals.
@@ -67,7 +68,9 @@ def classify_unprofitability(
       - trailing_eps_nonpositive: trailing_eps is not None and trailing_eps <= 0
       - unprofitable_signal: caller passed signaled_unprofitable=True
       - pe_not_meaningful: caller passed pe_not_meaningful=True
-      - no_pe_with_negative_fcf: pe_trailing is None and has_negative_fcf_signal=True
+      - no_pe_with_negative_fcf: pe_trailing is None and has_negative_fcf_signal=True,
+        unless the P/E exists but its basis is unverified (``pe_unverified``, WP4):
+        a profitable foreign filer is not inferred unprofitable from a missing P/E
     """
     triggers: set[str] = set()
     if net_margin is not None and net_margin < 0:
@@ -78,7 +81,7 @@ def classify_unprofitability(
         triggers.add("unprofitable_signal")
     if pe_not_meaningful:
         triggers.add("pe_not_meaningful")
-    if pe_trailing is None and has_negative_fcf_signal:
+    if pe_trailing is None and has_negative_fcf_signal and not pe_unverified:
         triggers.add("no_pe_with_negative_fcf")
     return UnprofitabilityResult(triggers=frozenset(triggers))
 
@@ -302,7 +305,7 @@ def _append_fundamental_signals(
 
     if get_rule_triggered(health, "net_cash_positive") is True:
         bullish.append("net_cash_positive")
-    if get_rule_triggered(health, "low_debt") is True:
+    if get_rule_triggered(health, "low_debt") is True and health.get("leverage_status") != "negative_equity":
         bullish.append("low_debt")
 
     if get_rule_triggered(profit, "profitable") is True:

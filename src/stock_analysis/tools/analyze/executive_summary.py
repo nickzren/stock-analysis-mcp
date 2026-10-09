@@ -533,12 +533,21 @@ def build_policy_action(
         elif valuation_basis == "pe_trailing":
             conditions_to_upgrade.append("P/E < 25x (currently headwind)")
     elif valuation_gate == "unknown":
-        conditions_to_upgrade.append("revenue data available for valuation")
+        gate_reasons = " ".join(valuation_assessment.get("reasons") or [])
+        if "unverified" in gate_reasons:
+            conditions_to_upgrade.append("valuation inputs on one verified currency basis")
+        elif "ev_nonpositive" in gate_reasons:
+            conditions_to_upgrade.append("positive enterprise value, or a verified P/S")
+        else:
+            conditions_to_upgrade.append("revenue data available for valuation")
 
     # Business quality conditions
+    health = (fundamentals_summary or {}).get("health") or {}
     if business_quality == "poor":
         conditions_to_upgrade.append("net_margin > 0%")
-        conditions_to_upgrade.append("debt_to_equity < 1.5x")
+        conditions_to_upgrade.append(
+            "shareholder equity > 0" if health.get("leverage_status") == "negative_equity" else "debt_to_equity < 1.5x"
+        )
     elif business_quality == "weak":
         conditions_to_upgrade.append("net_margin > 5%")
 
