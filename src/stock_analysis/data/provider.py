@@ -161,7 +161,7 @@ async def _attempts(
     for attempt in range(_max_retries + 1):
         cooldown = rate_limit_cooldown_remaining()
         if cooldown > 0 and cooldown >= clock.remaining():
-            return _Outcome(attempts=attempt, failure=_failed(source, "rate_limited", attempt, True))
+            return _Outcome(failure=_failed(source, "rate_limited", attempt, True))
         await wait_for_rate_limit_cooldown()
         if attempt:
             expire_yfinance_response_cache()  # a retry must do fresh I/O
@@ -169,7 +169,7 @@ async def _attempts(
             value = await jobs.run_job(call, clock=clock, symbol_lock=symbol_lock)
             return _Outcome(value=value, attempts=attempt + 1)
         except jobs.JobTimeoutError as e:
-            return _Outcome(attempts=attempt + 1, failure=_failed(source, e.reason, attempt + 1, True))
+            return _Outcome(failure=_failed(source, e.reason, attempt + 1, True))
         except Exception as e:
             can_retry, limit = retryable(e)
             delay = _calculate_backoff(attempt)
@@ -181,9 +181,7 @@ async def _attempts(
                 or delay >= clock.remaining()
             )
             if not can_retry or exhausted:
-                return _Outcome(
-                    attempts=attempt + 1, failure=_failed(source, _error_type(e), attempt + 1, can_retry)
-                )
+                return _Outcome(failure=_failed(source, _error_type(e), attempt + 1, can_retry))
             slept += delay
             await _sleep(delay)
     raise AssertionError("unreachable: the last attempt always returns")

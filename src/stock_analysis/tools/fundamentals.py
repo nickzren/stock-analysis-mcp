@@ -861,7 +861,7 @@ def _extract_estimate_rows(est_df: Any, key_prefix: str) -> dict[str, dict[str, 
 
 
 def _build_earnings_estimates(
-    eps_estimates: pd.DataFrame | None, revenue_estimates: pd.DataFrame | None, info_attr: dict[str, Any]
+    eps_estimates: pd.DataFrame | None, revenue_estimates: pd.DataFrame | None, info: dict[str, Any]
 ) -> dict[str, Any] | None:
     """Analyst earnings and revenue estimates (each None when its read failed), plus a
     forward P/E from the already-fetched info."""
@@ -870,8 +870,8 @@ def _build_earnings_estimates(
     result.update(_extract_estimate_rows(revenue_estimates, "rev"))
 
     forward_pe: float | None = None
-    if isinstance(info_attr, dict):
-        shares_out = safe_float(info_attr.get("sharesOutstanding"))
+    if isinstance(info, dict):
+        shares_out = safe_float(info.get("sharesOutstanding"))
         next_year_eps = result.get("eps_next_year", {}).get("avg")
         if (
             next_year_eps is not None
@@ -879,7 +879,7 @@ def _build_earnings_estimates(
             and shares_out is not None
             and shares_out > 0
         ):
-            current_price = current_price_from_info(info_attr)
+            current_price = current_price_from_info(info)
             if current_price is not None and current_price > 0:
                 forward_pe = safe_round(current_price / next_year_eps, 2)
 

@@ -196,19 +196,18 @@ async def _fetch_expected_move(
         return None
     try:
         ticker = await fetch_ticker(symbol)
-        expirations = await read_property(ticker, "options", lambda: ticker.options)
-        if expirations.status == "failed":
+        expirations_read = await read_property(ticker, "options", lambda: ticker.options)
+        if expirations_read.status == "failed":
             return None
-        expiration = select_event_expiration(list(expirations.payload or ()), earnings_date, now.date())
+        expiration = select_event_expiration(
+            list(expirations_read.payload or ()), earnings_date, now.date()
+        )
         if expiration is None:
             return None
-        chain = await read_property(ticker, "option_chain", lambda: ticker.option_chain(expiration))
-        if chain.status == "failed" or chain.payload is None:
+        chain_read = await read_property(ticker, "option_chain", lambda: ticker.option_chain(expiration))
+        if chain_read.status == "failed" or chain_read.payload is None:
             return None
-        option_chain = chain.payload
-        result = compute_expected_move(
-            option_chain.calls, option_chain.puts, float(spot),
-        )
+        result = compute_expected_move(chain_read.payload.calls, chain_read.payload.puts, float(spot))
         if result is not None:
             result["expiration"] = expiration
         return result
