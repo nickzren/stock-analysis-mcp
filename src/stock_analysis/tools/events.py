@@ -1,13 +1,13 @@
 """Events calendar tool."""
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from time import perf_counter
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pandas as pd
-import pytz
 
 from stock_analysis.data.provider import (
     is_epoch,
@@ -25,7 +25,7 @@ from stock_analysis.utils.provenance import (
     utcnow_isoformat_z,
 )
 
-_ET = pytz.timezone("America/New_York")
+_ET = ZoneInfo("America/New_York")
 
 
 async def events_calendar(symbol: str, _now: datetime | None = None) -> dict[str, Any]:
@@ -198,20 +198,18 @@ def _calendar_view(events: dict[str, Any], ok: bool, info: dict[str, Any], today
     entries = earnings.get("earningsDate") or []
     if not entries:
         return _SourceView("none")
-    if len(entries) > 2:
+    if len(entries) > 2 or entries[-1] < entries[0]:
         return _SourceView("failed")
     try:
         start, end = _et_date(entries[0]), _et_date(entries[-1])
     except (TypeError, OverflowError, OSError, ValueError):
-        return _SourceView("failed")
-    if end < start:
         return _SourceView("failed")
     if end < today:
         return _SourceView("stale")
     is_estimate = _as_bool(earnings.get("isEarningsDateEstimate"))
     if is_estimate is None:
         is_estimate = _as_bool(info.get("isEarningsDateEstimate"))
-    if start == end:
+    if len(entries) == 1:
         return _SourceView("ok", _Candidate("calendar", start, end, True, is_estimate))
     basis, conflict = _window_basis(start, end, is_estimate, info)
     window = {
@@ -259,10 +257,14 @@ def _info_view(info: dict[str, Any], ok: bool, today: date) -> _SourceView:
         day = _et_date(timestamp)
     except (OverflowError, OSError, ValueError):
         return _SourceView("failed")
-    if day < today:
+    info_range = _info_range(info)
+    is_window = info_range is not None and info_range[0] != info_range[1]
+    end = max(day, info_range[1]) if info_range and is_window else day
+    if end < today:
         return _SourceView("none")
     is_estimate = _as_bool(info.get("isEarningsDateEstimate"))
-    return _SourceView("ok", _Candidate("info_timestamp", day, day, True, is_estimate))
+    # Info's own multi-day range is an estimate window, never a verified date.
+    return _SourceView("ok", _Candidate("info_timestamp", day, end, not is_window, is_estimate))
 
 
 _SOURCE_NAMES = ("calendar", "earnings_dates", "info")
@@ -281,6 +283,11 @@ def _build_earnings(
     assumed window still drives the blackout; ``verification`` is
     ``verified_date`` only when a verified candidate exists.
     """
+    window, echo = calendar.candidate, info.candidate
+    if window and echo and not window.verified and window.start <= echo.start <= window.end:
+        # Info and calendarEvents carry the same Yahoo record, so an info date
+        # inside an unconfirmed calendar window is not independent evidence.
+        info = replace(info, candidate=replace(echo, verified=False))
     views = dict(zip(_SOURCE_NAMES, (calendar, page, info), strict=True))
     candidates = [view.candidate for view in views.values() if view.candidate]
     nearest = min(candidates, key=lambda c: max(c.start, today), default=None)

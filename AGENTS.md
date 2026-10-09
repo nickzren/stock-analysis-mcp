@@ -104,9 +104,13 @@
   `isEarningsDateEstimate` is true and info's `earningsTimestampStart/End`
   match; otherwise `assumed`, with `metadata_conflict` when they contradict).
   An assumed window still sets `next_date`/`days_until` (to its start, or `0`
-  while `window_active`) but never verifies on its own. `next_date` is the
-  earliest date across all sources; `candidate_dates` discloses each verified
-  source's date. `history` holds reported quarters only, newest first.
+  while `window_active`) but never verifies on its own. Reversed epochs fail
+  the calendar. Info and calendarEvents carry the same Yahoo record, so an info
+  date inside an unconfirmed calendar window does not verify it, and info's own
+  multi-day `earningsTimestampStart/End` range is an unverified window (it
+  still drives the blackout while it covers today). `next_date` is the earliest
+  date across all sources; `candidate_dates` discloses each verified source's
+  date. `history` holds reported quarters only, newest first.
 - `get_news` adds `source_status` (`ok` | `empty` | `failed` | `unverified`),
   `source` (`news` feed or the `search` fallback) and `rejected_count` (ads and
   items without a usable publish date). The feed is read with status and

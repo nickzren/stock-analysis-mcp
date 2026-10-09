@@ -5,7 +5,7 @@ FakeSource, so each source's verified state is explicit. Today is 2026-10-08.
 """
 
 from collections.abc import Callable
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 import pytest
@@ -52,6 +52,10 @@ def window_info(start: str, end: str, *, is_estimate: bool | None = True) -> dic
     if is_estimate is not None:
         info["isEarningsDateEstimate"] = is_estimate
     return info
+
+
+def raw_calendar(*epochs: int) -> FakeSource:
+    return FakeSource(SourceRead("calendar", "ok", payload={"earnings": {"earningsDate": list(epochs)}}))
 
 
 FAILED_CALENDAR = FakeSource.failed("calendar")
@@ -164,6 +168,8 @@ class TestStaleCalendar:
         assert (earnings["verification"], earnings["days_until"]) == ("unverifiable", None)
         assert card["action"] == "watch"
         assert "earnings_unverifiable" in blocker_ids(card)
+        reason = next(b["reason"] for b in card["blockers"] if b["id"] == "earnings_unverifiable")
+        assert "(calendar stale)" in reason
 
 
 class TestWindows:
@@ -227,6 +233,53 @@ class TestWindows:
         assert (window["window_basis"], window["metadata_conflict"]) == (basis, conflict)
         assert (earnings["verification"] == "verified_date") is (basis == "confirmed")
 
+    @pytest.mark.parametrize(
+        "cal",
+        [raw_calendar(epoch("2026-10-20", 16), epoch("2026-10-20", 8)),
+         raw_calendar(epoch("2026-10-24"), epoch("2026-10-20"))],
+        ids=["same_day", "different_days"],
+    )
+    async def test_reversed_epochs_fail_the_calendar(self, run: Callable[..., Any], cal: FakeSource) -> None:
+        earnings = (await run(cal, NO_PAGE_DATES))["earnings"]
+
+        assert (earnings["sources_failed"], earnings["verification"]) == (["calendar"], "unverifiable")
+
+    async def test_two_entries_on_one_day_are_still_a_window(self, run: Callable[..., Any]) -> None:
+        cal = raw_calendar(epoch("2026-10-20", 8), epoch("2026-10-20", 16))
+
+        earnings = (await run(cal, NO_PAGE_DATES))["earnings"]
+
+        assert earnings["next_window"]["window_basis"] == "assumed"
+        assert earnings["verification"] == "unverifiable"
+
+    @pytest.mark.parametrize(
+        ("cal", "info"),
+        [
+            (calendar("2026-10-20", "2026-10-24"), {"earningsTimestamp": epoch("2026-10-20")}),
+            # The recorded shape: info carries the calendar's own record.
+            (calendar("2026-10-20", "2026-10-24", is_estimate=False),
+             {**window_info("2026-10-20", "2026-10-24", is_estimate=False), "earningsTimestamp": epoch("2026-10-20")}),
+        ],
+        ids=["assumed", "conflicting"],
+    )
+    async def test_info_echo_does_not_verify_an_unconfirmed_window(
+        self, run: Callable[..., Any], cal: FakeSource, info: dict[str, Any]
+    ) -> None:
+        earnings = (await run(cal, NO_PAGE_DATES, info))["earnings"]
+        card = build_card(actionable_price=101.5, events_data={"earnings": earnings})
+
+        assert (earnings["verification"], earnings["next_date"]) == ("unverifiable", "2026-10-20")
+        assert card["action"] == "watch"
+        assert "earnings_unverifiable" in blocker_ids(card)
+
+    async def test_info_date_outside_the_window_is_independent(self, run: Callable[..., Any]) -> None:
+        info = {"earningsTimestamp": epoch("2026-10-18")}
+
+        earnings = (await run(calendar("2026-10-20", "2026-10-24"), NO_PAGE_DATES, info))["earnings"]
+
+        assert (earnings["verification"], earnings["next_date"]) == ("verified_date", "2026-10-18")
+        assert earnings["candidate_dates"] == {"info_timestamp": "2026-10-18"}
+
     async def test_r2_10_independent_date_resolves_an_assumed_window(self, run: Callable[..., Any]) -> None:
         earnings = (await run(calendar("2026-10-07", "2026-10-15"), page("2026-10-14")))["earnings"]
         card = build_card(actionable_price=101.5, events_data={"earnings": earnings})
@@ -263,6 +316,14 @@ class TestTimeZones:
         dividends = (await run(cal, NO_PAGE_DATES))["dividends"]
 
         assert (dividends["ex_date"], dividends["pay_date"]) == ("2026-09-15", "2026-09-30")
+
+    async def test_et_dates_hold_after_2037(self, run: Callable[..., Any]) -> None:
+        # 2040-07-01T04:30Z is 00:30 EDT on July 1; pytz falls back to EST here.
+        cal = raw_calendar(int(datetime(2040, 7, 1, 4, 30, tzinfo=UTC).timestamp()))
+
+        earnings = (await run(cal, NO_PAGE_DATES))["earnings"]
+
+        assert earnings["next_date"] == "2040-07-01"
 
     async def test_r2_9_same_day_earnings_is_day_zero(self, run: Callable[..., Any]) -> None:
         earnings = (await run(calendar("2026-10-08"), NO_PAGE_DATES))["earnings"]
@@ -301,11 +362,37 @@ class TestInfo:
         assert (earnings["next_date"], earnings["next_date_source"]) == ("2026-10-20", "info_timestamp")
         assert earnings["next_date_is_estimate"] is True
 
-    async def test_invalid_info_timestamp_marks_info_failed(self, run: Callable[..., Any]) -> None:
-        earnings = (await run(NO_CALENDAR_DATES, NO_PAGE_DATES, {"earningsTimestamp": "soon"}))["earnings"]
+    @pytest.mark.parametrize("timestamp", ["soon", 10**400], ids=["text", "overflowing_int"])
+    async def test_invalid_info_timestamp_marks_info_failed(self, run: Callable[..., Any], timestamp: Any) -> None:
+        earnings = (await run(NO_CALENDAR_DATES, NO_PAGE_DATES, {"earningsTimestamp": timestamp}))["earnings"]
 
         assert earnings["sources_failed"] == ["info"]
         assert earnings["verification"] == "unverifiable"
+
+
+    @pytest.mark.parametrize(
+        ("cal", "next_date", "days_until"),
+        [(NO_CALENDAR_DATES, "2026-10-08", 0), (FAILED_CALENDAR, "2026-10-08", 0)],
+        ids=["calendar_none", "calendar_failed"],
+    )
+    async def test_info_window_covering_today_blacks_out_unverified(
+        self, run: Callable[..., Any], cal: FakeSource, next_date: str, days_until: int
+    ) -> None:
+        info = {**window_info("2026-10-07", "2026-10-15"), "earningsTimestamp": epoch("2026-10-07")}
+
+        earnings = (await run(cal, NO_PAGE_DATES, info))["earnings"]
+        card = build_card(actionable_price=101.5, events_data={"earnings": earnings})
+
+        assert (earnings["next_date"], earnings["days_until"]) == (next_date, days_until)
+        assert earnings["verification"] == "unverifiable"
+        assert {"earnings_blackout", "earnings_unverifiable"} <= blocker_ids(card)
+
+    async def test_info_window_alone_does_not_verify(self, run: Callable[..., Any]) -> None:
+        info = {**window_info("2026-10-20", "2026-10-24"), "earningsTimestamp": epoch("2026-10-20")}
+
+        earnings = (await run(FAILED_CALENDAR, NO_PAGE_DATES, info))["earnings"]
+
+        assert (earnings["verification"], earnings["next_date"]) == ("unverifiable", "2026-10-20")
 
 
 def test_today_is_the_fixture_date() -> None:
