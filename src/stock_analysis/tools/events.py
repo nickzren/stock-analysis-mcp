@@ -109,9 +109,9 @@ def _host_local_date(epoch: Any) -> date:
 
 def _calendar_from_events(events: dict[str, Any]) -> dict[str, Any]:
     calendar: dict[str, Any] = {}
-    if "dividendDate" in events:
+    if events.get("dividendDate") is not None:
         calendar["Dividend Date"] = _host_local_date(events["dividendDate"])
-    if "exDividendDate" in events:
+    if events.get("exDividendDate") is not None:
         calendar["Ex-Dividend Date"] = _host_local_date(events["exDividendDate"])
     earnings = events.get("earnings")
     if isinstance(earnings, dict):

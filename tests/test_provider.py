@@ -202,11 +202,22 @@ class TestEarningsVerification:
         assert card["action"] == "watch"
         assert "earnings_unverifiable" in blocker_ids(card)
 
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "malformed_earnings_field",
+            # Falsy malformed values must not be defaulted to an empty list.
+            "earnings_date_zero",
+            "earnings_date_false",
+            "earnings_date_empty_string",
+            "earnings_date_object",
+        ],
+    )
     async def test_malformed_earnings_field_does_not_verify(
-        self, yf_transport: FakeSession, events_env: None
+        self, yf_transport: FakeSession, events_env: None, name: str
     ) -> None:
         """A malformed nested earnings field must not read as a verified absence."""
-        yf_transport.route("calendar", "malformed_earnings_field")
+        yf_transport.route("calendar", name)
         yf_transport.route("earnings_page", "past_only_table")
 
         earnings = (await _events())["earnings"]
@@ -215,6 +226,22 @@ class TestEarningsVerification:
         assert earnings["sources_failed"] == ["calendar"]
         assert card["action"] == "watch"
         assert "earnings_unverifiable" in blocker_ids(card)
+
+    @pytest.mark.parametrize(
+        "name", ["valid_no_earnings", "earnings_without_dates", "earnings_dates_empty_list", "earnings_dates_null"]
+    )
+    async def test_missing_earnings_dates_verify_as_absent(
+        self, yf_transport: FakeSession, events_env: None, name: str
+    ) -> None:
+        """Positive controls: an absent or null field, or an empty list, is a real absence."""
+        yf_transport.route("calendar", name)
+        yf_transport.route("earnings_page", "past_only_table")
+
+        earnings = (await _events())["earnings"]
+        card = build_card(actionable_price=101.5, events_data={"earnings": earnings})
+
+        assert earnings["sources_failed"] == []
+        assert card["action"] == "trade_now"
 
     async def test_calendar_date_flows_through_the_adapter(
         self, yf_transport: FakeSession, events_env: None, host_tz: Callable[[str], None]

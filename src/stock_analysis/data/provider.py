@@ -200,19 +200,18 @@ def _interpret_calendar(response: Any) -> _Interpretation:
     if not isinstance(events, dict):
         return _Interpretation("failed", error_type="malformed")
     # Nested fields must have the expected shape too: a malformed earnings field
-    # must not read as a verified absence.
+    # must not read as a verified absence. Validate raw values before defaulting;
+    # only an absent key or null counts as missing.
     earnings = events.get("earnings")
     if earnings is not None and not isinstance(earnings, dict):
         return _Interpretation("failed", error_type="malformed")
-    dates = (earnings or {}).get("earningsDate") or []
-    dividend_keys = [key for key in ("dividendDate", "exDividendDate") if key in events]
-    if (
-        not isinstance(dates, list)
-        or not all(_is_epoch(d) for d in dates)
-        or not all(_is_epoch(events[key]) for key in dividend_keys)
-    ):
+    dates = (earnings or {}).get("earningsDate")
+    if dates is not None and (not isinstance(dates, list) or not all(_is_epoch(d) for d in dates)):
         return _Interpretation("failed", error_type="malformed")
-    return _Interpretation("ok" if dates or dividend_keys else "empty", payload=events)
+    dividends = [events[key] for key in ("dividendDate", "exDividendDate") if events.get(key) is not None]
+    if not all(_is_epoch(value) for value in dividends):
+        return _Interpretation("failed", error_type="malformed")
+    return _Interpretation("ok" if dates or dividends else "empty", payload=events)
 
 
 def _parse_number(text: str) -> float | None:
