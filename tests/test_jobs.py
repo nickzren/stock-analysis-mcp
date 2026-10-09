@@ -23,7 +23,6 @@ analyze_orchestrator = importlib.import_module("stock_analysis.tools.analyze.orc
 options_signals = importlib.import_module("stock_analysis.tools.options_signals")
 
 SYMBOL = "EXMP"
-FAR = 60.0  # a deadline the test never reaches
 
 
 class Barrier:
@@ -130,13 +129,14 @@ class TestR31IndependentTools:
         failures = result["data_quality"]["tool_failures"]
         assert [f["tool"] for f in failures] == ["options_signals"]
         assert "timeout" in failures[0]["message"]
+        assert result["data_quality"]["in_flight_jobs"] == 1  # A's thread was still running
         await drain()
 
     async def test_a_tool_timeout_discloses_in_flight_jobs(
         self, monkeypatch: pytest.MonkeyPatch, barrier: Barrier
     ) -> None:
         async def blocked(symbol: str, **kwargs: Any) -> dict[str, Any]:
-            return await jobs.run_job(barrier.job("tool"), deadline=time.monotonic() + FAR)  # type: ignore[no-any-return]
+            return await jobs.run_job(barrier.job("tool"), clock=jobs.ReadClock())  # type: ignore[no-any-return]
 
         async def quick(symbol: str, **kwargs: Any) -> dict[str, Any]:
             return {"symbol": symbol}
@@ -189,7 +189,7 @@ class TestR33R34Singleflight:
         async def start() -> str:
             nonlocal starts
             starts += 1
-            return await jobs.run_job(barrier.job(result="value"), deadline=time.monotonic() + FAR)  # type: ignore[no-any-return]
+            return await jobs.run_job(barrier.job(result="value"), clock=jobs.ReadClock())  # type: ignore[no-any-return]
 
         creator = asyncio.create_task(jobs.singleflight("key", start))
         await barrier.until_started(1)
@@ -197,9 +197,12 @@ class TestR33R34Singleflight:
         await asyncio.sleep(0)
 
         await cancel(creator)
+        late = asyncio.create_task(jobs.singleflight("key", start))  # still in flight: joins
+        await asyncio.sleep(0)
         barrier.release.set()
 
         assert await joiner == ("value", True)
+        assert await late == ("value", True)
         assert starts == 1
         await drain()
 
@@ -211,7 +214,7 @@ class TestR33R34Singleflight:
         loop.set_exception_handler(lambda _loop, context: reported.append(context))
 
         async def start() -> None:
-            await jobs.run_job(barrier.job(error=RuntimeError("upstream broke")), deadline=time.monotonic() + FAR)
+            await jobs.run_job(barrier.job(error=RuntimeError("upstream broke")), clock=jobs.ReadClock())
 
         waiters = [asyncio.create_task(jobs.singleflight("key", start)) for _ in range(3)]
         await barrier.until_started(1)
@@ -222,7 +225,7 @@ class TestR33R34Singleflight:
         barrier.release.set()
         await asyncio.wait([flight])
 
-        assert flight.done() and isinstance(flight.exception(), RuntimeError)
+        assert flight.done() and not flight.cancelled()  # don't retrieve its exception here
         assert "key" not in jobs._flights
         del flight, waiters
         import gc
@@ -246,17 +249,172 @@ class TestR33R34Singleflight:
         assert starts == 2
 
 
+class TestR33R34CallerDeadlines:
+    async def test_a_joiner_stops_at_its_own_scope(self, barrier: Barrier) -> None:
+        async def start() -> str:
+            return await jobs.run_job(barrier.job(result="value"), clock=jobs.ReadClock())  # type: ignore[no-any-return]
+
+        creator = asyncio.create_task(jobs.singleflight("key", start))
+        await barrier.until_started(1)
+
+        with jobs.deadline_scope(0.05), pytest.raises(jobs.JobTimeoutError):
+            await jobs.singleflight("key", start)
+
+        barrier.release.set()
+        assert await creator == ("value", False)
+        await drain()
+
+    async def test_the_shared_work_outlives_its_creators_scope(self, barrier: Barrier) -> None:
+        async def start() -> str:
+            return await jobs.run_job(barrier.job(result="value"), clock=jobs.ReadClock())  # type: ignore[no-any-return]
+
+        with jobs.deadline_scope(0.05):
+            creator = asyncio.create_task(jobs.singleflight("key", start))
+        await barrier.until_started(1)
+        joiner = asyncio.create_task(jobs.singleflight("key", start))
+        with pytest.raises(jobs.JobTimeoutError):
+            await creator
+
+        barrier.release.set()
+        assert await joiner == ("value", True)
+        await drain()
+
+    async def test_concurrent_fetch_info_calls_share_one_fetch(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        release, reads = threading.Event(), []
+
+        class SlowInfoTicker:
+            @property
+            def info(self) -> dict[str, Any]:
+                reads.append(1)
+                release.wait(timeout=10)
+                return {"quoteType": "ETF", "symbol": SYMBOL}
+
+        monkeypatch.setattr(yfinance_client.yf, "Ticker", lambda symbol: SlowInfoTicker())
+        first = asyncio.create_task(yfinance_client._fetch_info_with_singleflight(SYMBOL))
+        second = asyncio.create_task(yfinance_client._fetch_info_with_singleflight(SYMBOL))
+        await asyncio.sleep(0)
+        release.set()
+
+        (_, _, first_joined), (_, _, second_joined) = await asyncio.gather(first, second)
+        assert (len(reads), first_joined, second_joined) == (1, False, True)
+        await drain()
+
+
+class TestRunJobOutcomes:
+    async def test_a_finished_job_is_not_reported_late(self) -> None:
+        """The loop was busy past the deadline, but the job had already finished."""
+        with jobs.deadline_scope(0.1):
+            task = asyncio.create_task(jobs.run_job(lambda: "done", clock=jobs.ReadClock()))
+        await asyncio.sleep(0)  # the job is submitted
+        while jobs.in_flight_jobs():
+            time.sleep(0.001)  # the job finishes while the loop is busy ...
+        time.sleep(0.15)  # ... and stays busy past the deadline (e.g. pandas work)
+
+        assert await task == "done"
+
+    async def test_an_expired_read_is_a_timeout_not_rate_limited(self) -> None:
+        with jobs.deadline_scope(0):
+            read = await provider.read_property(FakeTicker(SYMBOL), "splits", lambda: None)
+            with pytest.raises(yfinance_client.YFinanceRetryError, match="deadline passed: timeout"):
+                await yfinance_client._retry_with_backoff("probe", lambda: None)
+
+        assert (read.status, read.error_type) == ("failed", "timeout")
+
+    async def test_a_submit_that_fails_after_queueing_never_runs_the_job(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        real, queued, ran = jobs._executor, [], []
+
+        class QueueThenFail:
+            def submit(self, fn: Callable[[], Any]) -> Any:
+                queued.append(real.submit(fn))
+                raise RuntimeError("can't start new thread")
+
+        monkeypatch.setattr(jobs, "_executor", QueueThenFail())
+
+        with pytest.raises(RuntimeError, match="new thread"):
+            await jobs.run_job(lambda: ran.append(1), clock=jobs.ReadClock(), symbol_lock=SYMBOL)
+        await asyncio.wrap_future(queued[0])
+
+        assert ran == []
+        assert (jobs.in_flight_jobs(), SYMBOL in jobs._gate.locked_symbols) == (0, False)
+
+
+class TestGateOrder:
+    async def test_a_freed_symbol_lock_goes_to_the_earliest_waiter(self, barrier: Barrier) -> None:
+        order: list[str] = []
+        holder = asyncio.create_task(
+            jobs.run_job(barrier.job("holder", SYMBOL), clock=jobs.ReadClock(), symbol_lock=SYMBOL)
+        )
+        await barrier.until_started(1)
+        first = asyncio.create_task(
+            jobs.run_job(lambda: order.append("first"), clock=jobs.ReadClock(), symbol_lock=SYMBOL)
+        )
+        await asyncio.sleep(0)  # queued behind the holder
+
+        barrier.release.set()
+        while "end:holder" not in barrier.order:
+            time.sleep(0.001)  # the holder's thread finishes while the loop is busy ...
+        time.sleep(0.01)  # ... and its done-callback frees the lock; nobody is woken yet
+        late = asyncio.create_task(
+            jobs.run_job(lambda: order.append("late"), clock=jobs.ReadClock(), symbol_lock=SYMBOL)
+        )
+        await asyncio.gather(holder, first, late)
+
+        assert order == ["first", "late"]
+
+    async def test_a_full_pool_times_out_as_queued_for_admission(self, barrier: Barrier) -> None:
+        blocked = [asyncio.create_task(jobs.run_job(barrier.job(f"j{i}"), clock=jobs.ReadClock()))
+                   for i in range(jobs._gate.permits)]
+        await barrier.until_started(jobs._gate.permits)
+
+        with jobs.deadline_scope(0.05):
+            read = await provider.read_property(FakeTicker("OTHR"), "splits", lambda: None)
+
+        assert (read.status, read.error_type) == ("failed", "queued_for_admission")
+        barrier.release.set()
+        await asyncio.gather(*blocked)
+        await drain()
+
+    async def test_time_queued_for_a_slot_does_not_spend_the_read_budget(
+        self, monkeypatch: pytest.MonkeyPatch, barrier: Barrier
+    ) -> None:
+        """A batch tool's reads wait their turn without failing (no enclosing scope)."""
+        monkeypatch.setattr(jobs, "READ_DEADLINE_SECONDS", 0.05)
+        blocked = [asyncio.create_task(provider.read_property(FakeTicker(f"B{i}"), "splits", barrier.job(f"j{i}")))
+                   for i in range(jobs._gate.permits)]
+        await barrier.until_started(jobs._gate.permits)
+        waiting = asyncio.create_task(provider.read_property(FakeTicker("OTHR"), "splits", lambda: ("ok",)))
+        await asyncio.sleep(0.15)  # queued well past the 0.05 s read budget
+        barrier.release.set()
+
+        assert (await waiting).status == "ok"
+        await asyncio.gather(*blocked)
+        await drain()
+
+
+class TestRequestTimeoutCap:
+    async def test_property_requests_are_capped(self, yf_transport: FakeSession) -> None:
+        yf_transport.route("calendar", "valid_one_epoch")
+        ticker = yfinance_client.yf.Ticker(SYMBOL)
+
+        read = await provider.read_property(ticker, "calendar", lambda: ticker.calendar)
+
+        assert read.status == "ok"
+        assert {call.timeout for call in yf_transport.calls} == {jobs.REQUEST_TIMEOUT_SECONDS}
+
+
 class TestR35R36Ownership:
     async def test_admission_holds_while_orphaned_jobs_run(self, barrier: Barrier) -> None:
         permits = jobs._gate.permits
-        first = [asyncio.create_task(jobs.run_job(barrier.job(f"a{i}"), deadline=time.monotonic() + FAR))
+        first = [asyncio.create_task(jobs.run_job(barrier.job(f"a{i}"), clock=jobs.ReadClock()))
                  for i in range(permits)]
         await barrier.until_started(permits)
         for task in first:
             await cancel(task)
         assert jobs.in_flight_jobs() == permits  # orphans still hold their permits
 
-        second = [asyncio.create_task(jobs.run_job(barrier.job(f"b{i}"), deadline=time.monotonic() + FAR))
+        second = [asyncio.create_task(jobs.run_job(barrier.job(f"b{i}"), clock=jobs.ReadClock()))
                   for i in range(permits)]
         for _ in range(20):
             await asyncio.sleep(0.005)
@@ -270,13 +428,13 @@ class TestR35R36Ownership:
 
     async def test_symbol_lock_is_held_until_the_thread_finishes(self, barrier: Barrier) -> None:
         first = asyncio.create_task(
-            jobs.run_job(barrier.job("first", SYMBOL), deadline=time.monotonic() + FAR, symbol_lock=SYMBOL)
+            jobs.run_job(barrier.job("first", SYMBOL), clock=jobs.ReadClock(), symbol_lock=SYMBOL)
         )
         await barrier.until_started(1)
         await cancel(first)
 
         second = asyncio.create_task(
-            jobs.run_job(barrier.job("second", SYMBOL), deadline=time.monotonic() + FAR, symbol_lock=SYMBOL)
+            jobs.run_job(barrier.job("second", SYMBOL), clock=jobs.ReadClock(), symbol_lock=SYMBOL)
         )
         for _ in range(20):
             await asyncio.sleep(0.005)
@@ -289,8 +447,8 @@ class TestR35R36Ownership:
         await drain()
 
     async def test_a_waiter_timeout_also_keeps_the_lock(self, barrier: Barrier) -> None:
-        with pytest.raises(jobs.JobTimeoutError) as timed_out:
-            await jobs.run_job(barrier.job("slow", SYMBOL), deadline=time.monotonic() + 0.05, symbol_lock=SYMBOL)
+        with jobs.deadline_scope(0.05), pytest.raises(jobs.JobTimeoutError) as timed_out:
+            await jobs.run_job(barrier.job("slow", SYMBOL), clock=jobs.ReadClock(), symbol_lock=SYMBOL)
 
         assert timed_out.value.reason == "timeout"
         assert SYMBOL in jobs._gate.locked_symbols

@@ -151,25 +151,31 @@
   reads, since `Ticker` state is not thread-safe -- when submitted, and gives
   them back only when its thread finishes. A cancelled or timed-out waiter just
   stops waiting; the orphaned job keeps its permit and lock, so the limit holds
-  and one symbol's property reads never overlap. Backoff and rate-limit
-  cooldown sleeps hold neither. Every read stops at its deadline
-  (`YF_READ_DEADLINE_SECONDS`, default 8, capped by an enclosing
-  `jobs.deadline_scope`); transport requests and history also carry
-  `YF_REQUEST_TIMEOUT_SECONDS` (default 5). A provider read past its deadline
-  is `failed` with `error_type` `timeout`, `queued_behind_symbol_lock` or
-  `queued_for_admission`. `Ticker` property reads (statements, estimates,
-  dividends, splits, holders, options) go through `provider.read_property`:
-  retried (an error page hidden behind a JSON/parse error counts as
-  retryable) and returned as a `SourceRead` (`ok`, `unverified` when empty,
-  `failed`), with each site keeping its existing degraded output. Concurrent
-  reads of one provider source, and concurrent `fetch_info` calls for one
-  symbol, share a single in-flight fetch (`jobs.singleflight`): a detached
-  task every caller awaits through `asyncio.shield`, removed when it lands, so
-  a failure is shared only while in flight and never cached. `analyze` runs
-  each tool under `TIMEOUT_SECONDS` (10) with its reads capped at 90% of it,
-  so a hung read fails structured and the tool still returns; a tool that does
-  time out reports `in_flight_jobs` in its `tool_failures` entry, since
-  threads can't be killed.
+  and one symbol's property reads never overlap. Freed slots go to waiters in
+  arrival order. Backoff and rate-limit cooldown sleeps hold neither. A read's
+  `jobs.ReadClock` allows `YF_READ_DEADLINE_SECONDS` (default 8) from its first
+  admission, capped by any enclosing `jobs.deadline_scope`; time queued for a
+  slot counts only against that scope, so batch tools' healthy reads just wait
+  their turn. Every yfinance HTTP request, cookie and crumb fetches included,
+  is capped at `YF_REQUEST_TIMEOUT_SECONDS` (default 5; `yfinance_client`
+  wraps `YfData._make_request` and `_get_cookie_and_crumb` once at import). A
+  provider read that runs out of time is `failed` with `error_type` `timeout`,
+  `queued_behind_symbol_lock` or `queued_for_admission` (`rate_limited` only
+  while a cooldown is actually active); a job that finished is never reported
+  as timed out. `Ticker` property reads (statements, estimates, dividends,
+  splits, holders, options) go through `provider.read_property`: retried (an
+  error page hidden behind a JSON/parse error counts as retryable) and returned
+  as a `SourceRead` (`ok`, `unverified` when empty, `failed`), with each site
+  keeping its existing degraded output. Concurrent reads of one provider
+  source, and concurrent `fetch_info` calls for one symbol, share a single
+  in-flight fetch (`jobs.singleflight`): a detached task on its own read budget
+  that every caller awaits through `asyncio.shield`, each caller only until its
+  own scope ends; it is removed when it lands, so a failure is shared only while
+  in flight and never cached. `analyze` runs each tool under `TIMEOUT_SECONDS`
+  (10) with its reads capped at 90% of it, so a hung read fails structured and
+  the tool still returns; `data_quality.in_flight_jobs` (and a timed-out tool's
+  `tool_failures` entry) reports threads still running, since they can't be
+  killed.
 - `analyze_trade_setup.freshness` in regular session requires BOTH a fresh
   intraday bar and a current daily frame (`daily_bar_date >=
   daily_expected_date`, the previous completed session); daily-leg failure is

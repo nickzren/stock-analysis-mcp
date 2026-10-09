@@ -5,10 +5,12 @@ an admission permit, and optionally a per-symbol lock, when it is submitted and
 gives them back only when its thread finishes, in the future's done-callback.
 Cancelling or timing out the waiter stops only the waiting: an orphaned job keeps
 its permit and lock, so the limit can't be bypassed and no two jobs ever hold one
-symbol's lock at once.
+symbol's lock at once. Slots go to waiters in arrival order.
 
-Deadlines are absolute ``time.monotonic()`` values. ``deadline_scope`` lets a
-caller (analyze's per-tool deadline) cap every read started inside it.
+A read's time limit is a ``ReadClock``: ``READ_DEADLINE_SECONDS`` from its first
+admission, capped by any enclosing ``deadline_scope`` (analyze's per-tool
+deadline). Time spent queued for a slot counts only against the scope, so a
+batch tool's healthy reads aren't dropped just for waiting their turn.
 
 Shared by ``yfinance_client`` and ``provider``; it lives in its own module because
 the provider imports the client.
@@ -16,26 +18,26 @@ the provider imports the client.
 
 import asyncio
 import contextlib
+import contextvars
+import math
 import os
 import threading
 import time
 from collections.abc import Callable, Coroutine, Iterator
 from concurrent.futures import Future, ThreadPoolExecutor
-from contextvars import ContextVar
+from dataclasses import dataclass, field
 from typing import Any, TypeVar
 
 T = TypeVar("T")
 
 MAX_WORKERS = int(os.environ.get("YF_MAX_WORKERS", "4"))
-# How long one read (all attempts and backoff) may take, and how long one request
-# may wait on the network. Request timeouts reach only the transport reads and
-# history; other yfinance properties keep yfinance's own 30 s timeout, so their
-# waiter stops at the read deadline while the thread finishes in the background.
+# How long one read (all attempts and backoff) may run once admitted, and how long
+# one HTTP request may wait (yfinance_client caps every yfinance request at it).
 READ_DEADLINE_SECONDS = float(os.environ.get("YF_READ_DEADLINE_SECONDS", "8"))
 REQUEST_TIMEOUT_SECONDS = float(os.environ.get("YF_REQUEST_TIMEOUT_SECONDS", "5"))
 
 _executor = ThreadPoolExecutor(max_workers=MAX_WORKERS)
-_scope_deadline: ContextVar[float | None] = ContextVar("_scope_deadline", default=None)
+_scope_deadline: contextvars.ContextVar[float | None] = contextvars.ContextVar("_scope_deadline", default=None)
 
 
 class JobTimeoutError(TimeoutError):
@@ -47,89 +49,25 @@ class JobTimeoutError(TimeoutError):
         self.reason = reason
 
 
-class _Gate:
-    """Admission permits and per-symbol locks, released only when a job's thread is done.
+@dataclass
+class ReadClock:
+    """One read's time limit; create it when the read starts."""
 
-    State is guarded by a thread lock because releases run on worker threads;
-    waiting coroutines are woken on their own event loop.
-    """
+    scope: float | None = field(default_factory=_scope_deadline.get)
+    budget_end: float | None = None
 
-    def __init__(self, permits: int):
-        self.permits = permits
-        self.running = 0
-        self.locked_symbols: set[str] = set()
-        self._lock = threading.Lock()
-        self._waiters: list[tuple[asyncio.AbstractEventLoop, asyncio.Future[None]]] = []
+    def remaining(self) -> float:
+        ends = [end for end in (self.scope, self.budget_end) if end is not None]
+        return min(ends) - time.monotonic() if ends else math.inf
 
-    def blocked_reason(self, symbol: str | None) -> str | None:
-        if symbol is not None and symbol in self.locked_symbols:
-            return "queued_behind_symbol_lock"
-        if self.running >= self.permits:
-            return "queued_for_admission"
-        return None
+    def admitted(self) -> None:
+        if self.budget_end is None:
+            self.budget_end = time.monotonic() + READ_DEADLINE_SECONDS
 
-    async def submit(self, fn: Callable[[], T], symbol: str | None) -> "Future[T]":
-        loop = asyncio.get_running_loop()
-        while True:
-            with self._lock:
-                if self.blocked_reason(symbol) is None:
-                    self.running += 1
-                    if symbol is not None:
-                        self.locked_symbols.add(symbol)
-                    break
-                waiter: asyncio.Future[None] = loop.create_future()
-                self._waiters.append((loop, waiter))
-            try:
-                await waiter
-            finally:
-                with self._lock, contextlib.suppress(ValueError):
-                    self._waiters.remove((loop, waiter))
-        # No await between taking the slot and submitting, so a cancelled waiter
-        # can't leak a permit.
-        try:
-            future = _executor.submit(fn)
-        except BaseException:
-            self._release(symbol)
-            raise
-        future.add_done_callback(lambda _: self._release(symbol))
-        return future
-
-    def _release(self, symbol: str | None) -> None:
-        with self._lock:
-            self.running -= 1
-            if symbol is not None:
-                self.locked_symbols.discard(symbol)
-            waiters = list(self._waiters)
-        for loop, waiter in waiters:
-            with contextlib.suppress(RuntimeError):  # that loop is already closed
-                loop.call_soon_threadsafe(_wake, waiter)
-
-    def reset(self) -> None:
-        """Test seam: forget all state (between tests, after their jobs are released)."""
-        with self._lock:
-            self.running = 0
-            self.locked_symbols.clear()
-            self._waiters.clear()
-
-
-def _wake(waiter: "asyncio.Future[None]") -> None:
-    if not waiter.done():
-        waiter.set_result(None)
-
-
-_gate = _Gate(MAX_WORKERS)
-
-
-def in_flight_jobs() -> int:
-    """Jobs whose threads have not finished, including ones nobody waits for anymore."""
-    return _gate.running
-
-
-def read_deadline() -> float:
-    """Deadline for a read starting now: the read budget, capped by any enclosing scope."""
-    own = time.monotonic() + READ_DEADLINE_SECONDS
-    scope = _scope_deadline.get()
-    return own if scope is None else min(own, scope)
+    def timeout(self) -> float | None:
+        """For ``asyncio.timeout``: None when unlimited."""
+        left = self.remaining()
+        return None if left == math.inf else max(left, 0)
 
 
 @contextlib.contextmanager
@@ -142,29 +80,148 @@ def deadline_scope(seconds: float) -> Iterator[None]:
         _scope_deadline.reset(token)
 
 
-def remaining(deadline: float) -> float:
-    return deadline - time.monotonic()
+@dataclass(eq=False)
+class _Waiter:
+    loop: asyncio.AbstractEventLoop
+    future: "asyncio.Future[None]"
+    symbol: str | None
+    granted: bool = False
 
 
-async def run_job(fn: Callable[[], T], *, deadline: float, symbol_lock: str | None = None) -> T:
-    """Run ``fn`` as one executor job and wait for it until ``deadline``.
+class _Gate:
+    """Admission permits and per-symbol locks, released only when a job's thread is done.
+
+    State is guarded by a thread lock because releases run on worker threads. A
+    release grants the freed slot to the earliest queued waiter that can use it
+    before waking that waiter on its own loop, so later arrivals can't barge.
+    """
+
+    def __init__(self, permits: int):
+        self.permits = permits
+        self.running = 0
+        self.locked_symbols: set[str] = set()
+        self._lock = threading.Lock()
+        self._queue: list[_Waiter] = []
+
+    def blocked_reason(self, symbol: str | None) -> str | None:
+        with self._lock:
+            return self._blocked_reason(symbol)
+
+    def _blocked_reason(self, symbol: str | None) -> str | None:
+        if symbol is not None and symbol in self.locked_symbols:
+            return "queued_behind_symbol_lock"
+        if self.running >= self.permits:
+            return "queued_for_admission"
+        return None
+
+    def _take(self, symbol: str | None) -> None:
+        self.running += 1
+        if symbol is not None:
+            self.locked_symbols.add(symbol)
+
+    def _give_back(self, symbol: str | None) -> None:
+        self.running -= 1
+        if symbol is not None:
+            self.locked_symbols.discard(symbol)
+        for waiter in list(self._queue):
+            if self._blocked_reason(waiter.symbol) is not None:
+                continue
+            self._queue.remove(waiter)
+            try:
+                waiter.loop.call_soon_threadsafe(_wake, waiter.future)
+            except RuntimeError:  # its loop is closed; it will never run
+                continue
+            self._take(waiter.symbol)
+            waiter.granted = True
+
+    async def _acquire(self, symbol: str | None) -> None:
+        loop = asyncio.get_running_loop()
+        with self._lock:
+            if self._blocked_reason(symbol) is None:
+                self._take(symbol)
+                return
+            waiter = _Waiter(loop, loop.create_future(), symbol)
+            self._queue.append(waiter)
+        try:
+            await waiter.future
+        except BaseException:
+            with self._lock:
+                if waiter.granted:
+                    self._give_back(symbol)  # granted as we were cancelled: pass it on
+                elif waiter in self._queue:
+                    self._queue.remove(waiter)
+            raise
+
+    def release(self, symbol: str | None) -> None:
+        with self._lock:
+            self._give_back(symbol)
+
+    async def submit(self, fn: Callable[[], T], symbol: str | None) -> "Future[T]":
+        await self._acquire(symbol)
+        # From here to add_done_callback there is no await, so a cancelled waiter
+        # can't leak the slot. ``ThreadPoolExecutor.submit`` queues the work before
+        # it may fail to start a thread, so the job waits for ``go`` and runs ``fn``
+        # only if it was submitted cleanly and owns the slot.
+        go = threading.Event()
+        owned: list[bool] = []
+
+        def job() -> T | None:
+            go.wait()
+            return fn() if owned else None
+
+        try:
+            future = _executor.submit(job)
+        except BaseException:
+            go.set()
+            self.release(symbol)
+            raise
+        owned.append(True)
+        go.set()
+        future.add_done_callback(lambda _: self.release(symbol))
+        return future  # type: ignore[return-value]
+
+    def reset(self) -> None:
+        """Test seam: forget all state (between tests, after their jobs are released)."""
+        with self._lock:
+            self.running = 0
+            self.locked_symbols.clear()
+            self._queue.clear()
+
+
+def _wake(future: "asyncio.Future[None]") -> None:
+    if not future.done():
+        future.set_result(None)
+
+
+_gate = _Gate(MAX_WORKERS)
+
+
+def in_flight_jobs() -> int:
+    """Jobs whose threads have not finished, including ones nobody waits for anymore."""
+    return _gate.running
+
+
+async def run_job(fn: Callable[[], T], *, clock: ReadClock, symbol_lock: str | None = None) -> T:
+    """Run ``fn`` as one executor job, within ``clock``.
 
     Raises ``JobTimeoutError`` when the job could not be admitted, or did not
-    finish, in time. A started job keeps its permit and lock until it finishes.
+    finish, in time. A started job keeps its permit and lock until it finishes. A
+    job that finished is never reported as timed out, even if the loop was late.
     """
-    if remaining(deadline) <= 0:
+    if clock.remaining() <= 0:
         raise JobTimeoutError(_gate.blocked_reason(symbol_lock) or "timeout")
     try:
-        async with asyncio.timeout(max(remaining(deadline), 0)):
+        async with asyncio.timeout(clock.timeout()):
             future = await _gate.submit(fn, symbol_lock)
     except TimeoutError:
         raise JobTimeoutError(_gate.blocked_reason(symbol_lock) or "queued_for_admission") from None
+    clock.admitted()
     try:
-        async with asyncio.timeout(max(remaining(deadline), 0)):
+        async with asyncio.timeout(clock.timeout()):
             return await asyncio.wrap_future(future)
-    except TimeoutError as e:
-        if future.done() and not future.cancelled() and future.exception() is e:
-            raise  # the job itself raised a TimeoutError
+    except TimeoutError:
+        if future.done() and not future.cancelled():
+            return future.result()  # also re-raises the job's own error
         raise JobTimeoutError("timeout") from None
 
 
@@ -174,21 +231,31 @@ _flights: dict[Any, "asyncio.Task[Any]"] = {}
 async def singleflight(key: Any, start: Callable[[], Coroutine[Any, Any, T]]) -> tuple[T, bool]:
     """Share one in-flight ``start()`` among concurrent callers with the same key.
 
-    Returns (result, joined). The work runs in a detached task that every caller,
-    the creator included, awaits through ``asyncio.shield``, so a cancelled caller
-    never cancels it. A done-callback removes the entry and retrieves any
+    Returns (result, joined). The work runs in a detached task on its own read
+    budget (not its creator's scope) and every caller, the creator included, awaits
+    it through ``asyncio.shield``, so a cancelled caller never cancels it. Each
+    caller waits only until its own scope ends (``JobTimeoutError``); the work
+    goes on for the others. A done-callback removes the entry and retrieves any
     exception, so an outcome nobody awaited is never logged as unretrieved. The
     entry lives only while in flight: nothing, failed results included, is cached.
     """
     loop = asyncio.get_running_loop()
     task = _flights.get(key)
     joined = task is not None and task.get_loop() is loop and not task.done()
-    if not joined:
-        task = loop.create_task(start())
+    if task is None or not joined:
+        context = contextvars.copy_context()
+        context.run(_scope_deadline.set, None)
+        task = loop.create_task(start(), context=context)
         _flights[key] = task
         task.add_done_callback(lambda t: _land(key, t))
-    assert task is not None
-    return await asyncio.shield(task), joined
+    clock = ReadClock()
+    try:
+        async with asyncio.timeout(clock.timeout()):
+            return await asyncio.shield(task), joined
+    except TimeoutError:
+        if task.done() and not task.cancelled():
+            return task.result(), joined
+        raise JobTimeoutError("timeout") from None
 
 
 def _land(key: Any, task: "asyncio.Task[Any]") -> None:
@@ -205,4 +272,3 @@ def clear_flights() -> None:
 
 async def shutdown() -> None:
     _executor.shutdown(wait=False, cancel_futures=True)
-

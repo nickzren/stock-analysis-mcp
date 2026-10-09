@@ -10,7 +10,7 @@ cached, for ``SOURCE_TTL_SECONDS``. Property reads on a cached ``Ticker`` go thr
 
 WP3: every attempt is one executor job (``jobs.run_job``) that owns its admission
 permit (and, for property reads, the symbol lock) until its thread finishes; a
-read stops at ``jobs.read_deadline()``; concurrent reads of one source share a
+read runs within one ``jobs.ReadClock``; concurrent reads of one source share a
 single in-flight fetch (``jobs.singleflight``).
 """
 
@@ -66,7 +66,7 @@ SOURCE_TTL_SECONDS: dict[str, int] = {
 # Total backoff one read may sleep. With the client's 1 s base delay this allows
 # three attempts for 5xx/429/transport errors (jitter can't change it). Request
 # time is bounded separately: jobs.REQUEST_TIMEOUT_SECONDS per transport request
-# and jobs.read_deadline() for the whole read.
+# and a jobs.ReadClock for the whole read.
 _RETRY_BUDGET_SECONDS = 4.0
 _NEWS_COUNT = 10
 
@@ -156,16 +156,17 @@ async def _attempts(
     Backoff and rate-limit cooldown sleeps happen between jobs, so no permit or
     lock is held while sleeping.
     """
-    deadline = jobs.read_deadline()
+    clock = jobs.ReadClock()
     slept = 0.0
     for attempt in range(_max_retries + 1):
-        if rate_limit_cooldown_remaining() >= jobs.remaining(deadline):
+        cooldown = rate_limit_cooldown_remaining()
+        if cooldown > 0 and cooldown >= clock.remaining():
             return _Outcome(attempts=attempt, failure=_failed(source, "rate_limited", attempt, True))
         await wait_for_rate_limit_cooldown()
         if attempt:
             expire_yfinance_response_cache()  # a retry must do fresh I/O
         try:
-            value = await jobs.run_job(call, deadline=deadline, symbol_lock=symbol_lock)
+            value = await jobs.run_job(call, clock=clock, symbol_lock=symbol_lock)
             return _Outcome(value=value, attempts=attempt + 1)
         except jobs.JobTimeoutError as e:
             return _Outcome(attempts=attempt + 1, failure=_failed(source, e.reason, attempt + 1, True))
@@ -177,7 +178,7 @@ async def _attempts(
             exhausted = (
                 attempt >= min(_max_retries, limit)
                 or slept + delay > _RETRY_BUDGET_SECONDS
-                or delay >= jobs.remaining(deadline)
+                or delay >= clock.remaining()
             )
             if not can_retry or exhausted:
                 return _Outcome(
@@ -203,7 +204,12 @@ async def _read(
     cached = _source_cache.get(cache_key)
     if cached is not None:
         return cached  # type: ignore[no-any-return]
-    read, _ = await jobs.singleflight(("source", cache_key), lambda: _fetch_source(source, cache_key, fetch, interpret))
+    try:
+        read, _ = await jobs.singleflight(
+            ("source", cache_key), lambda: _fetch_source(source, cache_key, fetch, interpret)
+        )
+    except jobs.JobTimeoutError as e:
+        return _failed(source, e.reason, 0, True)  # this caller's scope ended; the fetch goes on
     return read
 
 

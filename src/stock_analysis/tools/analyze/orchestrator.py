@@ -357,6 +357,9 @@ async def analyze_stock(
     results = await asyncio.gather(
         *[run_with_timing(name, coro) for name, coro in tool_specs]
     )
+    # Reads that hit their deadline leave their threads running (they can't be
+    # killed); disclose how many still hold a permit.
+    in_flight_jobs = jobs.in_flight_jobs()
 
     total_duration = (perf_counter() - start_time) * 1000
 
@@ -882,6 +885,7 @@ async def analyze_stock(
         "staleness_warnings": staleness_warnings or [],
         "tool_failures": tool_failures,
         "tool_timings": tool_timings,
+        "in_flight_jobs": in_flight_jobs,
         "warnings": warnings,
     }
 

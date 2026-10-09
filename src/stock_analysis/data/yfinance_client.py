@@ -1,6 +1,7 @@
 """Async yfinance client with bounded concurrency and retry logic."""
 
 import asyncio
+import functools
 import json
 import logging
 import math
@@ -45,6 +46,30 @@ logger = logging.getLogger(__name__)
 # Error policy (Step 1, D1): surface yfinance read failures as exceptions instead
 # of letting them read as valid empty results. Set once here; never per call.
 YfConfig.debug.hide_exceptions = False
+
+
+def _cap_yfinance_request_timeouts() -> None:
+    """Cap every yfinance request (data, cookie and crumb) at the job request timeout
+    (Step 1 WP3, R3.9), so an orphaned job gives back its permit and symbol lock
+    within that bound instead of yfinance's 30 s defaults. Installed once, here."""
+    make_request = YfData._make_request
+    get_cookie_and_crumb = YfData._get_cookie_and_crumb
+
+    @functools.wraps(make_request)
+    def capped_make_request(self: YfData, url: str, request_method: Any, body: Any = None,
+                            params: Any = None, timeout: float = 30, data: Any = None) -> Any:
+        return make_request(self, url, request_method, body=body, params=params,
+                            timeout=min(timeout, jobs.REQUEST_TIMEOUT_SECONDS), data=data)
+
+    @functools.wraps(get_cookie_and_crumb)
+    def capped_get_cookie_and_crumb(self: YfData, timeout: float = 30) -> Any:
+        return get_cookie_and_crumb(self, min(timeout, jobs.REQUEST_TIMEOUT_SECONDS))
+
+    YfData._make_request = capped_make_request
+    YfData._get_cookie_and_crumb = capped_get_cookie_and_crumb
+
+
+_cap_yfinance_request_timeouts()
 
 # Retry configuration
 _max_retries = int(os.environ.get("YF_MAX_RETRIES", "3"))
@@ -403,7 +428,7 @@ async def _retry_with_backoff(
     Execute a synchronous function with retry logic.
 
     Each attempt is one executor job (``jobs.run_job``); backoff sleeps hold no
-    permit. The whole read, attempts and sleeps, stops at ``jobs.read_deadline()``.
+    permit. The whole read, attempts and sleeps, runs within one ``jobs.ReadClock``.
 
     Args:
         operation_name: Name for logging (e.g., "fetch_history(AAPL)")
@@ -417,7 +442,7 @@ async def _retry_with_backoff(
         YFinanceRetryError: If all retries exhausted or the read deadline passed
         ServerShuttingDownError: If server is shutting down
     """
-    deadline = jobs.read_deadline()
+    clock = jobs.ReadClock()
     last_error: Exception | None = None
     total_backoff: float = 0.0
     effective_max_retries = max_retries
@@ -427,7 +452,8 @@ async def _retry_with_backoff(
     for attempt in range(max_retries + 1):
         if shutdown_event.is_set():
             raise ServerShuttingDownError("Server is shutting down")
-        if rate_limit_cooldown_remaining() >= jobs.remaining(deadline):
+        cooldown = rate_limit_cooldown_remaining()
+        if cooldown > 0 and cooldown >= clock.remaining():
             raise YFinanceRetryError("Read deadline passed: rate_limited", last_error=last_error)
         await wait_for_rate_limit_cooldown()
         if attempt:
@@ -436,7 +462,7 @@ async def _retry_with_backoff(
             expire_yfinance_response_cache()
 
         try:
-            result = await jobs.run_job(sync_func, deadline=deadline)
+            result = await jobs.run_job(sync_func, clock=clock)
             # Record successful attempt in trace
             retry_trace.append(RetryAttempt(attempt=attempt + 1, ok=True))
             return RetryResult(
@@ -486,7 +512,7 @@ async def _retry_with_backoff(
 
             # Don't retry if we've exhausted attempts for this error type, or
             # if the backoff would run past the read deadline
-            if attempt >= effective_max_retries or delay >= jobs.remaining(deadline):
+            if attempt >= effective_max_retries or delay >= clock.remaining():
                 logger.warning(
                     f"{operation_name}: Failed after {attempt + 1} attempts "
                     f"(limit={effective_max_retries + 1}). Last error: {e}"
@@ -676,9 +702,12 @@ async def _fetch_info_with_singleflight(
         raise ServerShuttingDownError("Server is shutting down")
 
     normalized_symbol = symbol.upper().strip()
-    (info, retry_result), joined = await jobs.singleflight(
-        ("info", normalized_symbol), lambda: _fetch_info_raw(normalized_symbol)
-    )
+    try:
+        (info, retry_result), joined = await jobs.singleflight(
+            ("info", normalized_symbol), lambda: _fetch_info_raw(normalized_symbol)
+        )
+    except jobs.JobTimeoutError as e:
+        raise YFinanceRetryError(f"Read deadline passed: {e.reason}", last_error=e) from e
     return info, retry_result, joined
 
 
