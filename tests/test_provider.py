@@ -868,19 +868,6 @@ class TestSymbolSearch:
             await analyze_orchestrator._resolve_symbol_for_analysis("Example Corp")
 
 
-def _flaky(error: Exception, value: Any) -> Callable[[], Any]:
-    """A read that raises ``error`` once, then returns ``value``."""
-    calls = []
-
-    def read() -> Any:
-        calls.append(1)
-        if len(calls) == 1:
-            raise error
-        return value
-
-    return read
-
-
 class TestPropertyReadSites:
     """R1.11 + R3.8: each Ticker property read runs as executor jobs, retries retryable
     errors, becomes a SourceRead, keeps its site's degraded output and evicts the Ticker."""
@@ -889,7 +876,7 @@ class TestPropertyReadSites:
         ticker = FakeTicker(SYMBOL, splits=http_error(503))
         ticker_cache.set(SYMBOL, ticker, 3600)
 
-        read = await provider.read_property(ticker, "splits", lambda: ticker.splits)
+        read = await provider.read_property(ticker, "splits", lambda t: t.splits)
 
         assert (read.status, read.error_type, read.retryable) == ("failed", "http_503", True)
         assert read.attempts == ticker.reads["splits"] == 3
@@ -902,7 +889,7 @@ class TestPropertyReadSites:
         yf_transport.route("timeseries", "http_503_json", "http_503_json", "quarterly_revenue_100")
         ticker = yf.Ticker(SYMBOL)
 
-        read = await provider.read_property(ticker, "quarterly_income_stmt", lambda: ticker.quarterly_income_stmt)
+        read = await provider.read_property(ticker, "quarterly_income_stmt", lambda t: t.quarterly_income_stmt)
 
         assert (read.status, read.attempts) == ("ok", 2)
         assert read.payload.iloc[0, 0] == 100
@@ -917,20 +904,20 @@ class TestPropertyReadSites:
         yf_transport.route("timeseries", fixture)
         ticker = yf.Ticker(SYMBOL)
 
-        read = await provider.read_property(ticker, "quarterly_income_stmt", lambda: ticker.quarterly_income_stmt)
+        read = await provider.read_property(ticker, "quarterly_income_stmt", lambda t: t.quarterly_income_stmt)
 
         assert (read.status, read.error_type, read.attempts) == ("failed", error_type, 1)
 
     async def test_non_retryable_error_fails_once(self) -> None:
         ticker = FakeTicker(SYMBOL, splits=http_error(404))
 
-        read = await provider.read_property(ticker, "splits", lambda: ticker.splits)
+        read = await provider.read_property(ticker, "splits", lambda t: t.splits)
 
         assert (read.status, read.error_type, read.attempts) == ("failed", "http_404", 1)
 
     @pytest.mark.parametrize("value", [None, pd.DataFrame(), pd.Series(dtype=float), ()])
     async def test_empty_value_is_unverified(self, value: Any) -> None:
-        read = await provider.read_property(FakeTicker(SYMBOL), "holders", lambda: value)
+        read = await provider.read_property(FakeTicker(SYMBOL), "holders", lambda t: value)
 
         assert (read.status, read.error_type) == ("unverified", "empty_property")
 
@@ -1049,7 +1036,7 @@ class TestPropertyReadSites:
         newer = FakeTicker(SYMBOL, splits=pd.Series(dtype=float))
         ticker_cache.set(SYMBOL, newer, 3600)
 
-        await provider.read_property(failed, "splits", lambda: failed.splits)
+        await provider.read_property(failed, "splits", lambda t: t.splits)
 
         assert ticker_cache.get(SYMBOL) is newer
         ticker_cache.clear()
@@ -1058,7 +1045,7 @@ class TestPropertyReadSites:
         ticker = FakeTicker(SYMBOL, splits=pd.Series([2.0], index=pd.DatetimeIndex(["2024-06-10"])))
         ticker_cache.set(SYMBOL, ticker, 3600)
 
-        read = await provider.read_property(ticker, "splits", lambda: ticker.splits)
+        read = await provider.read_property(ticker, "splits", lambda t: t.splits)
 
         assert read.status == "ok"
         assert ticker_cache.get(SYMBOL) is ticker

@@ -71,13 +71,13 @@ _job_responses = threading.local()
 
 
 class HiddenHTTPError(Exception):
-    """yfinance received an HTTP error response without raising it: it failed parsing
-    the body (``cause``), or turned it into an ordinary-looking result (no cause,
-    e.g. an empty option chain from a 503). ``status`` is that response's status."""
+    """An HTTP error response yfinance would not raise, surfaced by a property job
+    (``preserving_http_status``). ``status`` is that response's status; ``cause`` is
+    the error yfinance raised instead, if any."""
 
     def __init__(self, status: int, cause: Exception | None = None):
-        detail = f"behind {type(cause).__name__}: {cause}" if cause else "returned as a result"
-        super().__init__(f"HTTP {status} {detail}")
+        detail = f" behind {type(cause).__name__}: {cause}" if cause else ""
+        super().__init__(f"HTTP {status} response{detail}")
         self.status = status
 
 
@@ -93,7 +93,10 @@ def _capped(method: Callable[..., Any]) -> Callable[..., Any]:
         statuses = getattr(_job_responses, "statuses", None)
         status = getattr(response, "status_code", None)
         if statuses is not None and isinstance(status, int) and status >= 400:
+            # Inside a property job: reject the error response before yfinance
+            # parses -- and caches on the Ticker -- anything built from it.
             statuses.append(status)
+            raise HiddenHTTPError(status)
         return response
 
     return call
@@ -114,9 +117,10 @@ _cap_yfinance_request_timeouts()
 
 def preserving_http_status(call: Callable[[], T]) -> Callable[[], T]:
     """Wrap a blocking yfinance read (run on a worker thread) so that an HTTP error
-    response yfinance didn't raise becomes a ``HiddenHTTPError`` carrying that
-    status -- whether yfinance then failed to parse it or returned something
-    built from it -- and retries follow the status, not the parser error."""
+    response yfinance wouldn't raise fails the read as a ``HiddenHTTPError``
+    carrying that status, raised as the response arrives (before yfinance parses
+    it). If yfinance swallows or wraps that error, the read still fails with the
+    status, and retries follow the status, not a parser error."""
 
     def run() -> T:
         _job_responses.statuses = []

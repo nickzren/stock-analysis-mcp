@@ -42,7 +42,7 @@ class Barrier:
 
     def job(self, name: str = "job", symbol: str | None = None, result: Any = None,
             error: Exception | None = None) -> Callable[[], Any]:
-        def run() -> Any:
+        def run(*_: Any) -> Any:  # also usable as a read_property read(ticker)
             with self._lock:
                 self.started += 1
                 self.active += 1
@@ -179,7 +179,7 @@ class TestR32SymbolLock:
         blocked = asyncio.create_task(provider.read_property(FakeTicker(SYMBOL), "options", barrier.job("a", SYMBOL)))
         await barrier.until_started(1)
 
-        other = await provider.read_property(FakeTicker("OTHR"), "options", lambda: ("2026-11-20",))
+        other = await provider.read_property(FakeTicker("OTHR"), "options", lambda t: ("2026-11-20",))
 
         assert other.status == "ok"
         barrier.release.set()
@@ -319,7 +319,7 @@ class TestRunJobOutcomes:
 
     async def test_an_expired_read_is_a_timeout_not_rate_limited(self) -> None:
         with jobs.deadline_scope(0):
-            read = await provider.read_property(FakeTicker(SYMBOL), "splits", lambda: None)
+            read = await provider.read_property(FakeTicker(SYMBOL), "splits", lambda t: None)
             with pytest.raises(yfinance_client.YFinanceRetryError, match="deadline passed: timeout"):
                 await yfinance_client._retry_with_backoff("probe", lambda: None)
 
@@ -403,7 +403,7 @@ class TestGateOrder:
         await barrier.until_started(jobs._gate.permits)
 
         with jobs.deadline_scope(0.05):
-            read = await provider.read_property(FakeTicker("OTHR"), "splits", lambda: None)
+            read = await provider.read_property(FakeTicker("OTHR"), "splits", lambda t: None)
 
         assert (read.status, read.error_type) == ("failed", "queued_for_admission")
         barrier.release.set()
@@ -418,7 +418,7 @@ class TestGateOrder:
         blocked = [asyncio.create_task(provider.read_property(FakeTicker(f"B{i}"), "splits", barrier.job(f"j{i}")))
                    for i in range(jobs._gate.permits)]
         await barrier.until_started(jobs._gate.permits)
-        waiting = asyncio.create_task(provider.read_property(FakeTicker("OTHR"), "splits", lambda: ("ok",)))
+        waiting = asyncio.create_task(provider.read_property(FakeTicker("OTHR"), "splits", lambda t: ("ok",)))
         await asyncio.sleep(0.15)  # queued well past the 0.05 s read budget
         barrier.release.set()
 
@@ -432,7 +432,7 @@ class TestRequestTimeoutCap:
         yf_transport.route("calendar", "valid_one_epoch")
         ticker = yfinance_client.yf.Ticker(SYMBOL)
 
-        read = await provider.read_property(ticker, "calendar", lambda: ticker.calendar)
+        read = await provider.read_property(ticker, "calendar", lambda t: t.calendar)
 
         assert read.status == "ok"
         assert {call.timeout for call in yf_transport.calls} == {jobs.REQUEST_TIMEOUT_SECONDS}
@@ -506,7 +506,7 @@ class TestR37NothingHeldWhileSleeping:
     async def test_property_read_backoff(self, sleeps: list[tuple[int, bool]]) -> None:
         ticker = FakeTicker(SYMBOL, splits=http_error(503))
 
-        await provider.read_property(ticker, "splits", lambda: ticker.splits)
+        await provider.read_property(ticker, "splits", lambda t: t.splits)
 
         assert sleeps and all(entry == (0, False) for entry in sleeps)
 
@@ -535,7 +535,7 @@ class TestR38PropertyReadsAreJobs:
     async def test_each_attempt_runs_on_a_worker_thread(self) -> None:
         threads: list[str] = []
 
-        def read() -> tuple[str, ...]:
+        def read(_: Any) -> tuple[str, ...]:
             threads.append(threading.current_thread().name)
             if len(threads) == 1:
                 raise http_error(503)
@@ -659,7 +659,7 @@ class TestHttpErrorsNeverBecomeResults:
         yf_transport.route("options", "http_503_json")
         ticker = yfinance_client.yf.Ticker(SYMBOL)
 
-        read = await provider.read_property(ticker, "option_chain", lambda: ticker.option_chain())
+        read = await provider.read_property(ticker, "option_chain", lambda t: t.option_chain())
 
         assert (read.status, read.error_type) == ("failed", "http_503")
 
@@ -667,16 +667,36 @@ class TestHttpErrorsNeverBecomeResults:
         # yfinance re-requests once on >= 400, so one attempt sees two 404s.
         yf_transport.route("timeseries", "http_404_html", "http_404_html", "quarterly_revenue_100")
         failing = yfinance_client.yf.Ticker(SYMBOL)
-        failed = await provider.read_property(failing, "income", lambda: failing.quarterly_income_stmt)
+        failed = await provider.read_property(failing, "income", lambda t: t.quarterly_income_stmt)
 
         recovered_ticker = yfinance_client.yf.Ticker(SYMBOL)
         recovered = await provider.read_property(
-            recovered_ticker, "income", lambda: recovered_ticker.quarterly_income_stmt
+            recovered_ticker, "income", lambda t: t.quarterly_income_stmt
         )
 
         assert (failed.status, failed.error_type) == ("failed", "http_404")
         assert recovered.status == "ok" and recovered.payload.iloc[0, 0] == 100
         assert len(yf_transport.calls_to("timeseries")) == 3  # fresh I/O, not the cached 404
+
+
+    @pytest.mark.parametrize("failed_fixture", ["http_503_revenue_999", "http_503_empty_series"])
+    async def test_a_retry_fetches_the_healthy_response_for_the_same_ticker(
+        self, yf_transport: FakeSession, failed_fixture: str
+    ) -> None:
+        """A 503 whose body yfinance can parse (data or an empty series) must not be
+        cached on the Ticker and reused by the retry."""
+        # yfinance re-requests once on >= 400, so one attempt sees two 503s.
+        yf_transport.route("timeseries", failed_fixture, failed_fixture, "quarterly_revenue_100")
+        ticker = yfinance_client.yf.Ticker(SYMBOL)
+        ticker_cache.set(SYMBOL, ticker, 3600)
+
+        read = await provider.read_property(ticker, "income", lambda t: t.quarterly_income_stmt)
+
+        assert (read.status, read.attempts) == ("ok", 2)
+        assert read.payload.iloc[0, 0] == 100
+        assert len(yf_transport.calls_to("timeseries")) == 3
+        assert ticker_cache.get(SYMBOL) is None  # the Ticker the failed attempt touched
+        ticker_cache.clear()
 
 
 class TestSharedReadClocks:

@@ -58,7 +58,7 @@ async def events_calendar(symbol: str, _now: datetime | None = None) -> dict[str
     (calendar_events, calendar_ok), (earnings_dates, earnings_dates_ok), splits_read = await asyncio.gather(
         _read_calendar(normalized_symbol),
         read_earnings_dates(normalized_symbol),
-        read_property(ticker, "splits", lambda: ticker.splits),
+        read_property(ticker, "splits", lambda t: t.splits),
     )
 
     today = now.date()

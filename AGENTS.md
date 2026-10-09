@@ -166,15 +166,16 @@
   `failed` with `error_type` `timeout`, `queued_behind_symbol_lock` or
   `queued_for_admission` (`rate_limited` only while a cooldown is actually
   active); a job that finished is never reported as timed out. `Ticker` property reads (statements, estimates, dividends,
-  splits, holders, options) go through `provider.read_property`: retried by
-  status -- the job records any HTTP error response yfinance received without
-  raising it (`preserving_http_status`), whether yfinance then failed to parse
-  it or built a result from it (e.g. an empty option chain from a 503), so a
-  JSON 503 is retried and an HTML 404 or an unparseable 200 is not -- and
-  returned as a `SourceRead` (`ok`, `unverified` when empty, `failed`), with
-  each site keeping its existing degraded output. A failed property read evicts
-  the Ticker and clears yfinance's response cache, so the next read fetches
-  again. Concurrent reads of one provider
+  splits, holders, options) go through `provider.read_property(ticker, source,
+  read)`, where `read` takes the Ticker: inside the job any HTTP error response
+  yfinance would not raise fails the read as it arrives, before yfinance parses
+  or caches anything from it (`preserving_http_status`), and retries follow its
+  status -- a 503 is retried, an HTML 404 or an unparseable 200 is not. A retry
+  evicts the Ticker and reads a fresh one (yfinance caches parsed state on the
+  Ticker) after clearing yfinance's response cache. Results are a `SourceRead`
+  (`ok`, `unverified` when empty, `failed`), with each site keeping its
+  existing degraded output; a failed read also evicts the Ticker and clears the
+  response cache, so the next read fetches again. Concurrent reads of one provider
   source, and concurrent `fetch_info` calls for one symbol, share a single
   in-flight fetch (`jobs.singleflight`): a detached task with no read budget,
   so the source stays owned until the fetch really finishes, that every caller

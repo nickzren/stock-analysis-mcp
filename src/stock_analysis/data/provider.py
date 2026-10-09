@@ -23,6 +23,7 @@ from datetime import datetime
 from typing import Any, Literal, TypeGuard, TypeVar
 from zoneinfo import ZoneInfo
 
+import yfinance as yf
 from bs4 import BeautifulSoup
 from curl_cffi.requests.exceptions import ConnectionError as CurlConnectionError
 from curl_cffi.requests.exceptions import HTTPError as CurlHTTPError
@@ -143,6 +144,7 @@ async def _attempts(
     call: Callable[[], Any],
     retryable: Callable[[Exception], tuple[bool, int]],
     symbol_lock: str | None = None,
+    before_retry: Callable[[], None] | None = None,
 ) -> _Outcome:
     """Run ``call`` as executor jobs, retrying retryable errors, until the read deadline.
 
@@ -158,6 +160,8 @@ async def _attempts(
         await wait_for_rate_limit_cooldown()
         if attempt:
             expire_yfinance_response_cache()  # a retry must do fresh I/O
+            if before_retry is not None:
+                before_retry()
         try:
             value = await jobs.run_job(call, clock=clock, symbol_lock=symbol_lock)
             return _Outcome(value=value, attempts=attempt + 1)
@@ -243,11 +247,13 @@ def _is_empty(value: Any) -> bool:
         return False
 
 
-async def read_property(ticker: Any, source: str, read: Callable[[], T]) -> SourceRead:
+async def read_property(ticker: Any, source: str, read: Callable[[Any], T]) -> SourceRead:
     """A network-backed ``Ticker`` property, read as executor jobs (WP3, R3.8).
 
-    Each attempt holds the symbol's lock (yfinance ``Ticker`` state is not
-    thread-safe) and its admission permit until the thread finishes. Retryable
+    ``read`` gets the Ticker to read. Each attempt holds the symbol's lock
+    (yfinance ``Ticker`` state is not thread-safe) and its admission permit until
+    the thread finishes; a retry evicts the Ticker and reads a fresh one, since
+    yfinance may cache what it parsed on the failed attempt. Retryable
     errors are retried; when yfinance parsed an HTTP error page instead of
     raising it, the page's status decides (``preserving_http_status``).
     ``ok``: a non-empty value. ``unverified``: ``None`` or empty, since a property
@@ -257,7 +263,21 @@ async def read_property(ticker: Any, source: str, read: Callable[[], T]) -> Sour
     is reused.
     """
     symbol = _normalize(str(getattr(ticker, "ticker", "") or "")) or None
-    outcome = await _attempts(source, preserving_http_status(read), _is_retryable_error, symbol_lock=symbol)
+    tickers = [ticker]
+
+    def use_a_fresh_ticker() -> None:
+        # yfinance may have cached state from the failed attempt on that Ticker.
+        evict_ticker(tickers[-1])
+        if isinstance(tickers[-1], yf.Ticker):
+            tickers.append(yf.Ticker(tickers[-1].ticker))
+
+    outcome = await _attempts(
+        source,
+        preserving_http_status(lambda: read(tickers[-1])),
+        _is_retryable_error,
+        symbol_lock=symbol,
+        before_retry=use_a_fresh_ticker,
+    )
     if outcome.failure is not None:
         evict_ticker(ticker)
         expire_yfinance_response_cache()  # a failed response must not be served to the next read

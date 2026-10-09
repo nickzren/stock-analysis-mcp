@@ -1,0 +1,34 @@
+{
+  "status": 503,
+  "json": {
+    "timeseries": {
+      "result": [
+        {
+          "meta": {
+            "symbol": [
+              "EXMP"
+            ],
+            "type": [
+              "quarterlyTotalRevenue"
+            ]
+          },
+          "timestamp": [
+            1782777600
+          ],
+          "quarterlyTotalRevenue": [
+            {
+              "asOfDate": "2026-06-30",
+              "periodType": "3M",
+              "currencyCode": "USD",
+              "reportedValue": {
+                "raw": 999.0,
+                "fmt": "999"
+              }
+            }
+          ]
+        }
+      ],
+      "error": null
+    }
+  }
+}

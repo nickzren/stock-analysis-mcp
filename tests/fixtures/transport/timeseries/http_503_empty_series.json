@@ -1,0 +1,9 @@
+{
+  "status": 503,
+  "json": {
+    "timeseries": {
+      "result": [],
+      "error": null
+    }
+  }
+}

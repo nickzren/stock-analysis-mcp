@@ -424,13 +424,13 @@ async def _read_statements(ticker: Any) -> dict[str, Any]:
     """The Ticker property reads fundamentals needs, each as executor jobs under the
     symbol lock (WP3). A failed read maps to None, as before."""
     reads = {
-        "cashflow_quarterly": lambda: _read_cashflow(ticker, "quarterly"),
-        "cashflow_yearly": lambda: _read_cashflow(ticker, None),
-        "quarterly_income_stmt": lambda: ticker.quarterly_income_stmt,
-        "price_history_5y": lambda: ticker.history(period="5y", interval="1d", auto_adjust=True),
-        "earnings_estimate": lambda: ticker.earnings_estimate,
-        "revenue_estimate": lambda: ticker.revenue_estimate,
-        "dividends": lambda: ticker.dividends,
+        "cashflow_quarterly": lambda t: _read_cashflow(t, "quarterly"),
+        "cashflow_yearly": lambda t: _read_cashflow(t, None),
+        "quarterly_income_stmt": lambda t: t.quarterly_income_stmt,
+        "price_history_5y": lambda t: t.history(period="5y", interval="1d", auto_adjust=True),
+        "earnings_estimate": lambda t: t.earnings_estimate,
+        "revenue_estimate": lambda t: t.revenue_estimate,
+        "dividends": lambda t: t.dividends,
     }
     results = await asyncio.gather(*(read_property(ticker, name, read) for name, read in reads.items()))
     for read in results:

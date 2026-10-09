@@ -44,7 +44,7 @@ async def options_signals(symbol: str) -> dict[str, Any]:
             symbol=normalized_symbol,
         )
 
-    expirations_read = await read_property(ticker, "options", lambda: ticker.options)
+    expirations_read = await read_property(ticker, "options", lambda t: t.options)
     if expirations_read.status == "failed":
         # A failed read is not "no options" (WP1: failures must not read as empty).
         return build_error_response(
@@ -69,7 +69,7 @@ async def options_signals(symbol: str) -> dict[str, Any]:
             symbol=normalized_symbol,
         )
 
-    chain_read = await read_property(ticker, "option_chain", lambda: ticker.option_chain(expiration))
+    chain_read = await read_property(ticker, "option_chain", lambda t: t.option_chain(expiration))
     if chain_read.status == "failed" or chain_read.payload is None:
         return build_error_response(
             error_type="data_unavailable",

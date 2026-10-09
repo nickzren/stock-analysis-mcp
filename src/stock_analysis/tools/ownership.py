@@ -41,9 +41,9 @@ async def ownership_analysis(symbol: str) -> dict[str, Any]:
 
     # One symbol lock serializes these reads; each is its own executor job.
     insider_read, institutional_read, major_read = await asyncio.gather(
-        read_property(ticker, "insider_transactions", lambda: ticker.insider_transactions),
-        read_property(ticker, "institutional_holders", lambda: ticker.institutional_holders),
-        read_property(ticker, "major_holders", lambda: ticker.major_holders),
+        read_property(ticker, "insider_transactions", lambda t: t.insider_transactions),
+        read_property(ticker, "institutional_holders", lambda t: t.institutional_holders),
+        read_property(ticker, "major_holders", lambda t: t.major_holders),
     )
 
     # --- Insider activity ---
