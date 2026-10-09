@@ -225,9 +225,18 @@ class TestWindows:
              window_info("2026-10-20", "2026-10-24", is_estimate=False), "assumed", True),
             (calendar("2026-10-20", "2026-10-24", is_estimate=True),
              {"earningsTimestampStart": epoch("2026-10-20"), "earningsTimestampEnd": "soon"}, "assumed", False),
+            (calendar("2026-10-20", "2026-10-24", is_estimate=True),
+             {**window_info("2026-10-20", "2026-10-24", is_estimate=None), "isEarningsDateEstimate": "false"},
+             "assumed", False),
+            (calendar("2026-10-20", "2026-10-24", is_estimate=True),
+             {**window_info("2026-10-20", "2026-10-24", is_estimate=None), "isEarningsDateEstimate": 1},
+             "assumed", False),
+            (FakeSource.ok("calendar", {"earnings": {"earningsDate": [epoch("2026-10-20"), epoch("2026-10-24")],
+                                                     "isEarningsDateEstimate": "true"}}),
+             window_info("2026-10-20", "2026-10-24"), "assumed", False),
         ],
         ids=["consistent", "absent", "range_absent", "contradicts_estimate_flag", "contradicts_range",
-             "flags_disagree", "malformed_range"],
+             "flags_disagree", "malformed_range", "info_flag_string", "info_flag_int", "calendar_flag_string"],
     )
     async def test_r2_10_window_basis(
         self, run: Callable[..., Any], cal: FakeSource, info: dict[str, Any], basis: str, conflict: bool
@@ -411,6 +420,35 @@ class TestInfo:
         assert (earnings["verification"], earnings["days_until"]) == ("unverifiable", 0)
         assert card["action"] == "watch"
         assert {"earnings_blackout", "earnings_unverifiable"} <= blocker_ids(card)
+
+    async def test_card_shows_the_window_that_drives_the_blackout(self, run: Callable[..., Any]) -> None:
+        """An active info window drives today's blackout while the calendar holds
+        a later window; both stay disclosed and the driver is identified."""
+        info = {**window_info("2026-10-07", "2026-10-15"), "earningsTimestamp": epoch("2026-10-07")}
+
+        earnings = (await run(calendar("2026-10-20", "2026-10-24", is_estimate=True), NO_PAGE_DATES, info))["earnings"]
+        card = build_card(actionable_price=101.5, events_data={"earnings": earnings})
+
+        event_risk = card["event_risk"]
+        assert (event_risk["next_earnings_date"], event_risk["earnings_in_days"]) == ("2026-10-08", 0)
+        driver = event_risk["earnings_window"]
+        assert (driver["source"], driver["start"], driver["end"], driver["window_active"]) == (
+            "info_timestamp", "2026-10-07", "2026-10-15", True
+        )
+        assert [(w["source"], w["start"], w["window_active"]) for w in event_risk["earnings_windows"]] == [
+            ("calendar", "2026-10-20", False), ("info_timestamp", "2026-10-07", True)
+        ]
+        assert card["action"] == "watch"
+        assert {"earnings_blackout", "earnings_unverifiable"} <= blocker_ids(card)
+
+    async def test_point_date_driver_has_no_next_window(self, run: Callable[..., Any]) -> None:
+        cal = calendar("2026-10-20", "2026-10-24", is_estimate=True)
+
+        earnings = (await run(cal, page("2026-10-12"), window_info("2026-10-20", "2026-10-24")))["earnings"]
+
+        assert (earnings["next_date"], earnings["next_date_source"]) == ("2026-10-12", "earnings_dates")
+        assert earnings["next_window"] is None
+        assert [w["source"] for w in earnings["windows"]] == ["calendar", "info_timestamp"]
 
     async def test_info_range_start_wins_over_its_timestamp(self, run: Callable[..., Any]) -> None:
         info = {**window_info("2026-10-07", "2026-10-20"), "earningsTimestamp": epoch("2026-10-20")}

@@ -178,6 +178,7 @@ def build_trade_setup_card(
             "next_earnings_date": str(next_date) if next_date else None,
             "earnings_verification": earnings.get("verification"),
             "earnings_window": earnings.get("next_window"),
+            "earnings_windows": earnings.get("windows") or [],
             "verified_earnings_dates": earnings.get("candidate_dates") or {},
             "expected_move_pct": em_pct,
         },
@@ -212,6 +213,6 @@ def _unverifiable_cause(earnings: dict[str, Any], events_failed: bool) -> str:
         return "tool fetch"
     causes = [f"{name} failed" for name in earnings.get("sources_failed") or []]
     causes += [f"{name} stale" for name in earnings.get("sources_stale") or []]
-    if (earnings.get("next_window") or {}).get("window_basis") == "assumed":
+    if any(window.get("window_basis") == "assumed" for window in earnings.get("windows") or []):
         causes.append("estimate window assumed")
     return ", ".join(causes) or "no verified source"

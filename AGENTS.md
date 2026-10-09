@@ -61,9 +61,10 @@
   blocker when `events_calendar` fails or `earnings.verification` is
   `unverifiable`; `verified_date` and `verified_none` avoid the blocker. The
   blocker reason names the failed and stale sources and an assumed window.
-  `event_risk` carries `earnings_verification`, `earnings_window` and
-  `verified_earnings_dates` next to `next_earnings_date`, so an assumed
-  window's start is never shown without its uncertainty.
+  `event_risk` carries `earnings_verification`, `earnings_window` (the window
+  behind `next_earnings_date`, if any), `earnings_windows` (every source
+  window) and `verified_earnings_dates`, so an assumed window's start is never
+  shown without its uncertainty.
 - `get_technicals` default response gained one additive `short_term` key;
   `intraday` exists only under `timeframe="swing"`. `prior_*` level fields
   exclude the current bar.
@@ -103,19 +104,21 @@
   when all three sources (calendar, earnings page, info earnings dates)
   verify no future date, else `unverifiable`. A calendar whose dates are all
   past is stale (`sources_stale`) and does not verify. Two calendar entries are
-  an interval, disclosed as `next_window` (`window_basis` `confirmed` only when
-  every present `isEarningsDateEstimate` flag -- calendar and info -- is true
-  and info's `earningsTimestampStart/End` match; otherwise `assumed`, with
-  `metadata_conflict` when they contradict or the flags disagree).
+  an interval (`window_basis` `confirmed` only when every present
+  `isEarningsDateEstimate` flag -- calendar and info -- is the boolean `true`
+  and info's `earningsTimestampStart/End` match; a non-boolean flag or bad range
+  is malformed and leaves it `assumed`; contradicting metadata or disagreeing
+  flags give `assumed` with `metadata_conflict`). `windows` lists every source
+  window (calendar, info) with its `source`; `next_window` is the one behind
+  `next_date`, or `null` when a point date drives it.
   An assumed window still sets `next_date`/`days_until` (to its start, or `0`
   while `window_active`) but never verifies on its own. Reversed epochs fail
   the calendar. Info and calendarEvents carry the same Yahoo record, so an info
   date inside an unconfirmed calendar window does not verify it. Info's range
   is read on its own (with or without `earningsTimestamp`; the window spans the
   earliest to the latest of the three); a multi-day range is an unverified
-  window (disclosed as `next_window` with `source` when the calendar has none)
-  that still drives the blackout while it covers today, and a malformed range
-  (one end missing, not an epoch, reversed) fails info. `next_date` is the
+  window that still drives the blackout while it covers today, and a malformed
+  range (one end missing, not an epoch, reversed) fails info. `next_date` is the
   earliest risk date across all sources, verified or not; `candidate_dates`
   discloses each verified source's date. `history` holds reported quarters
   only, newest first.

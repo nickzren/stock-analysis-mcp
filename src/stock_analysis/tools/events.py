@@ -187,24 +187,23 @@ def _info_range(info: dict[str, Any]) -> tuple[date, date] | None:
     return start, end
 
 
-def _window_basis(
-    start: date, end: date, flags: tuple[bool | None, bool | None], info: dict[str, Any]
-) -> tuple[str, bool]:
+def _window_basis(start: date, end: date, flags: tuple[Any, Any], info: dict[str, Any]) -> tuple[str, bool]:
     """(window_basis, metadata_conflict) for a two-date calendar entry (WP2, Q2).
 
-    ``flags`` are the calendar's and info's ``isEarningsDateEstimate``. Confirmed
-    only when every present flag says "estimate" and the info range matches the
-    entries; absent or malformed metadata is assumed; contradicting metadata
-    (including flags that disagree) is assumed and flagged.
+    ``flags`` are the raw calendar and info ``isEarningsDateEstimate`` values.
+    Confirmed only when every present flag is ``True`` and the info range
+    matches the entries; absent or malformed metadata (a non-bool flag, a bad
+    range) is assumed; contradicting metadata (including flags that disagree)
+    is assumed and flagged.
     """
-    present = {flag for flag in flags if flag is not None}
+    present = [flag for flag in flags if flag is not None]
     try:
         info_range = _info_range(info)
     except ValueError:
         return "assumed", False
-    if False in present or (info_range is not None and info_range != (start, end)):
+    if any(flag is False for flag in present) or (info_range is not None and info_range != (start, end)):
         return "assumed", True
-    if present == {True} and info_range == (start, end):
+    if present and all(flag is True for flag in present) and info_range == (start, end):
         return "confirmed", False
     return "assumed", False
 
@@ -236,8 +235,8 @@ def _calendar_view(events: dict[str, Any], ok: bool, info: dict[str, Any], today
         return _SourceView("failed")
     if end < today:
         return _SourceView("stale")
-    flags = (_as_bool(earnings.get("isEarningsDateEstimate")), _as_bool(info.get("isEarningsDateEstimate")))
-    is_estimate = flags[0] if flags[0] is not None else flags[1]
+    flags = (earnings.get("isEarningsDateEstimate"), info.get("isEarningsDateEstimate"))
+    is_estimate = _as_bool(flags[0]) if flags[0] is not None else _as_bool(flags[1])
     if len(entries) == 1:
         return _SourceView("ok", _Candidate("calendar", start, end, True, is_estimate))
     basis, conflict = _window_basis(start, end, flags, info)
@@ -328,7 +327,8 @@ def _build_earnings(
         "next_date_status": "available" if nearest else "unavailable",
         "next_date_status_reason": None if nearest else "calendar_missing_and_no_future_earnings_dates",
         "next_date_is_estimate": nearest.is_estimate if nearest else None,
-        "next_window": calendar.window or info.window,
+        "next_window": next((view.window for view in views.values() if nearest and view.candidate is nearest), None),
+        "windows": [view.window for view in views.values() if view.window],
         "days_until": (next_day - today).days if next_day else None,
         "verification": verification,
         "candidate_dates": {c.source: c.start.isoformat() for c in candidates if c.verified},
