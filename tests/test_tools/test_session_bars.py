@@ -116,7 +116,7 @@ def windows(**overrides: int) -> dict[str, int]:
     return {**base, **overrides}
 
 
-ALL_ONE = windows(**dict.fromkeys(windows(), 1))
+ALL_ONE = dict.fromkeys(windows(), 1)
 
 
 class TestR57IndicatorCharacterization:
@@ -142,7 +142,6 @@ class TestR57IndicatorCharacterization:
         assert (ma["sma_20"], ma["ema_12"], ma["ema_26"], r["rsi"]["value"], r["atr"]["value"]) == values
         assert r["bar_validity"]["latest_bar_invalid"] is latest_invalid
         assert r["bar_validity"]["invalid_bars_in_window"] == invalid
-
 
     async def test_atr_window_counts_a_missing_high(self, monkeypatch: pytest.MonkeyPatch) -> None:
         df = pin_frame()
