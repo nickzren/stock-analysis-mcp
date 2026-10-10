@@ -181,13 +181,12 @@ def income(columns: list[str], net_income: list[float], revenue: list[float] | N
 class TestR66RollingHistory:
     INFO = {"currency": "USD", "financialCurrency": "USD", "regularMarketPrice": 100.0, "marketCap": 1e8,
             "sharesOutstanding": 1e6}
+    PRICES = pd.DataFrame({"Close": 100.0}, index=pd.bdate_range("2023-01-02", "2025-10-10"))
 
     def test_a_non_consecutive_window_is_flagged_not_summed(self) -> None:
         cols = ["2025-09-30", "2025-06-30", "2025-03-31", "2024-12-31", "2024-06-30", "2024-03-31", "2023-12-31"]
-        days = pd.bdate_range("2023-01-02", "2025-10-10")
-        prices = pd.DataFrame({"Close": [100.0] * len(days)}, index=days)
 
-        history = fundamentals._compute_valuation_history(income(cols, [100.0] * 7), prices, self.INFO)
+        history = fundamentals._compute_valuation_history(income(cols, [100.0] * 7), self.PRICES, self.INFO)
 
         assert [e["quarter"] for e in history["pe_history"]] == ["2025-09-30"]
         assert history["non_consecutive_windows"] == ["2025-06-30", "2025-03-31", "2024-12-31"]
@@ -203,10 +202,8 @@ class TestR66RollingHistory:
 
     def test_consecutive_history_flags_nothing(self) -> None:
         cols = [d.strftime("%Y-%m-%d") for d in reversed(pd.date_range("2024-03-31", periods=6, freq="QE"))]
-        days = pd.bdate_range("2023-01-02", "2025-10-10")
-        prices = pd.DataFrame({"Close": [100.0] * len(days)}, index=days)
 
-        history = fundamentals._compute_valuation_history(income(cols, [100.0] * 6), prices, self.INFO)
+        history = fundamentals._compute_valuation_history(income(cols, [100.0] * 6), self.PRICES, self.INFO)
 
         assert len(history["pe_history"]) == 3
         assert history["non_consecutive_windows"] == []
@@ -244,12 +241,13 @@ class TestTrendPairing:
 
 
 class TestAnalyzeDisclosure:
+    CASH_FLOW = {"free_cash_flow_ttm": 100.0, "free_cash_flow_period": "FY 2024",
+                 "free_cash_flow_period_end": "2024-12-31", "free_cash_flow_source": "cashflow_yearly",
+                 "free_cash_flow_ttm_status": "ttm_incomplete", "free_cash_flow_period_lag": 1, "currency": "USD"}
+
     async def test_analyze_keeps_the_ttm_status_and_lag(self, monkeypatch: pytest.MonkeyPatch) -> None:
         async def fake_fundamentals(symbol: str, **kwargs: Any) -> dict[str, Any]:
-            return {"symbol": symbol, "valuation": {}, "cash_flow": {
-                "free_cash_flow_ttm": 100.0, "free_cash_flow_period": "FY 2024",
-                "free_cash_flow_period_end": "2024-12-31", "free_cash_flow_source": "cashflow_yearly",
-                "free_cash_flow_ttm_status": "ttm_incomplete", "free_cash_flow_period_lag": 1, "currency": "USD"}}
+            return {"symbol": symbol, "valuation": {}, "cash_flow": self.CASH_FLOW}
 
         async def summary(symbol: str, **kwargs: Any) -> dict[str, Any]:
             return {"symbol": symbol, "current_price": 100.0, "currency": "USD", "quote_type": "EQUITY"}
@@ -269,11 +267,7 @@ class TestAnalyzeDisclosure:
             assert (cash_flow["free_cash_flow_ttm_status"], cash_flow["free_cash_flow_period_lag"]) == (
                 "ttm_incomplete", 1), detail
 
-    def test_the_fundamentals_summary_carries_the_ttm_status_and_lag(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        cash_flow = {"free_cash_flow_ttm": 100.0, "free_cash_flow_period": "FY 2024",
-                     "free_cash_flow_period_end": "2024-12-31", "free_cash_flow_source": "cashflow_yearly",
-                     "free_cash_flow_ttm_status": "ttm_incomplete", "free_cash_flow_period_lag": 1,
-                     "currency": "USD"}
-        summary = orchestrator._fundamentals_cash_flow_summary(cash_flow)
+    def test_the_fundamentals_summary_carries_the_ttm_status_and_lag(self) -> None:
+        summary = orchestrator._fundamentals_cash_flow_summary(self.CASH_FLOW)
         assert (summary["free_cash_flow_ttm_status"], summary["free_cash_flow_period_lag"]) == ("ttm_incomplete", 1)
         assert summary["free_cash_flow_label"] == "FCF (FY 2024): +$100 (end 2024-12-31)"

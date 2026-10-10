@@ -563,8 +563,7 @@ def _resolve_cashflow(
     value with its own period (``period_lag`` counts newer empty columns); then
     the info figure, labelled TTM. FCF rebuilt as OCF + capex uses one period.
     """
-    unavailable = _Period(None, None, None, "unavailable")
-    q_ocf = q_fcf = y_ocf = y_fcf = unavailable
+    q_ocf = q_fcf = y_ocf = y_fcf = _Period(None, None, None, "unavailable")
     try:
         q_ocf, q_fcf, y_ocf, y_fcf = _statement_periods(quarterly_cf, yearly_cf)
     except Exception as e:
