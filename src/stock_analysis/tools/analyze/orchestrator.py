@@ -111,6 +111,13 @@ def _cap_modes_at_watch(decision_modes: dict[str, Any]) -> None:
             mode["long_term_view"] = "watch"
 
 
+def _fundamentals_cash_flow_summary(cf: dict[str, Any]) -> dict[str, Any]:
+    """FCF with its period, why a TTM wasn't used, and how many fiscal years it lags (WP6)."""
+    keys = ("free_cash_flow_ttm", "free_cash_flow_period", "free_cash_flow_period_end", "free_cash_flow_source",
+            "free_cash_flow_ttm_status", "free_cash_flow_period_lag", "currency")
+    return {**{key: cf.get(key) for key in keys}, "free_cash_flow_label": fcf_label_from_cashflow(cf)}
+
+
 def _compute_burn_metrics(
     fund_data: dict[str, Any],
     market_cap: float | None,
@@ -632,12 +639,6 @@ async def analyze_stock(
         valuation_summary["warnings"] = valuation_warnings
 
     gross_margin = profit.get("gross_margin")
-    fcf_value = cf.get("free_cash_flow_ttm")
-    fcf_period = cf.get("free_cash_flow_period")
-    fcf_period_end = cf.get("free_cash_flow_period_end")
-    fcf_currency = cf.get("currency")
-    fcf_source = cf.get("free_cash_flow_source")
-    fcf_label = fcf_label_from_cashflow(cf)
 
     fundamentals_summary = {
         "valuation": valuation_summary,
@@ -650,14 +651,7 @@ async def analyze_stock(
             "net_margin": net_margin,
             "fcf_positive": get_rule_triggered(cf, "positive_fcf"),
         },
-        "cash_flow": {
-            "free_cash_flow_ttm": fcf_value,
-            "free_cash_flow_period": fcf_period,
-            "free_cash_flow_period_end": fcf_period_end,
-            "free_cash_flow_source": fcf_source,
-            "currency": fcf_currency,
-            "free_cash_flow_label": fcf_label,
-        },
+        "cash_flow": _fundamentals_cash_flow_summary(cf),
         "health": {
             "debt_to_equity": health.get("debt_to_equity"),
             "leverage_status": health.get("leverage_status"),

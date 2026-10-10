@@ -4,10 +4,12 @@ import asyncio
 import logging
 import operator
 import statistics
+from dataclasses import dataclass
 from datetime import datetime
 from time import perf_counter
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from stock_analysis.data.provider import read_property
@@ -403,15 +405,14 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
 
     statements = await _read_statements(ticker_obj) if ticker_obj is not None else {}
 
-    operating_cf, free_cash_flow, fcf_period, fcf_period_end, fcf_source = (
-        _resolve_cashflow_ttm(
-            statements.get("cashflow_quarterly"),
-            statements.get("cashflow_yearly"),
-            operating_cf,
-            free_cash_flow,
-            fiscal_period,
-        )
+    cash_flow_periods = _resolve_cashflow(
+        statements.get("cashflow_quarterly"),
+        statements.get("cashflow_yearly"),
+        operating_cf,
+        free_cash_flow,
+        fiscal_period,
     )
+    free_cash_flow = cash_flow_periods["free_cash_flow_ttm"]
     market_cap = safe_float(info.get("marketCap"))
     revenue = safe_float(info.get("totalRevenue"))
 
@@ -422,11 +423,7 @@ async def fundamentals_snapshot(symbol: str) -> dict[str, Any]:
     )
 
     cash_flow = {
-        "operating_cf_ttm": operating_cf,
-        "free_cash_flow_ttm": free_cash_flow,
-        "free_cash_flow_period": fcf_period,
-        "free_cash_flow_period_end": fcf_period_end,
-        "free_cash_flow_source": fcf_source,
+        **cash_flow_periods,
         "currency": financial_currency,
         "fcf_margin": safe_round(fcf_margin, 4),
         "rules": {
@@ -552,89 +549,88 @@ async def _read_statements(ticker: Any) -> dict[str, Any]:
     return {read.source: None if read.status == "failed" else read.payload for read in results}
 
 
-def _resolve_cashflow_ttm(
+def _resolve_cashflow(
     quarterly_cf: pd.DataFrame | None,
     yearly_cf: pd.DataFrame | None,
     operating_cf: float | None,
     free_cash_flow: float | None,
     fiscal_period: str | None,
-) -> tuple[float | None, float | None, str | None, str | None, str | None]:
-    """Resolve preferred cash flow TTM values from statements, falling back to info."""
-    fcf_period: str | None = None
-    fcf_period_end: str | None = None
-    fcf_source: str | None = None
+) -> dict[str, Any]:
+    """Operating and free cash flow, each with the period it covers (WP6).
 
-    if quarterly_cf is not None or yearly_cf is not None:
-        try:
-            quarterly_cols = (
-                _sorted_cashflow_columns(quarterly_cf.columns)
-                if quarterly_cf is not None
-                else []
-            )
-            yearly_cols = (
-                _sorted_cashflow_columns(yearly_cf.columns)
-                if yearly_cf is not None
-                else []
-            )
-            quarterly_period_end = _period_end_from_columns(quarterly_cols)
-            yearly_period_end = _period_end_from_columns(yearly_cols)
+    Preference: a TTM over the 4 most recent quarter columns, only when they are
+    consecutive and all finite (else ``ttm_incomplete``); then the newest annual
+    value with its own period (``period_lag`` counts newer empty columns); then
+    the info figure, labelled TTM. FCF rebuilt as OCF + capex uses one period.
+    """
+    unavailable = _Period(None, None, None, "unavailable")
+    q_ocf = q_fcf = y_ocf = y_fcf = unavailable
+    try:
+        q_ocf, q_fcf, y_ocf, y_fcf = _statement_periods(quarterly_cf, yearly_cf)
+    except Exception as e:
+        logger.debug("cashflow statement parse failed: %s", e)
+    return {
+        **_cashflow_fields("operating_cf", q_ocf, y_ocf, operating_cf, fiscal_period),
+        **_cashflow_fields("free_cash_flow", q_fcf, y_fcf, free_cash_flow, fiscal_period),
+    }
 
-            fcf_quarterly = _sum_recent_periods(
-                _select_cashflow_series(quarterly_cf, _FCF_LABELS),
-                quarterly_cols,
-                periods=4,
-            )
-            ocf_quarterly = _sum_recent_periods(
-                _select_cashflow_series(quarterly_cf, _OCF_LABELS),
-                quarterly_cols,
-                periods=4,
-            )
-            capex_quarterly = _sum_recent_periods(
-                _select_cashflow_series(quarterly_cf, _CAPEX_LABELS),
-                quarterly_cols,
-                periods=4,
-            )
-            if fcf_quarterly is None and ocf_quarterly is not None and capex_quarterly is not None:
-                fcf_quarterly = ocf_quarterly + capex_quarterly
 
-            fcf_yearly = _latest_period_value(
-                _select_cashflow_series(yearly_cf, _FCF_LABELS),
-                yearly_cols,
-            )
-            ocf_yearly = _latest_period_value(
-                _select_cashflow_series(yearly_cf, _OCF_LABELS),
-                yearly_cols,
-            )
-            capex_yearly = _latest_period_value(
-                _select_cashflow_series(yearly_cf, _CAPEX_LABELS),
-                yearly_cols,
-            )
-            if fcf_yearly is None and ocf_yearly is not None and capex_yearly is not None:
-                fcf_yearly = ocf_yearly + capex_yearly
+def _statement_periods(
+    quarterly_cf: pd.DataFrame | None, yearly_cf: pd.DataFrame | None,
+) -> tuple["_Period", "_Period", "_Period", "_Period"]:
+    """(quarterly OCF, quarterly FCF, annual OCF, annual FCF)."""
+    quarterly_cols = _sorted_cashflow_columns(quarterly_cf.columns) if quarterly_cf is not None else []
+    yearly_cols = _sorted_cashflow_columns(yearly_cf.columns) if yearly_cf is not None else []
 
-            if fcf_quarterly is not None:
-                free_cash_flow = fcf_quarterly
-                fcf_period = "TTM"
-                fcf_period_end = quarterly_period_end
-                fcf_source = "cashflow_quarterly"
-            elif fcf_yearly is not None:
-                free_cash_flow = fcf_yearly
-                fcf_period = fiscal_period or "FY"
-                fcf_period_end = yearly_period_end
-                fcf_source = "cashflow_yearly"
+    q_ocf = _quarterly_ttm(_select_cashflow_series(quarterly_cf, _OCF_LABELS), quarterly_cols)
+    q_fcf = _quarterly_ttm(_select_cashflow_series(quarterly_cf, _FCF_LABELS), quarterly_cols)
+    if q_fcf.value is None:
+        # OCF and capex TTMs cover the same 4 columns, so their sum is one period.
+        q_capex = _quarterly_ttm(_select_cashflow_series(quarterly_cf, _CAPEX_LABELS), quarterly_cols)
+        if q_ocf.value is not None and q_capex.value is not None:
+            q_fcf = _Period(q_ocf.value + q_capex.value, q_ocf.period_end, None, "complete")
+        elif "ttm_incomplete" in (q_fcf.status, q_ocf.status, q_capex.status):
+            q_fcf = _Period(None, None, None, "ttm_incomplete")
 
-            if ocf_quarterly is not None:
-                operating_cf = ocf_quarterly
-            elif ocf_yearly is not None:
-                operating_cf = ocf_yearly
-        except Exception as e:
-            logger.debug("cashflow statement parse failed: %s", e)
+    y_ocf_series = _select_cashflow_series(yearly_cf, _OCF_LABELS)
+    y_ocf = _latest_annual(y_ocf_series, yearly_cols)
+    y_fcf = _latest_annual(_select_cashflow_series(yearly_cf, _FCF_LABELS), yearly_cols)
+    capex = _select_cashflow_series(yearly_cf, _CAPEX_LABELS)
+    if y_ocf_series is not None and capex is not None:
+        # Column-wise, so OCF and capex always come from the same fiscal year.
+        rebuilt = _latest_annual(y_ocf_series + capex, yearly_cols)
+        if rebuilt.value is not None and (y_fcf.period_lag is None or rebuilt.period_lag < y_fcf.period_lag):  # type: ignore[operator]
+            y_fcf = rebuilt
+    return q_ocf, q_fcf, y_ocf, y_fcf
 
-    if fcf_period is None and free_cash_flow is not None:
-        fcf_period = "TTM"
-        fcf_source = fcf_source or "info"
 
-    return operating_cf, free_cash_flow, fcf_period, fcf_period_end, fcf_source
+def _cashflow_fields(
+    prefix: str, quarterly: "_Period", yearly: "_Period", info_value: float | None, fiscal_period: str | None,
+) -> dict[str, Any]:
+    """``<prefix>_ttm`` (the existing key, whatever its period) plus its period, period
+    end, source, TTM status and annual period lag."""
+    period_end: str | None = None
+    lag: int | None = None
+    if quarterly.value is not None:
+        value, period, period_end, source = quarterly.value, "TTM", quarterly.period_end, "cashflow_quarterly"
+    elif yearly.value is not None:
+        value, period_end, source, lag = yearly.value, yearly.period_end, "cashflow_yearly", yearly.period_lag
+        if period_end is not None:
+            period = f"FY {period_end[:4]}"
+        else:
+            period = fiscal_period if lag == 0 and fiscal_period else "FY"
+    elif info_value is not None:
+        value, period, source = info_value, "TTM", "info"
+    else:
+        value, period, source = None, None, None
+    return {
+        f"{prefix}_ttm": value,
+        f"{prefix}_period": period,
+        f"{prefix}_period_end": period_end,
+        f"{prefix}_source": source,
+        f"{prefix}_ttm_status": quarterly.status,
+        f"{prefix}_period_lag": lag,
+    }
 
 
 def _build_yield_metrics(
@@ -793,12 +789,17 @@ def _compute_valuation_history(
 
     pe_history: list[dict[str, Any]] = []
     ps_history: list[dict[str, Any]] = []
+    non_consecutive_windows: list[str] = []
 
     # Compute trailing ratios using 4-quarter rolling sums
     for i in range(len(cols) - 3):
         quarter_end = cols[i]
         quarter_label = str(quarter_end.date()) if hasattr(quarter_end, "date") else str(quarter_end)
         trailing_cols = cols[i : i + 4]
+        if not _consecutive_quarters(trailing_cols):
+            # WP6: four columns that skip a quarter are not a trailing year.
+            non_consecutive_windows.append(quarter_label)
+            continue
         quarter_ts = pd.Timestamp(quarter_end)
         if quarter_ts.tzinfo is not None:
             quarter_ts = quarter_ts.tz_localize(None)
@@ -879,6 +880,7 @@ def _compute_valuation_history(
         "history_points": len(quarters),
         "history_span_years": span_years,
         "status": status,
+        "non_consecutive_windows": non_consecutive_windows,
     }
 
 
@@ -901,6 +903,10 @@ def _compute_fundamental_trends(income_stmt: pd.DataFrame | None) -> dict[str, A
     if len(cols) < 2:
         return None
 
+    def quarters_back(i: int, n: int) -> bool:
+        """WP6: column i+n is exactly n quarters before column i (no skipped quarter)."""
+        return i + n < len(cols) and _consecutive_quarters(cols[i : i + n + 1])
+
     quarterly_data: list[dict[str, Any]] = []
     for i, col in enumerate(cols):
         quarter_label = str(col.date()) if hasattr(col, "date") else str(col)
@@ -913,23 +919,23 @@ def _compute_fundamental_trends(income_stmt: pd.DataFrame | None) -> dict[str, A
             val = safe_float(income_stmt.loc[label, col])
             entry[metric_name] = val
 
-            # QoQ change (compare to next column which is previous quarter)
-            if i + 1 < len(cols):
+            # QoQ change (compare to the previous quarter)
+            if quarters_back(i, 1):
                 prev_val = safe_float(income_stmt.loc[label, cols[i + 1]])
                 if prev_val is not None and prev_val != 0 and val is not None:
                     entry[f"{metric_name}_qoq"] = safe_round((val - prev_val) / abs(prev_val), 4)
 
-            # YoY change (compare to quarter 4 periods ago)
-            if i + 4 < len(cols):
+            # YoY change (compare to the quarter a year earlier)
+            if quarters_back(i, 4):
                 yoy_val = safe_float(income_stmt.loc[label, cols[i + 4]])
                 if yoy_val is not None and yoy_val != 0 and val is not None:
                     entry[f"{metric_name}_yoy"] = safe_round((val - yoy_val) / abs(yoy_val), 4)
 
         quarterly_data.append(entry)
 
-    # Margin trends: compare latest quarter vs 4 quarters ago
+    # Margin trends: compare latest quarter vs the quarter a year earlier
     def _margin_trend(numerator_key: str, denominator_key: str) -> str | None:
-        if len(quarterly_data) < 5:
+        if not quarters_back(0, 4):
             return None
         latest = quarterly_data[0]
         past = quarterly_data[4]
@@ -961,7 +967,7 @@ def _compute_fundamental_trends(income_stmt: pd.DataFrame | None) -> dict[str, A
 
     # Revenue CAGR 3Y using a strict 12-quarter lookback
     revenue_cagr_3y = None
-    if len(cols) >= 13:
+    if quarters_back(0, 12):
         rev_label = metric_keys.get("total_revenue")
         if rev_label is not None:
             rev_latest = safe_float(income_stmt.loc[rev_label, cols[0]])
@@ -977,7 +983,7 @@ def _compute_fundamental_trends(income_stmt: pd.DataFrame | None) -> dict[str, A
 
     # EPS CAGR 3Y using net income proxy with strict 12-quarter lookback
     eps_cagr_3y = None
-    if len(cols) >= 13:
+    if quarters_back(0, 12):
         ni_label = metric_keys.get("net_income")
         if ni_label is not None:
             ni_latest = safe_float(income_stmt.loc[ni_label, cols[0]])
@@ -996,6 +1002,8 @@ def _compute_fundamental_trends(income_stmt: pd.DataFrame | None) -> dict[str, A
         "margin_trend": margin_trend,
         "revenue_cagr_3y": revenue_cagr_3y,
         "eps_cagr_3y": eps_cagr_3y,
+        # Quarters whose next-older column is not the previous quarter.
+        "quarter_gaps": [entry["quarter"] for i, entry in enumerate(quarterly_data[:-1]) if not quarters_back(i, 1)],
     }
 
 
@@ -1250,47 +1258,57 @@ def _sorted_cashflow_columns(columns: pd.Index) -> list[Any]:
     return cols
 
 
-def _sum_recent_periods(
-    series: pd.Series | None,
-    columns: list[Any],
-    *,
-    periods: int,
-) -> float | None:
-    """Sum most recent periods from a series; returns None if insufficient data."""
+# Adjacent quarter-end columns this many days apart are consecutive quarters
+# (13-week, 52/53-week and calendar quarters all fall inside).
+_QUARTER_GAP_DAYS = (80, 100)
+
+
+@dataclass(frozen=True)
+class _Period:
+    """A statement value with the period it belongs to (WP6)."""
+
+    value: float | None
+    period_end: str | None
+    period_lag: int | None
+    status: str  # TTM status: complete | ttm_incomplete | unavailable ("" for annual)
+
+
+def _column_date(column: Any) -> pd.Timestamp | None:
+    ts = pd.to_datetime(column, errors="coerce")
+    return None if pd.isna(ts) else pd.Timestamp(ts)
+
+
+def _consecutive_quarters(columns: list[Any]) -> bool:
+    """Whether newest-first columns are consecutive quarter ends."""
+    dates = [_column_date(c) for c in columns]
+    if any(d is None for d in dates):
+        return False
+    low, high = _QUARTER_GAP_DAYS
+    return all(low <= (newer - older).days <= high for newer, older in zip(dates, dates[1:], strict=False))  # type: ignore[operator]
+
+
+def _quarterly_ttm(series: pd.Series | None, columns: list[Any]) -> _Period:
+    """Sum of the 4 most recent quarter columns, only when consecutive and all finite."""
     if series is None:
-        return None
-    ordered = series.reindex(columns)
-    values = pd.to_numeric(ordered, errors="coerce").dropna()
-    if len(values) < periods:
-        return None
-    return float(values.iloc[:periods].sum())
+        return _Period(None, None, None, "unavailable")
+    recent = columns[:4]
+    values = pd.to_numeric(series.reindex(recent), errors="coerce")
+    if len(recent) < 4 or not _consecutive_quarters(recent) or not np.isfinite(values).all():
+        return _Period(None, None, None, "ttm_incomplete")
+    period_end = _column_date(recent[0])
+    return _Period(float(values.sum()), period_end.date().isoformat() if period_end else None, None, "complete")
 
 
-def _latest_period_value(
-    series: pd.Series | None,
-    columns: list[Any],
-) -> float | None:
-    """Return most recent value from a series."""
-    if series is None:
-        return None
-    ordered = series.reindex(columns)
-    values = pd.to_numeric(ordered, errors="coerce").dropna()
-    if values.empty:
-        return None
-    return float(values.iloc[0])
-
-
-def _period_end_from_columns(columns: list[Any]) -> str | None:
-    """Return ISO date for the most recent period end column."""
-    if not columns:
-        return None
-    try:
-        dt = pd.to_datetime(columns[0], errors="coerce")
-    except Exception:
-        return None
-    if pd.isna(dt):
-        return None
-    return dt.date().isoformat()
+def _latest_annual(series: pd.Series | None, columns: list[Any]) -> _Period:
+    """The newest finite annual value with its own column; ``period_lag`` counts the
+    newer columns that had none."""
+    if series is not None:
+        values = pd.to_numeric(series.reindex(columns), errors="coerce")
+        for lag, (column, value) in enumerate(zip(columns, values, strict=True)):
+            if np.isfinite(value):
+                period_end = _column_date(column)
+                return _Period(float(value), period_end.date().isoformat() if period_end else None, lag, "")
+    return _Period(None, None, None, "")
 
 
 def _read_cashflow(ticker: Any, freq: str | None) -> pd.DataFrame | None:

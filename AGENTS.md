@@ -93,6 +93,23 @@
   ranks the current usable ratio; `history_points` and `history_span_years`
   are always exposed. Valuation conditions and thesis milestones follow the
   gate's own basis (no P/S condition when EV <= 0 left the gate `unknown`).
+- Statement periods (WP6, `fundamentals._resolve_cashflow`): `cash_flow`
+  keeps `operating_cf_ttm` / `free_cash_flow_ttm` (key names kept, whatever
+  the period), each with `_period`, `_period_end`, `_source`, `_ttm_status`
+  and `_period_lag`. A TTM is the 4 most recent quarter columns only when they
+  are consecutive (80-100 days apart, so 52/53-week quarters count) and all
+  finite; otherwise `ttm_status` is `ttm_incomplete` (`unavailable` with no
+  quarterly row), never a sum that skips the gap. Next comes the newest finite
+  annual value labelled from its own column (`FY <year>`, its period end) with
+  `period_lag` = newer empty columns, then the info figure labelled `TTM` /
+  `info`. FCF rebuilt as OCF + capex uses one period (the same 4 quarters, or
+  the same annual column; the newest annual candidate wins). Rolling P/E and
+  P/S history skips non-consecutive 4-quarter windows and lists them in
+  `valuation_history.non_consecutive_windows`; trend QoQ / YoY / margin trend
+  / 3Y CAGR need an unbroken chain of quarters (`fundamental_trends.quarter_gaps`
+  lists quarters whose older neighbour isn't the previous quarter). Analyze's
+  `fundamentals_summary.cash_flow` carries `free_cash_flow_ttm_status` and
+  `free_cash_flow_period_lag`.
 - `analyze` returns the `standard` projection by default; deep audit fields such as `decision_context`, `dip_assessment`, and full `verdict` / `data_quality` require `detail="full"`.
 - `options_signals` returns put/call data at `put_call_ratio.volume_based` and `put_call_ratio.oi_based`, not under `summary.*`.
 - In `analyze`, raw options output is nested under `options_signals`, while derived narrative fields appear elsewhere such as `section_summaries`, `signals`, and `decision_context`.
