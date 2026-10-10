@@ -441,12 +441,12 @@ def calculate_sma_slope(
     sma_series: pd.Series,
     slope_window: int = 20,
 ) -> float | None:
-    """Calculate SMA slope as percent change per day over slope_window."""
-    series = sma_series.dropna()
-    if len(series) < slope_window + 1:
+    """Calculate SMA slope as percent change per day over slope_window sessions;
+    None unless the SMA is valid at both ends."""
+    if len(sma_series) < slope_window + 1:
         return None
-    start = series.iloc[-(slope_window + 1)]
-    end = series.iloc[-1]
+    start = sma_series.iloc[-(slope_window + 1)]
+    end = sma_series.iloc[-1]
     if start == 0 or pd.isna(start) or pd.isna(end):
         return None
     return float((end - start) / start / slope_window)

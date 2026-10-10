@@ -17,6 +17,7 @@ from stock_analysis.utils.freshness import build_freshness
 from stock_analysis.utils.indicators import (
     calculate_returns,
     calculate_sma,
+    calculate_sma_slope,
     days_since_extreme,
     invalid_bars_in_window,
     weekly_return_zscore,
@@ -66,6 +67,18 @@ class TestR54NeverCompress:
         got = tech_mod._build_price_action(pd.Series([10.0, 20.0, NAN, 25.0, 26.0, 27.0, 31.0]))
         assert got == {"higher_closes_2d": True, "break_5d_high": True}
 
+    def test_sma_slope_needs_the_sma_at_both_ends(self) -> None:
+        sma = pd.Series([100.0 + i for i in range(30)])
+        assert calculate_sma_slope(sma) == pytest.approx((129.0 - 109.0) / 109.0 / 20)
+        assert calculate_sma_slope(sma.mask(sma.index == 9)) is None  # invalid 20 sessions back
+        assert calculate_sma_slope(sma.mask(sma.index == 29)) is None  # invalid latest
+
+    def test_rsi_divergence_pairs_each_close_with_its_own_session(self) -> None:
+        closes = pd.Series([99.0, 101.2, 108.5, 99.3, 100.2, 101.7, 93.7, 100.2, 102.6, 105.9, 91.9, 96.1,
+                            91.8, 106.2, 103.9, 90.8, 109.6, 109.3, 103.1, NAN, 93.1, 90.3])
+        # An "RSI" that moves exactly with price can never diverge from it.
+        assert tech_mod._detect_bullish_rsi_divergence(closes, closes.ffill(), pivot_window=2, lookback=20) is False
+
     def test_price_history_total_return_uses_the_period_endpoints(self) -> None:
         df = pd.DataFrame({"date": ["2026-10-07", "2026-10-08", "2026-10-09"], "open": [1.0] * 3,
                            "high": [12.0] * 3, "low": [9.0] * 3, "close": [10.0, 11.0, NAN],
@@ -98,8 +111,8 @@ async def run_technicals(monkeypatch: pytest.MonkeyPatch, df: pd.DataFrame, **kw
 
 
 def windows(**overrides: int) -> dict[str, int]:
-    base = {"sma_20": 0, "sma_50": 0, "sma_200": 0, "ema_12": 0, "ema_26": 0, "rsi_14": 0,
-            "bollinger_20": 0, "atr_14": 0, "volume_20": 0}
+    base = {"sma_20": 0, "sma_50": 0, "sma_200": 0, "ema_12": 0, "ema_26": 0, "macd_12_26_9": 0,
+            "rsi_14": 0, "bollinger_20": 0, "atr_14": 0, "volume_20": 0, "obv_20": 0}
     return {**base, **overrides}
 
 
@@ -113,7 +126,7 @@ class TestR57IndicatorCharacterization:
         ("gap", "values", "latest_invalid", "invalid"),
         [
             (None, (107.44, 107.72, 106.35, 76.6, 2.1), False, windows()),
-            (10, (107.44, 107.72, 106.35, 78.0, 2.1), False, windows(sma_50=1, sma_200=1)),
+            (10, (107.44, 107.72, 106.35, 78.0, 2.1), False, windows(sma_50=1, sma_200=1, macd_12_26_9=1)),
             (35, (None, 107.71, 106.3, 72.8, 2.11), False, ALL_ONE),
             (39, (None, 107.12, 105.98, 73.3, 2.08), True, ALL_ONE),
         ],
@@ -173,7 +186,7 @@ class TestR56MissingVolume:
         assert r["obv"] == {"current": None, "sma_20": None, "trend": None}
         validity = r["bar_validity"]
         assert (validity["latest_bar_invalid"], validity["latest_volume_invalid"]) == (False, True)
-        assert validity["invalid_bars_in_window"] == windows(volume_20=1)
+        assert validity["invalid_bars_in_window"] == windows(volume_20=1, obv_20=1)
 
 
 class TestTechnicalsPriceBlocks:

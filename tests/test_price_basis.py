@@ -104,6 +104,19 @@ class TestQuoteStaleness:
         monday_evening = at(2026, 10, 12, 20, 30).astimezone(UTC)
         assert quote_staleness(monday_evening, at(2026, 10, 13, 17))["stale"] is True
 
+    def test_off_hours_a_quote_from_before_the_close_is_stale(self) -> None:
+        mid_session = at(2026, 10, 12, 14, 30).astimezone(UTC)
+        assert quote_staleness(mid_session, at(2026, 10, 12, 18))["stale"] is True
+        assert quote_staleness(mid_session, at(2026, 10, 13, 8))["stale"] is True
+        early_close_day = at(2026, 11, 27, 11).astimezone(UTC)
+        assert quote_staleness(early_close_day, at(2026, 11, 27, 14))["stale"] is True
+        assert quote_staleness(at(2026, 11, 27, 13).astimezone(UTC), at(2026, 11, 27, 14))["stale"] is False
+
+    def test_off_hours_a_quote_fetched_after_the_close_is_current(self) -> None:
+        last_trade = at(2026, 10, 12, 15, 45).astimezone(UTC)  # thinly traded: no later print
+        assert quote_staleness(last_trade, at(2026, 10, 12, 18), at(2026, 10, 12, 16, 30))["stale"] is False
+        assert quote_staleness(last_trade, at(2026, 10, 12, 18), at(2026, 10, 12, 15, 50))["stale"] is True
+
     def test_future_timestamp_beyond_skew_is_stale(self) -> None:
         now = at(2026, 10, 9, 11)
         s = quote_staleness(now.astimezone(UTC) + timedelta(seconds=6), now)
@@ -190,6 +203,25 @@ class TestR51SelectPrice:
         _, prov = select_price(now=now, intraday_quote=intraday(now, seconds_old=seconds_old),
                                session_close=SESSION_CLOSE)
         assert (prov["price_source"] == "intraday_quote") is used
+
+    @pytest.mark.parametrize(
+        ("quote", "reason"),
+        [(None, "intraday_quote_unavailable"), ("stale", "intraday_quote_stale"),
+         ("future", "intraday_future_timestamp")],
+    )
+    def test_a_rejected_intraday_bar_is_disclosed(self, quote: str | None, reason: str) -> None:
+        now = at(2026, 10, 9, 11)
+        bar = {"stale": intraday(now, seconds_old=16 * 60), "future": intraday(now, seconds_old=-60),
+               None: None}[quote]
+        _, prov = select_price(now=now, intraday_quote=bar, session_close=SESSION_CLOSE)
+        assert (prov["price_source"], prov["fallback_reason"]) == ("daily_close", reason)
+
+    def test_a_bar_newer_than_the_start_clock_is_judged_by_its_fetch_time(self) -> None:
+        now = at(2026, 10, 9, 10, 59, 54)  # analyze started before the 11:00 bar existed
+        bar = {"close": 82.0, "bar_time": "2026-10-09T15:00:00+00:00", "fetched_at": "2026-10-09T15:00:03Z",
+               "cache_hit": False}
+        price, prov = select_price(now=now, intraday_quote=bar, session_close=SESSION_CLOSE)
+        assert (price, prov["price_source"], prov["staleness"]["stale"]) == (82.0, "intraday_quote", False)
 
     def test_outside_regular_hours_the_completed_close_is_preferred(self) -> None:
         now = at(2026, 10, 9, 16, 5)

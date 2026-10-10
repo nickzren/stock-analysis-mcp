@@ -405,7 +405,7 @@ def _build_volume(volume: pd.Series) -> dict[str, Any]:
 # Indicator -> lookback whose bars are checked: the period for each indicator (EMA,
 # RSI and ATR carry on past an invalid bar; SMA and Bollinger go null).
 _CLOSE_WINDOWS = {"sma_20": 20, "sma_50": 50, "sma_200": 200, "ema_12": 12, "ema_26": 26,
-                  "rsi_14": 14, "bollinger_20": 20}
+                  "macd_12_26_9": 26 + 9 - 1, "rsi_14": 14, "bollinger_20": 20}
 
 
 def _build_bar_validity(
@@ -415,6 +415,7 @@ def _build_bar_validity(
     invalid = {name: invalid_bars_in_window(close, window=w) for name, w in _CLOSE_WINDOWS.items()}
     invalid["atr_14"] = invalid_bars_in_window(high, low, close, window=14)
     invalid["volume_20"] = invalid_bars_in_window(volume, window=20)
+    invalid["obv_20"] = invalid_bars_in_window(close, volume, window=20)
     return {
         "latest_bar_invalid": invalid_bars_in_window(close, window=1) == 1,
         "latest_volume_invalid": invalid_bars_in_window(volume, window=1) == 1,
@@ -529,11 +530,14 @@ def _detect_bullish_rsi_divergence(
     pivot_window: int = 5,
     lookback: int = 60,
 ) -> bool | None:
-    """Detect bullish RSI divergence (price lower low, RSI higher low)."""
-    c = close.dropna().tail(lookback).reset_index(drop=True)
-    r = rsi.dropna().tail(lookback).reset_index(drop=True)
-    if len(c) < (2 * pivot_window + 5) or len(r) != len(c):
+    """Detect bullish RSI divergence (price lower low, RSI higher low) over the last
+    ``lookback`` sessions. Invalid closes are skipped, keeping each close paired with
+    its own session's RSI."""
+    frame = pd.DataFrame({"c": close, "r": rsi}).tail(lookback)
+    frame = frame[frame["c"].notna()].reset_index(drop=True)
+    if len(frame) < (2 * pivot_window + 5) or frame["r"].isna().any():
         return None
+    c, r = frame["c"], frame["r"]
 
     lows: list[int] = []
     for i in range(pivot_window, len(c) - pivot_window):

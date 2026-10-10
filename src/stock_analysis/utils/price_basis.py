@@ -9,7 +9,7 @@ timestamped quotes in hours, in UTC. Staleness here is a disclosure, not a gate.
 from __future__ import annotations
 
 import math
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 
 import pandas as pd
@@ -19,6 +19,7 @@ from stock_analysis.utils.freshness import FRESHNESS_CEILING_MINUTES, FUTURE_SKE
 from stock_analysis.utils.market_calendar import (
     classify_session,
     last_completed_session,
+    regular_session_minutes,
     trading_days_between,
 )
 
@@ -90,10 +91,17 @@ def session_staleness(session_date: date, now: datetime) -> dict[str, Any]:
             "sessions_behind": behind, "stale": behind > 0}
 
 
-def quote_staleness(ts: datetime, now: datetime) -> dict[str, Any]:
+def _session_close(d: date) -> datetime:
+    """When the regular session on trading day ``d`` closes (16:00 ET, or 13:00 on
+    early-close days)."""
+    return _ET.localize(datetime.combine(d, time(9, 30)) + timedelta(minutes=regular_session_minutes(d)))
+
+
+def quote_staleness(ts: datetime, now: datetime, fetched_at: datetime | None = None) -> dict[str, Any]:
     """Age of a timestamped quote in hours. In the regular session a quote older than
-    the freshness ceiling is stale; otherwise one from before the last completed
-    session is."""
+    the freshness ceiling is stale. Otherwise it is stale when it predates the last
+    completed session's close, unless it was fetched after that close (then nothing
+    newer existed, e.g. a thinly traded name's last trade)."""
     now_et = now.astimezone(_ET)
     age_seconds = (now.astimezone(UTC) - ts).total_seconds()
     staleness: dict[str, Any] = {"unit": "hours", "age_hours": round(age_seconds / 3600, 2)}
@@ -102,7 +110,8 @@ def quote_staleness(ts: datetime, now: datetime) -> dict[str, Any]:
     if classify_session(now_et) == "regular":
         stale = age_seconds > FRESHNESS_CEILING_MINUTES * 60
     else:
-        stale = ts.astimezone(_ET).date() < last_completed_session(now_et)
+        close = _session_close(last_completed_session(now_et))
+        stale = ts < close and (fetched_at is None or fetched_at < close)
     return {**staleness, "stale": stale}
 
 
@@ -133,22 +142,35 @@ def select_price(
 
     An intraday bar counts only in the regular session, and only when its own
     timestamp is within the freshness ceiling (and not further ahead than clock skew).
+    In the regular session a daily close is itself a fallback, and its
+    ``fallback_reason`` says why the intraday bar was not used.
     """
-    now_utc = now.astimezone(UTC)
-    if intraday_quote and classify_session(now.astimezone(_ET)) == "regular":
-        ts = to_utc(intraday_quote.get("bar_time"))
-        price = _valid_price(intraday_quote.get("close"))
+    intraday_rejected: str | None = None
+    if classify_session(now.astimezone(_ET)) == "regular":
+        intraday_rejected = "intraday_quote_unavailable"
+        bar = intraday_quote or {}
+        ts = to_utc(bar.get("bar_time"))
+        price = _valid_price(bar.get("close"))
         if ts is not None and price is not None:
-            age = (now_utc - ts).total_seconds()
-            if -FUTURE_SKEW_TOLERANCE_SECONDS <= age <= FRESHNESS_CEILING_MINUTES * 60:
-                return price, _provenance("intraday_quote", ts.isoformat(), "bar_time", intraday_quote,
-                                          quote_staleness(ts, now))
+            # The clock is read when analyze starts, before the bar is fetched; the
+            # fetch time (if later) is the newest reading of it.
+            fetched = to_utc(bar.get("fetched_at"))
+            clock = max(now.astimezone(UTC), fetched) if fetched else now.astimezone(UTC)
+            age = (clock - ts).total_seconds()
+            if age < -FUTURE_SKEW_TOLERANCE_SECONDS:
+                intraday_rejected = "intraday_future_timestamp"
+            elif age > FRESHNESS_CEILING_MINUTES * 60:
+                intraday_rejected = "intraday_quote_stale"
+            else:
+                return price, _provenance("intraday_quote", ts.isoformat(), "bar_time", bar,
+                                          quote_staleness(ts, clock))
     if session_close:
         price = _valid_price(session_close.get("close"))
         session_date = session_close.get("session_date")
         if price is not None and isinstance(session_date, str):
             return price, _provenance("daily_close", session_date, "session_close", session_close,
-                                      session_staleness(date.fromisoformat(session_date), now))
+                                      session_staleness(date.fromisoformat(session_date), now),
+                                      intraday_rejected)
     info = info_quote or {}
     price = _valid_price(info.get("price"))
     if price is None:
@@ -158,4 +180,4 @@ def select_price(
         staleness = {"unit": "hours", "age_hours": None, "stale": True, "reason": "no_quote_time"}
         return price, _provenance("info_quote_fallback", None, None, info, staleness, "no_valid_daily_close")
     return price, _provenance("info_quote_fallback", ts.isoformat(), "quote_time", info,
-                              quote_staleness(ts, now), "no_valid_daily_close")
+                              quote_staleness(ts, now, to_utc(info.get("fetched_at"))), "no_valid_daily_close")
