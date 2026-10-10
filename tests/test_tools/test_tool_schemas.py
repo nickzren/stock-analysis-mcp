@@ -298,7 +298,7 @@ class TestToolResponseSchemas:
                 "website": "https://example.com",
             }
 
-        async def fake_technicals(symbol: str) -> dict[str, object]:
+        async def fake_technicals(symbol: str, **kwargs: object) -> dict[str, object]:
             return {
                 "symbol": symbol,
                 "current_price": 100.0,
@@ -676,7 +676,7 @@ class TestToolResponseSchemas:
                 "website": "https://www.circle.com",
             }
 
-        async def fake_technicals(symbol: str) -> dict[str, object]:
+        async def fake_technicals(symbol: str, **kwargs: object) -> dict[str, object]:
             resolved_symbols.append(symbol)
             return {
                 "symbol": symbol,

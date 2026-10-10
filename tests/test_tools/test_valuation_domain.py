@@ -22,6 +22,13 @@ def valuation(**info: Any) -> dict[str, Any]:
     return fundamentals._build_valuation({**USD, "regularMarketPrice": 100.0, **info})
 
 
+def with_cache_state(fetch: Any) -> Any:
+    async def fetch_with_cache_state(symbol: str) -> tuple[dict[str, Any], str, bool]:
+        return await fetch(symbol), "2026-10-09T12:00:00Z", False
+
+    return fetch_with_cache_state
+
+
 def status(section: dict[str, Any], key: str) -> tuple[Any, Any, Any]:
     entry = section["metric_status"][key]
     return entry["basis_status"], entry["scoring_applicable"], entry["reason"]
@@ -166,7 +173,7 @@ class TestDividendYield:
         async def fake_ticker(symbol: str) -> FakeTicker:
             return FakeTicker(symbol, splits=None)
 
-        monkeypatch.setattr(stock_summary, "fetch_info", fake_info)
+        monkeypatch.setattr(stock_summary, "fetch_info_with_cache_state", with_cache_state(fake_info))
         monkeypatch.setattr(events, "fetch_info", fake_info)
         monkeypatch.setattr(events, "fetch_ticker", fake_ticker)
         monkeypatch.setattr(events, "read_calendar_events", FakeSource.empty("calendar", {}))
@@ -360,7 +367,7 @@ class TestSupport:
         async def fake_info(symbol: str) -> dict[str, Any]:
             return {"regularMarketPrice": 10.0, "quoteType": "EQUITY"}
 
-        monkeypatch.setattr(stock_summary, "fetch_info", fake_info)
+        monkeypatch.setattr(stock_summary, "fetch_info_with_cache_state", with_cache_state(fake_info))
 
         summary = await stock_summary.stock_summary("EXMP")
 

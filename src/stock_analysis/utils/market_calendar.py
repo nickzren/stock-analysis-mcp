@@ -163,3 +163,27 @@ def previous_trading_day(d: date) -> date:
     while not _is_trading_day(cur):
         cur -= timedelta(days=1)
     return cur
+
+
+def last_completed_session(now: datetime) -> date:
+    """Most recent trading day whose regular session has closed (tz-aware ET `now`).
+
+    Unlike most_recent_trading_day, today's bar during the session is still forming,
+    so it does not count until the close (13:00 on early-close days).
+    """
+    d = now.date()
+    close_minute = _EARLY_CLOSE_MINUTE if calendar_covers(d) and d in EARLY_CLOSES else 16 * 60
+    if _is_trading_day(d) and now.hour * 60 + now.minute >= close_minute:
+        return d
+    return previous_trading_day(d)
+
+
+def trading_days_between(start: date, end: date) -> int:
+    """Trading days in (start, end]; 0 when end is not after start."""
+    count = 0
+    d = start
+    while d < end:
+        d += timedelta(days=1)
+        if _is_trading_day(d):
+            count += 1
+    return count

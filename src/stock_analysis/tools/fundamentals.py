@@ -285,17 +285,6 @@ def _build_analyst_coverage(info: dict[str, Any], current_price: float | None) -
     target_high = safe_float(info.get("targetHighPrice"))
     target_median = safe_float(info.get("targetMedianPrice"))
 
-    upside_to_mean_target = (
-        (target_mean - current_price) / current_price
-        if target_mean is not None and current_price is not None and current_price > 0
-        else None
-    )
-    upside_to_median_target = (
-        (target_median - current_price) / current_price
-        if target_median is not None and current_price is not None and current_price > 0
-        else None
-    )
-
     return {
         "rating": safe_str(info.get("recommendationKey")),
         "rating_score": safe_float(info.get("recommendationMean")),
@@ -304,9 +293,16 @@ def _build_analyst_coverage(info: dict[str, Any], current_price: float | None) -
         "price_target_mean": target_mean,
         "price_target_high": target_high,
         "price_target_median": target_median,
-        "upside_to_mean_target": safe_round(upside_to_mean_target, 4),
-        "upside_to_median_target": safe_round(upside_to_median_target, 4),
+        "upside_to_mean_target": upside_to_target(target_mean, current_price),
+        "upside_to_median_target": upside_to_target(target_median, current_price),
     }
+
+
+def upside_to_target(target: float | None, price: float | None) -> float | None:
+    """Fractional upside from ``price`` to an analyst target, rounded to 4 places."""
+    if target is None or price is None or price <= 0:
+        return None
+    return safe_round((target - price) / price, 4)
 
 
 def _build_short_interest(info: dict[str, Any]) -> dict[str, Any]:

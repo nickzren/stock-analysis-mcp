@@ -1,9 +1,11 @@
 """Analyze stock aggregator tool."""
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from time import perf_counter
 from typing import Any
+
+import pytz
 
 from stock_analysis.data import jobs
 from stock_analysis.reference_data import build_sector_comparison
@@ -53,7 +55,7 @@ from stock_analysis.tools.analyze.summaries import (
 )
 from stock_analysis.tools.analyze.verdict import build_verdict
 from stock_analysis.tools.events import events_calendar
-from stock_analysis.tools.fundamentals import fundamentals_snapshot
+from stock_analysis.tools.fundamentals import fundamentals_snapshot, upside_to_target
 from stock_analysis.tools.news import stock_news
 from stock_analysis.tools.options_signals import options_signals
 from stock_analysis.tools.ownership import ownership_analysis
@@ -63,6 +65,7 @@ from stock_analysis.tools.symbol_search import symbol_search
 from stock_analysis.tools.technicals import technicals
 from stock_analysis.utils.helpers import fcf_label_from_cashflow, first_sentences, round_or_none
 from stock_analysis.utils.normalize import build_watchlist_snapshot
+from stock_analysis.utils.price_basis import select_price, session_staleness, to_utc
 from stock_analysis.utils.provenance import build_meta
 from stock_analysis.utils.valuation_basis import (
     currency_supported,
@@ -76,6 +79,8 @@ from stock_analysis.utils.valuation_basis import (
 
 # Reads inside a tool share this fraction of the tool's deadline.
 _READ_SHARE_OF_TOOL_DEADLINE = 0.9
+
+_ET = pytz.timezone("America/New_York")
 
 
 # New-money codes: policy_action horizons use the policy codes, decision_modes
@@ -252,7 +257,7 @@ def _component_freshness_entry(
     now: datetime,
     stale_threshold_hours: int,
 ) -> tuple[dict[str, Any], int | None]:
-    """Compute a component_freshness entry from a provenance dict.
+    """Compute a component_freshness entry from a provenance dict (``now`` tz-aware).
 
     Returns (entry, stale_age_hours) where stale_age_hours is non-None only when the
     component is past its staleness threshold. The caller stores the entry and emits a
@@ -261,9 +266,8 @@ def _component_freshness_entry(
     as_of_str = prov.get("as_of")
     if not as_of_str:
         return {"as_of": None, "status": "unavailable"}, None
-    try:
-        as_of = datetime.fromisoformat(as_of_str.replace("Z", "+00:00")).replace(tzinfo=None)
-    except (ValueError, TypeError):
+    as_of = to_utc(as_of_str)
+    if as_of is None:
         return {"as_of": as_of_str, "parse_error": True}, None
     age_hours = (now - as_of).total_seconds() / 3600
     is_stale = age_hours > stale_threshold_hours
@@ -277,12 +281,30 @@ def _component_freshness_entry(
     )
 
 
-# (prov_key, component_name, stale_threshold_hours) — price/risk share the price provenance,
-# fundamentals/events get a 1-week threshold, news gets 2 weeks.
-_FRESHNESS_SPECS: tuple[tuple[str, str, int], ...] = (
-    ("price", "price", 48),
+def _session_freshness_entry(prov: dict[str, Any], now: datetime) -> tuple[dict[str, Any], int | None]:
+    """Freshness of a daily-bar component in sessions (WP5): its last bar date against
+    the last completed session. Returns (entry, sessions_behind when stale)."""
+    try:
+        last_bar = date.fromisoformat(str(prov.get("last_bar_date"))[:10])
+    except ValueError:
+        return {"as_of": prov.get("as_of"), "last_bar_date": None, "status": "unavailable"}, None
+    staleness = session_staleness(last_bar, now)
+    entry = {
+        "as_of": prov.get("as_of"),
+        "last_bar_date": last_bar.isoformat(),
+        "expected_session": staleness["expected_session"],
+        "sessions_behind": staleness["sessions_behind"],
+        "stale": staleness["stale"],
+    }
+    return entry, staleness["sessions_behind"] if staleness["stale"] else None
+
+
+# (prov_key, component_name, stale_threshold_hours) — price/risk share the price provenance
+# and are measured in sessions (None); fundamentals/events get a 1-week threshold, news 2 weeks.
+_FRESHNESS_SPECS: tuple[tuple[str, str, int | None], ...] = (
+    ("price", "price", None),
     ("fundamentals", "fundamentals", 168),
-    ("price", "risk", 48),
+    ("price", "risk", None),
     ("news", "news", 336),
     ("events", "events", 168),
 )
@@ -337,17 +359,20 @@ async def analyze_stock(
     account_size: float | None = None,
     risk_per_trade_pct: float | None = None,
     max_position_pct: float | None = None,
+    _now: datetime | None = None,
 ) -> dict[str, Any]:
     """
     Aggregate analysis from multiple tools with parallel execution.
 
     Args:
         symbol: Stock ticker symbol
+        _now: Test seam for the current ET time; production uses the clock
 
     Returns:
         Comprehensive analysis with data from all tools
     """
     start_time = perf_counter()
+    now = _now or datetime.now(_ET)
     normalized_symbol = await _resolve_symbol_for_analysis(symbol)
     investor_profile = resolve_investor_profile(
         profile=profile,
@@ -358,7 +383,7 @@ async def analyze_stock(
 
     tool_specs = [
         ("stock_summary", stock_summary(normalized_symbol)),
-        ("technicals", technicals(normalized_symbol)),
+        ("technicals", technicals(normalized_symbol, _now=now, intraday_quote=True)),
         ("fundamentals_snapshot", fundamentals_snapshot(normalized_symbol)),
         (
             "risk_metrics",
@@ -463,6 +488,20 @@ async def analyze_stock(
     ownership_data = tool_results.get("ownership_analysis") or {}
     options_data = tool_results.get("options_signals") or {}
 
+    # WP5: zones, stops, sizing and upside use a fresh intraday bar or the latest valid
+    # completed-session close; the (possibly hours-old cached) info quote is a fallback.
+    current_price, price_provenance = select_price(
+        now=now,
+        intraday_quote=tech_data.get("intraday_quote"),
+        session_close=tech_data.get("session_close"),
+        info_quote={
+            "price": summary_data.get("current_price"),
+            "quote_time": summary_data.get("quote_time"),
+            "fetched_at": summary_data.get("fetched_at"),
+            "cache_hit": summary_data.get("cache_hit"),
+        },
+    )
+
     # Summary section
     summary: dict[str, Any] = {
         "name": summary_data.get("name"),
@@ -470,7 +509,8 @@ async def analyze_stock(
         "industry": summary_data.get("industry"),
         "market_cap": summary_data.get("market_cap"),
         "currency": summary_data.get("currency"),
-        "current_price": summary_data.get("current_price") or tech_data.get("current_price"),
+        "current_price": current_price,
+        "price_provenance": price_provenance,
         "support": support,
     }
 
@@ -639,6 +679,13 @@ async def analyze_stock(
         fundamentals_summary["summary"] = None
 
     analyst_coverage = fund_data.get("analyst_coverage") or {}
+    if analyst_coverage:
+        # Upside from the same price as the zones, not the info quote fundamentals used.
+        analyst_coverage = {
+            **analyst_coverage,
+            "upside_to_mean_target": upside_to_target(analyst_coverage.get("price_target_mean"), current_price),
+            "upside_to_median_target": upside_to_target(analyst_coverage.get("price_target_median"), current_price),
+        }
     short_interest = fund_data.get("short_interest") or {}
     ownership = fund_data.get("ownership") or {}
     governance = fund_data.get("governance") or {}
@@ -874,6 +921,9 @@ async def analyze_stock(
     warnings: list[str] = []
     if earnings.get("days_until") and earnings.get("days_until") <= 7:
         warnings.append("earnings_within_7_days")
+    if (tech_data.get("bar_validity") or {}).get("latest_bar_invalid"):
+        # EMA, RSI and ATR carry on past an invalid bar and still look current.
+        warnings.append("latest_daily_bar_invalid")
 
     # Fundamentals status: missing | not_meaningful | available
     fundamentals_status: str
@@ -924,22 +974,26 @@ async def analyze_stock(
     # Staleness tracking
     component_freshness: dict[str, dict[str, Any]] = {}
     staleness_warnings: list[str] = []
-    now = datetime.now(UTC).replace(tzinfo=None)
+    now_utc = now.astimezone(UTC)
 
     for prov_key, component_name, threshold_h in _FRESHNESS_SPECS:
-        entry, stale_age_hours = _component_freshness_entry(
-            data_provenance.get(prov_key, {}), now, threshold_h
-        )
+        prov = data_provenance.get(prov_key, {})
+        if threshold_h is None:
+            entry, sessions_behind = _session_freshness_entry(prov, now)
+            if sessions_behind is not None:
+                staleness_warnings.append(f"{component_name}_stale_{sessions_behind}_sessions")
+        else:
+            entry, stale_age_hours = _component_freshness_entry(prov, now_utc, threshold_h)
+            if stale_age_hours is not None:
+                staleness_warnings.append(f"{component_name}_stale_{stale_age_hours}h")
         component_freshness[component_name] = entry
-        if stale_age_hours is not None:
-            staleness_warnings.append(f"{component_name}_stale_{stale_age_hours}h")
 
     if articles:
         try:
             latest_article_date = articles[0].get("date")
             if latest_article_date:
                 latest_dt = datetime.strptime(latest_article_date, "%Y-%m-%d")
-                news_age_days = (now - latest_dt).days
+                news_age_days = (now_utc.replace(tzinfo=None) - latest_dt).days
                 component_freshness["news"]["latest_article_date"] = latest_article_date
                 component_freshness["news"]["latest_article_age_days"] = news_age_days
                 if news_age_days > 14:

@@ -1,7 +1,10 @@
 """Price history tool."""
 
+import math
 from time import perf_counter
 from typing import Any
+
+import pandas as pd
 
 from stock_analysis.data.cache import price_cache
 from stock_analysis.data.yfinance_client import fetch_history, get_market_state
@@ -101,18 +104,17 @@ async def price_history(
 
 
 def _build_summary(df: Any) -> dict[str, Any]:
-    """Build price-history summary fields."""
-    close_prices = df["close"].dropna()
-    start_price: float | None
-    end_price: float | None
-    if len(close_prices) >= 2:
-        start_price = float(close_prices.iloc[0])
-        end_price = float(close_prices.iloc[-1])
-        total_return = (end_price - start_price) / start_price if start_price != 0 else None
-    else:
-        start_price = float(close_prices.iloc[0]) if len(close_prices) > 0 else None
-        end_price = float(close_prices.iloc[-1]) if len(close_prices) > 0 else None
-        total_return = None
+    """Build price-history summary fields. The endpoints are the first and last
+    sessions (matching start_date/end_date); an invalid endpoint close is None and
+    leaves total_return None."""
+    closes = pd.to_numeric(df["close"], errors="coerce")
+    start_price = _finite_or_none(closes.iloc[0]) if len(closes) > 0 else None
+    end_price = _finite_or_none(closes.iloc[-1]) if len(closes) > 0 else None
+    total_return = (
+        (end_price - start_price) / start_price
+        if len(closes) >= 2 and start_price and end_price is not None
+        else None
+    )
 
     return {
         "data_points": len(df),
@@ -124,3 +126,7 @@ def _build_summary(df: Any) -> dict[str, Any]:
         "period_low": float(df["low"].min()) if not df["low"].isna().all() else None,
         "total_return": round(total_return, 4) if total_return is not None else None,
     }
+
+
+def _finite_or_none(value: Any) -> float | None:
+    return float(value) if pd.notna(value) and math.isfinite(float(value)) else None

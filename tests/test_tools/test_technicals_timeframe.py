@@ -66,7 +66,7 @@ async def test_default_response_is_backward_compatible(patched: None) -> None:
     result = await tech_mod.technicals("TEST", _now=NOW)
     assert set(result.keys()) >= PRE_STEP2_KEYS
     new_keys = set(result.keys()) - PRE_STEP2_KEYS
-    assert new_keys == {"short_term"}  # exactly one additive key
+    assert new_keys == {"short_term", "session_close", "bar_validity"}  # additive keys (step 2, WP5)
     assert "intraday" not in result
 
 

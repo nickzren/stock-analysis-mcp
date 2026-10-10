@@ -23,9 +23,11 @@ from stock_analysis.utils.indicators import (
     calculate_sma,
     calculate_sma_slope,
     days_since_extreme,
+    invalid_bars_in_window,
     weekly_return_zscore,
 )
 from stock_analysis.utils.intraday_features import build_intraday_block
+from stock_analysis.utils.price_basis import latest_intraday_bar, latest_session_close
 from stock_analysis.utils.provenance import (
     FetchError,
     build_error_response,
@@ -52,6 +54,7 @@ async def technicals(
     symbol: str,
     timeframe: str = "position",
     _now: datetime | None = None,
+    intraday_quote: bool = False,
 ) -> dict[str, Any]:
     """
     Calculate technical indicators for a symbol.
@@ -60,6 +63,8 @@ async def technicals(
         symbol: Stock ticker symbol
         timeframe: "position" (default) or "swing" (adds an intraday block)
         _now: Test seam for the current ET time; production uses the clock
+        intraday_quote: Also report the latest 5m bar (fetched only in the regular
+            session); analyze uses it as its price when fresh
 
     Returns:
         Dict with moving averages, RSI, MACD, ATR, price position, returns, volume
@@ -112,6 +117,8 @@ async def technicals(
     obv_data = _build_obv(close, volume)
     fib_levels = _build_fibonacci(price_position, current_price)
     price_action = _build_price_action(close)
+    now = _now or datetime.now(_ET)
+    session = classify_session(now)
 
     result: dict[str, Any] = {
         "meta": {},  # stamped with the final duration just before return
@@ -135,15 +142,19 @@ async def technicals(
         "obv": obv_data,
         "fibonacci": fib_levels,
         "price_action": price_action,
+        "session_close": latest_session_close(df, now),
+        "bar_validity": _build_bar_validity(close, high, low, volume),
     }
 
-    now = _now or datetime.now(_ET)
-    session = classify_session(now)
     result["short_term"] = build_short_term_block(
         df, today=now.date(), session=session,
     )
-    if timeframe == "swing":
+    df_5m: pd.DataFrame | None = None
+    if timeframe == "swing" or (intraday_quote and session == "regular"):
         df_5m = await _quiet_fetch(FetchParams(params.symbol, "1d", "5m", True))
+    if intraday_quote:
+        result["intraday_quote"] = latest_intraday_bar(df_5m)
+    if timeframe == "swing":
         df_1h = await _quiet_fetch(FetchParams(params.symbol, "3mo", "1h", True))
         result["intraday"] = build_intraday_block(
             df_5m=df_5m, df_1h=df_1h, daily_df=df,
@@ -391,6 +402,26 @@ def _build_volume(volume: pd.Series) -> dict[str, Any]:
     }
 
 
+# Indicator -> lookback whose bars are checked: the period for each indicator (EMA,
+# RSI and ATR carry on past an invalid bar; SMA and Bollinger go null).
+_CLOSE_WINDOWS = {"sma_20": 20, "sma_50": 50, "sma_200": 200, "ema_12": 12, "ema_26": 26,
+                  "rsi_14": 14, "bollinger_20": 20}
+
+
+def _build_bar_validity(
+    close: pd.Series, high: pd.Series, low: pd.Series, volume: pd.Series,
+) -> dict[str, Any]:
+    """Disclose invalid bars; indicator values keep their own masking (WP5)."""
+    invalid = {name: invalid_bars_in_window(close, window=w) for name, w in _CLOSE_WINDOWS.items()}
+    invalid["atr_14"] = invalid_bars_in_window(high, low, close, window=14)
+    invalid["volume_20"] = invalid_bars_in_window(volume, window=20)
+    return {
+        "latest_bar_invalid": invalid_bars_in_window(close, window=1) == 1,
+        "latest_volume_invalid": invalid_bars_in_window(volume, window=1) == 1,
+        "invalid_bars_in_window": invalid,
+    }
+
+
 def _build_bollinger(close: pd.Series, current_price: float | None) -> dict[str, Any]:
     """Build Bollinger Band values and rules."""
     bb = calculate_bollinger_bands(close)
@@ -426,7 +457,8 @@ def _build_bollinger(close: pd.Series, current_price: float | None) -> dict[str,
 def _build_obv(close: pd.Series, volume: pd.Series) -> dict[str, Any]:
     """Build On-Balance Volume fields."""
     obv_series = calculate_obv(close, volume)
-    if obv_series is None or len(obv_series) < 20:
+    # A missing latest volume leaves the latest OBV undefined: null, not NaN.
+    if obv_series is None or len(obv_series) < 20 or pd.isna(obv_series.iloc[-1]):
         return {"current": None, "sma_20": None, "trend": None}
 
     obv_current = float(obv_series.iloc[-1])
@@ -519,18 +551,15 @@ def _detect_bullish_rsi_divergence(
 
 
 def _build_price_action(close_series: pd.Series) -> dict[str, bool | None]:
-    """Compute simple price action triggers for entry timing."""
-    clean = close_series.dropna().reset_index(drop=True)
-    if len(clean) < 3:
-        return {
-            "higher_closes_2d": None,
-            "break_5d_high": None,
-        }
-    higher_closes_2d = bool(clean.iloc[-1] > clean.iloc[-2] > clean.iloc[-3])
+    """Compute simple price action triggers for entry timing, over consecutive
+    sessions (an invalid close is never skipped over)."""
+    closes = close_series.reset_index(drop=True)
+    higher_closes_2d = None
+    if len(closes) >= 3 and closes.iloc[-3:].notna().all():
+        higher_closes_2d = bool(closes.iloc[-1] > closes.iloc[-2] > closes.iloc[-3])
     break_5d_high = None
-    if len(clean) >= 6:
-        prior_5d_high = clean.iloc[-6:-1].max()
-        break_5d_high = bool(clean.iloc[-1] > prior_5d_high)
+    if len(closes) >= 6 and pd.notna(closes.iloc[-1]) and closes.iloc[-6:-1].notna().any():
+        break_5d_high = bool(closes.iloc[-1] > closes.iloc[-6:-1].max())
     return {
         "higher_closes_2d": higher_closes_2d,
         "break_5d_high": break_5d_high,

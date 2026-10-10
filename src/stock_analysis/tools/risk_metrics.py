@@ -1,5 +1,6 @@
 """Risk metrics tool."""
 
+import math
 import operator
 from contextlib import suppress
 from time import perf_counter
@@ -473,18 +474,18 @@ def _build_position_sizing(
 
 
 def _calculate_period_return(series: pd.Series, periods: int) -> float | None:
-    """Calculate period return using trading-day lookback (e.g., 21d ~= 1 month)."""
-    clean = pd.to_numeric(series, errors="coerce").dropna()
-    if len(clean) < 2:
+    """Calculate period return using trading-day lookback (e.g., 21d ~= 1 month).
+
+    Counts sessions, not valid bars: both endpoint closes must be valid, else None.
+    """
+    closes = pd.to_numeric(series, errors="coerce").reset_index(drop=True)
+    if len(closes) < 2:
         return None
 
-    lookback = periods if len(clean) > periods else len(clean) - 1
-    if lookback <= 0:
-        return None
-
-    current = float(clean.iloc[-1])
-    prior = float(clean.iloc[-(lookback + 1)])
-    if prior <= 0:
+    lookback = periods if len(closes) > periods else len(closes) - 1
+    current = float(closes.iloc[-1])
+    prior = float(closes.iloc[-(lookback + 1)])
+    if math.isnan(current) or math.isnan(prior) or prior <= 0:
         return None
 
     return round((current - prior) / prior, 4)

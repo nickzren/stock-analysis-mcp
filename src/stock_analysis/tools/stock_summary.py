@@ -3,8 +3,9 @@
 from time import perf_counter
 from typing import Any
 
-from stock_analysis.data.yfinance_client import fetch_info
+from stock_analysis.data.yfinance_client import fetch_info_with_cache_state
 from stock_analysis.utils.helpers import current_price_from_info, safe_float, safe_int, safe_round
+from stock_analysis.utils.price_basis import to_utc
 from stock_analysis.utils.provenance import (
     FetchError,
     build_meta,
@@ -29,7 +30,7 @@ async def stock_summary(symbol: str) -> dict[str, Any]:
     start_time = perf_counter()
 
     try:
-        info = await fetch_or_error(fetch_info(symbol), symbol)
+        info, fetched_at, cache_hit = await fetch_or_error(fetch_info_with_cache_state(symbol), symbol)
     except FetchError as fe:
         return fe.response
 
@@ -38,6 +39,7 @@ async def stock_summary(symbol: str) -> dict[str, Any]:
 
     # Prices
     current_price = current_price_from_info(info)
+    quote_time = to_utc(info.get("regularMarketTime"))
     previous_close = info.get("previousClose") or info.get("regularMarketPreviousClose")
 
     # Volume
@@ -69,6 +71,11 @@ async def stock_summary(symbol: str) -> dict[str, Any]:
             quote_type=info.get("quoteType"), currency=info.get("currency"), symbol=normalized_symbol, name=name
         ),
         "current_price": current_price,
+        # WP5: the info quote can be cached for hours; analyze uses it only as a
+        # labelled fallback.
+        "quote_time": quote_time.isoformat() if quote_time else None,
+        "fetched_at": fetched_at,
+        "cache_hit": cache_hit,
         "previous_close": safe_float(previous_close),
         "market_cap": safe_int(info.get("marketCap")),
         "avg_volume_30d": safe_int(avg_volume),

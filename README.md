@@ -94,6 +94,11 @@ statements in another currency (e.g. a USD ADR reporting in TWD) are left null
 with `basis_status: unverified_currency` rather than shown wrong. Yields are
 fractions (0.005 = 0.5%); the dividend yield is forward (`dividendRate / price`).
 
+Prices: zones, stops, sizing and analyst upside use a fresh intraday bar during
+regular hours, otherwise the last completed session's close; the cached quote is
+only a labelled fallback. `summary.price_provenance` says which price was used,
+as of when, and how stale it is (in sessions for daily closes).
+
 ## What It Checks
 
 - **Action now:** buy, starter, hold, wait, avoid, or wait for data
@@ -158,7 +163,7 @@ If `account_size` is omitted, sizing remains percent-based. If a caller depends 
 | `search_symbol` | Search for stock symbols by company name or ticker |
 | `get_stock_summary` | Basic stock info (name, sector, price, market cap) |
 | `get_price_history` | Historical price data with summary and resource URI |
-| `get_technicals` | Technical indicators (SMA, EMA, RSI, MACD, ATR, Bollinger, Fibonacci, OBV) plus a `short_term` block (levels, gap, RVOL, compression); `timeframe="swing"` adds intraday VWAP, time-adjusted RVOL, hourly trend, and alignment with freshness disclosure. Regular-session freshness requires both a fresh intraday quote and a current daily frame; `reason_code` names any failure cause. |
+| `get_technicals` | Technical indicators (SMA, EMA, RSI, MACD, ATR, Bollinger, Fibonacci, OBV) plus a `short_term` block (levels, gap, RVOL, compression); `timeframe="swing"` adds intraday VWAP, time-adjusted RVOL, hourly trend, and alignment with freshness disclosure. Regular-session freshness requires both a fresh intraday quote and a current daily frame; `reason_code` names any failure cause. Also reports `session_close` (latest valid completed-session close) and `bar_validity` (invalid bars per indicator window). |
 | `get_fundamentals` | Financial metrics, valuation history, analyst estimates, dividends |
 | `get_events` | Earnings dates, dividends, splits |
 | `get_news` | Recent news headlines, earnings surprise data, and structured catalyst tags; `source_status` tells a quiet period (`empty`) apart from a feed that failed or could not be verified |

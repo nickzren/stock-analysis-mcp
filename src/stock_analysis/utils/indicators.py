@@ -131,6 +131,12 @@ def calculate_atr(
     return atr
 
 
+def invalid_bars_in_window(*series: pd.Series, window: int) -> int:
+    """Bars among the last ``window`` where any input is missing or non-finite."""
+    frame = pd.concat(series, axis=1).tail(window).astype(float)
+    return int((~np.isfinite(frame).all(axis=1)).sum())
+
+
 def calculate_returns(prices: pd.Series, periods: int) -> float | None:
     """
     Calculate return over a specific number of periods.
@@ -447,20 +453,27 @@ def calculate_sma_slope(
 
 
 def days_since_extreme(series: pd.Series, *, kind: str) -> int | None:
-    """Days since most recent extreme (high/low) in series."""
-    clean = series.dropna().reset_index(drop=True)
-    if len(clean) == 0:
+    """Sessions since the most recent extreme (high/low); invalid bars still count."""
+    sessions = series.reset_index(drop=True)
+    if sessions.isna().all():
         return None
-    idx = int(clean.idxmax()) if kind == "high" else int(clean.idxmin())
-    return int(len(clean) - 1 - idx)
+    idx = int(sessions.idxmax()) if kind == "high" else int(sessions.idxmin())
+    return int(len(sessions) - 1 - idx)
 
 
 def weekly_return_zscore(
     close_series: pd.Series,
     lookback_weeks: int = 104,
 ) -> float | None:
-    """Z-score of the most recent 1-week return vs trailing weekly returns."""
-    weekly = close_series.pct_change(5, fill_method=None).dropna()
+    """Z-score of the most recent 1-week return vs trailing weekly returns.
+
+    None when the latest 5-session return is undefined (either endpoint close invalid);
+    an older week is never reported as the latest.
+    """
+    weekly_all = close_series.pct_change(5, fill_method=None)
+    if len(weekly_all) == 0 or pd.isna(weekly_all.iloc[-1]):
+        return None
+    weekly = weekly_all.dropna()
     if len(weekly) < 20:
         return None
     weekly = weekly.tail(lookback_weeks)

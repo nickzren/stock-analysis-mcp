@@ -8,7 +8,9 @@ sections whose fields are present.
 
 ## Order
 
-1. Header: symbol, price, market cap, sector.
+1. Header: symbol, price, market cap, sector. Give the price's as-of from
+   `summary.price_provenance`, and say so when it is `info_quote_fallback`
+   or its `staleness.stale` is true.
 
 2. Executive summary:
    - Render `executive_summary` verbatim.

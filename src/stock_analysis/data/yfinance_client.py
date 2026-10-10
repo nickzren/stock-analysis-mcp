@@ -41,6 +41,7 @@ from stock_analysis.data.cache_manager import (
 )
 from stock_analysis.utils.market_calendar import session_method
 from stock_analysis.utils.ohlcv import standardize_ohlcv
+from stock_analysis.utils.provenance import utcnow_isoformat_z
 from stock_analysis.utils.validators import FetchParams
 
 logger = logging.getLogger(__name__)
@@ -665,6 +666,7 @@ async def _fetch_history_retry(params: FetchParams) -> RetryResult:
             "symbol": params.symbol,
             "currency": metadata.get("currency"),
             "instrument_type": metadata.get("instrumentType"),
+            "fetched_at": utcnow_isoformat_z(),  # WP5 price provenance
         })
         return standardized
 
@@ -815,13 +817,22 @@ async def fetch_info(symbol: str) -> dict[str, Any]:
         YFinanceIncompleteInfoError: If response missing fundamental data
         ValueError: If symbol is invalid
     """
+    info, _, _ = await fetch_info_with_cache_state(symbol)
+    return info
+
+
+async def fetch_info_with_cache_state(symbol: str) -> tuple[dict[str, Any], str, bool]:
+    """fetch_info plus (fetched_at UTC, cache_hit): a cached info dict can be hours
+    old, and its quote with it (WP5 price provenance)."""
     normalized = symbol.upper().strip()
     cached = info_cache.get(normalized)
     if cached is not None:
-        return cached
+        info, fetched_at = cached
+        return info, fetched_at, True
     info, _, _ = await _fetch_info_with_singleflight(symbol)
-    info_cache.set(normalized, info, get_ttl(DataType.FUNDAMENTALS))
-    return info
+    fetched_at = utcnow_isoformat_z()
+    info_cache.set(normalized, (info, fetched_at), get_ttl(DataType.FUNDAMENTALS))
+    return info, fetched_at, False
 
 
 async def fetch_info_with_provenance(symbol: str) -> tuple[dict[str, Any], dict[str, Any]]:
