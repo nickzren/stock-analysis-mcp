@@ -1,0 +1,108 @@
+{
+  "status": 200,
+  "json": {
+    "chart": {
+      "error": null,
+      "result": [
+        {
+          "meta": {
+            "currency": "AUD",
+            "symbol": "EXMP.AX",
+            "exchangeName": "ASX",
+            "fullExchangeName": "ASX",
+            "instrumentType": "EQUITY",
+            "firstTradeDate": 1262615400,
+            "regularMarketTime": 1791522000,
+            "hasPrePostMarketData": true,
+            "gmtoffset": 39600,
+            "timezone": "AEDT",
+            "exchangeTimezoneName": "Australia/Sydney",
+            "regularMarketPrice": 30.0,
+            "chartPreviousClose": 9.0,
+            "priceHint": 2,
+            "dataGranularity": "1d",
+            "range": "1y",
+            "currentTradingPeriod": {
+              "pre": {
+                "timezone": "AEDT",
+                "start": 1791496800,
+                "end": 1791500400,
+                "gmtoffset": 39600
+              },
+              "regular": {
+                "timezone": "AEDT",
+                "start": 1791500400,
+                "end": 1791522000,
+                "gmtoffset": 39600
+              },
+              "post": {
+                "timezone": "AEDT",
+                "start": 1791522000,
+                "end": 1791525600,
+                "gmtoffset": 39600
+              }
+            },
+            "validRanges": [
+              "1d",
+              "5d",
+              "1mo",
+              "3mo",
+              "6mo",
+              "1y",
+              "2y",
+              "5y",
+              "10y",
+              "ytd",
+              "max"
+            ]
+          },
+          "timestamp": [
+            1791327600,
+            1791414000,
+            1791500400
+          ],
+          "indicators": {
+            "quote": [
+              {
+                "open": [
+                  10.0,
+                  20.0,
+                  30.0
+                ],
+                "close": [
+                  10.0,
+                  20.0,
+                  30.0
+                ],
+                "high": [
+                  11.0,
+                  21.0,
+                  31.0
+                ],
+                "low": [
+                  9.0,
+                  19.0,
+                  29.0
+                ],
+                "volume": [
+                  1000,
+                  null,
+                  3000
+                ]
+              }
+            ],
+            "adjclose": [
+              {
+                "adjclose": [
+                  10.0,
+                  20.0,
+                  30.0
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

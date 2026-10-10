@@ -24,12 +24,14 @@ from stock_analysis.utils.indicators import (
     calculate_sma_slope,
     days_since_extreme,
     invalid_bars_in_window,
+    session_returns,
     weekly_return_zscore,
 )
 from stock_analysis.utils.validators import FetchParams
 
 tech_mod = importlib.import_module("stock_analysis.tools.technicals")
 summary_mod = importlib.import_module("stock_analysis.tools.stock_summary")
+risk_mod = importlib.import_module("stock_analysis.tools.risk_metrics")
 orchestrator = importlib.import_module("stock_analysis.tools.analyze.orchestrator")
 
 ET = pytz.timezone("America/New_York")
@@ -73,6 +75,32 @@ class TestR54NeverCompress:
         ytd = pd.DataFrame({"date": ["2026-01-02", "2026-01-05"], "close": [100.0, float("inf")]})
         assert tech_mod._calculate_ytd_return(ytd) is None
 
+    def test_weekly_zscore_rejects_an_infinite_starting_price(self) -> None:
+        closes = [100.0 + (i % 7) for i in range(60)]
+        start_inf = pd.Series(closes[:-6] + [float("inf")] + closes[-5:])
+        assert session_returns(start_inf, 5).iloc[-1] != session_returns(start_inf, 5).iloc[-1]  # NaN, not -100%
+        assert weekly_return_zscore(start_inf) is None
+        history_inf = pd.Series(closes[:20] + [float("inf")] + closes[21:])
+        history_nan = pd.Series(closes[:20] + [NAN] + closes[21:])
+        assert weekly_return_zscore(history_inf) == weekly_return_zscore(history_nan)
+
+    # The drawdown block (not a return series) divides by the infinite peak.
+    @pytest.mark.filterwarnings("ignore:invalid value encountered in scalar divide:RuntimeWarning")
+    async def test_risk_return_series_skip_infinite_prices(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        async def run(bad: float) -> dict[str, Any]:
+            df = pin_frame(n=60)
+            df.loc[30, "close"] = bad
+
+            async def fake_history(params: FetchParams) -> pd.DataFrame:
+                return df if params.symbol == "PIN" else pin_frame(n=60)
+
+            monkeypatch.setattr(risk_mod, "fetch_history", fake_history)
+            return await risk_mod.risk_metrics("PIN")  # type: ignore[no-any-return]
+
+        with_inf, with_nan = await run(float("inf")), await run(NAN)
+        assert with_inf["volatility"] == with_nan["volatility"]
+        assert with_inf["volatility"]["annualized"] is not None
+
     def test_days_since_extreme_counts_sessions(self) -> None:
         assert days_since_extreme(pd.Series([70.0, 60.0, NAN, 40.0]), kind="high") == 3
 
@@ -102,8 +130,7 @@ class TestR54NeverCompress:
         assert (summary["end_date"], summary["end_price"], summary["total_return"]) == ("2026-10-09", None, None)
 
 
-def pin_frame(gap: int | None = None, *, volume_gap: int | None = None) -> pd.DataFrame:
-    n = 40
+def pin_frame(gap: int | None = None, *, volume_gap: int | None = None, n: int = 40) -> pd.DataFrame:
     close = [round(100 + 3 * math.sin(i / 3) + 0.25 * i, 4) for i in range(n)]
     high = [round(c + 1.0 + 0.3 * math.cos(i), 4) for i, c in enumerate(close)]
     low = [round(c - 1.0 - 0.2 * math.sin(i), 4) for i, c in enumerate(close)]
@@ -248,13 +275,29 @@ class TestProviderKeepsSessionRows:
             await yfinance_client.fetch_history(FetchParams("AAPL", "1mo", interval, True))
         assert seen == [("1d", True), ("1wk", True), ("5m", False), ("1h", False)]
 
-    def test_contract_yfinance_zero_fills_volume_after_parsing_quotes(self) -> None:
-        """The seam the missing-volume recorder relies on, in the pinned yfinance."""
+    async def test_missing_volume_stays_on_its_exchange_session(self, yf_transport: Any) -> None:
+        """ASX daily bars are stamped at the Sydney open, the previous day in UTC."""
+        yf_transport.route("chart", "sydney_missing_volume")
+
+        df = await yfinance_client.fetch_history(FetchParams("EXMP.AX", "1y", "1d", True))
+
+        assert df["date"].tolist() == ["2026-10-07", "2026-10-08", "2026-10-09"]
+        volume = pd.to_numeric(df["volume"], errors="coerce").tolist()
+        assert volume[0] == 1000.0 and math.isnan(volume[1]) and volume[2] == 3000.0
+
+    def test_contract_yfinance_zero_fills_volume_after_dating_sessions(self) -> None:
+        """The seam the missing-volume recorder relies on, in the pinned yfinance: the
+        quotes are put in exchange time and DST-fixed, their .date becomes the daily
+        row date, and only later is volume zero-filled."""
         source = inspect.getsource(PriceHistory.history)
-        assert "utils.parse_quotes(" in source
-        assert "df['Volume'] = df['Volume'].fillna(0)" in source
+        set_tz = source.index("quotes = utils.set_df_tz(quotes, interval, tz_exchange)")
+        fix_dst = source.index("quotes = utils.fix_Yahoo_dst_issue(quotes, interval)")
+        dated = source.index("quotes.index = pd.to_datetime(quotes.index.date)")
+        zero_filled = source.index("df['Volume'] = df['Volume'].fillna(0)")
+        assert set_tz < fix_dst < dated < zero_filled
+        assert source.count("fix_Yahoo_dst_issue") == 1
         assert history_module.utils is yfinance_utils
-        assert yfinance_utils.parse_quotes.__wrapped__ is not None  # type: ignore[attr-defined]
+        assert yfinance_utils.fix_Yahoo_dst_issue.__wrapped__ is not None  # type: ignore[attr-defined]
 
 
 class TestTechnicalsPriceBlocks:

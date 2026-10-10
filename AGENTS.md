@@ -267,10 +267,13 @@
   hours.
 - Session-indexed bars (WP5): rows are never dropped. Daily-or-longer
   `fetch_history` frames pass `keepna=True` (yfinance otherwise drops empty
-  session rows) and restore missing volumes: yfinance zero-fills a null volume
-  after parsing, so `yfinance_client` wraps `yfinance.utils.parse_quotes` once
-  at import to note those dates (contract test pins the seam). Intraday frames
-  keep yfinance's defaults. N-session returns
+  session rows); `1d` frames also restore missing volumes: yfinance zero-fills a
+  null volume after dating the sessions, so `yfinance_client` wraps
+  `yfinance.utils.fix_Yahoo_dst_issue` once at import to note the exchange-local
+  session dates with a null volume (contract test pins the seam; a Sydney
+  fixture pins the dating). Intraday frames keep yfinance's defaults. Return
+  series use `indicators.session_returns` (NaN unless both endpoint prices are
+  finite). N-session returns
   (technicals returns, the 1w z-score's latest week, risk benchmark returns,
   `get_price_history` total return, the SMA200 slope, YTD) need both endpoints
   finite, else null; `price_action` and `days_since_52w_*` count sessions, and RSI

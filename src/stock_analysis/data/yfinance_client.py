@@ -115,27 +115,30 @@ def _cap_yfinance_request_timeouts() -> None:
 
 _cap_yfinance_request_timeouts()
 
-# Dates whose raw volume was null in the history being fetched on this thread.
+# Session dates whose raw volume was null in the history being fetched on this thread.
 _missing_volume = threading.local()
 
 
-def _recording_missing_volume(parse_quotes: Callable[..., pd.DataFrame]) -> Callable[..., pd.DataFrame]:
-    @functools.wraps(parse_quotes)
-    def parse(data: Any) -> pd.DataFrame:
-        quotes = parse_quotes(data)
+def _recording_missing_volume(fix_dst: Callable[..., pd.DataFrame]) -> Callable[..., pd.DataFrame]:
+    @functools.wraps(fix_dst)
+    def fix(quotes: pd.DataFrame, interval: str) -> pd.DataFrame:
+        quotes = fix_dst(quotes, interval)
         dates = getattr(_missing_volume, "dates", None)
         if dates is not None:
             dates.update(pd.DatetimeIndex(quotes.index[quotes["Volume"].isna()]).date)
         return quotes
 
-    return parse
+    return fix
 
 
 def _record_missing_daily_volume() -> None:
     """yfinance turns a null volume into 0 after parsing (WP5, R5.6: a missing volume
-    must stay missing), so note the dates whose raw volume was null as the quotes
-    are parsed; ``_fetch_history_retry`` restores them. Installed once, here."""
-    yf.utils.parse_quotes = _recording_missing_volume(yf.utils.parse_quotes)
+    must stay missing), so note the sessions whose raw volume was null and let
+    ``_fetch_history_retry`` restore them. The quotes are read right after yfinance
+    puts them in exchange time and fixes Yahoo's DST offsets -- the step whose
+    ``.date`` becomes a daily row's date -- so a session is never confused with
+    its UTC date. Installed once, here."""
+    yf.utils.fix_Yahoo_dst_issue = _recording_missing_volume(yf.utils.fix_Yahoo_dst_issue)
 
 
 _record_missing_daily_volume()
@@ -648,15 +651,16 @@ async def _fetch_history_retry(params: FetchParams) -> RetryResult:
     if shutdown_event.is_set():
         raise ServerShuttingDownError("Server is shutting down")
 
-    # WP5: a daily frame keeps one row per vendor session, empty ones included, and
-    # its missing volumes; intraday frames keep yfinance's defaults.
+    # WP5: a daily-or-longer frame keeps one row per vendor session, empty ones
+    # included; a 1d frame (never resampled by yfinance) also keeps its missing
+    # volumes. Intraday frames keep yfinance's defaults.
     daily = not params.interval.endswith(("m", "h"))
 
     def _fetch() -> pd.DataFrame:
         # Use per-symbol history instead of yf.download to avoid cross-symbol
         # contamination when multiple symbols are fetched concurrently.
         ticker = yf.Ticker(params.symbol)
-        _missing_volume.dates = set() if daily else None
+        _missing_volume.dates = set() if params.interval == "1d" else None
         try:
             df = ticker.history(
                 period=params.period,

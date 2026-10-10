@@ -137,6 +137,13 @@ def invalid_bars_in_window(*series: pd.Series, window: int) -> int:
     return int((~np.isfinite(frame).all(axis=1)).sum())
 
 
+def session_returns(prices: pd.Series, periods: int = 1) -> pd.Series:
+    """N-session returns, NaN unless both endpoint prices are finite (a pct_change
+    from an infinite price would otherwise read as a finite -100%)."""
+    finite = prices.where(np.isfinite(prices))
+    return finite.pct_change(periods, fill_method=None)
+
+
 def calculate_returns(prices: pd.Series, periods: int) -> float | None:
     """
     Calculate return over a specific number of periods.
@@ -470,7 +477,7 @@ def weekly_return_zscore(
     None when the latest 5-session return is undefined (either endpoint close missing
     or non-finite); an older week is never reported as the latest.
     """
-    weekly_all = close_series.pct_change(5, fill_method=None)
+    weekly_all = session_returns(close_series, 5)
     if len(weekly_all) == 0 or not math.isfinite(weekly_all.iloc[-1]):
         return None
     weekly = weekly_all[np.isfinite(weekly_all)]
