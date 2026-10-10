@@ -9,10 +9,14 @@ import pytest
 
 fundamentals = importlib.import_module("stock_analysis.tools.fundamentals")
 orchestrator = importlib.import_module("stock_analysis.tools.analyze.orchestrator")
+project_analyze_result = importlib.import_module("stock_analysis.tools.analyze.projection").project_analyze_result
 
 NAN = float("nan")
 QUARTERS = ["2025-09-30", "2025-06-30", "2025-03-31", "2024-12-31", "2024-09-30"]
 YEARS = ["2025-12-31", "2024-12-31", "2023-12-31"]
+# Costco-style 12/12/12/16-week fiscal quarters (the 16-week quarter ends 2025-08-31).
+COSTCO_QUARTERS = ["2025-11-23", "2025-08-31", "2025-05-11", "2025-02-16", "2024-11-24", "2024-09-01",
+                   "2024-05-12"]
 
 
 def statement(columns: list[str], **rows: list[float]) -> pd.DataFrame:
@@ -43,6 +47,24 @@ class TestR62CompleteTtm:
     def test_52_53_week_quarters_are_consecutive(self) -> None:
         q = statement(["2025-06-28", "2025-03-29", "2024-12-28", "2024-09-28"], fcf=[1.0, 2.0, 3.0, 4.0])
         assert resolve(q, None)["free_cash_flow_ttm"] == 10.0
+
+    @pytest.mark.parametrize("newest", range(4), ids=["q4", "q3", "q2", "q1"])
+    def test_12_12_12_16_week_calendars_are_consecutive(self, newest: int) -> None:
+        q = statement(COSTCO_QUARTERS[newest:newest + 4], fcf=[1.0, 2.0, 3.0, 4.0])
+        cf = resolve(q, None)
+        assert (cf["free_cash_flow_ttm"], cf["free_cash_flow_ttm_status"]) == (10.0, "complete")
+
+    def test_a_17_week_quarter_is_consecutive(self) -> None:
+        q = statement(["2026-01-03", "2025-09-06", "2025-06-14", "2025-03-22"], fcf=[1.0, 2.0, 3.0, 4.0])
+        assert resolve(q, None)["free_cash_flow_ttm_status"] == "complete"
+
+    def test_monthly_columns_are_not_quarters(self) -> None:
+        q = statement(["2025-09-30", "2025-08-31", "2025-07-31", "2025-06-30"], fcf=[1.0, 2.0, 3.0, 4.0])
+        assert resolve(q, None)["free_cash_flow_ttm_status"] == "ttm_incomplete"
+
+    def test_skipping_a_12_week_quarter_is_still_a_gap(self) -> None:
+        q = statement(["2025-08-31", "2025-02-16", "2024-11-24", "2024-09-01"], fcf=[1.0, 2.0, 3.0, 4.0])
+        assert resolve(q, None)["free_cash_flow_ttm_status"] == "ttm_incomplete"
 
 
 class TestR61IncompleteTtm:
@@ -126,7 +148,9 @@ class TestR65SamePeriodReconstruction:
 
     def test_the_newest_annual_value_wins_between_the_fcf_row_and_a_reconstruction(self) -> None:
         y = statement(YEARS, fcf=[NAN, 250.0, NAN], ocf=[600.0, 500.0, NAN], capex=[-100.0, -200.0, NAN])
-        assert resolve(None, y)["free_cash_flow_period_end"] == "2025-12-31"
+        cf = resolve(None, y)
+        assert (cf["free_cash_flow_ttm"], cf["free_cash_flow_period"], cf["free_cash_flow_period_end"],
+                cf["free_cash_flow_period_lag"]) == (500.0, "FY 2025", "2025-12-31", 0)
 
     def test_quarterly_reconstruction_needs_both_complete_over_the_same_quarters(self) -> None:
         complete = statement(QUARTERS[:4], ocf=[10.0, 10.0, 10.0, 10.0], capex=[-1.0, -1.0, -1.0, -1.0])
@@ -168,6 +192,15 @@ class TestR66RollingHistory:
         assert [e["quarter"] for e in history["pe_history"]] == ["2025-09-30"]
         assert history["non_consecutive_windows"] == ["2025-06-30", "2025-03-31", "2024-12-31"]
 
+    def test_an_unverified_basis_reports_windows_as_unchecked(self) -> None:
+        cols = ["2025-09-30", "2025-06-30", "2025-03-31", "2024-12-31"]
+        prices = pd.DataFrame({"Close": [100.0]}, index=pd.DatetimeIndex(["2025-09-30"]))
+        info = {**self.INFO, "financialCurrency": "TWD"}
+
+        history = fundamentals._compute_valuation_history(income(cols, [100.0] * 4), prices, info)
+
+        assert (history["status"], history["non_consecutive_windows"]) == ("unverified_currency", None)
+
     def test_consecutive_history_flags_nothing(self) -> None:
         cols = [d.strftime("%Y-%m-%d") for d in reversed(pd.date_range("2024-03-31", periods=6, freq="QE"))]
         days = pd.bdate_range("2023-01-02", "2025-10-10")
@@ -193,6 +226,13 @@ class TestTrendPairing:
         assert trends["margin_trend"] == {"gross": None, "operating": None, "net": None}
         assert trends["quarter_gaps"] == ["2025-06-30"]
 
+    def test_a_12_12_12_16_week_calendar_has_no_gaps(self) -> None:
+        trends = fundamentals._compute_fundamental_trends(income(COSTCO_QUARTERS[:5], [20.0, 10.0, 10.0, 10.0, 10.0],
+                                                                 [100.0] * 5))
+        assert trends["quarter_gaps"] == []
+        assert trends["quarterly_data"][0]["net_income_yoy"] == 1.0
+        assert trends["margin_trend"]["net"] == "expanding"
+
     def test_an_unbroken_chain_compares_as_before(self) -> None:
         cols = [d.strftime("%Y-%m-%d") for d in reversed(pd.date_range("2024-06-30", periods=5, freq="QE"))]
         trends = fundamentals._compute_fundamental_trends(income(cols, [20.0, 10.0, 10.0, 10.0, 10.0],
@@ -204,6 +244,31 @@ class TestTrendPairing:
 
 
 class TestAnalyzeDisclosure:
+    async def test_analyze_keeps_the_ttm_status_and_lag(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        async def fake_fundamentals(symbol: str, **kwargs: Any) -> dict[str, Any]:
+            return {"symbol": symbol, "valuation": {}, "cash_flow": {
+                "free_cash_flow_ttm": 100.0, "free_cash_flow_period": "FY 2024",
+                "free_cash_flow_period_end": "2024-12-31", "free_cash_flow_source": "cashflow_yearly",
+                "free_cash_flow_ttm_status": "ttm_incomplete", "free_cash_flow_period_lag": 1, "currency": "USD"}}
+
+        async def summary(symbol: str, **kwargs: Any) -> dict[str, Any]:
+            return {"symbol": symbol, "current_price": 100.0, "currency": "USD", "quote_type": "EQUITY"}
+
+        async def empty(symbol: str, **kwargs: Any) -> dict[str, Any]:
+            return {"symbol": symbol}
+
+        monkeypatch.setattr(orchestrator, "fundamentals_snapshot", fake_fundamentals)
+        monkeypatch.setattr(orchestrator, "stock_summary", summary)
+        for name in ("technicals", "risk_metrics", "events_calendar", "stock_news", "ownership_analysis",
+                     "options_signals"):
+            monkeypatch.setattr(orchestrator, name, empty)
+        result = await orchestrator.analyze_stock("ACME")
+
+        for detail in ("standard", "full"):
+            cash_flow = project_analyze_result(result, detail)["fundamentals_summary"]["cash_flow"]
+            assert (cash_flow["free_cash_flow_ttm_status"], cash_flow["free_cash_flow_period_lag"]) == (
+                "ttm_incomplete", 1), detail
+
     def test_the_fundamentals_summary_carries_the_ttm_status_and_lag(self, monkeypatch: pytest.MonkeyPatch) -> None:
         cash_flow = {"free_cash_flow_ttm": 100.0, "free_cash_flow_period": "FY 2024",
                      "free_cash_flow_period_end": "2024-12-31", "free_cash_flow_source": "cashflow_yearly",

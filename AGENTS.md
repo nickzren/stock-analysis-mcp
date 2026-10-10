@@ -97,15 +97,17 @@
   keeps `operating_cf_ttm` / `free_cash_flow_ttm` (key names kept, whatever
   the period), each with `_period`, `_period_end`, `_source`, `_ttm_status`
   and `_period_lag`. A TTM is the 4 most recent quarter columns only when they
-  are consecutive (80-100 days apart, so 52/53-week quarters count) and all
+  are consecutive (77-125 days apart: calendar, 13-week and 12/16/17-week
+  fiscal quarters count, a skipped quarter, at least 168 days, does not) and all
   finite; otherwise `ttm_status` is `ttm_incomplete` (`unavailable` with no
-  quarterly row), never a sum that skips the gap. Next comes the newest finite
+  usable quarterly row), never a sum that skips the gap. Next comes the newest finite
   annual value labelled from its own column (`FY <year>`, its period end) with
   `period_lag` = newer empty columns, then the info figure labelled `TTM` /
   `info`. FCF rebuilt as OCF + capex uses one period (the same 4 quarters, or
   the same annual column; the newest annual candidate wins). Rolling P/E and
   P/S history skips non-consecutive 4-quarter windows and lists them in
-  `valuation_history.non_consecutive_windows`; trend QoQ / YoY / margin trend
+  `valuation_history.non_consecutive_windows` (None when an unverified share
+  basis stopped the history before any window was checked); trend QoQ / YoY / margin trend
   / 3Y CAGR need an unbroken chain of quarters (`fundamental_trends.quarter_gaps`
   lists quarters whose older neighbour isn't the previous quarter). Analyze's
   `fundamentals_summary.cash_flow` carries `free_cash_flow_ttm_status` and

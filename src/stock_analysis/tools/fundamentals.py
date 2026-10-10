@@ -770,6 +770,7 @@ def _compute_valuation_history(
         return {
             "pe_history": None, "ps_history": None, "pe_stats": None, "ps_stats": None,
             "history_points": 0, "history_span_years": None, "status": basis,
+            "non_consecutive_windows": None,  # windows not checked on this path
         }
 
     close_series = pd.to_numeric(price_hist["Close"], errors="coerce").dropna()
@@ -1258,9 +1259,11 @@ def _sorted_cashflow_columns(columns: pd.Index) -> list[Any]:
     return cols
 
 
-# Adjacent quarter-end columns this many days apart are consecutive quarters
-# (13-week, 52/53-week and calendar quarters all fall inside).
-_QUARTER_GAP_DAYS = (80, 100)
+# Adjacent quarter-end columns this many days apart are consecutive quarters:
+# calendar and 13-week quarters (~91 days) and 12/16-week fiscal calendars
+# (84 and 112 days; 119 for a 17-week quarter in a 53-week year) fall inside,
+# while a skipped quarter spans at least 168 days (two 12-week quarters).
+_QUARTER_GAP_DAYS = (77, 125)
 
 
 @dataclass(frozen=True)
