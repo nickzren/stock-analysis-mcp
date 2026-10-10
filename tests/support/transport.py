@@ -33,6 +33,7 @@ ROUTES: dict[str, str] = {
     "quote_v7": "/v7/finance/quote",
     "options": "/v7/finance/options/",
     "consent_page": "guce.yahoo.com/consent",
+    "chart": "/v8/finance/chart/",
 }
 
 # Set per test by the autouse guard in tests/conftest.py. Unrouted stub requests

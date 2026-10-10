@@ -9,7 +9,7 @@ SUMMARY_KEYS = (
     "name", "current_price", "price_provenance", "sector", "industry", "market_cap", "currency", "support",
 )
 VERDICT_DECISION_KEYS = ("score", "tilt", "confidence", "components", "pros", "cons")
-DATA_QUALITY_DECISION_KEYS = ("completeness", "missing_critical", "in_flight_jobs", "warnings")
+DATA_QUALITY_DECISION_KEYS = ("completeness", "missing_critical", "in_flight_jobs", "bar_validity", "warnings")
 ACTION_ZONES_STANDARD_KEYS = (
     "current_zone",
     "levels",

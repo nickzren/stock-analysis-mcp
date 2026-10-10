@@ -1,6 +1,7 @@
 """WP5: session-indexed bars, price provenance in analyze, staleness (R5.1-R5.7)."""
 
 import importlib
+import inspect
 import math
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -8,6 +9,9 @@ from typing import Any
 import pandas as pd
 import pytest
 import pytz
+import yfinance.scrapers.history as history_module
+import yfinance.utils as yfinance_utils
+from yfinance.scrapers.history import PriceHistory
 
 from stock_analysis.data import yfinance_client
 from stock_analysis.tools.analyze.projection import project_analyze_result
@@ -57,6 +61,17 @@ class TestR54NeverCompress:
         closes = pd.Series([100.0 + (i % 7) for i in range(60)] + [NAN])
         assert weekly_return_zscore(closes) is None
         assert weekly_return_zscore(closes.iloc[:-1]) is not None
+
+    def test_infinite_endpoints_give_no_return(self) -> None:
+        inf_latest = pd.Series([10.0, 20.0, 30.0, 40.0, 50.0, 60.0, float("inf")])
+        assert calculate_returns(inf_latest, 5) is None
+        assert _calculate_period_return(inf_latest, 5) is None
+        assert _calculate_period_return(pd.Series([float("inf"), 20.0, 30.0]), 5) is None
+        assert weekly_return_zscore(pd.Series([100.0 + (i % 7) for i in range(60)] + [float("inf")])) is None
+        assert calculate_sma_slope(pd.Series([100.0] * 20 + [float("inf")])) is None
+        assert tech_mod._build_price_action(inf_latest) == {"higher_closes_2d": None, "break_5d_high": None}
+        ytd = pd.DataFrame({"date": ["2026-01-02", "2026-01-05"], "close": [100.0, float("inf")]})
+        assert tech_mod._calculate_ytd_return(ytd) is None
 
     def test_days_since_extreme_counts_sessions(self) -> None:
         assert days_since_extreme(pd.Series([70.0, 60.0, NAN, 40.0]), kind="high") == 3
@@ -188,6 +203,60 @@ class TestR56MissingVolume:
         assert validity["invalid_bars_in_window"] == windows(volume_20=1, obv_20=1)
 
 
+    async def test_an_all_missing_volume_window_keeps_the_price_analysis(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        df = pin_frame()
+        df.loc[20:, "volume"] = NAN
+        r = await run_technicals(monkeypatch, df)
+        assert r["current_price"] == 111.01
+        assert r["volume"] == {"current": None, "avg_20d": None, "ratio": None}
+        assert r["bar_validity"]["invalid_bars_in_window"]["volume_20"] == 20
+
+
+class TestProviderKeepsSessionRows:
+    """Through the real pinned yfinance: a chart with an empty session row and a null volume."""
+
+    async def test_empty_sessions_and_missing_volume_survive_the_fetch(self, yf_transport: Any) -> None:
+        yf_transport.route("chart", "daily_gaps")
+
+        df = await yfinance_client.fetch_history(FetchParams("EXMP", "1y", "1d", True))
+
+        close = pd.to_numeric(df["close"], errors="coerce")
+        volume = pd.to_numeric(df["volume"], errors="coerce")
+        assert df["date"].tolist()[2] == "2026-10-02"
+        assert close.tolist()[:2] == [10.0, 20.0] and math.isnan(close.iloc[2])
+        assert calculate_returns(close, 5) == pytest.approx(2.5)  # not the compressed 6.0
+        assert math.isnan(volume.iloc[-1]) and volume.iloc[0] == 1000.0
+        validity = tech_mod._build_bar_validity(close, df["high"], df["low"], volume)
+        assert (validity["latest_bar_invalid"], validity["latest_volume_invalid"]) == (False, True)
+        assert tech_mod._build_volume(volume)["current"] is None
+
+    async def test_only_daily_frames_keep_empty_rows(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        seen: list[tuple[str, bool]] = []
+        frame = pd.DataFrame({"Open": [1.0], "High": [1.0], "Low": [1.0], "Close": [1.0], "Volume": [10]},
+                             index=pd.DatetimeIndex(["2026-10-08 10:00"], tz="America/New_York"))
+
+        class ChartTicker:
+            def __init__(self, symbol: str) -> None:
+                pass
+
+            def history(self, **kwargs: Any) -> pd.DataFrame:
+                seen.append((kwargs["interval"], kwargs["keepna"]))
+                return frame.copy()
+
+        monkeypatch.setattr(yfinance_client.yf, "Ticker", ChartTicker)
+        for interval in ("1d", "1wk", "5m", "1h"):
+            await yfinance_client.fetch_history(FetchParams("AAPL", "1mo", interval, True))
+        assert seen == [("1d", True), ("1wk", True), ("5m", False), ("1h", False)]
+
+    def test_contract_yfinance_zero_fills_volume_after_parsing_quotes(self) -> None:
+        """The seam the missing-volume recorder relies on, in the pinned yfinance."""
+        source = inspect.getsource(PriceHistory.history)
+        assert "utils.parse_quotes(" in source
+        assert "df['Volume'] = df['Volume'].fillna(0)" in source
+        assert history_module.utils is yfinance_utils
+        assert yfinance_utils.parse_quotes.__wrapped__ is not None  # type: ignore[attr-defined]
+
+
 class TestTechnicalsPriceBlocks:
     async def test_session_close_is_reported(self, monkeypatch: pytest.MonkeyPatch) -> None:
         df = pin_frame()
@@ -310,6 +379,26 @@ def analyze(monkeypatch: pytest.MonkeyPatch) -> Any:
         return result
 
     return run
+
+
+class TestAnalyzeBarValidity:
+    async def test_gap_counts_and_volume_validity_survive_every_tier(self, analyze: Any) -> None:
+        validity = {"latest_bar_invalid": False, "latest_volume_invalid": True,
+                    "invalid_bars_in_window": {"sma_20": 1, "rsi_14": 1, "volume_20": 1}}
+        result = await analyze(technicals={"bar_validity": validity})
+
+        for detail in ("decision", "standard", "full"):
+            dq = project_analyze_result(result, detail)["data_quality"]
+            assert dq["bar_validity"] == validity, detail
+            assert {"latest_daily_volume_invalid", "invalid_bars_in_indicator_windows"} <= set(dq["warnings"]), detail
+            assert "latest_daily_bar_invalid" not in dq["warnings"], detail
+
+    async def test_clean_bars_raise_no_warning(self, analyze: Any) -> None:
+        validity = {"latest_bar_invalid": False, "latest_volume_invalid": False,
+                    "invalid_bars_in_window": {"sma_20": 0}}
+        result = await analyze(technicals={"bar_validity": validity})
+        assert not {"latest_daily_bar_invalid", "latest_daily_volume_invalid",
+                    "invalid_bars_in_indicator_windows"} & set(result["data_quality"]["warnings"])
 
 
 class TestR51AnalyzePrice:

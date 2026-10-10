@@ -115,6 +115,31 @@ def _cap_yfinance_request_timeouts() -> None:
 
 _cap_yfinance_request_timeouts()
 
+# Dates whose raw volume was null in the history being fetched on this thread.
+_missing_volume = threading.local()
+
+
+def _recording_missing_volume(parse_quotes: Callable[..., pd.DataFrame]) -> Callable[..., pd.DataFrame]:
+    @functools.wraps(parse_quotes)
+    def parse(data: Any) -> pd.DataFrame:
+        quotes = parse_quotes(data)
+        dates = getattr(_missing_volume, "dates", None)
+        if dates is not None:
+            dates.update(pd.DatetimeIndex(quotes.index[quotes["Volume"].isna()]).date)
+        return quotes
+
+    return parse
+
+
+def _record_missing_daily_volume() -> None:
+    """yfinance turns a null volume into 0 after parsing (WP5, R5.6: a missing volume
+    must stay missing), so note the dates whose raw volume was null as the quotes
+    are parsed; ``_fetch_history_retry`` restores them. Installed once, here."""
+    yf.utils.parse_quotes = _recording_missing_volume(yf.utils.parse_quotes)
+
+
+_record_missing_daily_volume()
+
 
 def preserving_http_status(call: Callable[[], T]) -> Callable[[], T]:
     """Wrap a blocking yfinance read (run on a worker thread) so that an HTTP error
@@ -623,17 +648,24 @@ async def _fetch_history_retry(params: FetchParams) -> RetryResult:
     if shutdown_event.is_set():
         raise ServerShuttingDownError("Server is shutting down")
 
+    # WP5: a daily frame keeps one row per vendor session, empty ones included, and
+    # its missing volumes; intraday frames keep yfinance's defaults.
+    daily = not params.interval.endswith(("m", "h"))
+
     def _fetch() -> pd.DataFrame:
         # Use per-symbol history instead of yf.download to avoid cross-symbol
         # contamination when multiple symbols are fetched concurrently.
         ticker = yf.Ticker(params.symbol)
+        _missing_volume.dates = set() if daily else None
         try:
             df = ticker.history(
                 period=params.period,
                 interval=params.interval,
                 auto_adjust=params.adjusted,
+                keepna=daily,
                 timeout=jobs.REQUEST_TIMEOUT_SECONDS,
             )
+            missing_volume_dates = _missing_volume.dates
         except (YFTickerMissingError, YFInvalidPeriodError) as e:
             # yfinance raises these (errors not hidden) where it used to return
             # an empty frame; keep them mapped to invalid_symbol.
@@ -655,8 +687,13 @@ async def _fetch_history_retry(params: FetchParams) -> RetryResult:
         except Exception:
             expire_yfinance_response_cache()
             raise
+        finally:
+            _missing_volume.dates = None
         if df.empty:
             raise ValueError(f"No data returned for {params.symbol}")
+        if missing_volume_dates:
+            df["Volume"] = df["Volume"].astype(float)
+            df.loc[[d in missing_volume_dates for d in df.index.date], "Volume"] = float("nan")
         # Standardize here - single place for both preview and cache
         standardized = standardize_ohlcv(df, params.adjusted)
         # WP4 (D5): the scan's phase 1 needs currency and instrument type; yfinance

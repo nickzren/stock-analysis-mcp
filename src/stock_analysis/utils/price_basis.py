@@ -97,11 +97,10 @@ def _session_close(d: date) -> datetime:
     return _ET.localize(datetime.combine(d, time(9, 30)) + timedelta(minutes=regular_session_minutes(d)))
 
 
-def quote_staleness(ts: datetime, now: datetime, fetched_at: datetime | None = None) -> dict[str, Any]:
+def quote_staleness(ts: datetime, now: datetime) -> dict[str, Any]:
     """Age of a timestamped quote in hours. In the regular session a quote older than
-    the freshness ceiling is stale. Otherwise it is stale when it predates the last
-    completed session's close, unless it was fetched after that close (then nothing
-    newer existed, e.g. a thinly traded name's last trade)."""
+    the freshness ceiling is stale; otherwise one from before the last completed
+    session's close is (when it was fetched never makes it current)."""
     now_et = now.astimezone(_ET)
     age_seconds = (now.astimezone(UTC) - ts).total_seconds()
     staleness: dict[str, Any] = {"unit": "hours", "age_hours": round(age_seconds / 3600, 2)}
@@ -110,9 +109,16 @@ def quote_staleness(ts: datetime, now: datetime, fetched_at: datetime | None = N
     if classify_session(now_et) == "regular":
         stale = age_seconds > FRESHNESS_CEILING_MINUTES * 60
     else:
-        close = _session_close(last_completed_session(now_et))
-        stale = ts < close and (fetched_at is None or fetched_at < close)
+        stale = ts < _session_close(last_completed_session(now_et))
     return {**staleness, "stale": stale}
+
+
+def _clock(now: datetime, block: dict[str, Any]) -> datetime:
+    """The newest clock reading for a fetched quote: analyze reads ``now`` before the
+    fetch, so a later ``fetched_at`` is closer to the truth."""
+    fetched = to_utc(block.get("fetched_at"))
+    now_utc = now.astimezone(UTC)
+    return max(now_utc, fetched) if fetched else now_utc
 
 
 def _provenance(
@@ -152,10 +158,7 @@ def select_price(
         ts = to_utc(bar.get("bar_time"))
         price = _valid_price(bar.get("close"))
         if ts is not None and price is not None:
-            # The clock is read when analyze starts, before the bar is fetched; the
-            # fetch time (if later) is the newest reading of it.
-            fetched = to_utc(bar.get("fetched_at"))
-            clock = max(now.astimezone(UTC), fetched) if fetched else now.astimezone(UTC)
+            clock = _clock(now, bar)
             age = (clock - ts).total_seconds()
             if age < -FUTURE_SKEW_TOLERANCE_SECONDS:
                 intraday_rejected = "intraday_future_timestamp"
@@ -180,4 +183,4 @@ def select_price(
         staleness = {"unit": "hours", "age_hours": None, "stale": True, "reason": "no_quote_time"}
         return price, _provenance("info_quote_fallback", None, None, info, staleness, "no_valid_daily_close")
     return price, _provenance("info_quote_fallback", ts.isoformat(), "quote_time", info,
-                              quote_staleness(ts, now, to_utc(info.get("fetched_at"))), "no_valid_daily_close")
+                              quote_staleness(ts, _clock(now, info)), "no_valid_daily_close")

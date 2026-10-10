@@ -16,7 +16,7 @@ Sources are matched by URL fragment (`ROUTES` in `tests/support/transport.py`):
 param), `earnings_page`, `news` (`/xhr/ncp`), `search`, `timeseries`
 (statement time series, which yfinance reads through its `cache_get` LRU) and
 `quote_v7` (the v7 quote endpoint used as the info fallback), `options` (the v7
-options endpoint) and `consent_page` (Yahoo's cookie-consent page). A spec may add `final_url` to simulate a redirect,
+options endpoint), `consent_page` (Yahoo's cookie-consent page) and `chart` (the v8 chart endpoint behind history and the time-zone probe). A spec may add `final_url` to simulate a redirect,
 e.g. to the consent page.
 
 Real responses recorded by `scripts/record_provider_fixtures.py` go to the

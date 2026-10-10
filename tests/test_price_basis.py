@@ -112,10 +112,13 @@ class TestQuoteStaleness:
         assert quote_staleness(early_close_day, at(2026, 11, 27, 14))["stale"] is True
         assert quote_staleness(at(2026, 11, 27, 13).astimezone(UTC), at(2026, 11, 27, 14))["stale"] is False
 
-    def test_off_hours_a_quote_fetched_after_the_close_is_current(self) -> None:
-        last_trade = at(2026, 10, 12, 15, 45).astimezone(UTC)  # thinly traded: no later print
-        assert quote_staleness(last_trade, at(2026, 10, 12, 18), at(2026, 10, 12, 16, 30))["stale"] is False
-        assert quote_staleness(last_trade, at(2026, 10, 12, 18), at(2026, 10, 12, 15, 50))["stale"] is True
+    def test_fetching_an_old_quote_after_the_close_never_makes_it_current(self) -> None:
+        now = at(2026, 10, 13, 18)
+        info = {"price": 100.0, "quote_time": (now.astimezone(UTC) - timedelta(hours=31)).isoformat(),
+                "fetched_at": at(2026, 10, 13, 17).astimezone(UTC).isoformat(), "cache_hit": True}
+        _, prov = select_price(now=now, info_quote=info)
+        assert (prov["staleness"]["age_hours"], prov["staleness"]["stale"]) == (31.0, True)
+        assert prov["fetched_at"] == info["fetched_at"]  # still disclosed
 
     def test_future_timestamp_beyond_skew_is_stale(self) -> None:
         now = at(2026, 10, 9, 11)
@@ -235,6 +238,13 @@ class TestR51SelectPrice:
         assert prov["fallback_reason"] == "no_valid_daily_close"
         assert (prov["price_as_of"], prov["as_of_kind"]) == ("2026-10-09T11:00:00+00:00", "quote_time")
         assert (prov["fetched_at"], prov["cache_hit"]) == ("2026-10-09T11:00:05Z", True)
+
+    def test_fallback_quote_newer_than_the_start_clock_is_judged_by_its_fetch_time(self) -> None:
+        now = datetime(2026, 10, 9, 15, 0, 0, tzinfo=UTC)  # 11:00 ET, regular session
+        info = {"price": 100.0, "quote_time": "2026-10-09T15:00:06Z", "fetched_at": "2026-10-09T15:00:07Z",
+                "cache_hit": False}
+        _, prov = select_price(now=now, info_quote=info)
+        assert prov["staleness"] == {"unit": "hours", "age_hours": 0.0, "stale": False}
 
     def test_fallback_without_a_quote_time_is_unverifiable(self) -> None:
         _, prov = select_price(now=at(2026, 10, 9, 8), info_quote={**CACHED_INFO, "quote_time": None})

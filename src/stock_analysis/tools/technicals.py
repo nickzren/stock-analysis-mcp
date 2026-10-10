@@ -1,10 +1,12 @@
 """Technical analysis tool."""
 
+import math
 import operator
 from datetime import datetime
 from time import perf_counter
 from typing import Any
 
+import numpy as np
 import pandas as pd
 import pytz
 
@@ -390,7 +392,8 @@ def _build_returns(df: pd.DataFrame, close: pd.Series) -> dict[str, Any]:
 def _build_volume(volume: pd.Series) -> dict[str, Any]:
     """Build volume summary fields."""
     current_volume = int(volume.iloc[-1]) if not pd.isna(volume.iloc[-1]) else None
-    avg_volume_20d = float(volume.tail(20).mean()) if len(volume) >= 20 else None
+    window_mean = volume.tail(20).mean()
+    avg_volume_20d = float(window_mean) if len(volume) >= 20 and pd.notna(window_mean) else None
     volume_ratio: float | None = None
     if current_volume is not None and avg_volume_20d is not None and avg_volume_20d > 0:
         volume_ratio = current_volume / avg_volume_20d
@@ -518,7 +521,7 @@ def _calculate_ytd_return(df: pd.DataFrame) -> float | None:
     start_price = close.iloc[0]
     end_price = close.iloc[-1]
 
-    if pd.isna(start_price) or pd.isna(end_price) or start_price == 0:
+    if not (math.isfinite(start_price) and math.isfinite(end_price)) or start_price == 0:
         return None
 
     return float(round((end_price - start_price) / start_price, 4))
@@ -557,7 +560,7 @@ def _detect_bullish_rsi_divergence(
 def _build_price_action(close_series: pd.Series) -> dict[str, bool | None]:
     """Compute simple price action triggers for entry timing, over consecutive
     sessions (an invalid close is never skipped over)."""
-    closes = close_series.reset_index(drop=True)
+    closes = close_series.where(np.isfinite(close_series)).reset_index(drop=True)
     higher_closes_2d = None
     if len(closes) >= 3 and closes.iloc[-3:].notna().all():
         higher_closes_2d = bool(closes.iloc[-1] > closes.iloc[-2] > closes.iloc[-3])

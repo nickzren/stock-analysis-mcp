@@ -59,7 +59,8 @@ def build_screen_payload(df: pd.DataFrame | None) -> dict[str, Any] | None:
     )
 
     current_volume = safe_last_float(volume)
-    avg_volume_20d = float(volume.tail(20).mean()) if len(volume) >= 20 else None
+    window_mean = volume.tail(20).mean()
+    avg_volume_20d = float(window_mean) if len(volume) >= 20 and pd.notna(window_mean) else None
     volume_ratio = (
         current_volume / avg_volume_20d
         if current_volume is not None and avg_volume_20d

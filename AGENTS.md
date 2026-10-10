@@ -258,24 +258,33 @@
   in-app), `fallback_reason` and `staleness`: daily closes in sessions behind
   `market_calendar.last_completed_session`, timestamped quotes in hours
   (regular session: stale past 15 min; off-hours: stale when it predates the
-  last completed session's close, 16:00 or 13:00 ET, unless fetched after it). `stock_summary` reports `quote_time`, `fetched_at`
+  last completed session's close, 16:00 or 13:00 ET; when it was fetched never
+  makes it current). Quote ages use the later of analyze's start and the
+  quote's `fetched_at`. `stock_summary` reports `quote_time`, `fetched_at`
   and `cache_hit`. Staleness is disclosure only; existing freshness gates are
   unchanged. `data_quality.component_freshness` ages price/risk in sessions
   from `last_bar_date` (warning `price_stale_N_sessions`) and the rest in UTC
   hours.
-- Session-indexed bars (WP5): rows are never dropped. N-session returns
+- Session-indexed bars (WP5): rows are never dropped. Daily-or-longer
+  `fetch_history` frames pass `keepna=True` (yfinance otherwise drops empty
+  session rows) and restore missing volumes: yfinance zero-fills a null volume
+  after parsing, so `yfinance_client` wraps `yfinance.utils.parse_quotes` once
+  at import to note those dates (contract test pins the seam). Intraday frames
+  keep yfinance's defaults. N-session returns
   (technicals returns, the 1w z-score's latest week, risk benchmark returns,
-  `get_price_history` total return, the SMA200 slope) need both endpoints,
-  else null; `price_action` and `days_since_52w_*` count sessions, and RSI
+  `get_price_history` total return, the SMA200 slope, YTD) need both endpoints
+  finite, else null; `price_action` and `days_since_52w_*` count sessions, and RSI
   divergence pairs each close with its own session's RSI. Indicators keep their
   masking (SMA/Bollinger go null on an invalid bar in the window; EMA and ATR
   carry on; RSI treats a NaN delta as no change; pivots, bandwidth percentile
   and RSI divergence still skip invalid bars); `technicals.bar_validity`
   discloses `latest_bar_invalid`, `latest_volume_invalid` and
   `invalid_bars_in_window` per indicator (its period; MACD 34 bars; ATR checks
-  H/L/C, OBV close and volume), and
-  analyze warns `latest_daily_bar_invalid`. A missing latest volume nulls the
-  volume metrics (current, ratio, OBV) but never a valid close.
+  H/L/C, OBV close and volume). Analyze keeps it as `data_quality.bar_validity`
+  at every `detail` level and warns `latest_daily_bar_invalid`,
+  `latest_daily_volume_invalid` and `invalid_bars_in_indicator_windows`. A
+  missing latest volume nulls the volume metrics (current, ratio, OBV; an
+  all-missing window nulls `avg_20d`) but never a valid close.
 - `analyze_trade_setup.freshness` in regular session requires BOTH a fresh
   intraday bar and a current daily frame (`daily_bar_date >=
   daily_expected_date`, the previous completed session); daily-leg failure is

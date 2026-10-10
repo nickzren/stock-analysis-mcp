@@ -921,9 +921,15 @@ async def analyze_stock(
     warnings: list[str] = []
     if earnings.get("days_until") and earnings.get("days_until") <= 7:
         warnings.append("earnings_within_7_days")
-    if (tech_data.get("bar_validity") or {}).get("latest_bar_invalid"):
+    bar_validity = tech_data.get("bar_validity")
+    if bar_validity:
         # EMA, RSI and ATR carry on past an invalid bar and still look current.
-        warnings.append("latest_daily_bar_invalid")
+        if bar_validity.get("latest_bar_invalid"):
+            warnings.append("latest_daily_bar_invalid")
+        if bar_validity.get("latest_volume_invalid"):
+            warnings.append("latest_daily_volume_invalid")
+        if any((bar_validity.get("invalid_bars_in_window") or {}).values()):
+            warnings.append("invalid_bars_in_indicator_windows")
 
     # Fundamentals status: missing | not_meaningful | available
     fundamentals_status: str
@@ -1012,6 +1018,7 @@ async def analyze_stock(
         "tool_failures": tool_failures,
         "tool_timings": tool_timings,
         "in_flight_jobs": in_flight_jobs,
+        "bar_validity": bar_validity,
         "warnings": warnings,
     }
 

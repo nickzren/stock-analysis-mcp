@@ -154,7 +154,7 @@ def calculate_returns(prices: pd.Series, periods: int) -> float | None:
     current = prices.iloc[-1]
     past = prices.iloc[-periods - 1]
 
-    if pd.isna(current) or pd.isna(past) or past == 0:
+    if not (math.isfinite(current) and math.isfinite(past)) or past == 0:
         return None
 
     return (current - past) / past
@@ -447,7 +447,7 @@ def calculate_sma_slope(
         return None
     start = sma_series.iloc[-(slope_window + 1)]
     end = sma_series.iloc[-1]
-    if start == 0 or pd.isna(start) or pd.isna(end):
+    if start == 0 or not (math.isfinite(start) and math.isfinite(end)):
         return None
     return float((end - start) / start / slope_window)
 
@@ -467,13 +467,13 @@ def weekly_return_zscore(
 ) -> float | None:
     """Z-score of the most recent 1-week return vs trailing weekly returns.
 
-    None when the latest 5-session return is undefined (either endpoint close invalid);
-    an older week is never reported as the latest.
+    None when the latest 5-session return is undefined (either endpoint close missing
+    or non-finite); an older week is never reported as the latest.
     """
     weekly_all = close_series.pct_change(5, fill_method=None)
-    if len(weekly_all) == 0 or pd.isna(weekly_all.iloc[-1]):
+    if len(weekly_all) == 0 or not math.isfinite(weekly_all.iloc[-1]):
         return None
-    weekly = weekly_all.dropna()
+    weekly = weekly_all[np.isfinite(weekly_all)]
     if len(weekly) < 20:
         return None
     weekly = weekly.tail(lookback_weeks)
