@@ -39,6 +39,11 @@
 - If you change user-visible output semantics, update the relevant examples in `README.md`.
 
 ## Common Schema Gotchas
+- Two versions move independently: `meta.schema_version` (response schema,
+  `SCHEMA_VERSION` in `src/stock_analysis/__init__.py`, now "5") and
+  `watchlist_snapshot.snapshot_version` (`normalize.SNAPSHOT_VERSION`, now
+  "2.0.0"). CHANGELOG.md lists every field that changed meaning or units since
+  schema 4; update it with any further output change.
 - `technicals` returns `current_price` at the top level, not under a `summary` object.
 - `analyze` returns price, name, sector, market cap, and currency under `summary`, not as duplicated top-level fields.
 - Support boundaries (WP4, D5): `summary.support` (and the trade card's

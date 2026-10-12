@@ -99,6 +99,25 @@ regular hours, otherwise the last completed session's close; the cached quote is
 only a labelled fallback. `summary.price_provenance` says which price was used,
 as of when, and how stale it is (in sessions for daily closes).
 
+Other data conventions:
+- Debt-to-equity is a ratio (1.2 = 120%). A valuation ratio that is undefined
+  (e.g. P/E with EPS <= 0) or whose basis can't be verified is null, and
+  `metric_status` says why.
+- Statement values carry their period: `free_cash_flow_ttm` and
+  `operating_cf_ttm` hold a TTM only when four consecutive quarters are
+  complete, otherwise the newest annual value labelled `FY <year>` with
+  `*_period_end`, `*_ttm_status` and `*_period_lag`.
+- Daily price history keeps every vendor session; an empty session is a row of
+  nulls. Returns count sessions and are null when an endpoint is missing, and
+  `get_technicals` discloses gaps per indicator window in `bar_validity`.
+- A failed upstream read is reported as failed (for example `source_status` on
+  news, `sources_failed` and `verification` on earnings), never as "nothing
+  found".
+
+Responses carry `meta.schema_version` (`"5"`); watchlist snapshots carry their
+own `snapshot_version` (`"2.0.0"`). [CHANGELOG.md](CHANGELOG.md) lists every
+field that changed meaning or units since schema 4.
+
 ## What It Checks
 
 - **Action now:** buy, starter, hold, wait, avoid, or wait for data

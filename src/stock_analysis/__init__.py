@@ -21,4 +21,7 @@ SERVER_VERSION = get_server_version()
 # v2: Added watchlist_snapshot with snapshot_version/hash, NaN sanitization, policy_action enhancements
 # v3: Added dip_assessment, cash_flow metadata, action_zones distance labels, oversold_composite
 # v4: Added analyst coverage, ownership/short interest, governance, quality, valuation context, section summaries
-SCHEMA_VERSION = "4"
+# v5: Step 1 correctness (see CHANGELOG.md): fraction units and one forward dividend yield, valuation
+#     basis/applicability, instrument and currency support, session-based price provenance and staleness,
+#     period-paired statement values, earnings verification, explicit read failures, snapshot 2.0.0
+SCHEMA_VERSION = "5"
