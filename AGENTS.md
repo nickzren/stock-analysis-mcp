@@ -116,14 +116,17 @@
   only when the cash runway fails (< 4 quarters), negative equity included;
   net debt (`net_cash_positive` False, exactly zero included) or negative
   equity is `watch`, and `balance_sheet_safety.reasons` names why
-  (`runway_under_4q`, `runway_under_8q`, `net_debt`, `negative_equity`,
-  `high_leverage`, `dilution_risk`). The thesis reads `broken` only when the
+  (`runway_under_4q`, `runway_under_8q`, `net_debt`, `net_cash_unknown`,
+  `negative_equity`, `high_leverage`, `dilution_risk`). The thesis reads `broken` only when the
   business is broken or the runway fails, and `watch` never makes a dislocation
   candidate (that needs `safe`). In `build_policy_action` an absent or null
   tilt is missing, not neutral or bearish: the branches it would decide become
   `insufficient_data` with `tilt=missing` in the rationale, while avoid fits,
   valuation- and dislocation-driven actions and the falling-knife override are
-  unchanged (a failed fundamentals fetch used to read as `hold_or_reduce`).
+  unchanged (with a known mid-term fit of `ok`, a failed fundamentals fetch
+  used to read as `hold_or_reduce`). `balance_sheet_safety.summary` names the
+  causes, and a missing tilt with an `ok` mid-term fit makes the balanced
+  mode's suitability `needs_more_data`.
 - `analyze` returns the `standard` projection by default; deep audit fields such as `decision_context`, `dip_assessment`, and full `verdict` / `data_quality` require `detail="full"`.
 - `options_signals` returns put/call data at `put_call_ratio.volume_based` and `put_call_ratio.oi_based`, not under `summary.*`.
 - In `analyze`, raw options output is nested under `options_signals`, while derived narrative fields appear elsewhere such as `section_summaries`, `signals`, and `decision_context`.

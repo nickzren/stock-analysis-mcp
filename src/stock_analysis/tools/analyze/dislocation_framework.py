@@ -275,6 +275,17 @@ def _durability_status(business_quality: str | None) -> str:
     return "unknown"
 
 
+_REASON_LABELS = {
+    "runway_under_4q": "runway under 4 quarters",
+    "runway_under_8q": "runway under 8 quarters",
+    "net_debt": "net debt",
+    "net_cash_unknown": "net cash unknown",
+    "negative_equity": "negative equity",
+    "high_leverage": "high leverage",
+    "dilution_risk": "dilution risk",
+}
+
+
 def _build_balance_sheet_safety(
     health: dict[str, Any],
     burn_metrics: dict[str, Any],
@@ -340,29 +351,33 @@ def _build_balance_sheet_safety(
     liquidity_label = format_compact_number(liquidity)
     runway_label = f"{runway_quarters:.1f}q" if runway_quarters is not None else None
 
-    if status == "safe":
-        summary = "Balance sheet looks safe."
-        if liquidity_label:
-            summary = f"Balance sheet looks safe with liquidity around {liquidity_label}."
-    elif status == "watch":
-        summary = "Balance sheet is workable but needs monitoring."
-        if runway_label:
-            summary = f"Balance sheet needs monitoring; runway is about {runway_label}."
-    else:
-        summary = "Balance sheet risk is elevated enough to threaten the thesis."
-
     reasons = [
         reason
         for reason, applies in (
             ("runway_under_4q", runway_status == "fail"),
             ("runway_under_8q", runway_status == "watch"),
             ("net_debt", net_cash_status == "fail"),
+            ("net_cash_unknown", net_cash_status == "unknown"),
             ("negative_equity", health.get("leverage_status") == "negative_equity"),
             ("high_leverage", debt_status in {"watch", "fail"} and health.get("leverage_status") != "negative_equity"),
             ("dilution_risk", dilution_status in {"watch", "fail"}),
         )
         if applies
     ]
+    # Name the causes, so the summary never blames a runway that passed.
+    causes = ", ".join(
+        f"runway about {runway_label}" if reason.startswith("runway_") and runway_label else _REASON_LABELS[reason]
+        for reason in reasons
+    )
+
+    if status == "safe":
+        summary = "Balance sheet looks safe."
+        if liquidity_label:
+            summary = f"Balance sheet looks safe with liquidity around {liquidity_label}."
+    elif status == "watch":
+        summary = f"Balance sheet needs monitoring: {causes}." if causes else "Balance sheet needs monitoring."
+    else:
+        summary = f"Balance sheet risk is elevated enough to threaten the thesis: {causes}."
 
     return {
         "status": status,

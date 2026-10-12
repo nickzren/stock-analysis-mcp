@@ -219,7 +219,9 @@ def build_decision_modes(
         core_why.append("price_broken_more_than_business")
 
     balanced_suitability: str
-    if mid_term_fit == "ok":
+    if mid_term_fit == "ok" and verdict.get("tilt") is None:
+        balanced_suitability = "needs_more_data"  # the policy action is insufficient_data (WP9)
+    elif mid_term_fit == "ok":
         balanced_suitability = "favorable" if verdict.get("tilt") == "bullish" else "workable"
     elif mid_term_fit == "caution":
         balanced_suitability = "caution"

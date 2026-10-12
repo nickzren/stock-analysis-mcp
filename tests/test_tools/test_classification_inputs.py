@@ -14,6 +14,7 @@ from stock_analysis.tools.analyze.dislocation_framework import (
 from stock_analysis.tools.analyze.executive_summary import build_policy_action
 
 orchestrator = importlib.import_module("stock_analysis.tools.analyze.orchestrator")
+fundamentals_module = importlib.import_module("stock_analysis.tools.fundamentals")
 
 HEALTHY_NET_DEBT = {"net_cash_positive": False, "debt_to_equity": 1.2}
 NO_BURN = {"status": "not_applicable"}
@@ -81,6 +82,46 @@ class TestR92Runway:
         balance = _build_balance_sheet_safety(negative, NO_BURN)
         assert balance["status"] == "watch"
         assert "negative_equity" in balance["reasons"]
+
+    def test_exactly_zero_net_cash_is_not_net_cash_positive(self) -> None:
+        health = fundamentals_module._build_financial_health({"totalCash": 5e9, "totalDebt": 5e9, "debtToEquity": 40.0})
+        assert health["rules"]["net_cash_positive"]["triggered"] is False
+        balance = _build_balance_sheet_safety({"net_cash_positive": False, "debt_to_equity": 0.4}, NO_BURN)
+        assert (balance["status"], balance["reasons"]) == ("watch", ["net_debt"])
+
+    @pytest.mark.parametrize(
+        ("health", "burn", "reasons"),
+        [({"net_cash_positive": True, "debt_to_equity": 0.5}, {"status": "available", "cash_runway_quarters": 6.0},
+          ["runway_under_8q"]),
+         ({"net_cash_positive": True, "debt_to_equity": 2.0}, NO_BURN, ["high_leverage"]),
+         ({"net_cash_positive": True, "debt_to_equity": 4.0}, NO_BURN, ["high_leverage"]),
+         ({"net_cash_positive": True, "debt_to_equity": 0.5},
+          {"status": "available", "cash_runway_quarters": 6.0,
+           "dilution_analysis": {"dilution_if_raised_today": 0.25}}, ["runway_under_8q", "dilution_risk"])],
+        ids=["runway_watch", "leverage_watch", "leverage_fail", "dilution"],
+    )
+    def test_each_reason_is_named(self, health: dict[str, Any], burn: dict[str, Any], reasons: list[str]) -> None:
+        balance = _build_balance_sheet_safety(health, burn)
+        assert (balance["status"], balance["reasons"]) == ("watch", reasons)
+
+    def test_unknown_net_cash_is_named(self) -> None:
+        balance = _build_balance_sheet_safety({"net_cash_positive": None, "debt_to_equity": 0.2}, NO_BURN)
+        assert (balance["status"], balance["reasons"]) == ("watch", ["net_cash_unknown"])
+
+    @pytest.mark.parametrize(
+        ("health", "burn", "summary"),
+        [(HEALTHY_NET_DEBT, NO_BURN, "Balance sheet needs monitoring: net debt."),
+         (HEALTHY_NET_DEBT, {"status": "available", "cash_runway_quarters": 10.0}, "Balance sheet needs monitoring: net debt."),
+         ({"net_cash_positive": True, "debt_to_equity": 0.5}, {"status": "available", "cash_runway_quarters": 6.0},
+          "Balance sheet needs monitoring: runway about 6.0q."),
+         ({"net_cash_positive": False, "debt_to_equity": None, "leverage_status": "negative_equity"}, NO_BURN,
+          "Balance sheet needs monitoring: net debt, negative equity."),
+         (HEALTHY_NET_DEBT, SHORT_RUNWAY,
+          "Balance sheet risk is elevated enough to threaten the thesis: runway about 3.0q, net debt.")],
+        ids=["net_debt", "net_debt_long_runway", "short_runway", "negative_equity", "failed_runway"],
+    )
+    def test_the_summary_names_the_actual_causes(self, health: dict[str, Any], burn: dict[str, Any], summary: str) -> None:
+        assert _build_balance_sheet_safety(health, burn)["summary"] == summary
 
     def test_a_safe_balance_sheet_has_no_reasons(self) -> None:
         balance = _build_balance_sheet_safety({"net_cash_positive": True, "debt_to_equity": 0.5}, NO_BURN)
@@ -196,4 +237,6 @@ class TestMissingTiltEndToEnd:
         assert result["verdict"]["horizon_fit"]["mid_term"] == "ok"
         assert result["policy_action"]["mid_term"] == "insufficient_data"  # was hold_or_reduce
         assert result["decision_card"]["action_now"] == "insufficient_data"
+        balanced = result["decision_modes"]["balanced"]
+        assert (balanced["suitability"], balanced["action"]) == ("needs_more_data", "insufficient_data")
         assert not [r for r in result["policy_action"]["rationale"] if "tilt=bearish" in r or "tilt=None" in r]
