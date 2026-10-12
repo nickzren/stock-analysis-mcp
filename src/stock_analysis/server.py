@@ -415,16 +415,24 @@ async def detect_changes(
     """
     Detect material changes for a stock since a previous snapshot.
 
-    Runs fresh analysis and diffs against previous watchlist_snapshot.
-    Identifies price moves >5%, score changes >0.10, tilt/zone/regime shifts,
-    and new or removed signals.
+    Runs fresh analysis and diffs its watchlist_snapshot (the same at every
+    analyze detail level) against previous_snapshot. Material changes: price
+    moves >5%, score changes >0.10, and any change in action, hard gates, zone,
+    horizon fit, tilt, confidence, risk regime, valuation gate, support, price
+    source or staleness, or a new or removed signal. Fields absent from an older
+    snapshot are listed in not_comparable, never reported as changes; fetch
+    times, cache hits and ages never count.
 
     Args:
         symbol: Stock ticker symbol
-        previous_snapshot: Previous watchlist_snapshot dict (optional - if omitted, returns current snapshot only)
+        previous_snapshot: A previous analyze watchlist_snapshot or detect_changes
+            current_snapshot for the same symbol (optional - if omitted, returns
+            current snapshot only). A snapshot for another symbol, or with a
+            missing key or wrong type, returns an invalid_snapshot error.
 
     Returns:
-        JSON with changes summary, key_changes list, and investment impact narrative
+        JSON with changes, material_changes, not_comparable, hash_changed and a
+        narrative summary
     """
     result = await what_changed(symbol=symbol, previous_snapshot=previous_snapshot)
     return _json_response(result)

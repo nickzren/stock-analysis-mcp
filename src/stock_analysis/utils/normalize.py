@@ -25,8 +25,17 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
-# Snapshot format version - bump when normalization logic changes
-SNAPSHOT_VERSION = "1.1.0"
+# Snapshot format version - bump when normalization logic changes.
+# 2.0.0 (WP7): one snapshot for analyze and detect_changes (enriched, decision,
+# support and price-provenance fields); unknown lists stay null; the hash covers
+# the full set except fetch-derived fields.
+SNAPSHOT_VERSION = "2.0.0"
+# Versions detect_changes accepts as a previous snapshot.
+COMPATIBLE_SNAPSHOT_VERSIONS = frozenset({"1.0.0", "1.1.0", SNAPSHOT_VERSION})
+# Required in every snapshot; every other field is optional (older versions lack some).
+SNAPSHOT_IDENTITY_KEYS = ("snapshot_version", "symbol")
+# Derived from fetch times, not market data, so left out of snapshot_hash.
+_UNHASHED_SNAPSHOT_KEYS = frozenset({"snapshot_hash", "snapshot_as_of_date"})
 
 
 def canonical_dumps(obj: Any) -> str:
@@ -417,23 +426,39 @@ def _compute_snapshot_as_of_date(normalized: dict[str, Any]) -> str | None:
     return max(dates) if dates else None
 
 
+def _string_list(value: Any) -> list[str] | None:
+    """A sorted list of strings, or None when the source list is unknown (absent or
+    null) -- read before normalization, which turns those into []."""
+    if not isinstance(value, list):
+        return None
+    return sorted(str(item) for item in value)
+
+
+def _hard_gate_ids(decision_card: Any) -> list[str] | None:
+    hard_gates = decision_card.get("hard_gates") if isinstance(decision_card, dict) else None
+    blocking = hard_gates.get("blocking") if isinstance(hard_gates, dict) else None
+    if not isinstance(blocking, list):
+        return None
+    return sorted(str(gate["id"]) for gate in blocking if isinstance(gate, dict) and gate.get("id"))
+
+
 def build_watchlist_snapshot(raw: dict[str, Any]) -> dict[str, Any]:
     """
-    Build a watchlist snapshot with key summary fields.
-
-    This is a reduced view optimized for watchlist displays and diffs,
-    containing only the most relevant decision fields.
+    Build the watchlist snapshot: the one record analyze returns at every detail
+    level and detect_changes diffs (WP7).
 
     The snapshot includes:
     - snapshot_version: Format version for compatibility checking
-    - snapshot_hash: SHA-256 hash of canonical JSON for change detection
-    - snapshot_as_of_date: Latest data date across all components (time anchor)
+    - snapshot_hash: SHA-256 of the canonical snapshot, without fetch-derived fields
+    - snapshot_as_of_date: Latest fetch date across all components (time anchor)
+    - decision fields (actions, gates, zone, horizon fit, signals, support,
+      price provenance); a list that is unknown is null, a known-empty list is []
 
     Args:
         raw: Raw analyze_stock output
 
     Returns:
-        Compact snapshot dict with version and hash
+        Snapshot dict with version and hash
     """
     normalized = normalize_for_watchlist_diff(raw)
 
@@ -444,18 +469,20 @@ def build_watchlist_snapshot(raw: dict[str, Any]) -> dict[str, Any]:
     events = normalized.get("events_summary", {})
     risk = normalized.get("risk_summary", {})
     decision_card = normalized.get("decision_card", {})
-    hard_gates = decision_card.get("hard_gates", {}) if isinstance(decision_card, dict) else {}
-    hard_gate_blocking = hard_gates.get("blocking", []) if isinstance(hard_gates, dict) else []
-    hard_gate_ids: list[str] = sorted(
-        str(g["id"]) for g in hard_gate_blocking
-        if isinstance(g, dict) and g.get("id")
-    )
+    horizon_fit = verdict.get("horizon_fit") or {}
+    support = summary.get("support") or {}
+    provenance = summary.get("price_provenance") or {}
+    raw_signals = raw.get("signals")
+    if not isinstance(raw_signals, dict):
+        raw_signals = {}
+    next_catalyst = events.get("next_catalyst")
+    if isinstance(next_catalyst, dict):
+        # days_until shrinks every day without any new data.
+        next_catalyst = {key: value for key, value in next_catalyst.items() if key != "days_until"}
 
     # Compute snapshot_as_of_date (max of all component dates)
     snapshot_as_of_date = _compute_snapshot_as_of_date(normalized)
 
-    # Build the core snapshot data (without hash - we'll add it after)
-    # Include snapshot_version in hashed content so version changes invalidate hash
     snapshot_data = {
         "snapshot_version": SNAPSHOT_VERSION,
         "symbol": normalized.get("symbol"),
@@ -466,6 +493,8 @@ def build_watchlist_snapshot(raw: dict[str, Any]) -> dict[str, Any]:
         "tilt": verdict.get("tilt"),
         "confidence": verdict.get("confidence"),
         "score": verdict.get("score"),
+        "mid_term_fit": horizon_fit.get("mid_term"),
+        "long_term_fit": horizon_fit.get("long_term"),
         # Policy action (primary decision output)
         "action_mid_term": policy.get("mid_term"),
         "action_long_term": policy.get("long_term"),
@@ -473,20 +502,31 @@ def build_watchlist_snapshot(raw: dict[str, Any]) -> dict[str, Any]:
         "is_unprofitable": policy.get("is_unprofitable"),
         # Decision card (compact action surface — diffs surface action / gate changes)
         "decision_action_now": decision_card.get("action_now") if isinstance(decision_card, dict) else None,
-        "hard_gate_ids": hard_gate_ids,
+        "hard_gate_ids": _hard_gate_ids(raw.get("decision_card")),
+        "zone": (normalized.get("action_zones") or {}).get("current_zone"),
+        "bullish_signals": _string_list(raw_signals.get("bullish")),
+        "bearish_signals": _string_list(raw_signals.get("bearish")),
         # Key risk
         "risk_regime": risk.get("risk_regime", {}).get("classification"),
         "volatility_ann": risk.get("annualized_volatility", risk.get("volatility_ann")),
+        # Instrument and currency support (WP4)
+        "support_instrument": (support.get("instrument") or {}).get("status"),
+        "support_currency": (support.get("currency") or {}).get("status"),
+        # Price provenance (WP5); fetch time, cache hit and ages stay out
+        "price_source": provenance.get("price_source"),
+        "price_as_of": provenance.get("price_as_of"),
+        "as_of_kind": provenance.get("as_of_kind"),
+        "price_stale": (provenance.get("staleness") or {}).get("stale"),
         # Next catalyst
-        "next_catalyst": events.get("next_catalyst"),
+        "next_catalyst": next_catalyst,
         # Data freshness - single time anchor for diffs
         "snapshot_as_of_date": snapshot_as_of_date,
     }
 
-    # Compute hash of canonical JSON for change detection
-    # Hash includes snapshot_version so version bumps change the hash
-    canonical_json = canonical_dumps(snapshot_data)
-    snapshot_hash = hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()[:16]
+    # Hash the full set once it is assembled; snapshot_version is included so a
+    # version bump changes the hash.
+    hashed = {key: value for key, value in snapshot_data.items() if key not in _UNHASHED_SNAPSHOT_KEYS}
+    snapshot_hash = hashlib.sha256(canonical_dumps(hashed).encode("utf-8")).hexdigest()[:16]
 
     return {
         **snapshot_data,

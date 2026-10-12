@@ -284,6 +284,22 @@
   unchanged. `data_quality.component_freshness` ages price/risk in sessions
   from `last_bar_date` (warning `price_stale_N_sessions`) and the rest in UTC
   hours.
+- Snapshots (WP7, `normalize.build_watchlist_snapshot`, version 2.0.0): analyze
+  builds one `watchlist_snapshot` before projection (identical at every
+  `detail` level) and `detect_changes` uses it as is. It holds the compact,
+  enriched (zone, horizon fit, signals) and decision fields plus
+  `support_instrument` / `support_currency` and `price_source` /
+  `price_as_of` / `as_of_kind` / `price_stale`; fetch time, cache hit, ages and
+  `next_catalyst.days_until` are left out, and `snapshot_as_of_date` (fetch
+  dates) is excluded from `snapshot_hash`, which is computed over the full set.
+  Lists are read before normalization: unknown is null, known-empty is `[]`.
+  `detect_changes` validates `previous_snapshot` first (required
+  `snapshot_version` in 1.0.0/1.1.0/2.0.0 and a matching `symbol`; every
+  other field optional but type-checked) and returns `invalid_snapshot` with
+  `problems`. It compares only fields both snapshots carry (the rest are
+  `not_comparable`); null -> value is a change; `hash_changed` is reported
+  separately from `material_changes`, and a version change alone is not
+  material.
 - Session-indexed bars (WP5): rows are never dropped. Daily-or-longer
   `fetch_history` frames pass `keepna=True` (yfinance otherwise drops empty
   session rows); `1d` frames also restore missing volumes: yfinance zero-fills a

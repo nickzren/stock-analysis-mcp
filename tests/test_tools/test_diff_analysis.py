@@ -77,15 +77,11 @@ class TestWhatChangedDecisionFields:
 
         monkeypatch.setattr(diff_module, "analyze_stock", fake_analyze)
 
-        # Build a result whose extracted snapshot has action_now=wait_for_data
-        def fake_extract(_result: dict) -> dict:
-            return _snapshot(
-                action_now="wait_for_data",
-                hard_gate_ids=["earnings_blackout"],
-            )
-
-        monkeypatch.setattr(diff_module, "_extract_snapshot", fake_extract)
-        captured["result"] = {"symbol": "TEST"}
+        # detect_changes uses analyze's own watchlist_snapshot (WP7).
+        captured["result"] = {
+            "symbol": "TEST",
+            "watchlist_snapshot": _snapshot(action_now="wait_for_data", hard_gate_ids=["earnings_blackout"]),
+        }
 
         previous = _snapshot(action_now="buy", hard_gate_ids=[])
 
@@ -116,12 +112,7 @@ class TestWhatChangedDecisionFields:
             return captured["result"]
 
         monkeypatch.setattr(diff_module, "analyze_stock", fake_analyze)
-        monkeypatch.setattr(
-            diff_module,
-            "_extract_snapshot",
-            lambda r: _snapshot(action_now="buy", hard_gate_ids=[]),
-        )
-        captured["result"] = {"symbol": "TEST"}
+        captured["result"] = {"symbol": "TEST", "watchlist_snapshot": _snapshot(action_now="buy", hard_gate_ids=[])}
 
         previous = _snapshot(action_now="wait_for_data", hard_gate_ids=["falling_knife"])
 

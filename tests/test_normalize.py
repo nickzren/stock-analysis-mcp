@@ -332,11 +332,11 @@ class TestBuildWatchlistSnapshot:
 
     def test_decision_card_missing_yields_none_fields(self):
         """When decision_card isn't present (e.g., partial result), snapshot
-        gracefully sets the fields to None / empty."""
+        sets the fields to None: the gates are unknown, not known-empty (WP7)."""
         raw = {"symbol": "TEST"}
         snapshot = build_watchlist_snapshot(raw)
         assert snapshot["decision_action_now"] is None
-        assert snapshot["hard_gate_ids"] == []
+        assert snapshot["hard_gate_ids"] is None
 
     def test_includes_snapshot_hash(self):
         """Should include snapshot_hash in output."""

@@ -154,7 +154,7 @@ If `account_size` is omitted, sizing remains percent-based. If a caller depends 
 | Tool | Description |
 |------|-------------|
 | `compare` | Side-by-side comparison for 2-5 symbols with rankings |
-| `detect_changes` | Diff current analysis vs prior snapshot (material changes) |
+| `detect_changes` | Diff current analysis vs prior `watchlist_snapshot` (material changes; older snapshots compare without phantom changes) |
 
 ### Market Data & Signals
 
