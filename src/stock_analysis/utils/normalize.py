@@ -458,8 +458,8 @@ def _string_list(value: Any) -> list[str] | None:
 
 
 def _hard_gate_ids(decision_card: Any) -> list[str] | None:
-    hard_gates = decision_card.get("hard_gates") if isinstance(decision_card, dict) else None
-    blocking = hard_gates.get("blocking") if isinstance(hard_gates, dict) else None
+    hard_gates = _section(_section(decision_card).get("hard_gates"))
+    blocking = hard_gates.get("blocking")
     if not isinstance(blocking, list):
         return None
     return sorted(str(gate["id"]) for gate in blocking if isinstance(gate, dict) and gate.get("id"))

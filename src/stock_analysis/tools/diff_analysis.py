@@ -24,6 +24,8 @@ _FIELD_TYPES: dict[str, str] = {
         "string",
     ),
 }
+
+
 def _finite_number(value: Any) -> bool:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return False
@@ -448,10 +450,9 @@ async def what_changed(
     # fetch times, cache hits and ages are kept out of it.
     # Hashes only compare within one version: each version hashes a different field set.
     previous_hash = previous_snapshot.get("snapshot_hash")
-    same_version = previous_snapshot.get("snapshot_version") == current_snapshot.get("snapshot_version")
-    response["hash_changed"] = (
-        previous_hash != current_snapshot.get("snapshot_hash") if previous_hash is not None and same_version else None
-    )
+    response["hash_changed"] = None
+    if previous_hash is not None and prev_version == curr_version:
+        response["hash_changed"] = previous_hash != current_snapshot.get("snapshot_hash")
     response["summary"] = summary
     response["warnings"] = warnings or None
 
