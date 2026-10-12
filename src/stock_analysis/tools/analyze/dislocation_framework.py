@@ -292,6 +292,7 @@ def _build_balance_sheet_safety(
 ) -> dict[str, Any]:
     net_cash_positive = health.get("net_cash_positive")
     debt_to_equity = health.get("debt_to_equity")
+    negative_equity = health.get("leverage_status") == "negative_equity"
     liquidity = burn_metrics.get("liquidity")
     runway_quarters = burn_metrics.get("cash_runway_quarters")
     dilution_analysis = burn_metrics.get("dilution_analysis") or {}
@@ -304,7 +305,7 @@ def _build_balance_sheet_safety(
     else:
         net_cash_status = "unknown"
 
-    if health.get("leverage_status") == "negative_equity":
+    if negative_equity:
         debt_status = "fail"  # negative equity is never low debt (WP4, R4.2)
     elif debt_to_equity is None:
         debt_status = "unknown"
@@ -358,8 +359,8 @@ def _build_balance_sheet_safety(
             ("runway_under_8q", runway_status == "watch"),
             ("net_debt", net_cash_status == "fail"),
             ("net_cash_unknown", net_cash_status == "unknown"),
-            ("negative_equity", health.get("leverage_status") == "negative_equity"),
-            ("high_leverage", debt_status in {"watch", "fail"} and health.get("leverage_status") != "negative_equity"),
+            ("negative_equity", negative_equity),
+            ("high_leverage", debt_status in {"watch", "fail"} and not negative_equity),
             ("dilution_risk", dilution_status in {"watch", "fail"}),
         )
         if applies

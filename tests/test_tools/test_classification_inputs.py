@@ -16,6 +16,7 @@ from stock_analysis.tools.analyze.executive_summary import build_policy_action
 orchestrator = importlib.import_module("stock_analysis.tools.analyze.orchestrator")
 fundamentals_module = importlib.import_module("stock_analysis.tools.fundamentals")
 
+NET_CASH = {"net_cash_positive": True, "debt_to_equity": 0.5}
 HEALTHY_NET_DEBT = {"net_cash_positive": False, "debt_to_equity": 1.2}
 NO_BURN = {"status": "not_applicable"}
 SHORT_RUNWAY = {"status": "available", "cash_runway_quarters": 3.0, "liquidity": 5e7}
@@ -51,8 +52,7 @@ class TestR91NetDebt:
         assert signals["is_dislocation_candidate"] is False  # watch alone never qualifies
 
     def test_a_net_cash_company_is_still_safe_and_can_be_a_candidate(self) -> None:
-        healthy = {"net_cash_positive": True, "debt_to_equity": 0.5}
-        signals = classify_dislocation_opportunity(VERDICT, ZONES, fundamentals(healthy, NO_BURN), DEEP_DIP)
+        signals = classify_dislocation_opportunity(VERDICT, ZONES, fundamentals(NET_CASH, NO_BURN), DEEP_DIP)
         assert (signals["balance_status"], signals["is_dislocation_candidate"]) == ("safe", True)
 
     def test_the_framework_reads_net_debt_as_watch_not_broken(self) -> None:
@@ -68,7 +68,7 @@ class TestR91NetDebt:
 class TestR92Runway:
     @pytest.mark.parametrize(
         "health",
-        [{"net_cash_positive": True, "debt_to_equity": 0.5}, HEALTHY_NET_DEBT,
+        [NET_CASH, HEALTHY_NET_DEBT,
          {"net_cash_positive": False, "debt_to_equity": None, "leverage_status": "negative_equity"}],
         ids=["net_cash", "net_debt", "negative_equity"],
     )
@@ -91,13 +91,11 @@ class TestR92Runway:
 
     @pytest.mark.parametrize(
         ("health", "burn", "reasons"),
-        [({"net_cash_positive": True, "debt_to_equity": 0.5}, {"status": "available", "cash_runway_quarters": 6.0},
-          ["runway_under_8q"]),
+        [(NET_CASH, {"status": "available", "cash_runway_quarters": 6.0}, ["runway_under_8q"]),
          ({"net_cash_positive": True, "debt_to_equity": 2.0}, NO_BURN, ["high_leverage"]),
          ({"net_cash_positive": True, "debt_to_equity": 4.0}, NO_BURN, ["high_leverage"]),
-         ({"net_cash_positive": True, "debt_to_equity": 0.5},
-          {"status": "available", "cash_runway_quarters": 6.0,
-           "dilution_analysis": {"dilution_if_raised_today": 0.25}}, ["runway_under_8q", "dilution_risk"])],
+         (NET_CASH, {"status": "available", "cash_runway_quarters": 6.0,
+                     "dilution_analysis": {"dilution_if_raised_today": 0.25}}, ["runway_under_8q", "dilution_risk"])],
         ids=["runway_watch", "leverage_watch", "leverage_fail", "dilution"],
     )
     def test_each_reason_is_named(self, health: dict[str, Any], burn: dict[str, Any], reasons: list[str]) -> None:
@@ -112,8 +110,7 @@ class TestR92Runway:
         ("health", "burn", "summary"),
         [(HEALTHY_NET_DEBT, NO_BURN, "Balance sheet needs monitoring: net debt."),
          (HEALTHY_NET_DEBT, {"status": "available", "cash_runway_quarters": 10.0}, "Balance sheet needs monitoring: net debt."),
-         ({"net_cash_positive": True, "debt_to_equity": 0.5}, {"status": "available", "cash_runway_quarters": 6.0},
-          "Balance sheet needs monitoring: runway about 6.0q."),
+         (NET_CASH, {"status": "available", "cash_runway_quarters": 6.0}, "Balance sheet needs monitoring: runway about 6.0q."),
          ({"net_cash_positive": False, "debt_to_equity": None, "leverage_status": "negative_equity"}, NO_BURN,
           "Balance sheet needs monitoring: net debt, negative equity."),
          (HEALTHY_NET_DEBT, SHORT_RUNWAY,
@@ -124,19 +121,19 @@ class TestR92Runway:
         assert _build_balance_sheet_safety(health, burn)["summary"] == summary
 
     def test_a_safe_balance_sheet_has_no_reasons(self) -> None:
-        balance = _build_balance_sheet_safety({"net_cash_positive": True, "debt_to_equity": 0.5}, NO_BURN)
+        balance = _build_balance_sheet_safety(NET_CASH, NO_BURN)
         assert (balance["status"], balance["reasons"]) == ("safe", [])
 
 
 def policy(verdict: dict[str, Any], *, zones: dict[str, Any] | None = None,
-           dip: dict[str, Any] | None = None, health: dict[str, Any] | None = None) -> dict[str, Any]:
+           dip: dict[str, Any] | None = None) -> dict[str, Any]:
     return build_policy_action(
         verdict=verdict,
         action_zones=zones or {"current_zone": "hold_neutral",
                                "valuation_assessment": {"gate": "neutral", "is_unprofitable": False}},
         decomposed=verdict.get("decomposed"),
         dip_assessment=dip,
-        fundamentals_summary=fundamentals(health or {"net_cash_positive": True, "debt_to_equity": 0.5}, NO_BURN),
+        fundamentals_summary=fundamentals(NET_CASH, NO_BURN),
     )
 
 
