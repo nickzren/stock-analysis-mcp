@@ -290,16 +290,26 @@
   enriched (zone, horizon fit, signals) and decision fields plus
   `support_instrument` / `support_currency` and `price_source` /
   `price_as_of` / `as_of_kind` / `price_stale`; fetch time, cache hit, ages and
-  `next_catalyst.days_until` are left out, and `snapshot_as_of_date` (fetch
-  dates) is excluded from `snapshot_hash`, which is computed over the full set.
-  Lists are read before normalization: unknown is null, known-empty is `[]`.
-  `detect_changes` validates `previous_snapshot` first (required
-  `snapshot_version` in 1.0.0/1.1.0/2.0.0 and a matching `symbol`; every
-  other field optional but type-checked) and returns `invalid_snapshot` with
-  `problems`. It compares only fields both snapshots carry (the rest are
-  `not_comparable`); null -> value is a change; `hash_changed` is reported
-  separately from `material_changes`, and a version change alone is not
-  material.
+  `next_catalyst.days_until` are left out. `snapshot_hash` covers the full set
+  except clock-driven fields (`snapshot_as_of_date`, `price_stale`,
+  `next_catalyst`, whose date advances inside an open earnings window). Lists
+  are read before normalization: unknown is null, known-empty is `[]`; the
+  signal lists are null when a tool feeding them failed (`no_options` is a
+  known state). Non-dict sections read as empty. `detect_changes` checks the
+  shape of `previous_snapshot` before analysis (required `snapshot_version` in
+  1.0.0/1.1.0/2.0.0 and `symbol`; every other field optional but type-checked,
+  `next_catalyst`'s keys included) and matches its symbol against the ticker
+  analyze resolved, returning `invalid_snapshot` with `problems`. It compares
+  only fields both snapshots carry (the rest are `not_comparable`); null ->
+  value is a change, and an unknown list on either side is one change, never
+  new or removed items. Material: price > 5% (judged before rounding) or a
+  price/score appearing or disappearing, score > 0.10, gates, zone, horizon
+  fit, signals, tilt, confidence, risk regime, actions, valuation gate,
+  support, and a price-source change involving the info fallback (a
+  bar <-> close switch follows the clock and is recorded, not material);
+  `is_unprofitable` and `price_stale` are kept but not compared.
+  `hash_changed` is reported only within one version, separately from
+  `material_changes`; a version change alone is not material.
 - Session-indexed bars (WP5): rows are never dropped. Daily-or-longer
   `fetch_history` frames pass `keepna=True` (yfinance otherwise drops empty
   session rows); `1d` frames also restore missing volumes: yfinance zero-fills a

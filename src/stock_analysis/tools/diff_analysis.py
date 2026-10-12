@@ -40,6 +40,15 @@ _TYPE_CHECKS: dict[str, Callable[[Any], bool]] = {
     "string_list": lambda v: isinstance(v, list) and all(isinstance(item, str) for item in v),
     "object": lambda v: isinstance(v, dict),
 }
+# Known keys of the nested next_catalyst object (other keys are ignored).
+_CATALYST_FIELD_TYPES = {
+    "type": "string", "status": "string", "date": "string", "source": "string", "reason": "string",
+    "days_until": "number",
+}
+# Price sources a snapshot moves between with the time of day alone (a fresh bar
+# in the session, the completed close outside it); a switch between them is
+# recorded but not material.
+_ROUTINE_PRICE_SOURCES = frozenset({"intraday_quote", "daily_close"})
 # Decision fields compared as scalars: (snapshot field, changes key, label).
 _SCALAR_FIELDS = (
     ("tilt", "tilt", "tilt"),
@@ -83,6 +92,12 @@ def validate_previous_snapshot(snapshot: Any, symbol: str | None) -> list[str]:
         value = snapshot.get(key)
         if value is not None and not _TYPE_CHECKS[kind](value):
             problems.append(f"{key}: expected {kind.replace('_', ' ')}, got {type(value).__name__}")
+    catalyst = snapshot.get("next_catalyst")
+    if isinstance(catalyst, dict):
+        for key, kind in _CATALYST_FIELD_TYPES.items():
+            value = catalyst.get(key)
+            if value is not None and not _TYPE_CHECKS[kind](value):
+                problems.append(f"next_catalyst.{key}: expected {kind}, got {type(value).__name__}")
     return problems
 
 
@@ -211,7 +226,7 @@ def _build_material_changes(changes: dict[str, Any]) -> list[str]:
 
     for _, changes_key, label in _SCALAR_FIELDS:
         change = changes.get(changes_key, {})
-        if change.get("changed"):
+        if change.get("changed") and change.get("material", True):
             items.append(f"{label}: {change['previous']} -> {change['current']}")
 
     hard_gates = changes.get("hard_gates", {})
@@ -401,6 +416,9 @@ async def what_changed(
     for field, changes_key, _ in _SCALAR_FIELDS:
         if comparable(field):
             changes[changes_key] = _diff_scalar(previous_snapshot, current_snapshot, field)
+    source = changes.get("price_source")
+    if source and {source["previous"], source["current"]} <= _ROUTINE_PRICE_SOURCES:
+        source["material"] = False
     if comparable("hard_gate_ids"):
         changes["hard_gates"] = _diff_hard_gates(previous_snapshot, current_snapshot)
     horizon_fit = {

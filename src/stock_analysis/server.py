@@ -418,10 +418,10 @@ async def detect_changes(
     Runs fresh analysis and diffs its watchlist_snapshot (the same at every
     analyze detail level) against previous_snapshot. Material changes: price
     moves >5%, score changes >0.10, and any change in action, hard gates, zone,
-    horizon fit, tilt, confidence, risk regime, valuation gate, support, price
-    source or staleness, or a new or removed signal. Fields absent from an older
-    snapshot are listed in not_comparable, never reported as changes; fetch
-    times, cache hits and ages never count.
+    horizon fit, tilt, confidence, risk regime, valuation gate, support or a
+    switch to or from the fallback price source, or a new or removed signal.
+    Fields absent from an older snapshot are listed in not_comparable, never
+    reported as changes; fetch times, cache hits, ages and staleness never count.
 
     Args:
         symbol: Stock ticker symbol

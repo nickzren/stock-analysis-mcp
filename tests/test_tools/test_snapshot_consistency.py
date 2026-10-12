@@ -138,6 +138,13 @@ class TestR71MaterialChanges:
         response = await detect(previous)
         assert response["material_changes"] == []
 
+    async def test_crossing_the_close_from_bar_to_daily_close_is_not_material(self, detect: Any) -> None:
+        previous = {**copy.deepcopy(BASE), "price_source": "intraday_quote"}
+        response = await detect(previous)
+        assert response["material_changes"] == []
+        assert response["changes"]["price_source"] == {
+            "previous": "intraday_quote", "current": "daily_close", "changed": True, "material": False}
+
     async def test_a_newer_intraday_bar_time_is_not_material(self, detect: Any) -> None:
         response = await detect(copy.deepcopy(BASE), summary__price_provenance__price_as_of="2026-10-10")
         assert response["material_changes"] == []
@@ -296,11 +303,14 @@ class TestR74Validation:
             ({**BASE, "price": True}, "price"),
             ({**BASE, "price_stale": "no"}, "price_stale"),
             ({**BASE, "next_catalyst": "soon"}, "next_catalyst"),
+            ({**BASE, "next_catalyst": {"type": ["earnings"], "date": "2026-10-30"}}, "next_catalyst.type"),
+            ({**BASE, "next_catalyst": {"type": "earnings", "date": 20261030}}, "next_catalyst.date"),
             ("not a snapshot", "object"),
         ],
         ids=["missing_symbol", "symbol_not_a_string", "missing_version", "unknown_version", "version_list",
              "version_dict", "price_too_big", "signals_not_a_list",
-             "gate_not_a_string", "price_string", "price_bool", "stale_not_bool", "catalyst_not_object", "not_dict"],
+             "gate_not_a_string", "price_string", "price_bool", "stale_not_bool", "catalyst_not_object",
+             "catalyst_type_list", "catalyst_date_int", "not_dict"],
     )
     async def test_bad_snapshots_get_a_structured_error_before_any_analysis(
         self, detect: Any, previous: Any, problem: str,
@@ -359,9 +369,17 @@ class TestOneSnapshot:
         assert "days_until" not in snapshot["next_catalyst"]
         assert not {"fetched_at", "cache_hit"} & set(snapshot)
 
-    async def test_detect_changes_uses_analyze_s_snapshot_as_is(self, detect: Any) -> None:
-        response = await detect(None)
-        assert response["current_snapshot"] == raw_result()["watchlist_snapshot"]
+    async def test_detect_changes_uses_analyze_s_snapshot_as_is(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        current = raw_result()
+        current["watchlist_snapshot"] = {**current["watchlist_snapshot"], "marker": "from analyze"}
+
+        async def fake_analyze(symbol: str, **kwargs: Any) -> dict[str, Any]:
+            return current
+
+        monkeypatch.setattr(diff_module, "analyze_stock", fake_analyze)
+        response = await diff_module.what_changed("ACME")
+
+        assert response["current_snapshot"] is current["watchlist_snapshot"]
 
     async def test_every_tier_carries_the_identical_snapshot(self, monkeypatch: pytest.MonkeyPatch) -> None:
         async def summary(symbol: str, **kwargs: Any) -> dict[str, Any]:
