@@ -1,8 +1,8 @@
 # Changelog
 
-## Unreleased: Step 1, correctness foundation
+## 0.2.0 (2026-10-12): Step 1, correctness foundation
 
-Two versions change, separately:
+The package version (`meta.server_version`) goes from `0.1.0` to `0.2.0`. Two other versions change, each on its own scale:
 
 - **Response schema:** `meta.schema_version` goes from `"4"` to `"5"`.
 - **Watchlist snapshot:** `watchlist_snapshot.snapshot_version` goes from `"1.1.0"` to `"2.0.0"`. `detect_changes` still accepts 1.0.0 and 1.1.0 snapshots.
