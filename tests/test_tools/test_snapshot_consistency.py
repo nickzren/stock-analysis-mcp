@@ -392,12 +392,16 @@ class TestR74Validation:
             ({**BASE, "next_catalyst": "soon"}, "next_catalyst"),
             ({**BASE, "next_catalyst": {"type": ["earnings"], "date": "2026-10-30"}}, "next_catalyst.type"),
             ({**BASE, "next_catalyst": {"type": "earnings", "date": 20261030}}, "next_catalyst.date"),
+            ({**BASE, "next_catalyst": {"type": "earnings", "window": {"start": [], "end": "2026-10-16"}}},
+             "next_catalyst.window.start"),
+            ({**BASE, "next_catalyst": {"type": "earnings", "window": {"start": "2026-10-12", "end": 23}}},
+             "next_catalyst.window.end"),
             ("not a snapshot", "object"),
         ],
         ids=["missing_symbol", "symbol_not_a_string", "missing_version", "unknown_version", "version_list",
              "version_dict", "price_too_big", "signals_not_a_list",
              "gate_not_a_string", "price_string", "price_bool", "stale_not_bool", "catalyst_not_object",
-             "catalyst_type_list", "catalyst_date_int", "not_dict"],
+             "catalyst_type_list", "catalyst_date_int", "window_start_list", "window_end_int", "not_dict"],
     )
     async def test_bad_snapshots_get_a_structured_error_before_any_analysis(
         self, detect: Any, previous: Any, problem: str,
@@ -425,6 +429,13 @@ class TestR74Validation:
 
         assert "error" not in response
         assert response["material_changes"] == []
+
+    @pytest.mark.parametrize("window", [{}, {"start": None, "end": None}, {"start": "2026-10-12"}],
+                             ids=["empty", "null_bounds", "absent_end"])
+    async def test_absent_or_null_window_bounds_stay_compatible(self, detect: Any, window: dict[str, Any]) -> None:
+        catalyst = {"type": "earnings", "status": "available", "source": "calendar", "window": window}
+        response = await detect({**copy.deepcopy(BASE), "next_catalyst": catalyst})
+        assert "error" not in response
 
     async def test_symbol_case_and_whitespace_do_not_matter(self, detect: Any) -> None:
         response = await detect({**copy.deepcopy(BASE), "symbol": " acme "})

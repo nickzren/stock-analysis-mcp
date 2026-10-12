@@ -300,7 +300,8 @@
   `insider_transactions_columns_unrecognized`. Non-dict sections read as empty. `detect_changes` checks the
   shape of `previous_snapshot` before analysis (required `snapshot_version` in
   1.0.0/1.1.0/2.0.0 and `symbol`; every other field optional but type-checked,
-  `next_catalyst`'s keys included) and matches its symbol against the ticker
+  `next_catalyst`'s keys and its `window` bounds included; absent or null
+  stays compatible) and matches its symbol against the ticker
   analyze resolved, returning `invalid_snapshot` with `problems`. It compares
   only fields both snapshots carry (the rest are `not_comparable`; a pre-2.0.0
   snapshot's signal lists are treated as absent, since the old producers wrote

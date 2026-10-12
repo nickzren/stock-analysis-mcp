@@ -108,6 +108,12 @@ def validate_previous_snapshot(snapshot: Any, symbol: str | None) -> list[str]:
             value = catalyst.get(key)
             if value is not None and not _TYPE_CHECKS[kind](value):
                 problems.append(f"next_catalyst.{key}: expected {kind}, got {type(value).__name__}")
+        window = catalyst.get("window")
+        if isinstance(window, dict):
+            for bound in ("start", "end"):
+                value = window.get(bound)
+                if value is not None and not isinstance(value, str):
+                    problems.append(f"next_catalyst.window.{bound}: expected string, got {type(value).__name__}")
     return problems
 
 
