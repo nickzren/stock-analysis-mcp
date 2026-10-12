@@ -46,7 +46,8 @@ async def analyze_position(
     if tech_result.get("error"):
         return tech_result
 
-    current_price = tech_result.get("current_price")
+    # An empty latest session leaves no current price; use the latest valid close.
+    current_price = tech_result.get("current_price") or (tech_result.get("session_close") or {}).get("close")
     if current_price is None:
         return build_error_response(
             error_type="data_unavailable",

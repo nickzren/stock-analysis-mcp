@@ -462,6 +462,19 @@ class TestInfo:
         assert card["action"] == "watch"
         assert "earnings_blackout" in blocker_ids(card)
 
+    async def test_last_report_timestamp_does_not_widen_the_estimate_window(self, run: Callable[..., Any]) -> None:
+        """After a report, info can keep that past ``earningsTimestamp`` next to the
+        next quarter's estimate range; the past date is history, not a risk date."""
+        info = {**window_info("2026-10-27", "2026-11-02"), "earningsTimestamp": epoch("2026-07-29")}
+
+        earnings = (await run(NO_CALENDAR_DATES, NO_PAGE_DATES, info))["earnings"]
+        card = build_card(actionable_price=101.5, events_data={"earnings": earnings})
+
+        assert (earnings["next_date"], earnings["days_until"]) == ("2026-10-27", 19)
+        window = earnings["next_window"]
+        assert (window["start"], window["end"], window["window_active"]) == ("2026-10-27", "2026-11-02", False)
+        assert "earnings_blackout" not in blocker_ids(card)
+
     @pytest.mark.parametrize(
         "bad_range",
         [

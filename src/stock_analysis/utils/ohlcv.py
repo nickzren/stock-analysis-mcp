@@ -67,11 +67,30 @@ def standardize_ohlcv(df: pd.DataFrame, adjusted: bool) -> pd.DataFrame:
     return df
 
 
+def _whole_volumes(df: pd.DataFrame) -> pd.Series | None:
+    """Volumes as nullable integers when every known volume is whole (a missing
+    volume makes the column float); None otherwise."""
+    if "volume" not in df.columns:
+        return None
+    volume = pd.to_numeric(df["volume"], errors="coerce")
+    known = volume.dropna()
+    if known.empty or not (known % 1 == 0).all():
+        return None
+    return volume.astype("Int64")
+
+
 def df_to_rows(df: pd.DataFrame) -> list[dict]:
     """Convert to list of dicts for inline preview. Lowercase keys."""
-    return df.to_dict("records")
+    rows = df.to_dict("records")
+    volumes = _whole_volumes(df)
+    if volumes is not None:
+        for row, volume in zip(rows, volumes.tolist(), strict=True):
+            if volume is not pd.NA:
+                row["volume"] = volume
+    return rows
 
 
 def df_to_csv(df: pd.DataFrame) -> str:
     """Convert to CSV string for cache/resource."""
-    return df.to_csv(index=False)
+    volumes = _whole_volumes(df)
+    return (df if volumes is None else df.assign(volume=volumes)).to_csv(index=False)

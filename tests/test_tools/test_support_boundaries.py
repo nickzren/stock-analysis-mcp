@@ -155,6 +155,17 @@ class TestAnalyzeCaps:
         text = json.dumps(result["executive_summary"]).lower()
         assert "hold or add" not in text and "accumulate" not in text
 
+    async def test_the_dip_recommendation_is_capped_too(self, analyze: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+        def buy_the_dip(**kwargs: Any) -> dict[str, Any]:
+            return {"assessment": {"dip_quality": "good", "recommendation": "buy_the_dip", "rationale": "x"}}
+
+        monkeypatch.setattr(orchestrator, "build_dip_assessment", buy_the_dip)
+        capped, control = await analyze(GBP_SUMMARY), await analyze(US_SUMMARY)
+
+        assessment = capped["dip_assessment"]["assessment"]
+        assert (assessment["recommendation"], assessment["support_gates"]) == ("watch", ["unsupported_currency"])
+        assert control["dip_assessment"]["assessment"]["recommendation"] == "buy_the_dip"
+
     async def test_control_a_supported_stock_keeps_its_policy(self, analyze: Any) -> None:
         result = await analyze(US_SUMMARY, bullish=True)
 
@@ -211,6 +222,7 @@ class TestAnalyzeUnsupportedInstrument:
         assert result["summary"]["support"]["instrument"]["status"] == "unsupported"
         assert result["data_quality"]["fundamentals_status"] == "not_applicable"
         assert result["fundamentals_summary"]["summary"] is None
+        assert project_analyze_result(result, "standard")["fundamentals_summary"]["status"] == "not_applicable"
         assert result["action_zones"]["valuation_assessment"]["gate"] == "not_applicable"
         assert result["dislocation_framework"]["status"] == "not_applicable"
         assert result["decision_card"]["action_now"] not in {"buy", "starter", "hold_or_add"}
@@ -277,3 +289,21 @@ class TestHistoryMetadata:
         """The hook _history_metadata reads (no extra request) exists in the pinned yfinance."""
         assert "self._price_history" in inspect.getsource(TickerBase._lazy_load_price_history)
         assert "self._history_metadata" in inspect.getsource(PriceHistory.__init__)
+
+
+class TestBurnDilutionCurrency:
+    """Dilution divides a raise in the statement currency by the market cap in the
+    price currency; with different currencies it is not computed."""
+
+    FUND = {"financial_health": {"total_cash": 1e9}, "cash_flow": {"free_cash_flow_ttm": -2e9}}
+
+    @pytest.mark.parametrize(("financial_currency", "computed"), [("USD", True), ("TWD", False), (None, False)])
+    def test_dilution_needs_one_currency(self, financial_currency: str | None, computed: bool) -> None:
+        summary = {"market_cap": 1e10, "currency": "USD", "financial_currency": financial_currency}
+
+        burn, _ = orchestrator._compute_burn_metrics(self.FUND, summary, is_unprofitable_company=True)
+
+        assert burn is not None
+        assert burn["cash_runway_quarters"] == 2.0  # runway is one currency either way
+        assert (burn["dilution_analysis"] is not None) is computed
+        assert ("dilution_currency_unverified" in burn["warnings"]) is not computed

@@ -33,6 +33,9 @@ tech_mod = importlib.import_module("stock_analysis.tools.technicals")
 summary_mod = importlib.import_module("stock_analysis.tools.stock_summary")
 risk_mod = importlib.import_module("stock_analysis.tools.risk_metrics")
 orchestrator = importlib.import_module("stock_analysis.tools.analyze.orchestrator")
+price_history_mod = importlib.import_module("stock_analysis.tools.price_history")
+data_quality_mod = importlib.import_module("stock_analysis.tools.data_quality")
+position_mod = importlib.import_module("stock_analysis.tools.position")
 
 ET = pytz.timezone("America/New_York")
 SATURDAY = ET.localize(datetime(2026, 3, 7, 12, 0))
@@ -216,6 +219,58 @@ class TestR55LatestBarInvalid:
         assert "latest_daily_bar_invalid" in project_analyze_result(result, "decision")["data_quality"]["warnings"]
 
 
+class TestEmptyLatestRowConsumers:
+    """An empty latest session (kept by keepna) is not the freshest bar, and a
+    holder's P&L falls back to the latest valid completed-session close."""
+
+    async def test_technicals_and_risk_date_the_last_valid_bar(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        df = pin_frame(59, n=60)
+
+        async def fake_history(params: FetchParams) -> pd.DataFrame:
+            return df if params.symbol == "PIN" else pin_frame(n=60)
+
+        monkeypatch.setattr(tech_mod, "fetch_history", fake_history)
+        monkeypatch.setattr(risk_mod, "fetch_history", fake_history)
+        monkeypatch.setattr(price_history_mod, "fetch_history", fake_history)
+        tech = await tech_mod.technicals("PIN", _now=SATURDAY)
+        risk = await risk_mod.risk_metrics("PIN")
+        history = await price_history_mod.price_history("PIN")
+
+        for result in (tech, risk, history):
+            assert result["data_provenance"]["price"]["last_bar_date"] == "2026-03-05"
+
+    async def test_data_quality_reports_the_last_bar_with_data(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        frames = {"PIN": pin_frame(4, n=5), "EMPTY": pin_frame(n=5).assign(open=NAN, high=NAN, low=NAN, close=NAN)}
+
+        async def fake_history(params: FetchParams) -> pd.DataFrame:
+            return frames[params.symbol]
+
+        monkeypatch.setattr(data_quality_mod, "fetch_history", fake_history)
+        reports = {}
+        for symbol in frames:
+            report = {"availability": {"price": False}, "staleness": {"price_last_bar": None}, "missing_fields": []}
+            await data_quality_mod._check_price_data(symbol, report)
+            reports[symbol] = report
+
+        assert reports["PIN"]["staleness"]["price_last_bar"] == "2026-03-05"
+        assert reports["PIN"]["availability"]["price"] is True
+        assert reports["EMPTY"]["availability"]["price"] is False
+        assert reports["EMPTY"]["staleness"]["price_last_bar"] is None
+
+    async def test_position_uses_the_latest_valid_close(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        df = pin_frame(39)
+
+        async def fake_history(params: FetchParams) -> pd.DataFrame:
+            return df
+
+        monkeypatch.setattr(tech_mod, "fetch_history", fake_history)
+        result = await position_mod.analyze_position("PIN", cost_basis=100.0, purchase_date="2025-01-02", shares=10)
+
+        assert "error" not in result
+        assert result["position"]["current_price"] == pytest.approx(df["close"].iloc[38])
+        assert result["data_provenance"]["price"]["last_bar_date"] == "2026-03-05"
+
+
 class TestR56MissingVolume:
     async def test_price_metrics_survive_and_volume_metrics_are_null(self, monkeypatch: pytest.MonkeyPatch) -> None:
         r = await run_technicals(monkeypatch, pin_frame(volume_gap=39))
@@ -284,6 +339,26 @@ class TestProviderKeepsSessionRows:
         assert df["date"].tolist() == ["2026-10-07", "2026-10-08", "2026-10-09"]
         volume = pd.to_numeric(df["volume"], errors="coerce").tolist()
         assert volume[0] == 1000.0 and math.isnan(volume[1]) and volume[2] == 3000.0
+
+    async def test_a_live_duplicate_row_keeps_its_volume(self, yf_transport: Any) -> None:
+        """yfinance merges Yahoo's separate live row into the session's row; a null
+        volume on the dropped duplicate must not blank the kept one."""
+        yf_transport.route("chart", "live_separate_volume")
+
+        df = await yfinance_client.fetch_history(FetchParams("EXMP", "1y", "1d", True))
+
+        assert pd.to_numeric(df["volume"], errors="coerce").iloc[-1] == 2500.0
+
+    async def test_a_row_with_no_prices_has_no_volume(self, yf_transport: Any) -> None:
+        """yfinance adds an empty row for a dividend after the last price row and
+        zero-fills its volume after the recorder has run."""
+        yf_transport.route("chart", "dividend_ahead")
+
+        df = await yfinance_client.fetch_history(FetchParams("EXMP", "1y", "1d", True))
+
+        close, volume = pd.to_numeric(df["close"], errors="coerce"), pd.to_numeric(df["volume"], errors="coerce")
+        assert math.isnan(close.iloc[-1]) and math.isnan(volume.iloc[-1])
+        assert tech_mod._build_bar_validity(close, df["high"], df["low"], volume)["latest_volume_invalid"] is True
 
     def test_contract_yfinance_zero_fills_volume_after_dating_sessions(self) -> None:
         """The seam the missing-volume recorder relies on, in the pinned yfinance: the

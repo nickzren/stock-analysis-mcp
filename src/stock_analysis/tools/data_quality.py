@@ -5,6 +5,7 @@ from time import perf_counter
 from typing import Any
 
 from stock_analysis.data.yfinance_client import fetch_history, fetch_info
+from stock_analysis.utils.price_basis import last_valid_bar_date
 from stock_analysis.utils.provenance import build_meta, build_provenance, utcnow_isoformat_z
 from stock_analysis.utils.validators import FetchParams
 
@@ -114,10 +115,10 @@ async def _check_price_data(symbol: str, report: dict[str, Any]) -> None:
             interval="1d",
             adjusted=True,
         )
-        df = await fetch_history(params)
-        if len(df) > 0:
+        last_bar = last_valid_bar_date(await fetch_history(params))
+        if last_bar is not None:
             report["availability"]["price"] = True
-            report["staleness"]["price_last_bar"] = df["date"].iloc[-1]
+            report["staleness"]["price_last_bar"] = last_bar
     except Exception:
         report["missing_fields"].append("price_data")
 

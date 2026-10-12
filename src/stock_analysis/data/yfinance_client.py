@@ -125,7 +125,11 @@ def _recording_missing_volume(fix_dst: Callable[..., pd.DataFrame]) -> Callable[
         quotes = fix_dst(quotes, interval)
         dates = getattr(_missing_volume, "dates", None)
         if dates is not None:
-            dates.update(pd.DatetimeIndex(quotes.index[quotes["Volume"].isna()]).date)
+            # yfinance later keeps one row per session; only a session with no volume
+            # on any of its rows (e.g. a separate live row) is missing.
+            days = pd.DatetimeIndex(quotes.index).date
+            missing = quotes["Volume"].isna().to_numpy()
+            dates.update(set(days[missing]) - set(days[~missing]))
         return quotes
 
     return fix
@@ -695,9 +699,13 @@ async def _fetch_history_retry(params: FetchParams) -> RetryResult:
             _missing_volume.dates = None
         if df.empty:
             raise ValueError(f"No data returned for {params.symbol}")
+        # A row without prices (e.g. one yfinance adds for a dividend) has no volume either.
+        no_volume = df[["Open", "High", "Low", "Close"]].isna().all(axis=1).to_numpy()
         if missing_volume_dates:
+            no_volume |= [d in missing_volume_dates for d in df.index.date]
+        if no_volume.any():
             df["Volume"] = df["Volume"].astype(float)
-            df.loc[[d in missing_volume_dates for d in df.index.date], "Volume"] = float("nan")
+            df.loc[no_volume, "Volume"] = float("nan")
         # Standardize here - single place for both preview and cache
         standardized = standardize_ohlcv(df, params.adjusted)
         # WP4 (D5): the scan's phase 1 needs currency and instrument type; yfinance

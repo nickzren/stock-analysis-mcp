@@ -18,11 +18,11 @@ Old consumers should re-check every item below.
 - **One forward value on three paths:** `get_fundamentals` `yield_metrics.dividend_yield`, `get_stock_summary` `dividend_yield` and `get_events` `dividends.yield` all carry the same value: `dividendRate / price`, as a fraction (0.005 = 0.5%).
   - v4 passed Yahoo's `dividendYield` through. It was in percent on the fundamentals path, and divided by 100 only when above 1 on the other two.
 - **Edge cases:**
-  - Non-payers get `0.0`, where v4 gave null.
+  - Non-payers get `0.0` (basis `no_dividend`). v4 passed Yahoo's value through: `0.0` for some non-payers, null where Yahoo omitted it.
   - A missing price gives null.
   - An unknown or minor-unit currency gives null (GBp, ZAc and similar).
 - **New companions:** `dividend_yield_basis` (`forward`, `no_dividend` or `unverified_currency`) and `dividend_yield_trailing`. In events they are `dividends.yield_basis` and `dividends.yield_trailing`.
-- **`compare`:** it ranks the new fraction, and non-payers are now ranked (0.0) instead of being left out.
+- **`compare`:** it ranks the new fraction, and non-payers are always ranked (0.0); v4 left them out where Yahoo omitted the field.
 - **`compare` leverage:** a negative D/E or negative equity is null and ranked last; v4 ranked it best.
 
 **`get_fundamentals`**
@@ -49,7 +49,9 @@ Old consumers should re-check every item below.
 
 **`get_technicals` and price history**
 
-- **Empty sessions are kept:** daily-or-longer frames now include sessions Yahoo sends with no data, as null OHLC. A missing 1d volume stays null instead of becoming 0. This reaches `get_price_history` rows, previews and the CSV resource.
+- **Empty sessions are kept:** daily-or-longer frames now include sessions Yahoo sends with no data, as null OHLC. A missing 1d volume stays null instead of becoming 0, and a row with no prices has no volume. This reaches `get_price_history` rows, previews and the CSV resource, where whole volumes still print as integers.
+  - `data_provenance.price.last_bar_date` (technicals, risk metrics, price history) and `check_data_quality`'s `price_last_bar` give the newest bar with a valid close, not an empty row. `check_data_quality` reports no price when no bar has one.
+  - `analyze_my_position` uses the latest valid completed-session close when the latest row is empty.
 - **Returns count sessions:**
   - **Return fields:** `returns.return_*` are null when either endpoint close is missing or non-finite. The 1-week z-score is null when the latest week is undefined.
   - **Counts and comparisons:** `days_since_52w_*` count sessions, and `price_action` compares consecutive sessions.
@@ -67,6 +69,7 @@ Old consumers should re-check every item below.
 - **`next_date` and `days_until`:**
   - `next_date` is the earliest risk date across all sources, verified or not, and is today while an estimate window is open.
   - `days_until` is never negative.
+  - A past info `earningsTimestamp` (the last report) is ignored, so it can't widen the next quarter's estimate window back to today.
   - `next_date_source` no longer has the value `calendar_dataframe`.
 - **Dates are ET:** calendar dates use exchange time (ET). `dividends.ex_date` / `pay_date` are UTC dates of the raw epoch; v4 used the host's local timezone.
 - **`sources_failed` widened:** it now also covers HTTP errors, malformed payloads and an earnings page with no table.
@@ -79,6 +82,7 @@ Old consumers should re-check every item below.
   - `data_quality.component_freshness` price/risk entries count sessions from the last bar date (`last_bar_date`, `expected_session`, `sessions_behind`). v4 counted hours from the fetch time.
   - `staleness_warnings` `price_stale_<N>h` / `risk_stale_<N>h` become `…_stale_<N>_sessions`.
 - **Ratios:** `fundamentals_summary.valuation` ratios are null unless usable. `metric_status` explains the excluded ones.
+- **Dilution:** `fundamentals_summary.burn_metrics.dilution_analysis` is null when the price and statement currencies differ or are unverified, with the burn warning `dilution_currency_unverified`. v4 divided a raise in the statement currency by the market cap in the price currency.
 - **Valuation gate (`action_zones.valuation_assessment`):**
   - It reads only usable metrics.
   - For unprofitable companies it uses EV/S first, then P/S, and "attractive" needs 0 < multiple < 3; v4 rated a negative EV/S as attractive. With EV ≤ 0 there is no P/S fallback, so the gate is `unknown`.
@@ -87,7 +91,7 @@ Old consumers should re-check every item below.
   - For an unsupported instrument the gate is `not_applicable`. This also reaches `policy_action.valuation_gate` and the snapshot.
 - **`data_quality`:** `fundamentals_status` can be `not_applicable`. An unverified P/E gives the reason `pe_<reason>` (e.g. `pe_unverified_currency`), and the same value replaces `pe_not_meaningful` in `data_gaps`.
 - **Unsupported instruments and currencies:** anything other than USD-priced common equity, or a symbol whose support can't be verified, gets new-money actions capped at `watch` everywhere. That covers `policy_action`, `decision_card.action_now`, `decision_modes` and the trade card. There is no share or dollar sizing and no dollar-liquidity gate.
-  - For an unsupported instrument, the fundamentals rubric, dip and dislocation blocks read `not_applicable`.
+  - For an unsupported instrument, the fundamentals rubric, dip and dislocation blocks read `not_applicable`. For an unsupported currency, a new-money `dip_assessment.assessment.recommendation` reads `watch`, with `support_gates`.
 - **Missing tilt:** a verdict tilt that is missing (absent or null) makes the tilt-decided actions `insufficient_data`, with rationale `tilt=missing`. In v4 an absent tilt read as neutral, and a null one as bearish; a failed fundamentals fetch could say `hold_or_reduce`.
 - **Balance sheet:** in the dislocation framework, `balance_sheet_safety` is `unsafe` only when the cash runway fails (under 4 quarters). Net debt, exactly zero net cash or negative equity is `watch`, so the thesis is no longer `broken` from net debt alone.
 
@@ -108,7 +112,8 @@ Old consumers should re-check every item below.
   - `data_quality.bar_validity`.
   - Warnings `latest_daily_bar_invalid`, `latest_daily_volume_invalid` and `invalid_bars_in_indicator_windows`.
   - A `news_source_failed` tool failure.
-  - `news_unverified` in `data_gaps`.
+  - `news_unverified` in `data_gaps`. `data_gaps` is now in every `detail` level; v4 had it only in `full`.
+  - `fundamentals_summary.status` at the `standard` level.
 - **Fundamentals summary:** `pe_forward`, `metric_status`, `health.leverage_status`, and `cash_flow.free_cash_flow_ttm_status` / `free_cash_flow_period_lag`.
 - **Decision card and zones:**
   - `decision_card.hard_gates` adds `unsupported_instrument` / `unsupported_currency`.
@@ -175,7 +180,7 @@ Old consumers should re-check every item below.
 - **History errors:**
   - An unknown symbol is still `invalid_symbol`.
   - An unreadable body (e.g. an HTML 5xx page) is retried, then reported as `data_unavailable`.
-  - 5xx and 429 are retried with backoff, and 401 is retried once; other 4xx are not.
+  - A 5xx or 429 that reaches the client as an HTTP error is retried with backoff, and 401 is retried once; other 4xx are not. A 5xx carrying Yahoo's JSON error body is not: see Known limitations.
 - **Search:** `search_symbol` returns `data_unavailable` when Search fails upstream. In `analyze`, a company name whose search fails is reported as `invalid_parameters` rather than "no match".
 - **Ownership:** a failed read gives a `*_error` warning, kept distinct from `*_unavailable`.
 - **analyze timeouts:** each tool's reads stop at 90% of its deadline, so a slow read comes back as a structured failure. Worker threads that are still running are counted in `in_flight_jobs`.
@@ -194,6 +199,10 @@ Old consumers should re-check every item below.
 ### Known limitations
 
 - **Stale latest bar:** when the latest daily bar is missing, ATR% and dollar liquidity in `risk_metrics` are null. Using the last valid close there is a separately approved fill-policy change.
-- **Empty latest rows:** how often Yahoo sends an empty latest daily row is not established.
+- **Empty latest rows:** how often Yahoo sends an empty latest daily row is not established. With one, `get_technicals` `current_price` and `compare`'s `position_in_52w_range` and `return_1m` are null (ranked last), and `scan_watchlist` returns `wait_for_data`.
+- **Earnings verification in analyze:** `analyze`'s earnings gate reads `days_until` only. An `unverifiable` calendar caps the trade card at `watch` but not `analyze`; Step 2 owns that gate.
+- **Intraday price basis:** in the regular session, when the 5m bar is stale or missing, `analyze` zones and stops use the last completed close while technicals include today's forming daily bar. Step 2 owns stale-price gating.
+- **Chart errors:** a price-history 5xx whose body is Yahoo's JSON error envelope is reported as `invalid_symbol` and not retried, as in v4.
+- **Earnings day:** the `earnings_within_7_days` warning is skipped when `days_until` is 0, as in v4 (the blackout gate still fires).
 - **Core profile mismatch:** with a missing tilt, the core decision mode can still read `build_position` while the policy long-term action is `insufficient_data`. Aligning action surfaces belongs to Step 2.
 - **Non-USD prices:** prose and sizing fields that print `$` are only correct for USD prices. Other currencies are unsupported, and FX conversion is not planned yet.

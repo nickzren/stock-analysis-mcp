@@ -29,7 +29,11 @@ from stock_analysis.utils.indicators import (
     weekly_return_zscore,
 )
 from stock_analysis.utils.intraday_features import build_intraday_block
-from stock_analysis.utils.price_basis import latest_intraday_bar, latest_session_close
+from stock_analysis.utils.price_basis import (
+    last_valid_bar_date,
+    latest_intraday_bar,
+    latest_session_close,
+)
 from stock_analysis.utils.provenance import (
     FetchError,
     build_error_response,
@@ -128,7 +132,7 @@ async def technicals(
             "price": build_provenance(
                 source="yfinance",
                 as_of=utcnow_isoformat_z(),
-                last_bar_date=df["date"].iloc[-1] if len(df) > 0 else None,
+                last_bar_date=last_valid_bar_date(df),
             ),
         },
         "symbol": params.symbol,

@@ -145,3 +145,23 @@ class TestDfToCsv:
 
         assert list(parsed.columns) == ["date", "open", "high", "low", "close", "volume"]
         assert len(parsed) == 10
+
+
+class TestWholeVolumes:
+    """A missing 1d volume makes the column float; whole volumes still print as integers."""
+
+    FRAME = pd.DataFrame({"date": ["2026-10-08", "2026-10-09"], "open": [1.0, 2.0], "high": [1.0, 2.0],
+                          "low": [1.0, 2.0], "close": [1.0, 2.0], "volume": [1026000.0, float("nan")]})
+
+    def test_csv(self) -> None:
+        assert df_to_csv(self.FRAME).splitlines()[1:] == ["2026-10-08,1.0,1.0,1.0,1.0,1026000", "2026-10-09,2.0,2.0,2.0,2.0,"]
+
+    def test_rows(self) -> None:
+        rows = df_to_rows(self.FRAME)
+        assert rows[0]["volume"] == 1026000 and isinstance(rows[0]["volume"], int)
+        assert pd.isna(rows[1]["volume"])
+
+    def test_fractional_volumes_are_kept(self) -> None:
+        frame = self.FRAME.assign(volume=[1.5, float("nan")])
+        assert df_to_csv(frame).splitlines()[1].endswith(",1.5")
+        assert df_to_rows(frame)[0]["volume"] == 1.5

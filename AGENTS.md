@@ -62,7 +62,11 @@
   instrument also skips the fundamentals rubric, dip and dislocation
   (`not_applicable`, including the verdict's fundamentals exclusion,
   `decision_context.fundamentals`, its `thesis_checkpoints` and the standard
-  tier's `dislocation_check`), with no stock-only conditions. The scan reads currency and instrument
+  tier's `dislocation_check`), with no stock-only conditions; an unsupported
+  currency caps a new-money `dip_assessment.assessment.recommendation` at
+  `watch` (with `support_gates`), and burn `dilution_analysis` needs the price
+  and statement currencies to match (else null, warning
+  `dilution_currency_unverified`). The scan reads currency and instrument
   type from the daily history's chart metadata (`df.attrs`, no extra request)
   and never promotes an unsupported row. `stock_summary.currency` no longer
   defaults to USD; it adds `quote_type`, `financial_currency` and `support`.
@@ -209,7 +213,8 @@
   the calendar. Info and calendarEvents carry the same Yahoo record, so an info
   date inside an unconfirmed calendar window does not verify it. Info's range
   is read on its own (with or without `earningsTimestamp`; the window spans the
-  earliest to the latest of the three); a multi-day range is an unverified
+  earliest to the latest of the three, and a past `earningsTimestamp` is the
+  last report, so it is ignored); a multi-day range is an unverified
   window that still drives the blackout while it covers today, and a malformed
   range (one end missing, not an epoch, reversed) fails info. `next_date` is the
   earliest risk date across all sources, verified or not; `candidate_dates`
@@ -345,8 +350,14 @@
   session rows); `1d` frames also restore missing volumes: yfinance zero-fills a
   null volume after dating the sessions, so `yfinance_client` wraps
   `yfinance.utils.fix_Yahoo_dst_issue` once at import to note the exchange-local
-  session dates with a null volume (contract test pins the seam; a Sydney
-  fixture pins the dating). Intraday frames keep yfinance's defaults. Return
+  session dates with a null volume on every raw row (a separate live row with a
+  volume keeps it; contract test pins the seam; a Sydney fixture pins the
+  dating). A row with no OHLC has a null volume (yfinance adds one for a
+  dividend after the last price row, after the recorder runs). CSV and preview
+  rows print whole volumes as integers. Provenance `last_bar_date` and
+  `check_data_quality`'s `price_last_bar` use `price_basis.last_valid_bar_date`
+  (the newest valid close, not an empty row), and `analyze_my_position` falls
+  back to `session_close` when the latest row is empty. Intraday frames keep yfinance's defaults. Return
   series use `indicators.session_returns` (NaN unless both endpoint prices are
   finite). N-session returns
   (technicals returns, the 1w z-score's latest week, risk benchmark returns,

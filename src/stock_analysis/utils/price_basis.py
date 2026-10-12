@@ -51,6 +51,17 @@ def _valid_price(value: Any) -> float | None:
     return float(price)
 
 
+def last_valid_bar_date(df: pd.DataFrame | None) -> Any:
+    """The ``date`` of the newest bar with a valid close, as stored; None when no bar
+    has one. An empty vendor session kept by ``keepna`` is not the freshest bar."""
+    if df is None or len(df) == 0 or "close" not in df.columns or "date" not in df.columns:
+        return None
+    for raw_date, raw_close in zip(reversed(df["date"].tolist()), reversed(df["close"].tolist()), strict=True):
+        if _valid_price(raw_close) is not None:
+            return raw_date
+    return None
+
+
 def latest_session_close(df: pd.DataFrame | None, now: datetime) -> dict[str, Any] | None:
     """The latest valid close of a completed session. Today's forming bar is skipped
     until its session closes; a missing, non-finite or non-positive close is skipped.

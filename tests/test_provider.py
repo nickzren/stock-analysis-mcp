@@ -47,6 +47,7 @@ from stock_analysis.data.yfinance_client import (
     fetch_history,
     fetch_ticker,
 )
+from stock_analysis.tools.analyze.projection import project_analyze_result
 from stock_analysis.tools.symbol_search import symbol_search
 from stock_analysis.utils.provenance import FetchError, fetch_or_error
 from stock_analysis.utils.validators import FetchParams
@@ -686,6 +687,8 @@ class TestAnalyzeSeesNewsHealth:
         assert bool(failures) is failure
         assert result["verdict"]["coverage"]["news"]["fetched"] is covered
         assert ("news_unverified" in result["data_quality"]["data_gaps"]) is gap
+        decision = project_analyze_result(result, "decision")["data_quality"]
+        assert ("news_unverified" in decision["data_gaps"]) is gap
 
 
 class TestRetries:

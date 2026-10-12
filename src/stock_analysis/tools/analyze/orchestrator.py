@@ -68,6 +68,8 @@ from stock_analysis.utils.normalize import build_watchlist_snapshot
 from stock_analysis.utils.price_basis import select_price, session_staleness, to_utc
 from stock_analysis.utils.provenance import build_meta
 from stock_analysis.utils.valuation_basis import (
+    VERIFIED,
+    currency_basis,
     currency_supported,
     instrument_supported,
     is_unverified,
@@ -111,6 +113,20 @@ def _cap_modes_at_watch(decision_modes: dict[str, Any]) -> None:
             mode["long_term_view"] = "watch"
 
 
+_DIP_NEW_MONEY_RECOMMENDATIONS = frozenset({
+    "strong_buy_the_dip", "buy_the_dip", "cautious_accumulation", "small_speculative_position",
+    "starter_only_wait_for_stabilization",
+})
+
+
+def _cap_dip_at_watch(dip_assessment: dict[str, Any] | None, support: dict[str, Any]) -> None:
+    assessment = (dip_assessment or {}).get("assessment")
+    if isinstance(assessment, dict) and assessment.get("recommendation") in _DIP_NEW_MONEY_RECOMMENDATIONS:
+        assessment["recommendation"] = "watch"
+        assessment["rationale"] = "Unsupported or unverified instrument or currency: no new-money entry."
+        assessment["support_gates"] = [gate["id"] for gate in support_blockers(support)]
+
+
 def _fundamentals_cash_flow_summary(cf: dict[str, Any]) -> dict[str, Any]:
     """FCF with its period, why a TTM wasn't used, and how many fiscal years it lags (WP6)."""
     keys = ("free_cash_flow_ttm", "free_cash_flow_period", "free_cash_flow_period_end", "free_cash_flow_source",
@@ -120,10 +136,13 @@ def _fundamentals_cash_flow_summary(cf: dict[str, Any]) -> dict[str, Any]:
 
 def _compute_burn_metrics(
     fund_data: dict[str, Any],
-    market_cap: float | None,
+    summary_data: dict[str, Any],
     is_unprofitable_company: bool,
 ) -> tuple[dict[str, Any] | None, bool]:
     """Compute burn_metrics dict for an unprofitable company.
+
+    Dilution divides a raise in the statement currency by the market cap in the
+    price currency, so it needs one currency (WP4).
 
     Returns (burn_metrics, dilution_risk_elevated). Returns (None, False) when the company
     is not flagged as unprofitable. The second element signals that callers should append
@@ -189,10 +208,16 @@ def _compute_burn_metrics(
     dilution_analysis: dict[str, Any] | None = None
     target_runway_quarters = 8  # 2 years
     quarterly_burn_for_dilution = quarterly_fcf_burn or quarterly_ocf_burn
+    market_cap = summary_data.get("market_cap")
+    one_currency = currency_basis(summary_data.get("currency"), summary_data.get("financial_currency")) == VERIFIED
+    needs_raise = cash_runway_quarters is not None and cash_runway_quarters < target_runway_quarters
+    if needs_raise and not one_currency:
+        burn_warnings.append("dilution_currency_unverified")
 
     if (
-        cash_runway_quarters is not None
-        and cash_runway_quarters < target_runway_quarters
+        needs_raise
+        and one_currency
+        and cash_runway_quarters is not None
         and market_cap is not None
         and market_cap > 0
         and quarterly_burn_for_dilution is not None
@@ -631,7 +656,7 @@ async def analyze_stock(
 
     burn_metrics, dilution_risk_elevated = _compute_burn_metrics(
         fund_data=fund_data,
-        market_cap=summary_data.get("market_cap"),
+        summary_data=summary_data,
         is_unprofitable_company=is_unprofitable_company,
     )
     if dilution_risk_elevated and "dilution_risk_elevated" not in valuation_warnings:
@@ -1089,6 +1114,8 @@ async def analyze_stock(
         can_start_now=bool((dislocation_framework.get("action") or {}).get("can_start_now")),
         add_only_if=(dislocation_framework.get("action") or {}).get("add_only_if"),
     )
+    if not supported:
+        _cap_dip_at_watch(dip_assessment, support)
     if not instrument_ok:
         dislocation_framework = {
             "status": "not_applicable",

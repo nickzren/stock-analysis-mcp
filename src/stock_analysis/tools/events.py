@@ -277,6 +277,8 @@ def _info_view(info: dict[str, Any], ok: bool, today: date) -> _SourceView:
         info_range = _info_range(info)
     except ValueError:
         return _SourceView("failed")
+    if day is not None and day < today:
+        day = None  # the last report, kept by info until the next date is set
     dates = [d for d in (day, *(info_range or ())) if d is not None]
     if not dates:
         return _SourceView("none")

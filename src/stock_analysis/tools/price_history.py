@@ -9,6 +9,7 @@ import pandas as pd
 from stock_analysis.data.cache import price_cache
 from stock_analysis.data.yfinance_client import fetch_history, get_market_state
 from stock_analysis.utils.ohlcv import df_to_rows
+from stock_analysis.utils.price_basis import last_valid_bar_date
 from stock_analysis.utils.provenance import (
     FetchError,
     build_error_response,
@@ -70,8 +71,7 @@ async def price_history(
     # Get market state
     market_state = get_market_state(params.tz)
 
-    # Get last bar date for provenance
-    last_bar_date = df["date"].iloc[-1] if len(df) > 0 else None
+    last_bar_date = last_valid_bar_date(df)
 
     duration_ms = (perf_counter() - start_time) * 1000
 
