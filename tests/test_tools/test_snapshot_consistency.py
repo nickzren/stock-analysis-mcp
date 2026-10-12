@@ -8,6 +8,7 @@ import pytest
 
 from stock_analysis.tools.analyze.projection import project_analyze_result
 from stock_analysis.utils.normalize import SNAPSHOT_VERSION, build_watchlist_snapshot
+from tests.support.legacy_snapshot import legacy_compact_snapshot, legacy_enriched_snapshot
 
 diff_module = importlib.import_module("stock_analysis.tools.diff_analysis")
 orchestrator = importlib.import_module("stock_analysis.tools.analyze.orchestrator")
@@ -121,11 +122,10 @@ class TestR71MaterialChanges:
             {"events_summary__next_catalyst__days_until": 17},
             {"data_quality__component_freshness__price__as_of": "2026-10-11T09:00:00Z"},
             {"summary__price_provenance__staleness__stale": True},
-            {"events_summary__next_catalyst__date": "2026-10-13"},
             {"policy_action__is_unprofitable": None},
         ],
         ids=["fetched_at", "cache_hit", "staleness_age", "days_until", "fetch_date", "stale_by_age",
-             "window_date_advances", "unprofitable_lossy"],
+             "unprofitable_lossy"],
     )
     async def test_fetch_times_cache_hits_and_ages_change_nothing(self, detect: Any, changes: dict[str, Any]) -> None:
         response = await detect(copy.deepcopy(BASE), **changes)
@@ -150,26 +150,69 @@ class TestR71MaterialChanges:
         assert response["material_changes"] == []
 
 
-def legacy_compact(snapshot: dict[str, Any]) -> dict[str, Any]:
-    """The 1.1.0 watchlist_snapshot analyze returned before WP7."""
-    keys = ("symbol", "price", "market_cap", "sector", "tilt", "confidence", "score", "action_mid_term",
-            "action_long_term", "valuation_gate", "is_unprofitable", "decision_action_now", "hard_gate_ids",
-            "risk_regime", "volatility_ann", "next_catalyst", "snapshot_as_of_date")
-    old = {key: copy.deepcopy(snapshot[key]) for key in keys}
-    old["next_catalyst"]["days_until"] = 21
-    return {"snapshot_version": "1.1.0", **old, "snapshot_hash": "0123456789abcdef"}
+WINDOW = {"start": "2026-10-12", "end": "2026-10-16"}
 
 
-def legacy_enriched(snapshot: dict[str, Any]) -> dict[str, Any]:
-    """The 1.1.0 current_snapshot detect_changes returned before WP7."""
-    extra = ("zone", "mid_term_fit", "long_term_fit", "bullish_signals", "bearish_signals")
-    return {**legacy_compact(snapshot), **{key: copy.deepcopy(snapshot[key]) for key in extra}}
+class TestCatalystHash:
+    async def test_a_rescheduled_date_changes_the_hash_without_an_alert(self, detect: Any) -> None:
+        response = await detect(copy.deepcopy(BASE), events_summary__next_catalyst__date="2026-11-10")
+        assert (response["hash_changed"], response["material_changes"]) == (True, [])
 
+    async def test_losing_the_date_changes_the_hash(self, detect: Any) -> None:
+        unavailable = {"type": "earnings", "status": "unavailable", "reason": "calendar_data_unavailable"}
+        response = await detect(copy.deepcopy(BASE), events_summary__next_catalyst=unavailable)
+        assert response["hash_changed"] is True
 
-NEW_FIELDS = ["as_of_kind", "price_as_of", "price_source", "price_stale", "support_currency", "support_instrument"]
+    async def test_inside_a_window_the_advancing_date_is_not_data(self, detect: Any) -> None:
+        catalyst = {"type": "earnings", "status": "available", "date": "2026-10-13", "days_until": 0,
+                    "source": "calendar", "window": WINDOW}
+        previous = raw_result(events_summary__next_catalyst=catalyst)["watchlist_snapshot"]
+        response = await detect(previous, events_summary__next_catalyst={**catalyst, "date": "2026-10-14"})
+        assert (response["hash_changed"], response["material_changes"]) == (False, [])
+        assert "date" not in response["current_snapshot"]["next_catalyst"]
+
+    async def test_moving_the_window_changes_the_hash(self, detect: Any) -> None:
+        catalyst = {"type": "earnings", "status": "available", "date": "2026-10-13", "source": "calendar",
+                    "window": WINDOW}
+        previous = raw_result(events_summary__next_catalyst=catalyst)["watchlist_snapshot"]
+        moved = {**catalyst, "window": {"start": "2026-10-19", "end": "2026-10-23"}}
+        response = await detect(previous, events_summary__next_catalyst=moved)
+        assert response["hash_changed"] is True
+
+    async def test_analyze_reports_the_window_behind_a_derived_date(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        async def events(symbol: str, **kwargs: Any) -> dict[str, Any]:
+            return {"symbol": symbol, "earnings": {
+                "next_date": "2026-10-13", "next_date_status": "available", "next_date_source": "calendar",
+                "days_until": 0, "next_window": {"source": "calendar", **WINDOW, "window_basis": "assumed"}}}
+
+        async def empty(symbol: str, **kwargs: Any) -> dict[str, Any]:
+            return {"symbol": symbol}
+
+        monkeypatch.setattr(orchestrator, "events_calendar", events)
+        for name in ("stock_summary", "technicals", "fundamentals_snapshot", "risk_metrics", "stock_news",
+                     "ownership_analysis", "options_signals"):
+            monkeypatch.setattr(orchestrator, name, empty)
+        result = await orchestrator.analyze_stock("ACME")
+
+        assert result["events_summary"]["next_catalyst"]["window"] == WINDOW
+        assert result["watchlist_snapshot"]["next_catalyst"] == {
+            "type": "earnings", "status": "available", "source": "calendar", "window": WINDOW}
 
 
 class TestDiffEdges:
+    @pytest.mark.parametrize(
+        ("changes", "material"),
+        [({"summary__current_price": 1.47}, False), ({"summary__current_price": 1.4701}, True),
+         ({"verdict__score": 0.40}, False), ({"verdict__score": 0.4001}, True)],
+        ids=["price_exactly_5pct", "price_over_5pct", "score_exactly_0_10", "score_over_0_10"],
+    )
+    async def test_exact_thresholds_are_not_crossed_by_float_error(
+        self, detect: Any, changes: dict[str, Any], material: bool,
+    ) -> None:
+        previous = {**copy.deepcopy(BASE), "price": 1.40, "score": 0.30}
+        response = await detect(previous, **{"summary__current_price": 1.40, "verdict__score": 0.30, **changes})
+        assert bool(response["material_changes"]) is material
+
     @pytest.mark.parametrize(
         ("previous", "changes", "line", "sentence"),
         [
@@ -206,22 +249,49 @@ class TestDiffEdges:
         assert (signals["bearish_changed"], signals["bullish_changed"]) == (True, False)
 
 
+# Fields only a 2.0.0 snapshot carries, and the legacy signal lists, which are ambiguous.
+NEW_FIELDS = ["as_of_kind", "price_as_of", "price_source", "price_stale", "support_currency", "support_instrument"]
+LEGACY_SIGNALS = ["bearish_signals", "bullish_signals"]
+
+
 class TestR72LegacySnapshots:
+    """Previous snapshots made by the frozen 1.1.0 producers (tests/support/legacy_snapshot.py)."""
+
     async def test_an_old_compact_snapshot_has_no_phantom_changes(self, detect: Any) -> None:
-        response = await detect(legacy_compact(BASE))
+        response = await detect(legacy_compact_snapshot(raw_result()))
 
         assert response["material_changes"] == []
         assert response["not_comparable"] == sorted(
-            ["bearish_signals", "bullish_signals", "long_term_fit", "mid_term_fit", "zone", *NEW_FIELDS])
+            [*LEGACY_SIGNALS, "long_term_fit", "mid_term_fit", "zone", *NEW_FIELDS])
+        assert response["hash_changed"] is None
 
     async def test_an_old_enriched_snapshot_has_no_phantom_changes(self, detect: Any) -> None:
-        response = await detect(legacy_enriched(BASE))
+        response = await detect(legacy_enriched_snapshot(raw_result()))
 
         assert response["material_changes"] == []
-        assert response["not_comparable"] == NEW_FIELDS
+        assert response["not_comparable"] == sorted([*LEGACY_SIGNALS, *NEW_FIELDS])
+
+    async def test_a_failed_source_tool_does_not_turn_old_signal_lists_into_alerts(self, detect: Any) -> None:
+        failed = {"tool_failures": [{"tool": "ownership_analysis", "error": "data_unavailable"}],
+                  "component_freshness": {"price": {"as_of": "2026-10-10T12:00:00Z", "stale": False}}}
+        previous = legacy_enriched_snapshot(raw_result(data_quality=failed))
+
+        response = await detect(previous, data_quality=failed)
+
+        assert previous["bullish_signals"] == ["above_sma200", "golden_cross"]  # the old producer's list
+        assert response["current_snapshot"]["bullish_signals"] is None
+        assert response["material_changes"] == []
+
+    async def test_a_1_0_0_snapshot_without_decision_fields_compares_cleanly(self, detect: Any) -> None:
+        old = legacy_compact_snapshot(raw_result())
+        del old["decision_action_now"], old["hard_gate_ids"]
+        response = await detect({**old, "snapshot_version": "1.0.0"})
+
+        assert response["material_changes"] == []
+        assert {"decision_action_now", "hard_gate_ids"} <= set(response["not_comparable"])
 
     async def test_real_changes_still_show_against_an_old_snapshot(self, detect: Any) -> None:
-        response = await detect(legacy_compact(BASE), decision_card__action_now="avoid")
+        response = await detect(legacy_compact_snapshot(raw_result()), decision_card__action_now="avoid")
         assert response["material_changes"] == ["action_now: buy -> avoid"]
 
 
@@ -280,6 +350,23 @@ class TestR73AbsentVersusNull:
         snapshot = raw_result(data_quality={"tool_failures": [failure]})["watchlist_snapshot"]
         assert (snapshot["bullish_signals"] is not None) is known
         assert (snapshot["bearish_signals"] is not None) is known
+
+    @pytest.mark.parametrize(
+        ("warning", "known"),
+        [("insider_transactions_error", False), ("insider_transactions_columns_unrecognized", False),
+         ("insider_transactions_unavailable", True), ("institutional_holders_error", True)],
+    )
+    def test_a_failed_insider_read_makes_the_signals_unknown(self, warning: str, known: bool) -> None:
+        snapshot = raw_result(ownership_flow={"warnings": [warning]})["watchlist_snapshot"]
+        assert (snapshot["bullish_signals"] is not None) is known
+
+    async def test_a_failed_insider_read_is_not_insider_buying_stopping(self, detect: Any) -> None:
+        with_insider = ["above_sma200", "golden_cross", "insider_buying"]
+        previous = raw_result(signals__bullish=with_insider)["watchlist_snapshot"]
+        # The 503 leaves insider sentiment neutral, so analyze drops insider_buying.
+        response = await detect(previous, ownership_flow={"warnings": ["insider_transactions_error"]})
+        assert "-bullish: insider_buying" not in response["material_changes"]
+        assert response["current_snapshot"]["bullish_signals"] is None
 
     def test_known_empty_lists_stay_empty(self) -> None:
         snapshot = raw_result(decision_card__hard_gates__blocking=[], signals__bearish=[])["watchlist_snapshot"]

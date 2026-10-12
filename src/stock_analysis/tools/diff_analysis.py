@@ -7,7 +7,11 @@ from typing import Any
 
 from stock_analysis.tools.analyze import analyze_stock
 from stock_analysis.utils.helpers import safe_float, safe_round
-from stock_analysis.utils.normalize import COMPATIBLE_SNAPSHOT_VERSIONS, SNAPSHOT_IDENTITY_KEYS
+from stock_analysis.utils.normalize import (
+    COMPATIBLE_SNAPSHOT_VERSIONS,
+    SNAPSHOT_IDENTITY_KEYS,
+    SNAPSHOT_VERSION,
+)
 from stock_analysis.utils.provenance import build_meta
 
 # Type of every optional snapshot field a previous snapshot may carry (null is
@@ -45,8 +49,12 @@ _TYPE_CHECKS: dict[str, Callable[[Any], bool]] = {
 # Known keys of the nested next_catalyst object (other keys are ignored).
 _CATALYST_FIELD_TYPES = {
     "type": "string", "status": "string", "date": "string", "source": "string", "reason": "string",
-    "days_until": "number",
+    "days_until": "number", "window": "object",
 }
+# Fields a pre-2.0.0 snapshot filled ambiguously (see what_changed).
+_LEGACY_AMBIGUOUS_FIELDS = frozenset({"bullish_signals", "bearish_signals"})
+# Thresholds are crossed only by more than float error (1.40 -> 1.47 is exactly 5%).
+_THRESHOLD_TOLERANCE = 1e-9
 # Price sources a snapshot moves between with the time of day alone (a fresh bar
 # in the session, the completed close outside it); a switch between them is
 # recorded but not material.
@@ -133,7 +141,7 @@ def _diff_price(
     if previous and current and previous != 0:
         raw_pct = (current - previous) / previous
         change_pct = safe_round(raw_pct, 4)
-        material = abs(raw_pct) > 0.05  # judged before rounding
+        material = abs(raw_pct) > 0.05 + _THRESHOLD_TOLERANCE  # judged before rounding
 
     return {
         "previous": previous,
@@ -155,7 +163,7 @@ def _diff_score(
     material = (previous is None) != (current is None)
     if previous is not None and current is not None:
         change = safe_round(current - previous, 6)
-        material = abs(current - previous) > 0.10  # judged before rounding
+        material = abs(current - previous) > 0.10 + _THRESHOLD_TOLERANCE  # judged before rounding
 
     return {
         "previous": previous,
@@ -404,6 +412,12 @@ async def what_changed(
             f"snapshot_version changed ({prev_version} -> {curr_version}); "
             "field semantics may differ"
         )
+
+    # Before 2.0.0 a signal list read [] (or partial) when a tool feeding it had
+    # failed, so a legacy list can't be told apart from a known one: treat it as
+    # absent. Gate ids stay: analyze always built the gate list.
+    if prev_version != SNAPSHOT_VERSION:
+        previous_snapshot = {k: v for k, v in previous_snapshot.items() if k not in _LEGACY_AMBIGUOUS_FIELDS}
 
     # Only fields both snapshots carry are compared (an absent field is unknown);
     # the rest are listed as not_comparable.

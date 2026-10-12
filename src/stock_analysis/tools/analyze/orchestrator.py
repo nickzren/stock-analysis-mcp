@@ -722,6 +722,11 @@ async def analyze_stock(
         next_catalyst["date"] = next_earnings_date
         next_catalyst["days_until"] = earnings.get("days_until")
         next_catalyst["source"] = next_earnings_source
+        next_window = earnings.get("next_window")
+        if isinstance(next_window, dict):
+            # The date is the later of the window start and today; the bounds are
+            # what the vendor actually published (WP7 keeps them in the snapshot).
+            next_catalyst["window"] = {"start": next_window.get("start"), "end": next_window.get("end")}
     else:
         next_catalyst["reason"] = next_earnings_reason or "calendar_data_unavailable"
 

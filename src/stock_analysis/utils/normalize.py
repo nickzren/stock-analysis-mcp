@@ -35,15 +35,17 @@ COMPATIBLE_SNAPSHOT_VERSIONS = frozenset({"1.0.0", "1.1.0", SNAPSHOT_VERSION})
 # Required in every snapshot; every other field is optional (older versions lack some).
 SNAPSHOT_IDENTITY_KEYS = ("snapshot_version", "symbol")
 # Left out of snapshot_hash because they move with the clock, not with market data:
-# fetch dates, staleness (an age past a threshold) and the next-catalyst date
-# (it advances to today inside an open earnings window).
-_UNHASHED_SNAPSHOT_KEYS = frozenset({"snapshot_hash", "snapshot_as_of_date", "price_stale", "next_catalyst"})
+# fetch dates and staleness (an age past a threshold).
+_UNHASHED_SNAPSHOT_KEYS = frozenset({"snapshot_hash", "snapshot_as_of_date", "price_stale"})
 # Tools whose output feeds the signal lists; when one fails, the lists are unknown.
 _SIGNAL_SOURCE_TOOLS = frozenset({
     "technicals", "fundamentals_snapshot", "risk_metrics", "ownership_analysis", "options_signals",
 })
 # Tool "failures" that are known states (no signals from that source), not unknowns.
 _KNOWN_EMPTY_ERRORS = frozenset({"no_options", "no_suitable_expiration"})
+# Partial failures a successful ownership result discloses: insider activity (and
+# so the insider signal) is unknown.
+_INSIDER_UNKNOWN_WARNINGS = frozenset({"insider_transactions_error", "insider_transactions_columns_unrecognized"})
 
 
 def canonical_dumps(obj: Any) -> str:
@@ -441,12 +443,15 @@ def _section(value: Any) -> dict[str, Any]:
 
 def _signal_sources_failed(raw: dict[str, Any]) -> bool:
     failures = _section(raw.get("data_quality")).get("tool_failures")
-    return any(
+    tool_failed = any(
         isinstance(failure, dict)
         and failure.get("tool") in _SIGNAL_SOURCE_TOOLS
         and failure.get("error") not in _KNOWN_EMPTY_ERRORS
         for failure in (failures if isinstance(failures, list) else [])
     )
+    ownership_warnings = _section(raw.get("ownership_flow")).get("warnings")
+    insider_unknown = isinstance(ownership_warnings, list) and bool(_INSIDER_UNKNOWN_WARNINGS & set(ownership_warnings))
+    return tool_failed or insider_unknown
 
 
 def _string_list(value: Any) -> list[str] | None:
@@ -500,8 +505,10 @@ def build_watchlist_snapshot(raw: dict[str, Any]) -> dict[str, Any]:
     raw_signals = {} if _signal_sources_failed(raw) else _section(raw.get("signals"))
     next_catalyst = events.get("next_catalyst")
     if isinstance(next_catalyst, dict):
-        # days_until shrinks every day without any new data.
-        next_catalyst = {key: value for key, value in next_catalyst.items() if key != "days_until"}
+        # days_until shrinks every day without any new data, and inside an earnings
+        # window the date is today (the window bounds are the stable data).
+        clock_keys = {"days_until", "date"} if "window" in next_catalyst else {"days_until"}
+        next_catalyst = {key: value for key, value in next_catalyst.items() if key not in clock_keys}
 
     # Compute snapshot_as_of_date (max of all component dates)
     snapshot_as_of_date = _compute_snapshot_as_of_date(normalized)
