@@ -1,340 +1,129 @@
 # Stock Analysis MCP
 
-[![Tests](https://img.shields.io/badge/Tests-Pytest-0A9EDC?logo=pytest)](tests/)
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![MCP](https://img.shields.io/badge/MCP-Server-00ADD8?logo=data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJMMyA3VjE3TDEyIDIyTDIxIDE3VjdMMTIgMloiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMiIvPgo8L3N2Zz4=)](https://modelcontextprotocol.io)
-[![Data: yfinance](https://img.shields.io/badge/Data-yfinance-720e9e)](https://github.com/ranaroussi/yfinance)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-AI-assisted single-stock analysis for individual investors using Claude Code,
-Codex, or any MCP client.
+Stock research for Claude Code, Codex, and other MCP clients. Get buy, wait, or
+avoid guidance, plus hold/sell signals for positions you own—with valuation,
+chart signals, risks, and earnings context.
 
-Ask for a stock and get a disciplined buy / wait / avoid read, risk summary,
-position-sizing context, catalyst notes, and a five-question dislocation check.
+Decision-card hard gates can block a buy for a falling knife, earnings risk, weak
+liquidity, poor data quality, or unsupported instruments—even if the narrative is
+positive.
 
-Informational only — not financial advice.
+Yahoo Finance data via `yfinance`. No market-data API key required. Does not place orders.
 
-## Example Output
+## How to use
 
-Shortened example from a live `HOOD` analysis on 2026-05-13. Market data changes over time.
-
-```text
-HOOD — Robinhood Markets @ $76.67
-
-Decision: WAIT
-Reason: falling-knife gate — severe decline with broken trends
-Verdict: neutral, score -0.10 (scale -1 to +1), low confidence
-Risk: EXTREME
-
-Dislocation Check
-
-Question                              Answer    Read
-Is it down enough?                    Yes       -50.2% from 52W high.
-Is the business still good?           Yes       Net margin 41.1%, FCF +$3.0B, revenue +15.1% YoY.
-Is the balance sheet safe?            Yes       Net cash positive balance sheet.
-Is the long-term thesis intact?       Watch     Good business, but high volatility and rich valuation need monitoring.
-Has price broken more than business?  Unclear   Business is intact, but valuation is still rich and technicals are broken.
-
-Bottom line: HOOD looks like a strong business in a broken chart, not a clear buy.
-Wait for stabilization and a volatility drop before adding.
-```
-
-## Quick Start
-
-### Claude Code
-
-```bash
-claude mcp add -s user stock-analysis -- uvx --from git+https://github.com/nickzren/stock-analysis-mcp stock-analysis
-```
-
-### Codex
-
-```bash
-codex mcp add stock-analysis -- uvx --from git+https://github.com/nickzren/stock-analysis-mcp stock-analysis
-```
-
-## How To Use
-
-Ask your agent:
+Once connected, just ask your agent:
 
 ```text
 Analyze HOOD
 ```
 
-With account sizing:
+No extra parameters needed. For more specific questions:
+
+| Question | What you get |
+|---|---|
+| “Analyze MSFT. What supports buying, and what would make you wait?” | A decision card, supporting evidence, blockers, and conditions to revisit. |
+| “I own 20 AAPL shares bought at $150 on 2025-01-02. Should I hold or sell?” | Position P&L, technical sell signals, and holding-period context. |
+| “Compare MSFT, AAPL, and GOOGL.” | Valuation, growth, profitability, and momentum side by side. |
+| “Any swing setup on HOOD? Account $3,000, risk 1%, position cap 10%.” | Entry, stop, targets, and stop-based sizing when a setup is actionable. |
+| “Add AAPL and MSFT to my watchlist, then scan for setups.” | A saved watchlist and setup screen; later scans highlight changes. |
+
+**Real example:** shortened `analyze` output for RIVN, recorded after the close
+on **2026-10-12**. Historical output, not a current recommendation.
 
 ```text
-Analyze HOOD with account size $3000
+RIVN — $13.54
+Action: wait
+Blocker: falling_knife
+Reason: severe decline with broken trends — wait for stabilization
+Price: daily_close, as of 2026-10-12
+Data gap: pe_not_meaningful
 ```
 
-Swing-trade check:
+## Set up
 
-```text
-Any swing setup on HOOD? Account size $3000.
+Requires [uv](https://docs.astral.sh/uv/getting-started/installation/) and Git.
+uv can [download Python automatically](https://docs.astral.sh/uv/concepts/python-versions/#installing-python-versions).
+Choose your client:
+
+**Claude Code**
+
+```bash
+claude mcp add -s user stock-analysis -- uvx --from git+https://github.com/nickzren/stock-analysis-mcp@v0.2.0 stock-analysis
 ```
 
-`analyze_trade_setup` returns an action (`trade_now`, `enter_on_trigger`, `watch`,
-`no_setup`, `avoid`, `wait_for_data`) plus an executable plan when actionable.
-`trade_now` is only possible during regular market hours with fresh data; stale,
-delayed, or unverifiable data downgrades the action and explains why in `blockers`.
-Earnings provenance is explicit: `event_risk.earnings_verification` (from
-`get_events` `earnings.verification`) distinguishes a
-verified date or a verified no-earnings state from an unverifiable one (which
-caps the card at `watch`), dates are exchange-local (ET), and same-day earnings
-count as day 0.
+**Codex**
 
-The default report is compact and decision-focused. It still computes the full
-underlying analysis before returning the shorter investor view.
-
-Supported: US-dollar-priced common stocks (`quoteType` EQUITY, including USD
-ADRs). ETFs, funds, indices, crypto, futures, preferreds, and anything priced in
-another currency (including GBp/ZAc minor units) get a `support` block marking
-them unsupported: no share or dollar sizing, no dollar-liquidity claims, and no
-new-money action (capped at `watch`). Ratios that mix the trading price with
-statements in another currency (e.g. a USD ADR reporting in TWD) are left null
-with `basis_status: unverified_currency` rather than shown wrong. Yields are
-fractions (0.005 = 0.5%); the dividend yield is forward (`dividendRate / price`).
-
-Prices: zones, stops, sizing and analyst upside use a fresh intraday bar during
-regular hours, otherwise the last completed session's close; the cached quote is
-only a labelled fallback. `summary.price_provenance` says which price was used,
-as of when, and how stale it is (in sessions for daily closes).
-
-Other data conventions:
-- Debt-to-equity is a ratio (1.2 = 120%). A valuation ratio that is undefined
-  (e.g. P/E with EPS <= 0) or whose basis can't be verified is null, and
-  `metric_status` says why.
-- Statement values carry their period: `free_cash_flow_ttm` and
-  `operating_cf_ttm` hold a TTM only when four consecutive quarters are
-  complete, otherwise the newest annual value labelled `FY <year>` with
-  `*_period_end`, `*_ttm_status` and `*_period_lag`, otherwise Yahoo's info
-  figure labelled `TTM` with `*_source: "info"`.
-- Daily price history keeps every vendor session; an empty session is a row of
-  nulls. Returns count sessions and are null when an endpoint is missing. SMAs
-  and Bollinger Bands use the last N valid closes, so an older empty session
-  doesn't void them, and `get_technicals` discloses gaps per indicator window in
-  `bar_validity`.
-- A failed news, earnings, symbol-search, options-expiration or ownership read
-  is reported as failed (for example `source_status` on news, `sources_failed`
-  and `verification` on earnings), not as "nothing found". Fundamentals
-  statement, estimate and dividend-history reads still degrade to missing
-  fields.
-
-Responses carry `meta.schema_version` (`"5"`); watchlist snapshots carry their
-own `snapshot_version` (`"2.0.0"`). [CHANGELOG.md](CHANGELOG.md) lists every
-field that changed meaning or units since schema 4.
-
-## What It Checks
-
-- **Action now:** buy, starter, hold, wait, avoid, or wait for data
-- **Hard gates:** falling knife, weak liquidity, poor data quality, missing runway
-- **Business quality:** growth, margins, free cash flow, profitability
-- **Balance-sheet safety:** debt, cash runway, dilution risk
-- **Technicals:** trend, momentum, moving averages, RSI, MACD, ATR
-- **Risk:** volatility, beta, drawdown, stop levels, position sizing
-- **Catalysts:** earnings, analyst targets, news, short interest, ownership
-- **Dislocation check:** whether price is broken more than the business
-
-## Advanced Usage
-
-By default, `analyze` returns the `standard` detail level: a compact investor report covering:
-- **Decision card** — what to do now, sizing, entry/stop, conditions, and next review
-- **Hard gates** — pre-buy checks such as falling knife, weak liquidity, missing runway, and poor data quality
-- **Executive summary** — materiality-first narrative (leads with what matters most)
-- **Section summaries** — 1–2 sentence takeaways per major section
-- **Verdict** — score, tilt, confidence, components, pros, and cons
-- **Dislocation check** — five-question broken-price vs. broken-business read
-- **Action zones** — compact ATR/valuation-based levels and sizing context
-- **Catalyst intelligence** — structured bullish/bearish news catalyst tags
-- **Analyst coverage** — consensus rating + targets
-- **Ownership, short interest, sector comparison, and relative performance**
-- Compact fundamentals, risk, events, and news summaries
-
-The output follows a consistent schema, making it easy to compare multiple stocks or track changes over time.
-For invalid/delisted symbols, `analyze` returns a top-level error (`error=true`) with diagnostics in `data_quality.tool_failures`.
-For detailed rendering guidance, read the MCP resource `stock-analysis://guides/analyze-rendering`.
-
-### Optional Inputs
-
-`analyze` works without any extra parameters. Optional inputs refine sizing and response size:
-
-- `account_size`: portfolio/account size used for dollar sizing output
-- `risk_per_trade_pct`: percent of account you are willing to lose if a stop is hit
-- `max_position_pct`: hard cap for a single position
-- `detail`: `standard` (default), `decision` for the smallest action surface, or `full` for the previous complete audit/debug payload
-
-If `account_size` is omitted, sizing remains percent-based. If a caller depends on fields omitted from `standard` (for example `decision_context`, `dip_assessment`, `decision_modes`, or full `company_profile`), call `analyze(..., detail="full")`.
-
-## Available Tools
-
-### Primary
-
-| Tool | Description |
-|------|-------------|
-| `analyze` | Single-stock analysis with token-efficient `standard` output by default, optional `decision`/`full` detail levels, dollar sizing, and company-name resolution |
-| `analyze_trade_setup` | Swing-trade setup card (long-only, days-to-weeks): setup type, entry trigger, stop, targets, R-based sizing, time stop, and freshness-gated action |
-
-### Comparative Analysis
-
-| Tool | Description |
-|------|-------------|
-| `compare` | Side-by-side comparison for 2-5 symbols with rankings |
-| `detect_changes` | Diff current analysis vs prior `watchlist_snapshot` (material changes; older snapshots compare without phantom changes) |
-
-### Market Data & Signals
-
-| Tool | Description |
-|------|-------------|
-| `search_symbol` | Search for stock symbols by company name or ticker |
-| `get_stock_summary` | Basic stock info (name, sector, price, market cap) |
-| `get_price_history` | Historical price data with summary and resource URI |
-| `get_technicals` | Technical indicators (SMA, EMA, RSI, MACD, ATR, Bollinger, Fibonacci, OBV) plus a `short_term` block (levels, gap, RVOL, compression); `timeframe="swing"` adds intraday VWAP, time-adjusted RVOL, hourly trend, and alignment with freshness disclosure. Regular-session freshness requires both a fresh intraday quote and a current daily frame; `reason_code` names any failure cause. Also reports `session_close` (latest valid completed-session close) and `bar_validity` (invalid bars per indicator window). |
-| `get_fundamentals` | Financial metrics, valuation history, analyst estimates, dividends |
-| `get_events` | Earnings dates, dividends, splits |
-| `get_news` | Recent news headlines, earnings surprise data, and structured catalyst tags; `source_status` tells a quiet period (`empty`) apart from a feed that failed or could not be verified |
-| `get_ownership` | Insider transactions and institutional ownership trends |
-| `get_options_signals` | Options-derived signals (IV, put/call, unusual activity) |
-
-`get_price_history` returns a `price://...` resource URI backed by an in-memory, process-local cache. Read that resource during the same server session; it does not survive restarts. Some MCP clients (observed: Claude Desktop) serve resource reads from a separate server process where that cache is empty — if resource reads return "not cached", fall back to `include_preview=true` for inline bars.
-
-### Watchlist
-
-| Tool | Description |
-|------|-------------|
-| `manage_watchlist` | Add, remove, or list symbols (max 25); normalized and deduplicated |
-| `scan_watchlist` | Two-phase screen for swing setups: cheap daily screen for all symbols, full card (`analyze_trade_setup`) only for candidates and previously-actionable ones; `changes` lists transitions since the last scan, `rows` is the full current state. Near earnings (≤21 days) the card fills `event_risk.expected_move_pct` from the ATM straddle and warns when the stop sits inside the implied move |
-
-**Storage:** Watchlist and scan state persist under `$STOCK_ANALYSIS_DATA_DIR` (if set), else `$XDG_DATA_HOME/stock-analysis`, else `~/.local/share/stock-analysis`. The same directory stores `watchlist.json` and `scan_state.json`; corrupt files degrade to empty state with a warning instead of failing. Run `manage_watchlist action=list` to inspect the current watchlist and storage state.
-
-**Scheduled Brief Example:** Run `scan_watchlist` from a scheduled task before market open (e.g., via cron or `at` command) with optional `account_size`, `risk_per_trade_pct`, and `max_position_pct` parameters to match your account. Lead the report with the `changes` key to focus on symbol transitions; `rows` provides full current state for trend analysis. First scan returns an empty `changes` list with a `first_scan` warning; transitions appear starting from the second scan.
-
-### Portfolio & Utilities
-
-| Tool | Description |
-|------|-------------|
-| `analyze_my_position` | Hold/sell analysis for existing positions |
-| `analyze_portfolio` | Concentration, sector exposure, correlation |
-| `check_data_quality` | Verify data availability for symbols |
-
-## Technical Details
-
-**Session Classification and Holidays**
-
-Session classification is holiday-aware via a vendored NYSE calendar
-(2025–2030, full holidays and 13:00 early closes); outside that range it
-falls back to clock-only weekday logic, reported as
-`method="clock_only_no_holidays_fallback"` in `get_market_state` provenance.
-
-<details>
-<summary>Architecture</summary>
-
-Read left to right: request -> orchestration -> parallel data fetch -> synthesized response.
-
-### Quick Flow
-
-```mermaid
-flowchart LR
-    C["AI Agent"] --> A["analyze"]
-    A --> O["Orchestrator"]
-    O --> T["Core Tools"]
-    T --> D["Data Client + Cache"]
-    D --> Y["yfinance"]
-    O --> R["Response JSON"]
+```bash
+codex mcp add stock-analysis -- uvx --from git+https://github.com/nickzren/stock-analysis-mcp@v0.2.0 stock-analysis
 ```
 
-### Detailed Flow
+These commands are pinned to **v0.2.0**. Other MCP clients can use the same `uvx`
+command as a stdio server.
 
-```mermaid
-flowchart LR
-    classDef client fill:#EAF3FF,stroke:#2F6DB3,color:#12345B,stroke-width:1px;
-    classDef entry fill:#E9FFF4,stroke:#2E9B64,color:#0E4F32,stroke-width:1px;
-    classDef engine fill:#FFF7E8,stroke:#C58C2A,color:#5B3A00,stroke-width:1px;
-    classDef data fill:#F3EEFF,stroke:#6E4EC9,color:#2F1F63,stroke-width:1px;
-    classDef output fill:#FFEDEF,stroke:#C3445A,color:#5E1E2A,stroke-width:1px;
+## For agents
 
-    subgraph L1["Client"]
-        C["AI Agent<br/>Claude or Codex"]
-    end
+Start with `analyze(symbol="MSFT")`. It accepts a ticker or company name;
+use `search_symbol` to resolve names before calling other tools.
 
-    subgraph L2["MCP Layer"]
-        S["MCP Server"]
-        A["analyze<br/>primary tool"]
-        OT["other tools<br/>compare, detect_changes<br/>get_ownership, get_options_signals"]
-    end
+| Task | Tool |
+|---|---|
+| General stock decision | `analyze`: `detail="standard"` by default; `"decision"` for a smaller response, `"full"` for the audit detail. |
+| Long-only swing trade, days to weeks | `analyze_trade_setup` |
+| Existing holding | `analyze_my_position`: provide `symbol`, `cost_basis`, `purchase_date`; `shares` is optional. |
+| Compare 2–5 stocks / review portfolio exposure | `compare` / `analyze_portfolio` |
+| Recheck a stock | Save `watchlist_snapshot`; pass it as `previous_snapshot` to `detect_changes`. |
+| Maintain and scan up to 25 symbols | `manage_watchlist` / `scan_watchlist` |
+| Inspect a specific input | `get_stock_summary`, `get_price_history`, `get_technicals`, `get_fundamentals`, `get_events`, `get_news`, `get_ownership`, `get_options_signals`, `check_data_quality` |
 
-    subgraph L3["Analysis Engine"]
-        O["Orchestrator"]
-        M["Modules<br/>scoring, actions, context"]
-    end
+Read `decision_card` with its hard gates, `summary.price_provenance`, and
+`data_quality`. Keep timestamps, blockers, and missing-data warnings in the answer;
+do not promote a positive narrative into a buy when a gate blocks it.
 
-    subgraph L4["Core Data Layer"]
-        T["Core tools<br/>technicals, fundamentals<br/>risk, events, news"]
-        D["Data client + cache"]
-        Y["yfinance"]
-    end
+For swing cards, preserve `action` and `blockers`. Show the returned `plan` only
+for `trade_now` or `enter_on_trigger`. `trade_now` requires fresh regular-session
+data; unverifiable earnings cap the card at `watch`.
 
-    R["Response JSON"]
+`account_size` enables dollar/share sizing. `analyze` sizes are estimates, not a
+guarantee that every suggestion fits the risk budget. Use `analyze_trade_setup`
+for stop-based risk sizing; `risk_per_trade_pct=1` means 1% of the account.
 
-    C -->|"Analyze NVDA"| S
-    S --> A
-    S --> OT
-    A --> O
-    O -->|"parallel calls"| T
-    OT --> T
-    T --> D --> Y
-    O --> M --> R
+Responses use schema **5**; snapshots use **2.0.0**.
+[CHANGELOG.md](CHANGELOG.md) covers field meanings, migration, and known limitations.
 
-    class C client
-    class S,A,OT entry
-    class O,M engine
-    class T,D,Y data
-    class R output
-```
+## Data and limits
 
-Color legend: `blue=client`, `green=entry`, `orange=engine`, `purple=data`, `red=output`.
-
-Node map: `S=src/stock_analysis/server.py`, `O=src/stock_analysis/tools/analyze/orchestrator.py`, `D=src/stock_analysis/data/`.
-
-### Request Lifecycle
-
-```mermaid
-sequenceDiagram
-    participant U as AI Agent
-    participant M as MCP Server
-    participant A as analyze
-    participant O as Orchestrator
-    participant T as Core Tools
-    participant D as Data Client
-    participant Y as yfinance
-
-    U->>M: "Analyze NVDA"
-    M->>A: call analyze
-    A->>O: start orchestration
-    par parallel fetch
-        O->>T: technicals/fundamentals/risk/events/news
-    end
-    T->>D: fetch data
-    D->>Y: request market data
-    Y-->>D: raw data
-    D-->>T: normalized data
-    T-->>O: tool outputs
-    O-->>M: unified response JSON
-    M-->>U: analysis result
-```
-
-</details>
+- **Supported decisions:** USD-priced common stocks, including USD ADRs. Unsupported
+  or unverified instruments/currencies block new buying and dollar/share sizing;
+  existing-holder actions can remain. ETFs, preferreds, and non-USD listings are
+  outside the supported decision rules.
+- **`analyze` price basis:** uses a fresh intraday bar during regular hours when
+  available, otherwise the completed daily close, then a labelled quote fallback.
+  Yahoo data can be delayed or incomplete; check the reported source and age.
+- **Units and gaps:** dividend yields are fractions (`0.005 = 0.5%`); debt-to-equity
+  is a ratio (`1.2 = 120%`). Undefined or unverified ratios are null;
+  `metric_status` marks ratios excluded from scoring. Read cash-flow period labels:
+  a field named `*_ttm` can contain an annual fallback.
+- **Limits remain:** `analyze` does not apply all the swing card's freshness and
+  earnings-verification gates. Some statement reads become missing fields after
+  failure. Scores and sizing are rule-based estimates. See the [known limitations](CHANGELOG.md#known-limitations).
+- **Local state:** watchlist and scan state persist in `$STOCK_ANALYSIS_DATA_DIR`,
+  otherwise `$XDG_DATA_HOME/stock-analysis`, otherwise `~/.local/share/stock-analysis`.
+  Price-history `price://` resources last only in the server process that fetched
+  them; use `include_preview=true` for the last five inline bars if resource reads fail.
 
 ## Development
 
+[Tests](tests/) run offline against synthetic data and a stubbed Yahoo transport.
+They cover failures, earnings dates, price freshness, decision gates, and snapshots.
+
 ```bash
-# Install dev dependencies
-uv pip install -e ".[dev]"
-
-# Run tests
-uv run pytest
-
-# Linting
-uv run ruff check src tests
+uv sync --extra dev --locked
+uv run --frozen pytest
+uv run --frozen ruff check src tests
 ```
 
 ## Disclaimer
