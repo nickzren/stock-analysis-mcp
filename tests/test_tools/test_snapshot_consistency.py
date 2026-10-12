@@ -351,6 +351,14 @@ class TestR73AbsentVersusNull:
         assert (snapshot["bullish_signals"] is not None) is known
         assert (snapshot["bearish_signals"] is not None) is known
 
+    @pytest.mark.parametrize(("latest_bar_invalid", "known"), [(True, False), (False, True)])
+    def test_an_empty_latest_daily_bar_makes_the_signals_unknown(self, latest_bar_invalid: bool, known: bool) -> None:
+        """That day the SMA rules have no value, so their signals are unknown, not removed."""
+        data_quality = {"bar_validity": {"latest_bar_invalid": latest_bar_invalid}}
+        snapshot = raw_result(data_quality=data_quality)["watchlist_snapshot"]
+        assert (snapshot["bullish_signals"] is not None) is known
+        assert (snapshot["bearish_signals"] is not None) is known
+
     @pytest.mark.parametrize(
         ("warning", "known"),
         [("insider_transactions_error", False), ("insider_transactions_columns_unrecognized", False),

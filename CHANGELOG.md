@@ -156,7 +156,7 @@ Old consumers should re-check every item below.
 - **One snapshot, version 2.0.0:**
   - `watchlist_snapshot` is built once per analysis and is identical at every `detail` level. `detect_changes` uses it as is.
   - It adds `zone`, `mid_term_fit`, `long_term_fit`, `bullish_signals` / `bearish_signals`, `support_instrument` / `support_currency`, and `price_source` / `price_as_of` / `as_of_kind` / `price_stale`.
-  - An unknown list is null; a known-empty list is `[]`. Signal lists are null when a tool feeding them failed.
+  - An unknown list is null; a known-empty list is `[]`. Signal lists are null when a tool feeding them failed or the latest daily bar is empty.
 - **Clock-driven values:**
   - The snapshot's `next_catalyst` no longer carries `days_until` (1.1.0 did). It also drops `date` when an earnings `window` is present, because inside a window that date is just today.
   - `snapshot_hash` covers the full set except `snapshot_as_of_date` (fetch dates) and `price_stale` (an age past a threshold).

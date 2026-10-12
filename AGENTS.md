@@ -324,8 +324,9 @@
   except clock-driven fields (`snapshot_as_of_date`, `price_stale`). Lists are
   read before normalization: unknown is null, known-empty is `[]`; the signal
   lists are null when a tool feeding them failed (`no_options` is a known
-  state) or ownership discloses `insider_transactions_error` /
-  `insider_transactions_columns_unrecognized`. Non-dict sections read as empty. `detect_changes` checks the
+  state), ownership discloses `insider_transactions_error` /
+  `insider_transactions_columns_unrecognized`, or the latest daily bar is
+  invalid (`bar_validity.latest_bar_invalid`: the SMA rules have no value that day). Non-dict sections read as empty. `detect_changes` checks the
   shape of `previous_snapshot` before analysis (required `snapshot_version` in
   1.0.0/1.1.0/2.0.0 and `symbol`; every other field optional but type-checked,
   `next_catalyst`'s keys and its `window` bounds included; absent or null

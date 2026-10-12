@@ -442,7 +442,10 @@ def _section(value: Any) -> dict[str, Any]:
 
 
 def _signal_sources_failed(raw: dict[str, Any]) -> bool:
-    failures = _section(raw.get("data_quality")).get("tool_failures")
+    data_quality = _section(raw.get("data_quality"))
+    # An empty latest daily bar leaves the SMA rules without a value that day (D7).
+    latest_bar_invalid = _section(data_quality.get("bar_validity")).get("latest_bar_invalid") is True
+    failures = data_quality.get("tool_failures")
     tool_failed = any(
         isinstance(failure, dict)
         and failure.get("tool") in _SIGNAL_SOURCE_TOOLS
@@ -451,7 +454,7 @@ def _signal_sources_failed(raw: dict[str, Any]) -> bool:
     )
     ownership_warnings = _section(raw.get("ownership_flow")).get("warnings")
     insider_unknown = isinstance(ownership_warnings, list) and bool(_INSIDER_UNKNOWN_WARNINGS & set(ownership_warnings))
-    return tool_failed or insider_unknown
+    return tool_failed or insider_unknown or latest_bar_invalid
 
 
 def _string_list(value: Any) -> list[str] | None:
