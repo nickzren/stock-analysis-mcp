@@ -93,4 +93,6 @@ def df_to_rows(df: pd.DataFrame) -> list[dict]:
 def df_to_csv(df: pd.DataFrame) -> str:
     """Convert to CSV string for cache/resource."""
     volumes = _whole_volumes(df)
-    return (df if volumes is None else df.assign(volume=volumes)).to_csv(index=False)
+    if volumes is not None:
+        df = df.assign(volume=volumes)
+    return df.to_csv(index=False)

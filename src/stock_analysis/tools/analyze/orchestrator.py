@@ -92,6 +92,10 @@ _NEW_MONEY_POLICY_CODES = frozenset({
     "speculative_with_thesis", "speculative_only", "small_position_with_stops",
 })
 _NEW_MONEY_MODE_CODES = _NEW_MONEY_POLICY_CODES | {"build_position", "starter_position_only", "starter_then_add"}
+_DIP_NEW_MONEY_RECOMMENDATIONS = frozenset({
+    "strong_buy_the_dip", "buy_the_dip", "cautious_accumulation", "small_speculative_position",
+    "starter_only_wait_for_stabilization",
+})
 
 
 def _cap_policy_at_watch(policy_action: dict[str, Any], support: dict[str, Any]) -> None:
@@ -111,12 +115,6 @@ def _cap_modes_at_watch(decision_modes: dict[str, Any]) -> None:
             mode["action"] = "watch"
         if mode.get("long_term_view") in _NEW_MONEY_POLICY_CODES:
             mode["long_term_view"] = "watch"
-
-
-_DIP_NEW_MONEY_RECOMMENDATIONS = frozenset({
-    "strong_buy_the_dip", "buy_the_dip", "cautious_accumulation", "small_speculative_position",
-    "starter_only_wait_for_stabilization",
-})
 
 
 def _cap_dip_at_watch(dip_assessment: dict[str, Any] | None, support: dict[str, Any]) -> None:
