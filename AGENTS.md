@@ -363,10 +363,15 @@
   (technicals returns, the 1w z-score's latest week, risk benchmark returns,
   `get_price_history` total return, the SMA200 slope, YTD) need both endpoints
   finite, else null; `price_action` and `days_since_52w_*` count sessions, and RSI
-  divergence pairs each close with its own session's RSI. Indicators keep their
-  masking (SMA/Bollinger go null on an invalid bar in the window; EMA and ATR
-  carry on; RSI treats a NaN delta as no change; pivots, bandwidth percentile
-  and RSI divergence still skip invalid bars); `technicals.bar_validity`
+  divergence pairs each close with its own session's RSI. SMA and Bollinger
+  (D7, `indicators._rolling_over_finite`) use the last N finite closes, all N
+  required, placed back on their own session (a session without a finite close
+  has no value, so an invalid latest bar still nulls them); before D7 one empty
+  session nulled SMA200 for ~200 sessions and silenced the falling-knife gate.
+  The other indicators keep their masking (EMA and ATR carry on; RSI treats a
+  NaN delta as no change; pivots, bandwidth percentile and RSI divergence still
+  skip invalid bars). An empty previous session still gives the scan
+  `wait_for_data` (separate from D7); `technicals.bar_validity`
   discloses `latest_bar_invalid`, `latest_volume_invalid` and
   `invalid_bars_in_window` per indicator (its period; MACD 34 bars; ATR checks
   H/L/C, OBV close and volume). Analyze keeps it as `data_quality.bar_validity`

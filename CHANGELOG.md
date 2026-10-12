@@ -57,7 +57,8 @@ Old consumers should re-check every item below.
   - **Counts and comparisons:** `days_since_52w_*` count sessions, and `price_action` compares consecutive sessions.
   - **SMA200 slope:** compares the SMA 20 sessions apart.
   - **RSI divergence:** keeps each close with its own session's RSI.
-  - **Unchanged indicators:** SMA, EMA, MACD, RSI, ATR and Bollinger values behave as before. One empty session still nulls an SMA for its whole window, and `bar_validity` now says so.
+  - **SMA and Bollinger:** they use the last N valid closes, all N required, so an older empty session no longer voids the window. A day with no close has no value, so an empty latest session still nulls them.
+  - **Unchanged indicators:** EMA, MACD, RSI and ATR behave as before. `bar_validity` discloses the gaps in every indicator window.
 - **Volume and the latest bar:**
   - `volume.current` / `ratio` and all `obv` fields are null when the latest volume is missing.
   - `volume.avg_20d` averages only valid volumes.
@@ -199,7 +200,7 @@ Old consumers should re-check every item below.
 ### Known limitations
 
 - **Stale latest bar:** when the latest daily bar is missing, ATR% and dollar liquidity in `risk_metrics` are null. Using the last valid close there is a separately approved fill-policy change.
-- **Empty latest rows:** how often Yahoo sends an empty latest daily row is not established. With one, `get_technicals` `current_price` and `compare`'s `position_in_52w_range` and `return_1m` are null (ranked last), and `scan_watchlist` returns `wait_for_data`.
+- **Empty latest rows:** how often Yahoo sends an empty latest daily row is not established. With one, `get_technicals` `current_price` and `compare`'s `position_in_52w_range` and `return_1m` are null (ranked last), and `scan_watchlist` returns `wait_for_data`, as it also does when the previous session is empty.
 - **Earnings verification in analyze:** `analyze`'s earnings gate reads `days_until` only. An `unverifiable` calendar caps the trade card at `watch` but not `analyze`; Step 2 owns that gate.
 - **Intraday price basis:** in the regular session, when the 5m bar is stale or missing, `analyze` zones and stops use the last completed close while technicals include today's forming daily bar. Step 2 owns stale-price gating.
 - **Chart errors:** a price-history 5xx whose body is Yahoo's JSON error envelope is reported as `invalid_symbol` and not retried, as in v4.

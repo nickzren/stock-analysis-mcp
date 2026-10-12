@@ -110,8 +110,10 @@ Other data conventions:
   `*_period_end`, `*_ttm_status` and `*_period_lag`, otherwise Yahoo's info
   figure labelled `TTM` with `*_source: "info"`.
 - Daily price history keeps every vendor session; an empty session is a row of
-  nulls. Returns count sessions and are null when an endpoint is missing, and
-  `get_technicals` discloses gaps per indicator window in `bar_validity`.
+  nulls. Returns count sessions and are null when an endpoint is missing. SMAs
+  and Bollinger Bands use the last N valid closes, so an older empty session
+  doesn't void them, and `get_technicals` discloses gaps per indicator window in
+  `bar_validity`.
 - A failed news, earnings, symbol-search, options-expiration or ownership read
   is reported as failed (for example `source_status` on news, `sources_failed`
   and `verification` on earnings), not as "nothing found". Fundamentals

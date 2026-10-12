@@ -8,9 +8,21 @@ import pandas as pd
 from stock_analysis.utils.helpers import safe_last_float, safe_round
 
 
+def _rolling_over_finite(prices: pd.Series, period: int, stat: str) -> pd.Series:
+    """``stat`` over the last ``period`` finite prices, all required, on each finite
+    price's own session (D7). An empty session is skipped instead of voiding the
+    window, and has no value itself."""
+    raw = pd.to_numeric(prices, errors="coerce").to_numpy(dtype="float64", na_value=np.nan)
+    finite = np.isfinite(raw)
+    rolling = pd.Series(raw[finite]).rolling(window=period, min_periods=period)
+    out = np.full(len(raw), np.nan)
+    out[finite] = getattr(rolling, stat)().to_numpy()
+    return pd.Series(out, index=prices.index, name=prices.name)
+
+
 def calculate_sma(prices: pd.Series, period: int) -> pd.Series:
     """
-    Calculate Simple Moving Average.
+    Calculate Simple Moving Average over the last ``period`` finite prices (D7).
 
     Args:
         prices: Price series (typically close prices)
@@ -19,7 +31,7 @@ def calculate_sma(prices: pd.Series, period: int) -> pd.Series:
     Returns:
         SMA series
     """
-    return prices.rolling(window=period, min_periods=period).mean()
+    return _rolling_over_finite(prices, period, "mean")
 
 
 def calculate_ema(prices: pd.Series, period: int) -> pd.Series:
@@ -391,8 +403,8 @@ def calculate_bollinger_bands(
     """Calculate Bollinger Bands."""
     if prices is None or len(prices) < period:
         return {"upper": None, "middle": None, "lower": None, "bandwidth": None, "pct_b": None}
-    sma = prices.rolling(window=period).mean()
-    std = prices.rolling(window=period).std()
+    sma = calculate_sma(prices, period)
+    std = _rolling_over_finite(prices, period, "std")
     upper = sma + std_dev * std
     lower = sma - std_dev * std
     current_price = float(prices.iloc[-1])

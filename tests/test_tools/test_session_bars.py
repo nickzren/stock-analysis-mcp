@@ -52,8 +52,9 @@ class TestR54NeverCompress:
         assert calculate_returns(R54_CLOSES, 5) == pytest.approx(2.5)
         assert _calculate_period_return(R54_CLOSES, 5) == pytest.approx(2.5)
 
-    def test_sma5_stays_null_and_discloses_the_invalid_bar(self) -> None:
-        assert math.isnan(calculate_sma(R54_CLOSES, 5).iloc[-1])
+    def test_sma5_skips_the_invalid_bar_and_discloses_it(self) -> None:
+        """D7 replaced SMA's strict window: the last 5 finite closes, 20..70."""
+        assert calculate_sma(R54_CLOSES, 5).iloc[-1] == 48.0
         assert invalid_bars_in_window(R54_CLOSES, window=5) == 1
 
     def test_an_invalid_endpoint_nulls_the_return(self) -> None:
@@ -165,14 +166,16 @@ ALL_ONE = dict.fromkeys(windows(), 1)
 
 
 class TestR57IndicatorCharacterization:
-    """Pinned on the pre-WP5 code: values are preserved, disclosures are added."""
+    """Pinned on the pre-WP5 code: values are preserved, disclosures are added.
+    SMA follows D7 since: a gap inside its window is skipped (107.37 is the mean of
+    the last 20 finite closes); an invalid latest bar still has no SMA."""
 
     @pytest.mark.parametrize(
         ("gap", "values", "latest_invalid", "invalid"),
         [
             (None, (107.44, 107.72, 106.35, 76.6, 2.1), False, windows()),
             (10, (107.44, 107.72, 106.35, 78.0, 2.1), False, windows(sma_50=1, sma_200=1, macd_12_26_9=1)),
-            (35, (None, 107.71, 106.3, 72.8, 2.11), False, ALL_ONE),
+            (35, (107.37, 107.71, 106.3, 72.8, 2.11), False, ALL_ONE),
             (39, (None, 107.12, 105.98, 73.3, 2.08), True, ALL_ONE),
         ],
         ids=["no_gap", "gap_mid_series", "gap_in_window", "gap_latest_bar"],
