@@ -50,13 +50,13 @@ _SCALAR_FIELDS = (
     ("action_mid_term", "action_mid_term", "action_mid_term"),
     ("action_long_term", "action_long_term", "action_long_term"),
     ("valuation_gate", "valuation_gate", "valuation_gate"),
-    ("is_unprofitable", "is_unprofitable", "is_unprofitable"),
     ("support_instrument", "support_instrument", "support_instrument"),
     ("support_currency", "support_currency", "support_currency"),
     ("price_source", "price_source", "price_source"),
-    ("price_stale", "price_stale", "price_stale"),
 )
-# Every snapshot field the diff compares.
+# Every snapshot field the diff compares (is_unprofitable and price_stale are kept
+# but not compared: analyze stores a known False as null, and staleness moves with
+# the clock alone).
 _DIFFED_FIELDS = (
     "price", "score", "hard_gate_ids", "mid_term_fit", "long_term_fit", "bullish_signals", "bearish_signals",
     *(field for field, _, _ in _SCALAR_FIELDS),
@@ -152,18 +152,19 @@ def _diff_signals(
     prev: dict[str, Any],
     curr: dict[str, Any],
 ) -> dict[str, Any]:
-    """Diff bullish and bearish signal lists; a list absent from either snapshot is
-    not compared (its keys are left out), and a null list counts as empty."""
+    """Diff bullish and bearish signal lists. A list absent from either snapshot is
+    not compared (its keys are left out); when either side is null (unknown) no
+    signal is reported as new or removed, only that the list changed."""
     diff: dict[str, Any] = {}
     for side in ("bullish", "bearish"):
         key = f"{side}_signals"
         if key not in prev or key not in curr:
             continue
-        before = set(prev[key] or [])
-        after = set(curr[key] or [])
-        diff[f"new_{side}"] = sorted(after - before)
-        diff[f"removed_{side}"] = sorted(before - after)
-        diff[f"{side}_changed"] = before != after or (prev[key] is None) != (curr[key] is None)
+        before, after = prev[key], curr[key]
+        known = before is not None and after is not None
+        diff[f"new_{side}"] = sorted(set(after) - set(before)) if known else []
+        diff[f"removed_{side}"] = sorted(set(before) - set(after)) if known else []
+        diff[f"{side}_changed"] = set(before) != set(after) if known else (before is None) != (after is None)
     return diff
 
 
@@ -174,15 +175,19 @@ def _diff_hard_gates(
     """Diff the set of active hard-gate ids — what fired or cleared between snapshots."""
     previous = prev.get("hard_gate_ids")
     current = curr.get("hard_gate_ids")
-    prev_gates = set(previous or [])
-    curr_gates = set(current or [])
+    if previous is None or current is None:
+        # Unknown on either side: no gate is reported as new or cleared, only that
+        # the list went from unknown to known (or back).
+        return {"previous": previous, "current": current, "new": [], "cleared": [],
+                "changed": (previous is None) != (current is None)}
+    prev_gates = set(previous)
+    curr_gates = set(current)
     return {
-        "previous": previous if previous is None else sorted(prev_gates),
-        "current": current if current is None else sorted(curr_gates),
+        "previous": sorted(prev_gates),
+        "current": sorted(curr_gates),
         "new": sorted(curr_gates - prev_gates),
         "cleared": sorted(prev_gates - curr_gates),
-        # Known-unknown (null) -> a known list is a change even when it is empty.
-        "changed": prev_gates != curr_gates or (previous is None) != (current is None),
+        "changed": prev_gates != curr_gates,
     }
 
 

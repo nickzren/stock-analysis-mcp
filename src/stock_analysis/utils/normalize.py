@@ -34,8 +34,16 @@ SNAPSHOT_VERSION = "2.0.0"
 COMPATIBLE_SNAPSHOT_VERSIONS = frozenset({"1.0.0", "1.1.0", SNAPSHOT_VERSION})
 # Required in every snapshot; every other field is optional (older versions lack some).
 SNAPSHOT_IDENTITY_KEYS = ("snapshot_version", "symbol")
-# Derived from fetch times, not market data, so left out of snapshot_hash.
-_UNHASHED_SNAPSHOT_KEYS = frozenset({"snapshot_hash", "snapshot_as_of_date"})
+# Left out of snapshot_hash because they move with the clock, not with market data:
+# fetch dates, staleness (an age past a threshold) and the next-catalyst date
+# (it advances to today inside an open earnings window).
+_UNHASHED_SNAPSHOT_KEYS = frozenset({"snapshot_hash", "snapshot_as_of_date", "price_stale", "next_catalyst"})
+# Tools whose output feeds the signal lists; when one fails, the lists are unknown.
+_SIGNAL_SOURCE_TOOLS = frozenset({
+    "technicals", "fundamentals_snapshot", "risk_metrics", "ownership_analysis", "options_signals",
+})
+# Tool "failures" that are known states (no signals from that source), not unknowns.
+_KNOWN_EMPTY_ERRORS = frozenset({"no_options", "no_suitable_expiration"})
 
 
 def canonical_dumps(obj: Any) -> str:
@@ -426,6 +434,21 @@ def _compute_snapshot_as_of_date(normalized: dict[str, Any]) -> str | None:
     return max(dates) if dates else None
 
 
+def _section(value: Any) -> dict[str, Any]:
+    """A result section as a dict ({} when it is missing or not a dict)."""
+    return value if isinstance(value, dict) else {}
+
+
+def _signal_sources_failed(raw: dict[str, Any]) -> bool:
+    failures = _section(raw.get("data_quality")).get("tool_failures")
+    return any(
+        isinstance(failure, dict)
+        and failure.get("tool") in _SIGNAL_SOURCE_TOOLS
+        and failure.get("error") not in _KNOWN_EMPTY_ERRORS
+        for failure in (failures if isinstance(failures, list) else [])
+    )
+
+
 def _string_list(value: Any) -> list[str] | None:
     """A sorted list of strings, or None when the source list is unknown (absent or
     null) -- read before normalization, which turns those into []."""
@@ -463,18 +486,18 @@ def build_watchlist_snapshot(raw: dict[str, Any]) -> dict[str, Any]:
     normalized = normalize_for_watchlist_diff(raw)
 
     # Extract key fields for watchlist
-    summary = normalized.get("summary", {})
-    verdict = normalized.get("verdict", {})
-    policy = normalized.get("policy_action", {})
-    events = normalized.get("events_summary", {})
-    risk = normalized.get("risk_summary", {})
-    decision_card = normalized.get("decision_card", {})
-    horizon_fit = verdict.get("horizon_fit") or {}
-    support = summary.get("support") or {}
-    provenance = summary.get("price_provenance") or {}
-    raw_signals = raw.get("signals")
-    if not isinstance(raw_signals, dict):
-        raw_signals = {}
+    summary = _section(normalized.get("summary"))
+    verdict = _section(normalized.get("verdict"))
+    policy = _section(normalized.get("policy_action"))
+    events = _section(normalized.get("events_summary"))
+    risk = _section(normalized.get("risk_summary"))
+    decision_card = _section(normalized.get("decision_card"))
+    horizon_fit = _section(verdict.get("horizon_fit"))
+    support = _section(summary.get("support"))
+    provenance = _section(summary.get("price_provenance"))
+    # The lists are unknown when a tool feeding them failed (they would otherwise
+    # read as signals removed).
+    raw_signals = {} if _signal_sources_failed(raw) else _section(raw.get("signals"))
     next_catalyst = events.get("next_catalyst")
     if isinstance(next_catalyst, dict):
         # days_until shrinks every day without any new data.
@@ -501,22 +524,23 @@ def build_watchlist_snapshot(raw: dict[str, Any]) -> dict[str, Any]:
         "valuation_gate": policy.get("valuation_gate"),
         "is_unprofitable": policy.get("is_unprofitable"),
         # Decision card (compact action surface — diffs surface action / gate changes)
-        "decision_action_now": decision_card.get("action_now") if isinstance(decision_card, dict) else None,
+        "decision_action_now": decision_card.get("action_now"),
         "hard_gate_ids": _hard_gate_ids(raw.get("decision_card")),
-        "zone": (normalized.get("action_zones") or {}).get("current_zone"),
+        "zone": _section(normalized.get("action_zones")).get("current_zone"),
         "bullish_signals": _string_list(raw_signals.get("bullish")),
         "bearish_signals": _string_list(raw_signals.get("bearish")),
         # Key risk
-        "risk_regime": risk.get("risk_regime", {}).get("classification"),
+        "risk_regime": _section(risk.get("risk_regime")).get("classification"),
         "volatility_ann": risk.get("annualized_volatility", risk.get("volatility_ann")),
         # Instrument and currency support (WP4)
-        "support_instrument": (support.get("instrument") or {}).get("status"),
-        "support_currency": (support.get("currency") or {}).get("status"),
-        # Price provenance (WP5); fetch time, cache hit and ages stay out
+        "support_instrument": _section(support.get("instrument")).get("status"),
+        "support_currency": _section(support.get("currency")).get("status"),
+        # Price provenance (WP5); fetch time, cache hit and ages stay out, and the
+        # stale flag (an age past a threshold) is informational, not hashed
         "price_source": provenance.get("price_source"),
         "price_as_of": provenance.get("price_as_of"),
         "as_of_kind": provenance.get("as_of_kind"),
-        "price_stale": (provenance.get("staleness") or {}).get("stale"),
+        "price_stale": _section(provenance.get("staleness")).get("stale"),
         # Next catalyst
         "next_catalyst": next_catalyst,
         # Data freshness - single time anchor for diffs

@@ -87,7 +87,6 @@ CODEX_CHANGES = {
     "confidence": ({"verdict__confidence": "low"}, "confidence: medium -> low"),
     "price_source": ({"summary__price_provenance__price_source": "info_quote_fallback"},
                      "price_source: daily_close -> info_quote_fallback"),
-    "price_stale": ({"summary__price_provenance__staleness__stale": True}, "price_stale: False -> True"),
 }
 
 
@@ -121,12 +120,18 @@ class TestR71MaterialChanges:
             {"summary__price_provenance__staleness__age_hours": 5.0},
             {"events_summary__next_catalyst__days_until": 17},
             {"data_quality__component_freshness__price__as_of": "2026-10-11T09:00:00Z"},
+            {"summary__price_provenance__staleness__stale": True},
+            {"events_summary__next_catalyst__date": "2026-10-13"},
+            {"policy_action__is_unprofitable": None},
         ],
-        ids=["fetched_at", "cache_hit", "staleness_age", "days_until", "fetch_date"],
+        ids=["fetched_at", "cache_hit", "staleness_age", "days_until", "fetch_date", "stale_by_age",
+             "window_date_advances", "unprofitable_lossy"],
     )
     async def test_fetch_times_cache_hits_and_ages_change_nothing(self, detect: Any, changes: dict[str, Any]) -> None:
         response = await detect(copy.deepcopy(BASE), **changes)
-        assert (response["material_changes"], response["hash_changed"]) == ([], False)
+        assert response["material_changes"] == []
+        if "policy_action__is_unprofitable" not in changes:  # a data field, hashed but not compared
+            assert response["hash_changed"] is False
 
     async def test_a_version_change_alone_is_not_material(self, detect: Any) -> None:
         previous = {**copy.deepcopy(BASE), "snapshot_version": "1.1.0"}
@@ -227,11 +232,18 @@ class TestR73AbsentVersusNull:
         assert response["not_comparable"] == ["zone"]
         assert "action_zone" not in response["changes"]
 
-    async def test_a_null_signal_list_that_gains_signals_reports_them(self, detect: Any) -> None:
+    async def test_a_null_signal_list_that_becomes_known_is_one_change_not_new_signals(self, detect: Any) -> None:
         previous = {**copy.deepcopy(BASE), "bullish_signals": None}
         response = await detect(previous)
-        assert {"+bullish: above_sma200", "+bullish: golden_cross",
-                "bullish_signals: None -> ['above_sma200', 'golden_cross']"} <= set(response["material_changes"])
+        assert response["material_changes"] == ["bullish_signals: None -> ['above_sma200', 'golden_cross']"]
+        assert response["changes"]["signals"]["bullish_changed"] is True
+
+    async def test_a_list_that_becomes_unknown_removes_nothing(self, detect: Any) -> None:
+        failed = {"tool_failures": [{"tool": "technicals", "error": "TimeoutError"}],
+                  "component_freshness": {"price": {"as_of": "2026-10-10T12:00:00Z", "stale": False}}}
+        response = await detect(copy.deepcopy(BASE), data_quality=failed)
+        assert not [line for line in response["material_changes"] if line.startswith(("-bullish", "-bearish"))]
+        assert "bullish_signals: ['above_sma200', 'golden_cross'] -> None" in response["material_changes"]
 
     async def test_a_null_list_that_becomes_known_empty_is_a_change(self, detect: Any) -> None:
         previous = {**copy.deepcopy(BASE), "hard_gate_ids": None}
@@ -248,6 +260,19 @@ class TestR73AbsentVersusNull:
         snapshot = raw["watchlist_snapshot"]
         assert snapshot["hard_gate_ids"] is None
         assert (snapshot["bullish_signals"], snapshot["bearish_signals"]) == (["golden_cross"], None)
+
+    @pytest.mark.parametrize(
+        ("failure", "known"),
+        [({"tool": "technicals", "error": "data_unavailable"}, False),
+         ({"tool": "options_signals", "error": "TimeoutError"}, False),
+         ({"tool": "options_signals", "error": "no_options"}, True),
+         ({"tool": "stock_news", "error": "news_source_failed"}, True)],
+        ids=["technicals_failed", "options_failed", "no_options_is_known", "news_feeds_no_signal"],
+    )
+    def test_signals_are_unknown_when_a_source_tool_failed(self, failure: dict[str, Any], known: bool) -> None:
+        snapshot = raw_result(data_quality={"tool_failures": [failure]})["watchlist_snapshot"]
+        assert (snapshot["bullish_signals"] is not None) is known
+        assert (snapshot["bearish_signals"] is not None) is known
 
     def test_known_empty_lists_stay_empty(self) -> None:
         snapshot = raw_result(decision_card__hard_gates__blocking=[], signals__bearish=[])["watchlist_snapshot"]
@@ -307,6 +332,19 @@ class TestR74Validation:
     async def test_symbol_case_and_whitespace_do_not_matter(self, detect: Any) -> None:
         response = await detect({**copy.deepcopy(BASE), "symbol": " acme "})
         assert "error" not in response
+
+
+class TestOddSections:
+    @pytest.mark.parametrize(
+        "changes",
+        [{"summary__price_provenance": "x"}, {"summary__price_provenance__staleness": "x"},
+         {"summary__support": "x"}, {"summary__support__instrument": "x"}, {"verdict__horizon_fit": "x"},
+         {"summary": None}, {"events_summary": None}, {"risk_summary": None}, {"risk_summary__risk_regime": "x"},
+         {"action_zones": None}, {"data_quality": "x"}],
+    )
+    def test_a_section_that_is_not_a_dict_reads_as_empty(self, changes: dict[str, Any]) -> None:
+        snapshot = raw_result(**changes)["watchlist_snapshot"]
+        assert snapshot["snapshot_version"] == "2.0.0"
 
 
 class TestOneSnapshot:
