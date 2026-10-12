@@ -383,7 +383,9 @@ def build_policy_action(
     Returns:
         Dict with mid_term/long_term actions, rationale, and upgrade conditions.
     """
-    tilt = verdict.get("tilt", "neutral")
+    # WP9: an absent or null tilt is missing, not neutral and not bearish; the
+    # branches it would decide become insufficient_data.
+    tilt = verdict.get("tilt")
     horizon_fit = verdict.get("horizon_fit", {})
     mid_term_fit = horizon_fit.get("mid_term", "unknown")
     long_term_fit = horizon_fit.get("long_term", "unknown")
@@ -427,11 +429,17 @@ def build_policy_action(
         elif is_dislocation_candidate:
             mid_term_action = "speculative_small_position"
             rationale.append("mid_term_fit=caution, dislocation=price_broken_more_than_business")
+        elif tilt is None:
+            mid_term_action = "insufficient_data"
+            rationale.append("mid_term=caution, tilt=missing")
         else:
             mid_term_action = "wait_for_entry"
             rationale.append(f"mid_term_fit=caution, tilt={tilt}")
     elif mid_term_fit == "ok":
-        if tilt == "bullish" and zone in ("strong_buy", "accumulate"):
+        if tilt is None:
+            mid_term_action = "insufficient_data"
+            rationale.append("mid_term=ok, tilt=missing")
+        elif tilt == "bullish" and zone in ("strong_buy", "accumulate"):
             mid_term_action = "buy"
             rationale.append(f"mid_term=ok, tilt=bullish, zone={zone}")
         elif tilt == "bullish":
@@ -473,6 +481,9 @@ def build_policy_action(
                     rationale.append("long_term=caution, dislocation=price_broken_more_than_business")
                 else:
                     rationale.append("long_term=caution, tilt=bullish")
+            elif tilt is None:
+                long_term_action = "insufficient_data"
+                rationale.append("long_term=caution, tilt=missing")
             else:
                 long_term_action = "wait_or_avoid"
                 rationale.append(f"long_term=caution, tilt={tilt}")
@@ -483,6 +494,9 @@ def build_policy_action(
         elif valuation_gate == "headwind":
             long_term_action = "hold_size_conservatively"
             rationale.append("long_term=ok, valuation=headwind")
+        elif tilt is None:
+            long_term_action = "insufficient_data"
+            rationale.append("long_term=ok, tilt=missing")
         else:
             long_term_action = "hold_or_add" if tilt == "bullish" else "hold"
             rationale.append(f"long_term=ok, tilt={tilt}, zone={zone}")

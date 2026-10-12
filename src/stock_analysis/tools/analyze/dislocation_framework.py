@@ -322,7 +322,10 @@ def _build_balance_sheet_safety(
     else:
         dilution_status = "pass"
 
-    if runway_status == "fail" or net_cash_status == "fail":
+    # WP9: only a failed runway threatens the thesis on its own. Net debt (including
+    # exactly zero net cash) or negative equity is "watch" with a reason, and
+    # "watch" never qualifies a dislocation candidate (that needs "safe").
+    if runway_status == "fail":
         status = "unsafe"
     elif (
         net_cash_status == "pass"
@@ -348,9 +351,23 @@ def _build_balance_sheet_safety(
     else:
         summary = "Balance sheet risk is elevated enough to threaten the thesis."
 
+    reasons = [
+        reason
+        for reason, applies in (
+            ("runway_under_4q", runway_status == "fail"),
+            ("runway_under_8q", runway_status == "watch"),
+            ("net_debt", net_cash_status == "fail"),
+            ("negative_equity", health.get("leverage_status") == "negative_equity"),
+            ("high_leverage", debt_status in {"watch", "fail"} and health.get("leverage_status") != "negative_equity"),
+            ("dilution_risk", dilution_status in {"watch", "fail"}),
+        )
+        if applies
+    ]
+
     return {
         "status": status,
         "summary": summary,
+        "reasons": reasons,
         "checks": {
             "net_cash": net_cash_status,
             "debt_load": debt_status,
