@@ -24,8 +24,17 @@ _FIELD_TYPES: dict[str, str] = {
         "string",
     ),
 }
+def _finite_number(value: Any) -> bool:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return False
+    try:
+        return math.isfinite(value)
+    except OverflowError:  # an int too large for a float
+        return False
+
+
 _TYPE_CHECKS: dict[str, Callable[[Any], bool]] = {
-    "number": lambda v: isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v),
+    "number": _finite_number,
     "bool": lambda v: isinstance(v, bool),
     "string": lambda v: isinstance(v, str),
     "string_list": lambda v: isinstance(v, list) and all(isinstance(item, str) for item in v),
@@ -47,21 +56,27 @@ _SCALAR_FIELDS = (
     ("price_source", "price_source", "price_source"),
     ("price_stale", "price_stale", "price_stale"),
 )
+# Every snapshot field the diff compares.
+_DIFFED_FIELDS = (
+    "price", "score", "hard_gate_ids", "mid_term_fit", "long_term_fit", "bullish_signals", "bearish_signals",
+    *(field for field, _, _ in _SCALAR_FIELDS),
+)
 
 
-def validate_previous_snapshot(snapshot: Any, symbol: str) -> list[str]:
+def validate_previous_snapshot(snapshot: Any, symbol: str | None) -> list[str]:
     """Problems that make ``snapshot`` unusable as the previous snapshot for ``symbol``
-    (empty when it is usable). Unknown extra fields are ignored."""
+    (empty when it is usable; ``symbol`` None skips the symbol match). Unknown extra
+    fields are ignored."""
     if not isinstance(snapshot, dict):
         return ["previous_snapshot must be an object"]
     problems = [f"missing required key: {key}" for key in SNAPSHOT_IDENTITY_KEYS if key not in snapshot]
-    version = snapshot.get("snapshot_version", "")
-    if "snapshot_version" in snapshot and version not in COMPATIBLE_SNAPSHOT_VERSIONS:
+    version = snapshot.get("snapshot_version")
+    if "snapshot_version" in snapshot and not (isinstance(version, str) and version in COMPATIBLE_SNAPSHOT_VERSIONS):
         problems.append(f"unsupported snapshot_version: {version!r}")
     snapshot_symbol = snapshot.get("symbol")
-    if "symbol" in snapshot and (
-        not isinstance(snapshot_symbol, str) or snapshot_symbol.upper().strip() != symbol
-    ):
+    if "symbol" in snapshot and not isinstance(snapshot_symbol, str):
+        problems.append(f"symbol: expected string, got {type(snapshot_symbol).__name__}")
+    elif symbol is not None and "symbol" in snapshot and snapshot_symbol.upper().strip() != symbol:
         problems.append(f"symbol {snapshot_symbol!r} does not match {symbol}")
     for key, kind in _FIELD_TYPES.items():
         value = snapshot.get(key)
@@ -95,11 +110,12 @@ def _diff_price(
     current = safe_float(curr.get("price"))
 
     change_pct: float | None = None
-    if previous and current and previous != 0:
-        change_pct = safe_round((current - previous) / previous, 4)
-
     # A price appearing or disappearing is material in itself.
-    material = abs(change_pct) > 0.05 if change_pct is not None else (previous is None) != (current is None)
+    material = (previous is None) != (current is None)
+    if previous and current and previous != 0:
+        raw_pct = (current - previous) / previous
+        change_pct = safe_round(raw_pct, 4)
+        material = abs(raw_pct) > 0.05  # judged before rounding
 
     return {
         "previous": previous,
@@ -118,10 +134,10 @@ def _diff_score(
     current = safe_float(curr.get("score"))
 
     change: float | None = None
+    material = (previous is None) != (current is None)
     if previous is not None and current is not None:
         change = safe_round(current - previous, 6)
-
-    material = abs(change) > 0.10 if change is not None else (previous is None) != (current is None)
+        material = abs(current - previous) > 0.10  # judged before rounding
 
     return {
         "previous": previous,
@@ -146,6 +162,7 @@ def _diff_signals(
         after = set(curr[key] or [])
         diff[f"new_{side}"] = sorted(after - before)
         diff[f"removed_{side}"] = sorted(before - after)
+        diff[f"{side}_changed"] = before != after or (prev[key] is None) != (curr[key] is None)
     return diff
 
 
@@ -176,11 +193,15 @@ def _build_material_changes(changes: dict[str, Any]) -> list[str]:
     if price.get("material") and price.get("change_pct") is not None:
         direction = "+" if price["change_pct"] >= 0 else ""
         items.append(f"price {direction}{price['change_pct'] * 100:.1f}%")
+    elif price.get("material"):
+        items.append(f"price: {price['previous']} -> {price['current']}")
 
     score = changes.get("score", {})
     if score.get("material") and score.get("change") is not None:
         direction = "+" if score["change"] >= 0 else ""
         items.append(f"score {direction}{score['change']:.2f}")
+    elif score.get("material"):
+        items.append(f"score: {score['previous']} -> {score['current']}")
 
     for _, changes_key, label in _SCALAR_FIELDS:
         change = changes.get(changes_key, {})
@@ -229,6 +250,8 @@ def _build_summary(
     if price.get("material") and price.get("change_pct") is not None:
         direction = "up" if price["change_pct"] >= 0 else "down"
         parts.append(f"Price {direction} {abs(price['change_pct']) * 100:.1f}%.")
+    elif price.get("material"):
+        parts.append(f"Price {price['previous']} -> {price['current']}.")
 
     tilt = changes.get("tilt", {})
     if tilt.get("changed"):
@@ -258,6 +281,8 @@ def _build_summary(
     if score.get("material") and score.get("change") is not None:
         direction = "improved" if score["change"] > 0 else "declined"
         parts.append(f"Score {direction} by {abs(score['change']):.2f}.")
+    elif score.get("material"):
+        parts.append(f"Score {score['previous']} -> {score['current']}.")
 
     # Fallback when only the changes without a sentence above are material
     if len(parts) == 1:
@@ -286,17 +311,22 @@ async def what_changed(
     start = perf_counter()
     normalized_symbol = symbol.upper().strip()
 
+    def invalid_snapshot(problems: list[str]) -> dict[str, Any]:
+        return {
+            "meta": build_meta("what_changed", (perf_counter() - start) * 1000),
+            "symbol": normalized_symbol,
+            "error": True,
+            "error_type": "invalid_snapshot",
+            "message": f"previous_snapshot is not a usable {normalized_symbol} snapshot",
+            "problems": problems,
+        }
+
+    # Shape problems are caught before analysis; the symbol is matched after it,
+    # against the ticker analyze resolved (a company name resolves to its ticker).
     if previous_snapshot is not None:
-        problems = validate_previous_snapshot(previous_snapshot, normalized_symbol)
+        problems = validate_previous_snapshot(previous_snapshot, None)
         if problems:
-            return {
-                "meta": build_meta("what_changed", (perf_counter() - start) * 1000),
-                "symbol": normalized_symbol,
-                "error": True,
-                "error_type": "invalid_snapshot",
-                "message": f"previous_snapshot is not a usable {normalized_symbol} snapshot",
-                "problems": problems,
-            }
+            return invalid_snapshot(problems)
 
     try:
         result = await analyze_stock(normalized_symbol)
@@ -322,6 +352,11 @@ async def what_changed(
 
     # The snapshot analyze returns at every detail level, used as is (WP7).
     current_snapshot = result.get("watchlist_snapshot") or {}
+    if previous_snapshot is not None:
+        resolved = str(current_snapshot.get("symbol") or result.get("symbol") or normalized_symbol).upper()
+        problems = validate_previous_snapshot(previous_snapshot, resolved)
+        if problems:
+            return invalid_snapshot(problems)
     duration_ms = (perf_counter() - start) * 1000
 
     response: dict[str, Any] = {
@@ -377,15 +412,22 @@ async def what_changed(
     for field in ("hard_gate_ids", "bullish_signals", "bearish_signals"):
         if comparable(field) and (previous_snapshot[field] is None) != (current_snapshot[field] is None):
             material_changes.append(f"{field}: {previous_snapshot[field]} -> {current_snapshot[field]}")
-    summary = _build_summary(normalized_symbol, changes, material_changes)
+    if any(comparable(field) for field in _DIFFED_FIELDS):
+        summary = _build_summary(normalized_symbol, changes, material_changes)
+    else:
+        summary = f"{normalized_symbol}: Nothing to compare: the previous snapshot has none of the diffed fields."
 
     response["changes"] = changes
     response["material_changes"] = material_changes
     response["not_comparable"] = sorted(set(current_snapshot) - set(previous_snapshot))
     # The hash also moves on non-material data (a small price move, a newer bar);
     # fetch times, cache hits and ages are kept out of it.
+    # Hashes only compare within one version: each version hashes a different field set.
     previous_hash = previous_snapshot.get("snapshot_hash")
-    response["hash_changed"] = None if previous_hash is None else previous_hash != current_snapshot.get("snapshot_hash")
+    same_version = previous_snapshot.get("snapshot_version") == current_snapshot.get("snapshot_version")
+    response["hash_changed"] = (
+        previous_hash != current_snapshot.get("snapshot_hash") if previous_hash is not None and same_version else None
+    )
     response["summary"] = summary
     response["warnings"] = warnings or None
 

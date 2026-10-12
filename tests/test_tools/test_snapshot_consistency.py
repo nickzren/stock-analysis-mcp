@@ -157,6 +157,43 @@ def legacy_enriched(snapshot: dict[str, Any]) -> dict[str, Any]:
 NEW_FIELDS = ["as_of_kind", "price_as_of", "price_source", "price_stale", "support_currency", "support_instrument"]
 
 
+class TestDiffEdges:
+    @pytest.mark.parametrize(
+        ("previous", "changes", "line", "sentence"),
+        [
+            ({"price": None}, {}, "price: None -> 100.0", "Price None -> 100.0."),
+            ({}, {"summary__current_price": None}, "price: 100.0 -> None", "Price 100.0 -> None."),
+            ({"score": None}, {}, "score: None -> 0.4", "Score None -> 0.4."),
+        ],
+        ids=["price_appears", "price_disappears", "score_appears"],
+    )
+    async def test_a_value_appearing_or_disappearing_is_reported(
+        self, detect: Any, previous: dict[str, Any], changes: dict[str, Any], line: str, sentence: str,
+    ) -> None:
+        response = await detect({**copy.deepcopy(BASE), **previous}, **changes)
+        assert line in response["material_changes"]
+        assert sentence in response["summary"]
+
+    async def test_a_move_just_over_the_threshold_is_material(self, detect: Any) -> None:
+        response = await detect(copy.deepcopy(BASE), summary__current_price=105.004)
+        assert response["changes"]["price"]["material"] is True
+        assert "price +5.0%" in response["material_changes"]
+
+    async def test_nothing_in_common_is_not_reported_as_no_change(self, detect: Any) -> None:
+        response = await detect({"snapshot_version": "2.0.0", "symbol": "ACME"})
+        assert response["material_changes"] == []
+        assert response["summary"].startswith("ACME: Nothing to compare")
+
+    async def test_hashes_from_another_version_are_not_compared(self, detect: Any) -> None:
+        response = await detect({**copy.deepcopy(BASE), "snapshot_version": "1.1.0"})
+        assert response["hash_changed"] is None
+
+    async def test_signal_changes_carry_a_changed_flag(self, detect: Any) -> None:
+        response = await detect({**copy.deepcopy(BASE), "bearish_signals": None}, signals__bearish=[])
+        signals = response["changes"]["signals"]
+        assert (signals["bearish_changed"], signals["bullish_changed"]) == (True, False)
+
+
 class TestR72LegacySnapshots:
     async def test_an_old_compact_snapshot_has_no_phantom_changes(self, detect: Any) -> None:
         response = await detect(legacy_compact(BASE))
@@ -221,10 +258,13 @@ class TestR74Validation:
     @pytest.mark.parametrize(
         ("previous", "problem"),
         [
-            ({**BASE, "symbol": "OTHER"}, "symbol"),
             ({k: v for k, v in BASE.items() if k != "symbol"}, "symbol"),
+            ({**BASE, "symbol": 42}, "symbol"),
             ({k: v for k, v in BASE.items() if k != "snapshot_version"}, "snapshot_version"),
             ({**BASE, "snapshot_version": "9.0.0"}, "snapshot_version"),
+            ({**BASE, "snapshot_version": ["2.0.0"]}, "snapshot_version"),
+            ({**BASE, "snapshot_version": {"v": 2}}, "snapshot_version"),
+            ({**BASE, "price": 10**400}, "price"),
             ({**BASE, "bullish_signals": "golden_cross"}, "bullish_signals"),
             ({**BASE, "hard_gate_ids": [1]}, "hard_gate_ids"),
             ({**BASE, "price": "100"}, "price"),
@@ -233,7 +273,8 @@ class TestR74Validation:
             ({**BASE, "next_catalyst": "soon"}, "next_catalyst"),
             ("not a snapshot", "object"),
         ],
-        ids=["other_symbol", "missing_symbol", "missing_version", "unknown_version", "signals_not_a_list",
+        ids=["missing_symbol", "symbol_not_a_string", "missing_version", "unknown_version", "version_list",
+             "version_dict", "price_too_big", "signals_not_a_list",
              "gate_not_a_string", "price_string", "price_bool", "stale_not_bool", "catalyst_not_object", "not_dict"],
     )
     async def test_bad_snapshots_get_a_structured_error_before_any_analysis(
@@ -244,6 +285,24 @@ class TestR74Validation:
         assert (response["error"], response["error_type"]) == (True, "invalid_snapshot")
         assert any(problem in p for p in response["problems"])
         assert response["_analyzed"] == []
+
+    async def test_another_symbol_s_snapshot_is_rejected_against_the_resolved_ticker(self, detect: Any) -> None:
+        response = await detect({**copy.deepcopy(BASE), "symbol": "OTHER"})
+
+        assert (response["error"], response["error_type"]) == (True, "invalid_snapshot")
+        assert response["problems"] == ["symbol 'OTHER' does not match ACME"]
+
+    async def test_a_company_name_round_trips_its_own_snapshot(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        current = raw_result()
+
+        async def fake_analyze(symbol: str, **kwargs: Any) -> dict[str, Any]:
+            return current  # analyze resolves "Acme Corp" to ACME
+
+        monkeypatch.setattr(diff_module, "analyze_stock", fake_analyze)
+        response = await diff_module.what_changed("Acme Corp", previous_snapshot=copy.deepcopy(BASE))
+
+        assert "error" not in response
+        assert response["material_changes"] == []
 
     async def test_symbol_case_and_whitespace_do_not_matter(self, detect: Any) -> None:
         response = await detect({**copy.deepcopy(BASE), "symbol": " acme "})
