@@ -64,7 +64,8 @@
   `decision_context.fundamentals`, its `thesis_checkpoints` and the standard
   tier's `dislocation_check`), with no stock-only conditions; an unsupported
   currency caps a new-money `dip_assessment.assessment.recommendation` at
-  `watch` (with `support_gates`), and burn `dilution_analysis` needs the price
+  `watch` (with `support_gates`), as do its new-money `entry_timing.signals`
+  actions, and burn `dilution_analysis` needs the price
   and statement currencies to match (else null, warning
   `dilution_currency_unverified`). The scan reads currency and instrument
   type from the daily history's chart metadata (`df.attrs`, no extra request)
@@ -102,6 +103,8 @@
   ranks the current usable ratio; `history_points` and `history_span_years`
   are always exposed. Valuation conditions and thesis milestones follow the
   gate's own basis (no P/S condition when EV <= 0 left the gate `unknown`).
+  EV <= 0 sets `metric_status.ev_to_sales` to `ev_nonpositive` even with no
+  revenue to compute EV/S, so P/S never stands in.
 - Statement periods (WP6, `fundamentals._resolve_cashflow`): `cash_flow`
   keeps `operating_cf_ttm` / `free_cash_flow_ttm` (key names kept, whatever
   the period), each with `_period`, `_period_end`, `_source`, `_ttm_status`
@@ -250,7 +253,10 @@
   them back only when its thread finishes. A cancelled or timed-out waiter just
   stops waiting; the orphaned job keeps its permit and lock, so the limit holds
   and one symbol's property reads never overlap. Freed slots go to waiters in
-  arrival order. Backoff and rate-limit cooldown sleeps hold neither. A read's
+  arrival order. Backoff and rate-limit cooldown sleeps hold neither; a waiter
+  re-waits each cooldown extension made while it slept and fails `rate_limited`
+  once the cooldown would outlast its clock (a shared flight has no clock, so
+  its callers' own deadlines bound it). A read's
   `jobs.ReadClock` allows `YF_READ_DEADLINE_SECONDS` (default 8) from its first
   admission, capped by any enclosing `jobs.deadline_scope`; time queued for a
   slot counts only against that scope, so batch tools' healthy reads just wait
@@ -326,7 +332,9 @@
   lists are null when a tool feeding them failed (`no_options` is a known
   state), ownership discloses `insider_transactions_error` /
   `insider_transactions_columns_unrecognized`, or the latest daily bar is
-  invalid (`bar_validity.latest_bar_invalid`: the SMA rules have no value that day). Non-dict sections read as empty. `detect_changes` checks the
+  invalid (`bar_validity.latest_bar_invalid`: the SMA rules have no value that day),
+  or `return_3m` is null because its start bar is invalid
+  (`bar_validity.invalid_return_endpoints`; it feeds the 3m momentum signals). Non-dict sections read as empty. `detect_changes` checks the
   shape of `previous_snapshot` before analysis (required `snapshot_version` in
   1.0.0/1.1.0/2.0.0 and `symbol`; every other field optional but type-checked,
   `next_catalyst`'s keys and its `window` bounds included; absent or null

@@ -138,6 +138,7 @@ NEW_MONEY = {"buy", "starter", "hold_or_add", "accumulate", "build_position", "s
 GBP_SUMMARY = {"name": "Vodafone", "currency": "GBp", "quote_type": "EQUITY"}
 ETF_SUMMARY = {"name": "SPDR S&P 500", "currency": "USD", "quote_type": "ETF"}
 UNKNOWN_SUMMARY = {"name": "Unknown"}
+UNKNOWN_CURRENCY_SUMMARY = {"name": "Example", "quote_type": "EQUITY"}
 US_SUMMARY = {"name": "Example", "currency": "USD", "quote_type": "EQUITY"}
 
 
@@ -155,16 +156,26 @@ class TestAnalyzeCaps:
         text = json.dumps(result["executive_summary"]).lower()
         assert "hold or add" not in text and "accumulate" not in text
 
-    async def test_the_dip_recommendation_is_capped_too(self, analyze: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    @pytest.mark.parametrize("summary", [GBP_SUMMARY, UNKNOWN_CURRENCY_SUMMARY], ids=["gbp", "unknown_currency"])
+    async def test_the_dip_recommendation_and_entry_actions_are_capped_too(
+        self, analyze: Any, monkeypatch: pytest.MonkeyPatch, summary: dict[str, Any]
+    ) -> None:
+        entry = ["consider_small_position", "starter_position", "accumulate", "add_position", "watch_for_reversal"]
+
         def buy_the_dip(**kwargs: Any) -> dict[str, Any]:
-            return {"assessment": {"dip_quality": "good", "recommendation": "buy_the_dip", "rationale": "x"}}
+            return {"assessment": {"dip_quality": "good", "recommendation": "buy_the_dip", "rationale": "x"},
+                    "entry_timing": {"signals": [{"signal": f"s{i}", "action": action, "rationale": "r"}
+                                                 for i, action in enumerate(entry)], "wait_for": []}}
 
         monkeypatch.setattr(orchestrator, "build_dip_assessment", buy_the_dip)
-        capped, control = await analyze(GBP_SUMMARY), await analyze(US_SUMMARY)
+        capped, control = await analyze(summary), await analyze(US_SUMMARY)
 
         assessment = capped["dip_assessment"]["assessment"]
         assert (assessment["recommendation"], assessment["support_gates"]) == ("watch", ["unsupported_currency"])
+        actions = [signal["action"] for signal in capped["dip_assessment"]["entry_timing"]["signals"]]
+        assert actions == ["watch"] * 4 + ["watch_for_reversal"]
         assert control["dip_assessment"]["assessment"]["recommendation"] == "buy_the_dip"
+        assert [signal["action"] for signal in control["dip_assessment"]["entry_timing"]["signals"]] == entry
 
     async def test_control_a_supported_stock_keeps_its_policy(self, analyze: Any) -> None:
         result = await analyze(US_SUMMARY, bullish=True)

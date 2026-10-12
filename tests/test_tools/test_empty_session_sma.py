@@ -158,6 +158,30 @@ class TestFallingKnifeSurvivesEmptySessions:
         sell = result["sell_signals"]
         assert (sell["broke_sma200"], sell["death_cross"], sell["active_count"]) == (True, True, 3)
 
+    async def test_an_empty_3m_start_bar_leaves_the_signals_unknown(
+        self, monkeypatch: pytest.MonkeyPatch, prices: Any
+    ) -> None:
+        """Codex at 1a9c66a: a null return_3m read as `weak_3m_momentum` removed."""
+        prices(knife_frame((251 - 63,)))
+
+        async def summary(symbol: str, **kwargs: Any) -> dict[str, Any]:
+            return {"symbol": symbol, "name": "Knife", "currency": "USD", "quote_type": "EQUITY",
+                    "market_cap": 1e10, "current_price": 72.0}
+
+        async def empty_tool(symbol: str, **kwargs: Any) -> dict[str, Any]:
+            return {"symbol": symbol}
+
+        monkeypatch.setattr(orchestrator, "stock_summary", summary)
+        for name in ("fundamentals_snapshot", "events_calendar", "stock_news", "ownership_analysis",
+                     "options_signals"):
+            monkeypatch.setattr(orchestrator, name, empty_tool)
+
+        result = await orchestrator.analyze_stock("KNIFE", _now=SATURDAY)
+
+        assert result["data_quality"]["bar_validity"]["invalid_return_endpoints"] == ["return_3m"]
+        snapshot = result["watchlist_snapshot"]
+        assert (snapshot["bullish_signals"], snapshot["bearish_signals"]) == (None, None)
+
     def test_an_empty_latest_session_still_waits_for_data(self) -> None:
         verdict = screen_symbol(knife_frame((251,)))
         assert (verdict["action_hint"], verdict["blocker_ids"]) == ("wait_for_data", ["data_quality_critical"])

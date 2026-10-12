@@ -113,6 +113,9 @@ def _build_valuation(info: dict[str, Any]) -> dict[str, Any]:
             status["ev_to_sales"] = metric_entry(
                 VERIFIED, enterprise_value > 0, None if enterprise_value > 0 else "ev_nonpositive"
             )
+    elif enterprise_value is not None and enterprise_value <= 0:
+        # No revenue for EV/S, but EV <= 0 still rules out a sales multiple, P/S included (R4.5).
+        status["ev_to_sales"] = metric_entry(currency, False, "ev_nonpositive")
 
     ev_to_ebitda = safe_float(info.get("enterpriseToEbitda"))
     ebitda = safe_float(info.get("ebitda"))

@@ -415,6 +415,16 @@ _CLOSE_WINDOWS = {"sma_20": 20, "sma_50": 50, "sma_200": 200, "ema_12": 12, "ema
                   "macd_12_26_9": 26 + 9 - 1, "rsi_14": 14, "bollinger_20": 20}
 
 
+_RETURN_PERIODS = {"return_1w": 5, "return_1m": 21, "return_3m": 63, "return_6m": 126, "return_1y": 252}
+
+
+def _invalid_return_endpoints(close: pd.Series) -> list[str]:
+    """Returns null because an endpoint bar is invalid, not for lack of history."""
+    finite = np.isfinite(pd.to_numeric(close, errors="coerce").to_numpy(dtype="float64", na_value=np.nan))
+    return [name for name, periods in _RETURN_PERIODS.items()
+            if len(finite) > periods and not (finite[-1] and finite[-periods - 1])]
+
+
 def _build_bar_validity(
     close: pd.Series, high: pd.Series, low: pd.Series, volume: pd.Series,
 ) -> dict[str, Any]:
@@ -427,6 +437,7 @@ def _build_bar_validity(
         "latest_bar_invalid": invalid_bars_in_window(close, window=1) == 1,
         "latest_volume_invalid": invalid_bars_in_window(volume, window=1) == 1,
         "invalid_bars_in_window": invalid,
+        "invalid_return_endpoints": _invalid_return_endpoints(close),
     }
 
 

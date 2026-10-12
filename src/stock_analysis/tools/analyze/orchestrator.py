@@ -96,6 +96,7 @@ _DIP_NEW_MONEY_RECOMMENDATIONS = frozenset({
     "strong_buy_the_dip", "buy_the_dip", "cautious_accumulation", "small_speculative_position",
     "starter_only_wait_for_stabilization",
 })
+_DIP_NEW_MONEY_ENTRY_ACTIONS = frozenset({"consider_small_position", "starter_position", "accumulate", "add_position"})
 
 
 def _cap_policy_at_watch(policy_action: dict[str, Any], support: dict[str, Any]) -> None:
@@ -118,6 +119,9 @@ def _cap_modes_at_watch(decision_modes: dict[str, Any]) -> None:
 
 
 def _cap_dip_at_watch(dip_assessment: dict[str, Any] | None, support: dict[str, Any]) -> None:
+    for signal in ((dip_assessment or {}).get("entry_timing") or {}).get("signals") or []:
+        if isinstance(signal, dict) and signal.get("action") in _DIP_NEW_MONEY_ENTRY_ACTIONS:
+            signal["action"] = "watch"
     assessment = (dip_assessment or {}).get("assessment")
     if isinstance(assessment, dict) and assessment.get("recommendation") in _DIP_NEW_MONEY_RECOMMENDATIONS:
         assessment["recommendation"] = "watch"

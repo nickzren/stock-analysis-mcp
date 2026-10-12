@@ -78,7 +78,7 @@ Old consumers should re-check every item below.
 
 **`analyze`**
 
-- **Price:** `summary.current_price` is a fresh regular-session 5m bar, else the last completed-session close, else the cached info quote as a labelled fallback. v4 used the info quote, which could be up to 4 h old. Zones, stops, sizing, analyst upside and the snapshot price all follow this price.
+- **Price:** `summary.current_price` is a fresh regular-session 5m bar, else the last completed-session close, else the cached info quote as a labelled fallback. v4 used the info quote, which could be up to 4 h old. Zones, stops, sizing, analyst upside and the snapshot price all follow this price. Its market-data time is `summary.price_provenance.price_as_of`; every tool's `data_provenance.*.as_of` stays the fetch time.
 - **Freshness:**
   - `data_quality.component_freshness` price/risk entries count sessions from the last bar date (`last_bar_date`, `expected_session`, `sessions_behind`). v4 counted hours from the fetch time.
   - `staleness_warnings` `price_stale_<N>h` / `risk_stale_<N>h` become `…_stale_<N>_sessions`.
@@ -86,13 +86,13 @@ Old consumers should re-check every item below.
 - **Dilution:** `fundamentals_summary.burn_metrics.dilution_analysis` is null when the price and statement currencies differ or are unverified, with the burn warning `dilution_currency_unverified`. v4 divided a raise in the statement currency by the market cap in the price currency.
 - **Valuation gate (`action_zones.valuation_assessment`):**
   - It reads only usable metrics.
-  - For unprofitable companies it uses EV/S first, then P/S, and "attractive" needs 0 < multiple < 3; v4 rated a negative EV/S as attractive. With EV ≤ 0 there is no P/S fallback, so the gate is `unknown`.
+  - For unprofitable companies it uses EV/S first, then P/S, and "attractive" needs 0 < multiple < 3; v4 rated a negative EV/S as attractive. With EV ≤ 0 there is no P/S fallback, so the gate is `unknown`, also when there is no revenue to compute EV/S (`metric_status.ev_to_sales` reads `ev_nonpositive` either way).
   - PEG ≤ 0 is never attractive.
   - `reasons` name the excluded metrics, e.g. `pe_trailing_unverified_currency` or `ev_to_sales_ev_nonpositive`.
   - For an unsupported instrument the gate is `not_applicable`. This also reaches `policy_action.valuation_gate` and the snapshot.
 - **`data_quality`:** `fundamentals_status` can be `not_applicable`. An unverified P/E gives the reason `pe_<reason>` (e.g. `pe_unverified_currency`), and the same value replaces `pe_not_meaningful` in `data_gaps`.
 - **Unsupported instruments and currencies:** anything other than USD-priced common equity, or a symbol whose support can't be verified, gets new-money actions capped at `watch` everywhere. That covers `policy_action`, `decision_card.action_now`, `decision_modes` and the trade card. There is no share or dollar sizing and no dollar-liquidity gate.
-  - For an unsupported instrument, the fundamentals rubric, dip and dislocation blocks read `not_applicable`. For an unsupported currency, a new-money `dip_assessment.assessment.recommendation` reads `watch`, with `support_gates`.
+  - For an unsupported instrument, the fundamentals rubric, dip and dislocation blocks read `not_applicable`. For an unsupported currency, a new-money `dip_assessment.assessment.recommendation` and the new-money `entry_timing.signals` actions read `watch`, with `support_gates` on the assessment.
 - **Missing tilt:** a verdict tilt that is missing (absent or null) makes the tilt-decided actions `insufficient_data`, with rationale `tilt=missing`. In v4 an absent tilt read as neutral, and a null one as bearish; a failed fundamentals fetch could say `hold_or_reduce`.
 - **Balance sheet:** in the dislocation framework, `balance_sheet_safety` is `unsafe` only when the cash runway fails (under 4 quarters). Net debt, exactly zero net cash or negative equity is `watch`, so the thesis is no longer `broken` from net debt alone.
 
@@ -143,7 +143,7 @@ Old consumers should re-check every item below.
 - **`get_stock_summary`:** `financial_currency`, `quote_type`, `support`, `quote_time`, `fetched_at`, `cache_hit`, and the dividend basis and trailing fields. `currency` no longer defaults to "USD".
 - **`get_technicals`:**
   - `session_close`: the latest valid completed-session close, with `session_date` and `fetched_at`.
-  - `bar_validity`: `latest_bar_invalid`, `latest_volume_invalid`, and `invalid_bars_in_window` per indicator window.
+  - `bar_validity`: `latest_bar_invalid`, `latest_volume_invalid`, `invalid_bars_in_window` per indicator window, and `invalid_return_endpoints` (the `returns.return_*` that are null because an endpoint bar is invalid, not for lack of history).
 - **`get_events` earnings:** `verification` (`verified_date`, `verified_none` or `unverifiable`), `next_window`, `windows` (each with `window_basis` and `metadata_conflict`), `candidate_dates`, `next_date_is_estimate`, `sources_stale`.
 - **`get_news`:** `source_status` (`ok`, `empty`, `failed` or `unverified`), `source` (`news` or the `search` fallback), `rejected_count`.
 - **`analyze_trade_setup`:**
@@ -156,7 +156,7 @@ Old consumers should re-check every item below.
 - **One snapshot, version 2.0.0:**
   - `watchlist_snapshot` is built once per analysis and is identical at every `detail` level. `detect_changes` uses it as is.
   - It adds `zone`, `mid_term_fit`, `long_term_fit`, `bullish_signals` / `bearish_signals`, `support_instrument` / `support_currency`, and `price_source` / `price_as_of` / `as_of_kind` / `price_stale`.
-  - An unknown list is null; a known-empty list is `[]`. Signal lists are null when a tool feeding them failed or the latest daily bar is empty.
+  - An unknown list is null; a known-empty list is `[]`. Signal lists are null when a tool feeding them failed, the latest daily bar is empty, or `return_3m` is null because its start bar is empty.
 - **Clock-driven values:**
   - The snapshot's `next_catalyst` no longer carries `days_until` (1.1.0 did). It also drops `date` when an earnings `window` is present, because inside a window that date is just today.
   - `snapshot_hash` covers the full set except `snapshot_as_of_date` (fetch dates) and `price_stale` (an age past a threshold).
@@ -194,7 +194,7 @@ Old consumers should re-check every item below.
 - **`YF_MAX_WORKERS`** now gates every yfinance read. Property reads for one symbol run one at a time. A timed-out read keeps its slot until its thread finishes.
 - **Retries:**
   - Retries stop when the next backoff would pass the read deadline.
-  - A 429 starts a process-wide cooldown.
+  - A 429 starts a process-wide cooldown. A waiting read waits out every extension another read makes, and fails `rate_limited` when the cooldown would outlast its budget.
 - **Caches:** verified results are cached in process: calendar 1 h, earnings page 6 h, news 15 min, symbol search 1 h. Failures are never cached.
 
 ### Known limitations

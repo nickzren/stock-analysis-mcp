@@ -360,6 +360,18 @@ class TestR73AbsentVersusNull:
         assert (snapshot["bearish_signals"] is not None) is known
 
     @pytest.mark.parametrize(
+        ("endpoints", "known"), [(["return_3m"], False), (["return_1m", "return_1y"], True), ([], True)]
+    )
+    def test_a_3m_return_lost_to_an_invalid_bar_makes_the_signals_unknown(
+        self, endpoints: list[str], known: bool
+    ) -> None:
+        """return_3m feeds strong/weak_3m_momentum; the other returns feed no signal."""
+        data_quality = {"bar_validity": {"latest_bar_invalid": False, "invalid_return_endpoints": endpoints}}
+        snapshot = raw_result(data_quality=data_quality)["watchlist_snapshot"]
+        assert (snapshot["bullish_signals"] is not None) is known
+        assert (snapshot["bearish_signals"] is not None) is known
+
+    @pytest.mark.parametrize(
         ("warning", "known"),
         [("insider_transactions_error", False), ("insider_transactions_columns_unrecognized", False),
          ("insider_transactions_unavailable", True), ("institutional_holders_error", True)],

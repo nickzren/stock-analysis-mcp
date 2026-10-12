@@ -97,6 +97,16 @@ class TestValuationGate:
         assert gate["gate"] == "unknown"
         assert gate["reasons"] == ["ev_to_sales_ev_nonpositive"]
 
+    @pytest.mark.parametrize("revenue", [None, 0.0], ids=["revenue_missing", "revenue_zero"])
+    def test_r4_5_negative_ev_rules_out_ps_without_revenue(self, revenue: float | None) -> None:
+        """No revenue means no EV/S, but EV <= 0 still bars P/S from standing in."""
+        info = {**UNPROFITABLE_NEGATIVE_EV, "totalRevenue": revenue, "priceToSalesTrailing12Months": 0.5}
+
+        gate, _ = _build_valuation_assessment(fund_data(info), {"bearish": ["unprofitable"]})
+
+        assert gate["gate"] == "unknown"
+        assert gate["reasons"] == ["ev_to_sales_ev_nonpositive"]
+
     def test_ps_is_the_fallback_when_ev_sales_is_absent(self) -> None:
         info = {**UNPROFITABLE_NEGATIVE_EV, "enterpriseValue": None, "priceToSalesTrailing12Months": 12.0}
 

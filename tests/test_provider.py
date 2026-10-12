@@ -38,10 +38,11 @@ import stock_analysis.tools.fundamentals as fundamentals
 import stock_analysis.tools.news as news
 import stock_analysis.tools.ownership as ownership
 import stock_analysis.tools.trade_setup.orchestrator as trade_orchestrator
-from stock_analysis.data import provider, yfinance_client
+from stock_analysis.data import jobs, provider, yfinance_client
 from stock_analysis.data.cache_manager import ticker_cache
 from stock_analysis.data.yfinance_client import (
     YFinanceIncompleteInfoError,
+    YFinanceRetryError,
     YFinanceUnreadableResponseError,
     _is_retryable_error,
     fetch_history,
@@ -787,6 +788,54 @@ class TestRetries:
         await yfinance_client._retry_with_backoff("probe", lambda: "ok")
 
         assert len(waits) == 2 and all(wait > 0 for wait in waits)
+
+    @staticmethod
+    def extend_cooldown_on_first_wait(monkeypatch: pytest.MonkeyPatch, extension: float) -> list[float]:
+        """Another caller's 429 extends the shared cooldown while this one sleeps."""
+        waits: list[float] = []
+
+        async def sleep(delay: float) -> None:
+            if not waits:
+                yfinance_client.note_rate_limit(extension)
+            waits.append(delay)
+
+        monkeypatch.setattr(yfinance_client, "_sleep", sleep)
+        yfinance_client.note_rate_limit(0.5)
+        return waits
+
+    async def test_an_extended_cooldown_is_waited_out(
+        self, yf_transport: FakeSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        waits = self.extend_cooldown_on_first_wait(monkeypatch, 2.0)
+        yf_transport.route("search", "valid_news")
+
+        read = await provider.read_search_news(SYMBOL)
+
+        assert read.status == "ok"
+        assert len(waits) == 2 and waits[1] > 1.0
+
+        waits = self.extend_cooldown_on_first_wait(monkeypatch, 3.0)
+        result = await yfinance_client._retry_with_backoff("probe", lambda: "ok")
+        assert result.result == "ok"
+        assert len(waits) == 2 and waits[1] > 2.0
+
+    async def test_a_cooldown_extended_past_the_read_budget_fails_the_read(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Before admission a read's budget is its enclosing scope (analyze's deadline).
+        Property reads use the caller's clock; a shared flight has none by design."""
+        self.extend_cooldown_on_first_wait(monkeypatch, 3600.0)
+        ticker = FakeTicker(SYMBOL, news=[{"title": "x"}])
+
+        with jobs.deadline_scope(5.0):
+            read = await provider.read_property(ticker, "news", lambda t: t.news)
+
+        assert (read.status, read.error_type) == ("failed", "rate_limited")
+        assert ticker.reads["news"] == 0
+
+        self.extend_cooldown_on_first_wait(monkeypatch, 3600.0)
+        with jobs.deadline_scope(5.0), pytest.raises(YFinanceRetryError, match="rate_limited"):
+            await yfinance_client._retry_with_backoff("probe", lambda: "ok")
 
     @pytest.mark.parametrize(
         "error", [YFPricesMissingError(SYMBOL, ""), YFTzMissingError(SYMBOL), http_error(404)]

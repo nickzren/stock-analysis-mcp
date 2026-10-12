@@ -43,7 +43,6 @@ from stock_analysis.data.yfinance_client import (
     is_rate_limit,
     note_rate_limit,
     preserving_http_status,
-    rate_limit_cooldown_remaining,
     wait_for_rate_limit_cooldown,
 )
 from stock_analysis.utils.provenance import utcnow_isoformat_z
@@ -154,10 +153,8 @@ async def _attempts(
     clock = jobs.ReadClock()
     slept = 0.0
     for attempt in range(_max_retries + 1):
-        cooldown = rate_limit_cooldown_remaining()
-        if cooldown > 0 and cooldown >= clock.remaining():
+        if not await wait_for_rate_limit_cooldown(clock):
             return _Outcome(failure=_failed(source, "rate_limited", attempt, True))
-        await wait_for_rate_limit_cooldown()
         if attempt:
             expire_yfinance_response_cache()  # a retry must do fresh I/O
             if before_retry is not None:

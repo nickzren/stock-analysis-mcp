@@ -443,8 +443,13 @@ def _section(value: Any) -> dict[str, Any]:
 
 def _signal_sources_failed(raw: dict[str, Any]) -> bool:
     data_quality = _section(raw.get("data_quality"))
-    # An empty latest daily bar leaves the SMA rules without a value that day (D7).
-    latest_bar_invalid = _section(data_quality.get("bar_validity")).get("latest_bar_invalid") is True
+    # An empty latest daily bar leaves the SMA rules without a value that day (D7),
+    # and an invalid 63-session start bar leaves return_3m (the 3m momentum signals) null.
+    bar_validity = _section(data_quality.get("bar_validity"))
+    endpoints = bar_validity.get("invalid_return_endpoints")
+    bars_unknown = bar_validity.get("latest_bar_invalid") is True or (
+        isinstance(endpoints, list) and "return_3m" in endpoints
+    )
     failures = data_quality.get("tool_failures")
     tool_failed = any(
         isinstance(failure, dict)
@@ -454,7 +459,7 @@ def _signal_sources_failed(raw: dict[str, Any]) -> bool:
     )
     ownership_warnings = _section(raw.get("ownership_flow")).get("warnings")
     insider_unknown = isinstance(ownership_warnings, list) and bool(_INSIDER_UNKNOWN_WARNINGS & set(ownership_warnings))
-    return tool_failed or insider_unknown or latest_bar_invalid
+    return tool_failed or insider_unknown or bars_unknown
 
 
 def _string_list(value: Any) -> list[str] | None:

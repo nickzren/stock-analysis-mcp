@@ -199,6 +199,25 @@ class TestR57IndicatorCharacterization:
         assert r["bar_validity"]["invalid_bars_in_window"] == windows(atr_14=1)
 
 
+class TestReturnEndpoints:
+    """A return nulled by an invalid endpoint bar is named, unlike one with too
+    little history, so its signals can be marked unknown rather than removed."""
+
+    @pytest.mark.parametrize(
+        ("gap", "n", "named"),
+        [(None, 70, []), (70 - 64, 70, ["return_3m"]), (69, 70, ["return_1w", "return_1m", "return_3m"]),
+         (69 - 21, 70, ["return_1m"]), (0, 40, [])],
+        ids=["clean", "3m_start", "latest_bar", "1m_start", "short_history"],
+    )
+    async def test_invalid_return_endpoints(
+        self, monkeypatch: pytest.MonkeyPatch, gap: int | None, n: int, named: list[str]
+    ) -> None:
+        r = await run_technicals(monkeypatch, pin_frame(gap, n=n))
+        assert r["bar_validity"]["invalid_return_endpoints"] == named
+        for name in named:
+            assert r["returns"][name] is None
+
+
 class TestR55LatestBarInvalid:
     async def test_ema_rsi_atr_keep_their_values_and_the_bar_is_flagged(self, monkeypatch: pytest.MonkeyPatch) -> None:
         r = await run_technicals(monkeypatch, pin_frame(39))

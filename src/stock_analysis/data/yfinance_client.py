@@ -421,10 +421,19 @@ def rate_limit_cooldown_remaining() -> float:
     return max(_rate_limited_until - time.monotonic(), 0.0)
 
 
-async def wait_for_rate_limit_cooldown() -> None:
-    remaining = rate_limit_cooldown_remaining()
-    if remaining > 0:
+async def wait_for_rate_limit_cooldown(clock: jobs.ReadClock) -> bool:
+    """Wait out the shared cooldown, again for each extension another caller makes
+    while this one sleeps. False, without waiting, once it would outlast the read."""
+    waited_until = 0.0
+    while _rate_limited_until > waited_until:
+        remaining = rate_limit_cooldown_remaining()
+        if remaining <= 0:
+            break
+        if remaining >= clock.remaining():
+            return False
+        waited_until = _rate_limited_until
         await _sleep(remaining)
+    return True
 
 
 def expire_yfinance_response_cache() -> None:
@@ -556,10 +565,8 @@ async def _retry_with_backoff(
     for attempt in range(max_retries + 1):
         if shutdown_event.is_set():
             raise ServerShuttingDownError("Server is shutting down")
-        cooldown = rate_limit_cooldown_remaining()
-        if cooldown > 0 and cooldown >= clock.remaining():
+        if not await wait_for_rate_limit_cooldown(clock):
             raise YFinanceRetryError("Read deadline passed: rate_limited", last_error=last_error)
-        await wait_for_rate_limit_cooldown()
         if attempt:
             # A retry must do fresh I/O, not replay a response yfinance cached
             # (e.g. info's trailing-PEG time series reads through cache_get).
