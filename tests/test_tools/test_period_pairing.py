@@ -271,3 +271,26 @@ class TestAnalyzeDisclosure:
         summary = orchestrator._fundamentals_cash_flow_summary(self.CASH_FLOW)
         assert (summary["free_cash_flow_ttm_status"], summary["free_cash_flow_period_lag"]) == ("ttm_incomplete", 1)
         assert summary["free_cash_flow_label"] == "FCF (FY 2024): +$100 (end 2024-12-31)"
+
+
+class TestNullableValues:
+    """Nullable statement frames (``Float64`` or object rows holding ``pd.NA``) follow the same rules."""
+
+    @pytest.mark.parametrize("dtype", ["Float64", "object"])
+    def test_a_missing_quarter_is_incomplete_not_skipped(self, dtype: str) -> None:
+        q = pd.DataFrame([[10.0, pd.NA, 30.0, 40.0]], index=["Free Cash Flow"], columns=pd.to_datetime(QUARTERS[:4]),
+                         dtype=dtype)
+        cf = resolve(q, None)
+        assert (cf["free_cash_flow_ttm"], cf["free_cash_flow_ttm_status"]) == (3.0, "ttm_incomplete")
+
+    @pytest.mark.parametrize("dtype", ["Float64", "object"])
+    def test_a_missing_newest_year_keeps_the_older_value(self, dtype: str) -> None:
+        y = pd.DataFrame([[pd.NA, 100.0, 90.0]], index=["Free Cash Flow"], columns=pd.to_datetime(YEARS), dtype=dtype)
+        cf = resolve(None, y)
+        assert (cf["free_cash_flow_ttm"], cf["free_cash_flow_period"], cf["free_cash_flow_period_lag"]) == (
+            100.0, "FY 2024", 1)
+
+    def test_a_complete_nullable_window_still_sums(self) -> None:
+        q = pd.DataFrame([[1.0, 2.0, 3.0, 4.0]], index=["Free Cash Flow"], columns=pd.to_datetime(QUARTERS[:4]),
+                         dtype="Float64")
+        assert resolve(q, None)["free_cash_flow_ttm"] == 10.0

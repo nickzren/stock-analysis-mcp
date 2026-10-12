@@ -1289,12 +1289,20 @@ def _consecutive_quarters(columns: list[Any]) -> bool:
     return all(low <= (newer - older).days <= high for newer, older in zip(dates, dates[1:], strict=False))  # type: ignore[operator]
 
 
+def _float_values(series: pd.Series, columns: list[Any]) -> np.ndarray:
+    """The series' values for ``columns`` as plain floats: ``pd.NA`` in a nullable
+    (``Float64`` or object) row becomes NaN, so it can't be skipped by a sum or
+    break a finiteness check."""
+    values = pd.to_numeric(series.reindex(columns), errors="coerce")
+    return values.to_numpy(dtype="float64", na_value=np.nan)
+
+
 def _quarterly_ttm(series: pd.Series | None, columns: list[Any]) -> _Period:
     """Sum of the 4 most recent quarter columns, only when consecutive and all finite."""
     if series is None:
         return _Period(None, None, None, "unavailable")
     recent = columns[:4]
-    values = pd.to_numeric(series.reindex(recent), errors="coerce")
+    values = _float_values(series, recent)
     if len(recent) < 4 or not _consecutive_quarters(recent) or not np.isfinite(values).all():
         return _Period(None, None, None, "ttm_incomplete")
     period_end = _column_date(recent[0])
@@ -1305,7 +1313,7 @@ def _latest_annual(series: pd.Series | None, columns: list[Any]) -> _Period:
     """The newest finite annual value with its own column; ``period_lag`` counts the
     newer columns that had none."""
     if series is not None:
-        values = pd.to_numeric(series.reindex(columns), errors="coerce")
+        values = _float_values(series, columns)
         for lag, (column, value) in enumerate(zip(columns, values, strict=True)):
             if np.isfinite(value):
                 period_end = _column_date(column)

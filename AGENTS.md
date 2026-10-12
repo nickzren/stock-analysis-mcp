@@ -100,7 +100,9 @@
   are consecutive (77-125 days apart: calendar, 13-week and 12/16/17-week
   fiscal quarters count, a skipped quarter, at least 168 days, does not) and all
   finite; otherwise `ttm_status` is `ttm_incomplete` (`unavailable` with no
-  usable quarterly row), never a sum that skips the gap. Next comes the newest finite
+  usable quarterly row), never a sum that skips the gap. Statement rows are read as
+  plain floats first, so a `pd.NA` in a nullable (`Float64` or object) row is
+  a gap too. Next comes the newest finite
   annual value labelled from its own column (`FY <year>`, its period end) with
   `period_lag` = newer empty columns, then the info figure labelled `TTM` /
   `info`. FCF rebuilt as OCF + capex uses one period (the same 4 quarters, or
