@@ -143,7 +143,7 @@ Old consumers should re-check every item below.
 - **`get_stock_summary`:** `financial_currency`, `quote_type`, `support`, `quote_time`, `fetched_at`, `cache_hit`, and the dividend basis and trailing fields. `currency` no longer defaults to "USD".
 - **`get_technicals`:**
   - `session_close`: the latest valid completed-session close, with `session_date` and `fetched_at`.
-  - `bar_validity`: `latest_bar_invalid`, `latest_volume_invalid`, `invalid_bars_in_window` per indicator window, and `invalid_return_endpoints` (the `returns.return_*` that are null because an endpoint bar is invalid, not for lack of history).
+  - `bar_validity`: `latest_bar_invalid`, `latest_volume_invalid`, `invalid_bars_in_window` per indicator window, and `invalid_return_endpoints` (the `returns.return_*` that are null although the history reaches back far enough: an endpoint the return used is missing or non-finite, or its start is zero; `return_1y` follows its first-bar fallback).
 - **`get_events` earnings:** `verification` (`verified_date`, `verified_none` or `unverifiable`), `next_window`, `windows` (each with `window_basis` and `metadata_conflict`), `candidate_dates`, `next_date_is_estimate`, `sources_stale`.
 - **`get_news`:** `source_status` (`ok`, `empty`, `failed` or `unverified`), `source` (`news` or the `search` fallback), `rejected_count`.
 - **`analyze_trade_setup`:**
@@ -194,7 +194,7 @@ Old consumers should re-check every item below.
 - **`YF_MAX_WORKERS`** now gates every yfinance read. Property reads for one symbol run one at a time. A timed-out read keeps its slot until its thread finishes.
 - **Retries:**
   - Retries stop when the next backoff would pass the read deadline.
-  - A 429 starts a process-wide cooldown. A waiting read waits out every extension another read makes, and fails `rate_limited` when the cooldown would outlast its budget.
+  - A 429 starts a process-wide cooldown. A waiting read waits out every extension another read makes, and a cooldown that begins while a read is queued for a worker slot is checked again when the slot is granted: the read gives the slot back, waits and queues again. It fails `rate_limited` when the cooldown would outlast its budget.
 - **Caches:** verified results are cached in process: calendar 1 h, earnings page 6 h, news 15 min, symbol search 1 h. Failures are never cached.
 
 ### Known limitations

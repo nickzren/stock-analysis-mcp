@@ -59,6 +59,10 @@ class JobTimeoutError(TimeoutError):
         self.reason = reason
 
 
+class JobDeferredError(Exception):
+    """Admitted, but ``defer`` said not to start yet; the slot was given back."""
+
+
 @dataclass
 class ReadClock:
     """One read's time limit; create it when the read starts."""
@@ -217,12 +221,21 @@ def in_flight_jobs() -> int:
     return _gate.running
 
 
-async def run_job(fn: Callable[[], T], *, clock: ReadClock, symbol_lock: str | None = None) -> T:
+async def run_job(
+    fn: Callable[[], T],
+    *,
+    clock: ReadClock,
+    symbol_lock: str | None = None,
+    defer: Callable[[], bool] | None = None,
+) -> T:
     """Run ``fn`` as one executor job, within ``clock``.
 
     Raises ``JobTimeoutError`` when the job could not be admitted, or did not
     finish, in time. A started job keeps its permit and lock until it finishes. A
     job that finished is never reported as timed out, even if the loop was late.
+    ``defer`` is checked once admitted (e.g. a rate-limit cooldown that began while
+    queued); when it is true the slot is given back and ``JobDeferredError`` raised,
+    without starting the read's budget.
     """
     if clock.remaining() <= 0:
         raise JobTimeoutError(_gate.blocked_reason(symbol_lock) or "timeout")
@@ -234,6 +247,9 @@ async def run_job(fn: Callable[[], T], *, clock: ReadClock, symbol_lock: str | N
     if clock.remaining() <= 0:  # admitted, but woken after the deadline: don't start late
         _gate.release(symbol_lock)
         raise JobTimeoutError(queued_reason or "timeout")
+    if defer is not None and defer():
+        _gate.release(symbol_lock)
+        raise JobDeferredError
     future = _gate.start(fn, symbol_lock)
     clock.admitted()
     started = _flight_started.get()

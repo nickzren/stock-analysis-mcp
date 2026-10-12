@@ -427,6 +427,69 @@ class TestGateOrder:
         await drain()
 
 
+class TestCooldownAtAdmission:
+    """Codex at 27ccebf: a rate-limit cooldown that starts while a read is queued for
+    a slot is waited out at admission, without holding the slot or lock meanwhile."""
+
+    async def test_a_queued_property_read_waits_out_a_new_cooldown(
+        self, barrier: Barrier, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        ran: list[str] = []
+        sleeps: list[tuple[float, bool, list[str]]] = []
+
+        async def record(delay: float) -> None:
+            sleeps.append((delay, SYMBOL in jobs._gate.locked_symbols, list(ran)))
+
+        monkeypatch.setattr(yfinance_client, "_sleep", record)
+        holder = asyncio.create_task(
+            jobs.run_job(barrier.job("holder", SYMBOL), clock=jobs.ReadClock(), symbol_lock=SYMBOL)
+        )
+        await barrier.until_started(1)
+        with jobs.deadline_scope(4.0):  # a slot kept while waiting would time out, not hang
+            waiting = asyncio.create_task(
+                provider.read_property(FakeTicker(SYMBOL), "splits", lambda t: ran.append("read") or ("ok",))
+            )
+        await asyncio.sleep(0)  # queued behind the holder's symbol lock
+        yfinance_client.note_rate_limit(2.0)  # another read's 429 meanwhile
+        barrier.release.set()
+
+        read = await waiting
+        await holder
+
+        assert (read.status, ran) == ("ok", ["read"])
+        assert len(sleeps) == 1
+        delay, lock_held, ran_before = sleeps[0]
+        assert delay > 1.0 and not lock_held and ran_before == []
+        await drain()
+
+    async def test_a_queued_client_read_waits_out_a_new_cooldown(
+        self, barrier: Barrier, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        ran: list[str] = []
+        sleeps: list[tuple[float, list[str]]] = []
+
+        async def record(delay: float) -> None:
+            sleeps.append((delay, list(ran)))
+
+        monkeypatch.setattr(yfinance_client, "_sleep", record)
+        blocked = [asyncio.create_task(jobs.run_job(barrier.job(f"j{i}"), clock=jobs.ReadClock()))
+                   for i in range(jobs._gate.permits)]
+        await barrier.until_started(jobs._gate.permits)
+        waiting = asyncio.create_task(
+            yfinance_client._retry_with_backoff("probe", lambda: ran.append("read") or "ok")
+        )
+        await asyncio.sleep(0)  # queued for admission
+        yfinance_client.note_rate_limit(5.0)
+        barrier.release.set()
+
+        result = await waiting
+        await asyncio.gather(*blocked)
+
+        assert (result.result, result.attempts, ran) == ("ok", 1, ["read"])
+        assert len(sleeps) == 1 and sleeps[0][0] > 4.0 and sleeps[0][1] == []
+        await drain()
+
+
 class TestRequestTimeoutCap:
     async def test_property_requests_are_capped(self, yf_transport: FakeSession) -> None:
         yf_transport.route("calendar", "valid_one_epoch")

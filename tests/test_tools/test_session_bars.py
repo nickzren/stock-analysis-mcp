@@ -217,6 +217,25 @@ class TestReturnEndpoints:
         for name in named:
             assert r["returns"][name] is None
 
+    async def test_a_zero_start_price_is_an_invalid_endpoint(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        df = pin_frame(n=70)
+        df.loc[70 - 64, "close"] = 0.0
+        r = await run_technicals(monkeypatch, df)
+        assert (r["returns"]["return_3m"], r["bar_validity"]["invalid_return_endpoints"]) == (None, ["return_3m"])
+
+    @pytest.mark.parametrize(
+        ("n", "gap", "flagged"),
+        [(252, 0, True), (260, 260 - 253, False), (260, 0, False), (199, 0, False)],
+        ids=["fallback_start_invalid", "nominal_start_invalid_fallback_used", "unused_first_bar", "short_history"],
+    )
+    async def test_the_1y_flag_follows_the_endpoints_used(
+        self, monkeypatch: pytest.MonkeyPatch, n: int, gap: int, flagged: bool
+    ) -> None:
+        """return_1y falls back to the first bar (>= 200 rows) when the 252-session start fails."""
+        r = await run_technicals(monkeypatch, pin_frame(gap, n=n))
+        assert ("return_1y" in r["bar_validity"]["invalid_return_endpoints"]) is flagged
+        assert (r["returns"]["return_1y"] is None) is (flagged or n < 200)
+
 
 class TestR55LatestBarInvalid:
     async def test_ema_rsi_atr_keep_their_values_and_the_bar_is_flagged(self, monkeypatch: pytest.MonkeyPatch) -> None:

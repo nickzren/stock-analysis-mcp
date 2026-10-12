@@ -376,11 +376,17 @@ def _build_price_position(
     }
 
 
-def _build_returns(df: pd.DataFrame, close: pd.Series) -> dict[str, Any]:
-    """Build trailing return fields."""
+def _return_1y(close: pd.Series) -> float | None:
+    """252 sessions, else from the first bar when there are at least 200."""
     return_1y = calculate_returns(close, 252)
     if return_1y is None and len(close) >= 200:
         return_1y = calculate_returns(close, len(close) - 1)
+    return return_1y
+
+
+def _build_returns(df: pd.DataFrame, close: pd.Series) -> dict[str, Any]:
+    """Build trailing return fields."""
+    return_1y = _return_1y(close)
 
     return {
         "return_1w": safe_round(calculate_returns(close, 5), 4),
@@ -415,14 +421,17 @@ _CLOSE_WINDOWS = {"sma_20": 20, "sma_50": 50, "sma_200": 200, "ema_12": 12, "ema
                   "macd_12_26_9": 26 + 9 - 1, "rsi_14": 14, "bollinger_20": 20}
 
 
-_RETURN_PERIODS = {"return_1w": 5, "return_1m": 21, "return_3m": 63, "return_6m": 126, "return_1y": 252}
+_RETURN_PERIODS = {"return_1w": 5, "return_1m": 21, "return_3m": 63, "return_6m": 126}
 
 
 def _invalid_return_endpoints(close: pd.Series) -> list[str]:
-    """Returns null because an endpoint bar is invalid, not for lack of history."""
-    finite = np.isfinite(pd.to_numeric(close, errors="coerce").to_numpy(dtype="float64", na_value=np.nan))
-    return [name for name, periods in _RETURN_PERIODS.items()
-            if len(finite) > periods and not (finite[-1] and finite[-periods - 1])]
+    """Returns null although the history reaches their start: an endpoint the return
+    used is non-finite, or its start is zero (``calculate_returns``'s own test)."""
+    named = [name for name, periods in _RETURN_PERIODS.items()
+             if len(close) > periods and calculate_returns(close, periods) is None]
+    if len(close) >= 200 and _return_1y(close) is None:
+        named.append("return_1y")
+    return named
 
 
 def _build_bar_validity(

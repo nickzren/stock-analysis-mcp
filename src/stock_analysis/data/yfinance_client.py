@@ -421,19 +421,37 @@ def rate_limit_cooldown_remaining() -> float:
     return max(_rate_limited_until - time.monotonic(), 0.0)
 
 
-async def wait_for_rate_limit_cooldown(clock: jobs.ReadClock) -> bool:
+async def _wait_out_cooldown(clock: jobs.ReadClock) -> float:
     """Wait out the shared cooldown, again for each extension another caller makes
-    while this one sleeps. False, without waiting, once it would outlast the read."""
+    while this one sleeps; returns the cooldown end it covered. Raises
+    ``JobTimeoutError("rate_limited")``, without waiting, once it would outlast the read."""
     waited_until = 0.0
     while _rate_limited_until > waited_until:
         remaining = rate_limit_cooldown_remaining()
         if remaining <= 0:
             break
         if remaining >= clock.remaining():
-            return False
+            raise jobs.JobTimeoutError("rate_limited")
         waited_until = _rate_limited_until
         await _sleep(remaining)
-    return True
+    return _rate_limited_until
+
+
+def _cooldown_began_after(covered: float) -> bool:
+    return _rate_limited_until > covered and rate_limit_cooldown_remaining() > 0
+
+
+async def run_job_after_cooldown(fn: Callable[[], T], *, clock: jobs.ReadClock, symbol_lock: str | None = None) -> T:
+    """``jobs.run_job`` once no rate-limit cooldown is active. A cooldown that begins
+    while the read is queued for a slot is checked again at admission: the read gives
+    the slot back, waits it out and queues again, within ``clock``."""
+    while True:
+        covered = await _wait_out_cooldown(clock)
+        try:
+            return await jobs.run_job(fn, clock=clock, symbol_lock=symbol_lock,
+                                      defer=functools.partial(_cooldown_began_after, covered))
+        except jobs.JobDeferredError:
+            continue
 
 
 def expire_yfinance_response_cache() -> None:
@@ -565,15 +583,13 @@ async def _retry_with_backoff(
     for attempt in range(max_retries + 1):
         if shutdown_event.is_set():
             raise ServerShuttingDownError("Server is shutting down")
-        if not await wait_for_rate_limit_cooldown(clock):
-            raise YFinanceRetryError("Read deadline passed: rate_limited", last_error=last_error)
         if attempt:
             # A retry must do fresh I/O, not replay a response yfinance cached
             # (e.g. info's trailing-PEG time series reads through cache_get).
             expire_yfinance_response_cache()
 
         try:
-            result = await jobs.run_job(sync_func, clock=clock)
+            result = await run_job_after_cooldown(sync_func, clock=clock)
             # Record successful attempt in trace
             retry_trace.append(RetryAttempt(attempt=attempt + 1, ok=True))
             return RetryResult(

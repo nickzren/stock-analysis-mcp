@@ -253,10 +253,13 @@
   them back only when its thread finishes. A cancelled or timed-out waiter just
   stops waiting; the orphaned job keeps its permit and lock, so the limit holds
   and one symbol's property reads never overlap. Freed slots go to waiters in
-  arrival order. Backoff and rate-limit cooldown sleeps hold neither; a waiter
-  re-waits each cooldown extension made while it slept and fails `rate_limited`
-  once the cooldown would outlast its clock (a shared flight has no clock, so
-  its callers' own deadlines bound it). A read's
+  arrival order. Backoff and rate-limit cooldown sleeps hold neither. Both retry
+  loops run jobs through `yfinance_client.run_job_after_cooldown`: it re-waits
+  each cooldown extension made while it slept, and `run_job(defer=...)` rechecks
+  at admission, so a cooldown that began while the read was queued makes it give
+  the slot back (`JobDeferredError`), wait and queue again; it fails
+  `rate_limited` once the cooldown would outlast its clock (a shared flight has
+  no clock, so its callers' own deadlines bound it). A read's
   `jobs.ReadClock` allows `YF_READ_DEADLINE_SECONDS` (default 8) from its first
   admission, capped by any enclosing `jobs.deadline_scope`; time queued for a
   slot counts only against that scope, so batch tools' healthy reads just wait
@@ -334,7 +337,9 @@
   `insider_transactions_columns_unrecognized`, or the latest daily bar is
   invalid (`bar_validity.latest_bar_invalid`: the SMA rules have no value that day),
   or `return_3m` is null because its start bar is invalid
-  (`bar_validity.invalid_return_endpoints`; it feeds the 3m momentum signals). Non-dict sections read as empty. `detect_changes` checks the
+  (`bar_validity.invalid_return_endpoints`, which follows `calculate_returns`:
+  a missing, non-finite or zero start, and `return_1y`'s first-bar fallback; it
+  feeds the 3m momentum signals). Non-dict sections read as empty. `detect_changes` checks the
   shape of `previous_snapshot` before analysis (required `snapshot_version` in
   1.0.0/1.1.0/2.0.0 and `symbol`; every other field optional but type-checked,
   `next_catalyst`'s keys and its `window` bounds included; absent or null
