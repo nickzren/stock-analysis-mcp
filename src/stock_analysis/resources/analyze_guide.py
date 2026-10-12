@@ -75,7 +75,8 @@ sections whose fields are present.
     - Current zone and valuation gate.
     - Price levels with distances.
     - Stop-loss distance and basis.
-    - For unprofitable companies, show P/S-based valuation gate.
+    - For unprofitable companies, show the sales-multiple gate (EV/S, else P/S;
+      `unknown` when enterprise value is not positive).
     - If valuation gate is unknown, mention reduced valuation confidence.
 
 12. Dip assessment:
@@ -111,7 +112,7 @@ sections whose fields are present.
 
 ## Unprofitable Companies
 
-- Show P/S instead of P/E.
+- Show the sales multiple (EV/S, else P/S) instead of P/E.
 - Show burn metrics: liquidity, runway, burn rates, and dilution risk.
 - If burn metrics are unavailable, show the status reason.
 - Emphasize path-to-profitability triggers in fundamentals.

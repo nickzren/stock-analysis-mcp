@@ -7,7 +7,7 @@ Two versions change, separately:
 - **Response schema:** `meta.schema_version` goes from `"4"` to `"5"`.
 - **Watchlist snapshot:** `watchlist_snapshot.snapshot_version` goes from `"1.1.0"` to `"2.0.0"`. `detect_changes` still accepts 1.0.0 and 1.1.0 snapshots.
 
-Upstream is now `yfinance>=1.0,<2`, which adds a `beautifulsoup4` dependency.
+Upstream is now `yfinance>=1.0,<2`. `beautifulsoup4` is a direct dependency, because the earnings page is now parsed directly.
 
 ### Read this first: fields whose meaning or units changed
 
@@ -23,6 +23,7 @@ Old consumers should re-check every item below.
   - An unknown or minor-unit currency gives null (GBp, ZAc and similar).
 - **New companions:** `dividend_yield_basis` (`forward`, `no_dividend` or `unverified_currency`) and `dividend_yield_trailing`. In events they are `dividends.yield_basis` and `dividends.yield_trailing`.
 - **`compare`:** it ranks the new fraction, and non-payers are now ranked (0.0) instead of being left out.
+- **`compare` leverage:** a negative D/E or negative equity is null and ranked last; v4 ranked it best.
 
 **`get_fundamentals`**
 
@@ -31,8 +32,8 @@ Old consumers should re-check every item below.
 - **Valuation ratios are null when undefined or unverified:**
   - **P/E:** `pe_trailing` / `pe_forward` are null when their own EPS ≤ 0.
   - **EV/EBITDA:** null when EBITDA ≤ 0.
-  - **Currency:** P/E, P/S, EV/S, EV/EBITDA, FCF yield and the payout ratios are null when the trading currency differs from `financialCurrency`, e.g. a USD ADR reporting in TWD.
-  - **Share units:** P/B, the trailing dividend and FCF payout are null when `marketCap ≈ price × sharesOutstanding` fails.
+  - **Currency:** P/E, P/S, EV/S, EV/EBITDA, P/B, FCF yield, the payout ratios, the trailing dividend yield and the P/E and P/S history are null when the trading currency differs from `financialCurrency`, or is unknown or a minor unit. A USD ADR reporting in TWD loses all of them.
+  - **Share units:** P/B, the trailing dividend yield, FCF payout and the P/E and P/S history are also null when `marketCap ≈ price × sharesOutstanding` fails, e.g. multi-class shares.
   - **`earnings_yield`:** uses only the usable P/E.
   - **`compare`:** P/E, P/S or PEG ≤ 0 are null and ranked last, where v4 ranked them best.
 - **Cash flow periods:** `cash_flow.operating_cf_ttm` / `free_cash_flow_ttm` keep their names but can hold an annual value.
@@ -78,6 +79,13 @@ Old consumers should re-check every item below.
   - `data_quality.component_freshness` price/risk entries count sessions from the last bar date (`last_bar_date`, `expected_session`, `sessions_behind`). v4 counted hours from the fetch time.
   - `staleness_warnings` `price_stale_<N>h` / `risk_stale_<N>h` become `…_stale_<N>_sessions`.
 - **Ratios:** `fundamentals_summary.valuation` ratios are null unless usable. `metric_status` explains the excluded ones.
+- **Valuation gate (`action_zones.valuation_assessment`):**
+  - It reads only usable metrics.
+  - For unprofitable companies it uses EV/S first, then P/S, and "attractive" needs 0 < multiple < 3; v4 rated a negative EV/S as attractive. With EV ≤ 0 there is no P/S fallback, so the gate is `unknown`.
+  - PEG ≤ 0 is never attractive.
+  - `reasons` name the excluded metrics, e.g. `pe_trailing_unverified_currency` or `ev_to_sales_ev_nonpositive`.
+  - For an unsupported instrument the gate is `not_applicable`. This also reaches `policy_action.valuation_gate` and the snapshot.
+- **`data_quality`:** `fundamentals_status` can be `not_applicable`. An unverified P/E gives the reason `pe_<reason>` (e.g. `pe_unverified_currency`), and the same value replaces `pe_not_meaningful` in `data_gaps`.
 - **Unsupported instruments and currencies:** anything other than USD-priced common equity, or a symbol whose support can't be verified, gets new-money actions capped at `watch` everywhere. That covers `policy_action`, `decision_card.action_now`, `decision_modes` and the trade card. There is no share or dollar sizing and no dollar-liquidity gate.
   - For an unsupported instrument, the fundamentals rubric, dip and dislocation blocks read `not_applicable`.
 - **Missing tilt:** a verdict tilt that is missing (absent or null) makes the tilt-decided actions `insufficient_data`, with rationale `tilt=missing`. In v4 an absent tilt read as neutral, and a null one as bearish; a failed fundamentals fetch could say `hold_or_reduce`.
@@ -104,8 +112,8 @@ Old consumers should re-check every item below.
 - **Fundamentals summary:** `pe_forward`, `metric_status`, `health.leverage_status`, and `cash_flow.free_cash_flow_ttm_status` / `free_cash_flow_period_lag`.
 - **Decision card and zones:**
   - `decision_card.hard_gates` adds `unsupported_instrument` / `unsupported_currency`.
-  - `sizing.unavailable_reason`.
-  - `action_zones.position_sizing_range.unavailable_reason`.
+  - `sizing.unavailable_reason`, `action_zones.position_sizing_range.unavailable_reason` and the decision modes' position `unavailable_reason`.
+  - `policy_action.support_gates` when the support cap applied.
 - **Events and dislocation:**
   - `events_summary.next_catalyst.window` (`{start, end}`).
   - `dislocation_framework.balance_sheet_safety.reasons`; the `summary` names the causes.
@@ -143,22 +151,31 @@ Old consumers should re-check every item below.
   - `watchlist_snapshot` is built once per analysis and is identical at every `detail` level. `detect_changes` uses it as is.
   - It adds `zone`, `mid_term_fit`, `long_term_fit`, `bullish_signals` / `bearish_signals`, `support_instrument` / `support_currency`, and `price_source` / `price_as_of` / `as_of_kind` / `price_stale`.
   - An unknown list is null; a known-empty list is `[]`. Signal lists are null when a tool feeding them failed.
-- **`snapshot_hash`** covers the full set except fetch-derived values (`snapshot_as_of_date`, `price_stale`, the countdown and window-derived date in `next_catalyst`).
+- **Clock-driven values:**
+  - The snapshot's `next_catalyst` no longer carries `days_until` (1.1.0 did). It also drops `date` when an earnings `window` is present, because inside a window that date is just today.
+  - `snapshot_hash` covers the full set except `snapshot_as_of_date` (fetch dates) and `price_stale` (an age past a threshold).
 - **`detect_changes` validation:** a `previous_snapshot` with another symbol, a missing `snapshot_version` / `symbol`, or a wrong-typed field returns `error_type: "invalid_snapshot"` with `problems`.
 - **`detect_changes` output:**
   - It compares only fields both snapshots carry and lists the rest in `not_comparable`. Older snapshots therefore show no phantom changes, and their signal lists are not compared.
   - It adds `hash_changed`, reported only within one snapshot version.
+  - **`changes` shape:**
+    - Keys appear only for comparable fields.
+    - It adds `confidence`, `action_mid_term`, `action_long_term`, `valuation_gate`, `support_instrument`, `support_currency` and `price_source`. `price_source` has `material: false` for a bar ↔ close switch.
+    - `signals` adds `bullish_changed` / `bearish_changed`.
+    - `hard_gates.previous` / `current` can be null (unknown).
   - `material_changes` now covers confidence, actions, valuation gate, support and a price-source change involving the fallback.
 
 ### Failures and errors
 
-- **Read failures raise:** yfinance reads no longer hide failures as empty data. A failed read is reported as failed, not as "none".
+- **Read failures raise:** yfinance reads no longer hide failures as empty data.
+  - **Reported as failed, not "none":** news, earnings sources, symbol search, option expirations and ownership.
+  - **Still degrade to missing fields, as before, with no failure flag:** fundamentals statement, estimate and dividend-history reads, and the splits read in `get_events`.
   - **Provider statuses:** `ok`, `empty`, `failed`, `unverified`.
   - **`error_type` values:** `rate_limited`, `http_<status>`, `timeout`, `queued_for_admission`, `queued_behind_symbol_lock`, `unreadable_response`, `malformed`, and others.
 - **History errors:**
   - An unknown symbol is still `invalid_symbol`.
   - An unreadable body (e.g. an HTML 5xx page) is retried, then reported as `data_unavailable`.
-  - 5xx and 429 are retried; other 4xx are not.
+  - 5xx and 429 are retried with backoff, and 401 is retried once; other 4xx are not.
 - **Search:** `search_symbol` returns `data_unavailable` when Search fails upstream. In `analyze`, a company name whose search fails is reported as `invalid_parameters` rather than "no match".
 - **Ownership:** a failed read gives a `*_error` warning, kept distinct from `*_unavailable`.
 - **analyze timeouts:** each tool's reads stop at 90% of its deadline, so a slow read comes back as a structured failure. Worker threads that are still running are counted in `in_flight_jobs`.

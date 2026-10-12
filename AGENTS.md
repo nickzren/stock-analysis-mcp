@@ -275,8 +275,9 @@
   awaits through `asyncio.shield`, each only within its own clock (while the
   fetch is queued for a slot only the caller's scope counts; its read budget
   starts when the fetch is admitted). A caller already out of time may join a
-  fetch in flight but never starts a new one (so a timed-out news feed starts
-  no Search fallback). The entry is removed when the fetch lands, so a failure
+  fetch in flight but never starts a new one (so a news feed whose caller's
+  scope has run out starts no Search fallback; a feed that only spent its own
+  read budget still falls back within the caller's remaining scope). The entry is removed when the fetch lands, so a failure
   is shared only while in flight and never cached. `analyze` runs each tool under `TIMEOUT_SECONDS`
   (10) with its reads capped at 90% of it, so a hung read fails structured and
   the tool still returns; `data_quality.in_flight_jobs`, kept at every

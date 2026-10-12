@@ -77,7 +77,8 @@ Any swing setup on HOOD? Account size $3000.
 `no_setup`, `avoid`, `wait_for_data`) plus an executable plan when actionable.
 `trade_now` is only possible during regular market hours with fresh data; stale,
 delayed, or unverifiable data downgrades the action and explains why in `blockers`.
-Earnings provenance is explicit: `earnings.verification` distinguishes a
+Earnings provenance is explicit: `event_risk.earnings_verification` (from
+`get_events` `earnings.verification`) distinguishes a
 verified date or a verified no-earnings state from an unverifiable one (which
 caps the card at `watch`), dates are exchange-local (ET), and same-day earnings
 count as day 0.
@@ -106,13 +107,16 @@ Other data conventions:
 - Statement values carry their period: `free_cash_flow_ttm` and
   `operating_cf_ttm` hold a TTM only when four consecutive quarters are
   complete, otherwise the newest annual value labelled `FY <year>` with
-  `*_period_end`, `*_ttm_status` and `*_period_lag`.
+  `*_period_end`, `*_ttm_status` and `*_period_lag`, otherwise Yahoo's info
+  figure labelled `TTM` with `*_source: "info"`.
 - Daily price history keeps every vendor session; an empty session is a row of
   nulls. Returns count sessions and are null when an endpoint is missing, and
   `get_technicals` discloses gaps per indicator window in `bar_validity`.
-- A failed upstream read is reported as failed (for example `source_status` on
-  news, `sources_failed` and `verification` on earnings), never as "nothing
-  found".
+- A failed news, earnings, symbol-search, options-expiration or ownership read
+  is reported as failed (for example `source_status` on news, `sources_failed`
+  and `verification` on earnings), not as "nothing found". Fundamentals
+  statement, estimate and dividend-history reads still degrade to missing
+  fields.
 
 Responses carry `meta.schema_version` (`"5"`); watchlist snapshots carry their
 own `snapshot_version` (`"2.0.0"`). [CHANGELOG.md](CHANGELOG.md) lists every
