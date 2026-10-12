@@ -74,10 +74,11 @@ def validate_previous_snapshot(snapshot: Any, symbol: str | None) -> list[str]:
     if "snapshot_version" in snapshot and not (isinstance(version, str) and version in COMPATIBLE_SNAPSHOT_VERSIONS):
         problems.append(f"unsupported snapshot_version: {version!r}")
     snapshot_symbol = snapshot.get("symbol")
-    if "symbol" in snapshot and not isinstance(snapshot_symbol, str):
+    if isinstance(snapshot_symbol, str):
+        if symbol is not None and snapshot_symbol.upper().strip() != symbol:
+            problems.append(f"symbol {snapshot_symbol!r} does not match {symbol}")
+    elif "symbol" in snapshot:
         problems.append(f"symbol: expected string, got {type(snapshot_symbol).__name__}")
-    elif symbol is not None and "symbol" in snapshot and snapshot_symbol.upper().strip() != symbol:
-        problems.append(f"symbol {snapshot_symbol!r} does not match {symbol}")
     for key, kind in _FIELD_TYPES.items():
         value = snapshot.get(key)
         if value is not None and not _TYPE_CHECKS[kind](value):
