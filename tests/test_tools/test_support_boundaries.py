@@ -73,7 +73,7 @@ class TestOrdinaryAdr:
 class TestAnalyzeDecision:
     def test_r4_7_decision_card_caps_new_money_at_watch_and_skips_liquidity(self) -> None:
         gates = _compute_hard_gates(
-            events_data={}, data_quality={}, dip_assessment=None,
+            events_data={}, data_quality={}, technicals_data=None,
             fundamentals_summary={}, risk_data={"liquidity": {"avg_dollar_volume": None}}, support=GBP_STOCK,
         )
 
@@ -85,7 +85,7 @@ class TestAnalyzeDecision:
 
     def test_holders_still_get_non_new_money_guidance(self) -> None:
         gates = _compute_hard_gates(
-            events_data={}, data_quality={}, dip_assessment=None, fundamentals_summary={},
+            events_data={}, data_quality={}, technicals_data=None, fundamentals_summary={},
             risk_data={"liquidity": {"avg_dollar_volume": 5e7}}, support=ETF,
         )
 

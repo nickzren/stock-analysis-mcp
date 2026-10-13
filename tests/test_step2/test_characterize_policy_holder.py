@@ -265,7 +265,7 @@ class TestThesisSurfaces:
         action = build_policy_action(verdict=BURNER_VERDICT, action_zones=BURNER_ZONES,
                                      decomposed=BURNER_VERDICT["decomposed"], dip_assessment=None,
                                      fundamentals_summary=fundamentals)
-        hard_gates = _compute_hard_gates(events_data={}, data_quality={}, dip_assessment=None,
+        hard_gates = _compute_hard_gates(events_data={}, data_quality={}, technicals_data=None,
                                          fundamentals_summary=fundamentals,
                                          risk_data={"liquidity": {"avg_dollar_volume": 5e8}})
 

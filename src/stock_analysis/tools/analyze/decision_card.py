@@ -1,7 +1,7 @@
 """Decision card: a compact, gated "what do I do now?" block.
 
 Consolidates the scattered outputs (`policy_action`, `decision_modes`, `action_zones`,
-events, data_quality, dip_assessment, burn_metrics) into a single small-account-friendly
+events, data_quality, technicals, burn_metrics) into a single small-account-friendly
 block. Applies hard pre-buy gates *before* surfacing any bullish or starter action so
 a single blocking condition (e.g., earnings within 5 days, falling knife, missing
 runway on an unprofitable burner) overrides the headline action.
@@ -15,82 +15,62 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from stock_analysis.tools.analyze.gates import (
+    ANALYZE_GATE_IDS,
+    GATES,
     check_data_quality,
     check_earnings_blackout,
+    check_earnings_unverifiable,
     check_liquidity,
+    is_falling_knife_technicals,
+    merge_blockers,
 )
 from stock_analysis.utils.valuation_basis import sizing_unavailable_reason, support_blockers
 
 # Default look-ahead for "next_review.date" when no earnings date is near.
 _DEFAULT_REVIEW_HORIZON_DAYS = 30
 
+_MISSING_RUNWAY = {"id": "missing_runway",
+                   "reason": "unprofitable company with no usable runway data — uninvestable for sizing"}
+_FALLING_KNIFE = {"id": "falling_knife", "reason": "severe decline with broken trends — wait for stabilization"}
+_ANALYZE_ORDER = {gate_id: i for i, gate_id in enumerate(ANALYZE_GATE_IDS)}
+
 
 def _compute_hard_gates(
     events_data: dict[str, Any],
     data_quality: dict[str, Any],
-    dip_assessment: dict[str, Any] | None,
+    technicals_data: dict[str, Any] | None,
     fundamentals_summary: dict[str, Any],
     risk_data: dict[str, Any],
     support: dict[str, Any] | None = None,
+    freshness_blockers: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Collect blocking conditions that must override any bullish recommendation.
+    """Every gate analyze evaluates, once each, in disclosure order (gates.ANALYZE_GATE_IDS).
 
-    ``support`` (WP4, D5): an unsupported or unverified instrument/currency blocks
-    new money, and a non-USD price makes no dollar-liquidity claim.
+    The knife reads the technicals for every instrument (D-5a). ``support`` (WP4, D5): an
+    unsupported or unverified instrument/currency blocks new money, and a non-USD price makes
+    no dollar-liquidity claim. ``freshness_blockers`` come from the price freshness legs.
     """
-    earnings_blackout, earnings_blocker = check_earnings_blackout(events_data)
-    data_quality_critical, data_quality_blocker = check_data_quality(data_quality)
-
-    dip_type: str | None = None
-    if dip_assessment:
-        dip_type = (dip_assessment.get("dip_classification") or {}).get("type")
-    falling_knife = dip_type == "falling_knife"
-
     burn = fundamentals_summary.get("burn_metrics") or {}
-    burn_status = burn.get("status")
     valuation_summary = fundamentals_summary.get("valuation") or {}
-    is_unprofitable = valuation_summary.get("valuation_note") == "pe_not_meaningful"
-    missing_runway = is_unprofitable and burn_status == "unavailable"
-
-    if support is None or sizing_unavailable_reason(support) is None:
-        weak_liquidity, liquidity_missing, liquidity_blockers = check_liquidity(risk_data)
-    else:
-        weak_liquidity, liquidity_missing, liquidity_blockers = False, False, []
-    support_gates = support_blockers(support) if support is not None else []
-
-    blocking: list[dict[str, str]] = []
-    if earnings_blocker:
-        blocking.append(earnings_blocker)
-    if data_quality_blocker:
-        blocking.append(data_quality_blocker)
-    if falling_knife:
-        blocking.append({
-            "id": "falling_knife",
-            "reason": "severe decline with broken trends — wait for stabilization",
-        })
-    if missing_runway:
-        blocking.append({
-            "id": "missing_runway",
-            "reason": "unprofitable company with no usable runway data — uninvestable for sizing",
-        })
-    blocking.extend(liquidity_blockers)
-    blocking.extend(support_gates)
-    support_ids = {gate["id"] for gate in support_gates}
-
-    return {
-        "any_blocking": bool(blocking),
-        "blocking": blocking,
-        "checks": {
-            "earnings_blackout": earnings_blackout,
-            "data_quality_critical": data_quality_critical,
-            "falling_knife": falling_knife,
-            "missing_runway": missing_runway,
-            "weak_liquidity": weak_liquidity,
-            "liquidity_missing": liquidity_missing,
-            "unsupported_instrument": "unsupported_instrument" in support_ids,
-            "unsupported_currency": "unsupported_currency" in support_ids,
-        },
-    }
+    missing_runway = (valuation_summary.get("valuation_note") == "pe_not_meaningful"
+                      and burn.get("status") == "unavailable")
+    knife, _ = is_falling_knife_technicals(technicals_data or {})
+    liquidity_applies = support is None or sizing_unavailable_reason(support) is None
+    candidates = [
+        *(freshness_blockers or []),
+        check_data_quality(data_quality)[1],
+        _MISSING_RUNWAY if missing_runway else None,
+        _FALLING_KNIFE if knife else None,
+        *(check_liquidity(risk_data)[2] if liquidity_applies else []),
+        *(support_blockers(support) if support is not None else []),
+        check_earnings_blackout(events_data)[1],
+        check_earnings_unverifiable(events_data, data_quality.get("tool_failures"))[1],
+    ]
+    merged = merge_blockers(b for b in candidates if b is not None)
+    blocking = sorted(merged, key=lambda b: _ANALYZE_ORDER[b["id"]])  # KeyError: an id outside the registry
+    fired = {b["id"] for b in blocking}
+    return {"any_blocking": bool(blocking), "blocking": blocking,
+            "checks": {gate_id: gate_id in fired for gate_id in ANALYZE_GATE_IDS}}
 
 
 # Map verbose policy_action.mid_term values to compact action_now codes used by
@@ -112,7 +92,7 @@ _MID_TERM_TO_ACTION: dict[str, str] = {
 
 # Actions that allow new money in (subject to hard gates).
 _NEW_MONEY_ACTIONS = frozenset({"buy", "starter", "hold_or_add"})
-_SUPPORT_GATE_IDS = frozenset({"unsupported_instrument", "unsupported_currency"})
+_SUPPORT_GATE_IDS = frozenset(g for g, gate in GATES.items() if gate.gate_class == "support")
 
 
 def _resolve_action_now(
@@ -277,8 +257,9 @@ def build_decision_card(
     risk_data: dict[str, Any],
     events_data: dict[str, Any],
     data_quality: dict[str, Any],
-    dip_assessment: dict[str, Any] | None,
+    technicals_data: dict[str, Any] | None,
     dislocation_framework: dict[str, Any] | None,
+    freshness_blockers: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Build the compact small-account decision card.
 
@@ -287,8 +268,7 @@ def build_decision_card(
                     wait_for_data | avoid | insufficient_data
         rationale: short bulleted reasons
         hard_gates: blocking conditions that override new-money recommendations.
-                    Checks: earnings_blackout, data_quality_critical, falling_knife,
-                    missing_runway, weak_liquidity, liquidity_missing.
+                    Checks: one boolean per gates.ANALYZE_GATE_IDS.
         sizing: starter/full pct + dollars + whole/fractional shares
         entry: current zone, price, buy band
         exit: stop / invalidation level
@@ -300,10 +280,11 @@ def build_decision_card(
     hard_gates = _compute_hard_gates(
         events_data=events_data,
         data_quality=data_quality,
-        dip_assessment=dip_assessment,
+        technicals_data=technicals_data,
         fundamentals_summary=fundamentals_summary,
         risk_data=risk_data,
         support=summary.get("support"),
+        freshness_blockers=freshness_blockers,
     )
     action_now, rationale = _resolve_action_now(policy_action, hard_gates)
 

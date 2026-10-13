@@ -941,8 +941,6 @@ async def analyze_stock(
     missing_critical: list[str] = []
     if summary.get("current_price") is None:
         missing_critical.append("current_price")
-    if risk_summary["beta"] is None:
-        missing_critical.append("beta")
 
     warnings: list[str] = []
     if earnings.get("days_until") and earnings.get("days_until") <= 7:
@@ -987,6 +985,8 @@ async def analyze_stock(
         fundamentals_status = "available"
 
     data_gaps: list[str] = []
+    if risk_summary["beta"] is None:
+        data_gaps.append("beta_unavailable")
     if news_status == "unverified":
         data_gaps.append("news_unverified")
 
@@ -1136,7 +1136,7 @@ async def analyze_stock(
         risk_data=risk_data,
         events_data=events_data,
         data_quality=data_quality,
-        dip_assessment=dip_assessment,
+        technicals_data=tech_data,
         dislocation_framework=dislocation_framework,
     )
 

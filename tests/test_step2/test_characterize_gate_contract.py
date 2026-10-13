@@ -154,7 +154,7 @@ US = classify_support(quote_type="EQUITY", currency="USD", symbol="X")
 ETF = classify_support(quote_type="ETF", currency="USD", symbol="SPY")
 GBP = classify_support(quote_type="EQUITY", currency="GBp", symbol="VOD.L")
 LIQ_OK = {"liquidity": {"avg_dollar_volume": 5e8}}
-KNIFE_DIP = {"dip_classification": {"type": "falling_knife"}}
+KNIFE_TECH = dm.KNIFE
 POLICY_CODES = ("buy", "speculative_small_position", "hold_or_add", "hold", "wait_for_entry", "hold_or_reduce",
                 "avoid")
 PASS_THROUGH = ("hold", "wait", "hold_or_reduce", "avoid")  # gates touch only buy, starter and hold_or_add
@@ -167,13 +167,12 @@ ANALYZE_GATE_ROWS: dict[str, tuple[dict[str, Any], list[str], tuple[str, ...]]] 
     "earnings3": ({"events_data": {"earnings": {"days_until": 3}}}, ["earnings_blackout"], NEW_MONEY_WAIT_FOR_DATA),
     "earnings0": ({"events_data": {"earnings": {"days_until": 0}}}, ["earnings_blackout"], NEW_MONEY_WAIT_FOR_DATA),
     "earn_unverifiable": ({"events_data": {"earnings": {"days_until": None, "verification": "unverifiable"}}},
-                          [], UNGATED),
+                          ["earnings_unverifiable"], NEW_MONEY_WAIT_FOR_DATA),
     "dq_tool_failed": ({"data_quality": {"tool_failures": [{"tool": "risk_metrics"}]}},
                        ["data_quality_critical"], NEW_MONEY_WAIT_FOR_DATA),
-    # the input B3 (WP2.1) retires: a missing beta alone no longer fires data_quality_critical
-    "dq_beta_missing": ({"data_quality": {"missing_critical": ["beta"]}}, ["data_quality_critical"],
-                        NEW_MONEY_WAIT_FOR_DATA),
-    "knife": ({"dip_assessment": KNIFE_DIP}, ["falling_knife"], NEW_MONEY_WAIT_FOR_DATA),
+    # B3: a missing beta is disclosed as a data gap and fires no gate
+    "beta_gap": ({"data_quality": {"data_gaps": ["beta_unavailable"]}}, [], UNGATED),
+    "knife": ({"technicals_data": KNIFE_TECH}, ["falling_knife"], NEW_MONEY_WAIT_FOR_DATA),
     "weak_liq": ({"risk_data": {"liquidity": {"avg_dollar_volume": 4e5}}}, ["weak_liquidity"],
                  NEW_MONEY_WAIT_FOR_DATA),
     "liq_missing": ({"risk_data": {"liquidity": {}}}, ["liquidity_missing"], NEW_MONEY_WAIT_FOR_DATA),
@@ -185,17 +184,17 @@ ANALYZE_GATE_ROWS: dict[str, tuple[dict[str, Any], list[str], tuple[str, ...]]] 
     # support wins over every other gate; the card gives data and knife precedence instead
     "etf+dq_tool_failed": ({"support": ETF, "data_quality": {"tool_failures": [{"tool": "technicals"}]}},
                            ["data_quality_critical", "unsupported_instrument"], NEW_MONEY_WATCH),
-    "gbp+knife": ({"support": GBP, "dip_assessment": KNIFE_DIP}, ["falling_knife", "unsupported_currency"],
+    "gbp+knife": ({"support": GBP, "technicals_data": KNIFE_TECH}, ["falling_knife", "unsupported_currency"],
                   NEW_MONEY_WATCH),
-    "knife+dq": ({"dip_assessment": KNIFE_DIP, "data_quality": {"tool_failures": [{"tool": "technicals"}]}},
+    "knife+dq": ({"technicals_data": KNIFE_TECH, "data_quality": {"tool_failures": [{"tool": "technicals"}]}},
                  ["data_quality_critical", "falling_knife"], NEW_MONEY_WAIT_FOR_DATA),
-    "knife+earnings3": ({"dip_assessment": KNIFE_DIP, "events_data": {"earnings": {"days_until": 3}}},
-                        ["earnings_blackout", "falling_knife"], NEW_MONEY_WAIT_FOR_DATA),
+    "knife+earnings3": ({"technicals_data": KNIFE_TECH, "events_data": {"earnings": {"days_until": 3}}},
+                        ["falling_knife", "earnings_blackout"], NEW_MONEY_WAIT_FOR_DATA),
 }
 
 
 def hard_gates(inputs: dict[str, Any]) -> dict[str, Any]:
-    base: dict[str, Any] = {"events_data": {}, "data_quality": {}, "dip_assessment": None,
+    base: dict[str, Any] = {"events_data": {}, "data_quality": {}, "technicals_data": None,
                             "fundamentals_summary": {}, "risk_data": LIQ_OK, "support": US}
     gates: dict[str, Any] = _compute_hard_gates(**{**base, **copy.deepcopy(inputs)})
     return gates
@@ -216,17 +215,23 @@ ANALYZE_PIPELINE_ROWS: dict[str, tuple[dm.Scenario, str, list[str], tuple[str, s
     "gbp_crash": (dm.Scenario("GC analyze_matrix", CRASH, dm.PROFITABLE, dm.CRASH_RISK, summary=dm.GBP_EQUITY),
                   "wait", ["falling_knife", "unsupported_currency"],
                   ("wait_for_entry", "watch", ["unsupported_currency"]), "falling_knife"),
-    # flipped by WP2.1: the knife is evaluated for every instrument (today the dip is not_applicable)
+    # the knife reads technicals for every instrument (WP2.1; the dip stays not_applicable);
+    # flipped by WP2.2: decide() keeps avoid (knife veto)
     "etf_crash": (dm.Scenario("GC analyze_matrix", CRASH, dm.PROFITABLE, dm.CRASH_RISK, summary=dm.ETF),
-                  "avoid", ["unsupported_instrument"], ("avoid", "insufficient_data", ["unsupported_instrument"]),
-                  "not_applicable"),
-    # flipped by WP2.1: B1 fires earnings_unverifiable in analyze (D-6)
+                  "avoid", ["falling_knife", "unsupported_instrument"],
+                  ("avoid", "insufficient_data", ["unsupported_instrument"]), "not_applicable"),
+    # B1 fires earnings_unverifiable in analyze (WP2.1, D-6); the wait candidate passes through.
+    # flipped by WP2.2: the knife veto makes it avoid (D-5a, D-5)
     "crash_earnings_unverifiable": (dm.Scenario("GC analyze_matrix", CRASH, dm.PROFITABLE, dm.CRASH_RISK,
                                                 events=sm.UNVERIFIABLE_EVENTS),
-                                    "wait", ["falling_knife"], ("wait_for_entry", "accumulate", None), "falling_knife"),
+                                    "wait", ["falling_knife", "earnings_unverifiable"],
+                                    ("wait_for_entry", "accumulate", None), "falling_knife"),
+    # the interim hard-gate resolution sends the new-money candidate to wait_for_data (WP2.1);
+    # flipped by WP2.2: the event cap makes it wait (GC-R2 analyze columns, RA.8)
     "strong_earnings_unverifiable": (dm.Scenario("GC analyze_matrix", dm.STRONG, dm.PROFITABLE, dm.CALM,
                                                  events=sm.UNVERIFIABLE_EVENTS),
-                                     "hold_or_add", [], ("hold_or_add", "accumulate", None), "healthy_pullback"),
+                                     "wait_for_data", ["earnings_unverifiable"], ("hold_or_add", "accumulate", None),
+                                     "healthy_pullback"),
     # flipped by WP2.3: policy_action moves to diagnostics.pre_gate_policy (D-9); the equity's
     # hold_or_add also becomes starter in WP2.2 (D-2)
     "etf_strong": (dm.Scenario("GC verify_policy_cap", dm.STRONG, dm.PROFITABLE, dm.CALM, summary=dm.ETF),
@@ -258,8 +263,7 @@ class TestAnalyzeGateBefore:
     @pytest.mark.parametrize("name", ANALYZE_GATE_ROWS)
     def test_gate_resolution_matrix(self, name: str) -> None:
         """GC-C3: every analyze gate sends buy, starter and hold_or_add to wait_for_data (support: watch).
-        Flipped by WP2.2 (decide(): D-2 mapping, D-5 most-restrictive, D-5a outcomes); earn_unverifiable by WP2.1 (B1),
-        and dq_beta_missing's input is retired by WP2.1 (B3)."""
+        Flipped by WP2.2 (decide(): D-2 mapping, D-5 most-restrictive, D-5a outcomes)."""
         inputs, expected_ids, expected_actions = ANALYZE_GATE_ROWS[name]
         gates = hard_gates(inputs)
 
@@ -268,8 +272,8 @@ class TestAnalyzeGateBefore:
 
     @pytest.mark.parametrize("name", ANALYZE_PIPELINE_ROWS)
     async def test_pipeline_rows(self, name: str) -> None:
-        """GC-C3: full analyze on crashed, strong and unsupported charts (the knife is skipped for an ETF).
-        Flipped row by row by WP2.1 (knife scope, B1), WP2.2 (D-2, D-5a) and WP2.3 (D-9), as each row notes."""
+        """GC-C3: full analyze on crashed, strong and unsupported charts (the dip is skipped for an ETF).
+        Flipped row by row by WP2.2 (D-2, D-5a) and WP2.3 (D-9), as each row notes."""
         scenario, action_now, expected_ids, (mid, long, support_gates), dip = ANALYZE_PIPELINE_ROWS[name]
         result = await dm.run(scenario)
         policy = result["policy_action"]

@@ -17,6 +17,7 @@ from typing import Any
 
 import pytest
 
+from stock_analysis.tools.analyze.gates import ANALYZE_GATE_IDS as GATE_IDS
 from stock_analysis.utils import normalize
 from stock_analysis.utils.normalize import SNAPSHOT_IDENTITY_KEYS, build_watchlist_snapshot
 from tests.support import decision_matrix as dm
@@ -73,14 +74,11 @@ def detect(monkeypatch: pytest.MonkeyPatch) -> Detect:
 
 # --- SN-C1, SN-C2: gate ids ------------------------------------------------------------
 
-# Every gate analyze evaluates at 0609fde (decision_card.py:61-77); from WP2.1 the GATES table.
-GATE_IDS = ("data_quality_critical", "earnings_blackout", "falling_knife", "liquidity_missing",
-            "missing_runway", "unsupported_currency", "unsupported_instrument", "weak_liquidity")
-
 
 async def test_every_gate_analyze_evaluates_has_a_case() -> None:
     """SN-C1: guard, set(GATE_IDS) == the gates analyze evaluates (decision_card.hard_gates.checks).
-    CH, flipped by WP2.1: the GATES registry adds gate ids; extend GATE_IDS or read it from GATES."""
+    G from WP2.1: set(GATE_IDS) == checks; WP2.2 adds thesis_broken and near_52w_high by deleting
+    REGISTERED_NOT_EVALUATED."""
     checks = (await dm.run(CLEAN))["decision_card"]["hard_gates"]["checks"]
     assert set(GATE_IDS) == set(checks)
 

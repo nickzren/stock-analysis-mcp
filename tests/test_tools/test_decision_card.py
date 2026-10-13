@@ -8,6 +8,7 @@ from stock_analysis.tools.analyze.decision_card import (
     _resolve_action_now,
     build_decision_card,
 )
+from tests.support.decision_matrix import KNIFE
 
 
 def _empty_policy_action(mid_term: str = "buy") -> dict:
@@ -46,7 +47,7 @@ class TestHardGates:
         gates = _compute_hard_gates(
             events_data={"earnings": {"days_until": 60, "next_date": "2026-07-15"}},
             data_quality={"fundamentals_status": "available"},
-            dip_assessment={"dip_classification": {"type": "healthy_pullback"}},
+            technicals_data=None,
             fundamentals_summary={
                 "valuation": {"valuation_note": None},
                 "burn_metrics": {"status": "not_applicable"},
@@ -61,7 +62,7 @@ class TestHardGates:
         gates = _compute_hard_gates(
             events_data={"earnings": {"days_until": 5}},
             data_quality={},
-            dip_assessment=None,
+            technicals_data=None,
             fundamentals_summary={},
             risk_data={"liquidity": {"avg_dollar_volume": 50_000_000}},
         )
@@ -72,7 +73,7 @@ class TestHardGates:
         gates = _compute_hard_gates(
             events_data={"earnings": {"days_until": 6}},
             data_quality={},
-            dip_assessment=None,
+            technicals_data=None,
             fundamentals_summary={},
             risk_data={"liquidity": {"avg_dollar_volume": 50_000_000}},
         )
@@ -82,7 +83,7 @@ class TestHardGates:
         gates = _compute_hard_gates(
             events_data={},
             data_quality={"fundamentals_status": "missing"},
-            dip_assessment=None,
+            technicals_data=None,
             fundamentals_summary={},
             risk_data={"liquidity": {"avg_dollar_volume": 50_000_000}},
         )
@@ -93,7 +94,7 @@ class TestHardGates:
         gates = _compute_hard_gates(
             events_data={},
             data_quality={},
-            dip_assessment={"dip_classification": {"type": "falling_knife"}},
+            technicals_data=KNIFE,
             fundamentals_summary={},
             risk_data={"liquidity": {"avg_dollar_volume": 50_000_000}},
         )
@@ -104,7 +105,7 @@ class TestHardGates:
         gates = _compute_hard_gates(
             events_data={},
             data_quality={},
-            dip_assessment=None,
+            technicals_data=None,
             fundamentals_summary={
                 "valuation": {"valuation_note": "pe_not_meaningful"},
                 "burn_metrics": {"status": "unavailable"},
@@ -117,7 +118,7 @@ class TestHardGates:
         gates = _compute_hard_gates(
             events_data={},
             data_quality={},
-            dip_assessment=None,
+            technicals_data=None,
             fundamentals_summary={
                 "valuation": {"valuation_note": "pe_not_meaningful"},
                 "burn_metrics": {"status": "available"},
@@ -130,7 +131,7 @@ class TestHardGates:
         gates = _compute_hard_gates(
             events_data={},
             data_quality={},
-            dip_assessment=None,
+            technicals_data=None,
             fundamentals_summary={
                 "valuation": {"valuation_note": None},
                 "burn_metrics": {"status": "unavailable"},
@@ -143,7 +144,7 @@ class TestHardGates:
         gates = _compute_hard_gates(
             events_data={},
             data_quality={},
-            dip_assessment=None,
+            technicals_data=None,
             fundamentals_summary={},
             risk_data={"liquidity": {"avg_dollar_volume": 500_000}},
         )
@@ -153,7 +154,7 @@ class TestHardGates:
         gates = _compute_hard_gates(
             events_data={},
             data_quality={},
-            dip_assessment=None,
+            technicals_data=None,
             fundamentals_summary={},
             risk_data={"liquidity": {"avg_dollar_volume": 2_000_000}},
         )
@@ -163,7 +164,7 @@ class TestHardGates:
         gates = _compute_hard_gates(
             events_data={"earnings": {"days_until": 3}},
             data_quality={"fundamentals_status": "missing"},
-            dip_assessment={"dip_classification": {"type": "falling_knife"}},
+            technicals_data=KNIFE,
             fundamentals_summary={},
             risk_data={"liquidity": {"avg_dollar_volume": 100_000}},
         )
@@ -183,7 +184,7 @@ class TestHardGates:
                 "fundamentals_status": "available",
                 "missing_critical": ["current_price"],
             },
-            dip_assessment=None,
+            technicals_data=None,
             fundamentals_summary={},
             risk_data={"liquidity": {"avg_dollar_volume": 50_000_000}},
         )
@@ -198,7 +199,7 @@ class TestHardGates:
                 "fundamentals_status": "available",
                 "tool_failures": [{"tool": "stock_summary", "error": "timeout"}],
             },
-            dip_assessment=None,
+            technicals_data=None,
             fundamentals_summary={},
             risk_data={"liquidity": {"avg_dollar_volume": 50_000_000}},
         )
@@ -214,7 +215,7 @@ class TestHardGates:
                 "fundamentals_status": "available",
                 "tool_failures": [{"tool": "options_signals", "error": "x"}],
             },
-            dip_assessment=None,
+            technicals_data=None,
             fundamentals_summary={},
             risk_data={"liquidity": {"avg_dollar_volume": 50_000_000}},
         )
@@ -225,7 +226,7 @@ class TestHardGates:
         gates = _compute_hard_gates(
             events_data={},
             data_quality={},
-            dip_assessment=None,
+            technicals_data=None,
             fundamentals_summary={},
             risk_data={"liquidity": {"avg_dollar_volume": None}},
         )
@@ -236,7 +237,7 @@ class TestHardGates:
         gates = _compute_hard_gates(
             events_data={},
             data_quality={},
-            dip_assessment=None,
+            technicals_data=None,
             fundamentals_summary={},
             risk_data={},
         )
@@ -361,7 +362,7 @@ class TestDecisionCardSchema:
             "risk_data": {"liquidity": {"avg_dollar_volume": 50_000_000}},
             "events_data": {"earnings": {"days_until": 60, "next_date": "2026-07-15"}},
             "data_quality": {"fundamentals_status": "available"},
-            "dip_assessment": {"dip_classification": {"type": "healthy_pullback"}},
+            "technicals_data": {},
             "dislocation_framework": {"action": {"add_only_if": ["fcf_turns_positive"]}},
         }
 
