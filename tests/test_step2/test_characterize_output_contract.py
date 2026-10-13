@@ -46,7 +46,7 @@ IMPERATIVE = re.compile(
     r"(?i)^(buy|add|accumulate|start|enter|sell|exit|reduce|trim|hold|wait|avoid|consider)\b"
 )
 THIRD_PARTY_KEY = re.compile(
-    r"analyst|news|headline|insider|institutional|ownership|options|short_interest|catalyst"
+    r"analyst|news|headline|insider|institutional|ownership|options|short_interest|catalyst|governance"
 )
 
 # probe_zone_snapshot (a): a price at the 52-week low classifies as strong_buy before any cap.
@@ -381,7 +381,7 @@ class TestSizingNumbers:
 
 
 class TestPreGateCandidate:
-    @pytest.mark.parametrize("name", sorted(set(dm.SCENARIOS) - KNIFE_ROWS))
+    @pytest.mark.parametrize("name", sorted(set(BEFORE) - KNIFE_ROWS))
     async def test_pre_gate_codes_equal_the_before_table(self, name: str) -> None:
         """OC-G4: the pre-gate candidate's mid- and long-term codes equal before.json's policy column.
         Holds throughout 2a: the knife rows are exempt because the knife override is the one
@@ -424,9 +424,19 @@ class TestThirdPartyConfinement:
             assert text.count(rating) == text.count(f"Analyst consensus: {rating}"), text
             assert not any(headline in text for headline in headlines), text
 
+    async def test_vendor_data_leaves_the_card_unchanged(self) -> None:
+        """OC-G5: V1 is S3 plus every vendor subtree (targets, estimates, short interest, ownership, options,
+        catalyst tags, governance), and its decision_card equals S3's at every tier, so no vendor value
+        reaches the card. Holds throughout 2a (class T)."""
+        vendor = dm.tiers(await dm.run("V1_vendor_rich_plain_avoid"))
+        plain = dm.tiers(await dm.run("S3_plain_avoid"))
+
+        for tier in dm.TIERS:
+            assert vendor[tier]["decision_card"] == plain[tier]["decision_card"], tier
+
 
 class TestSnapshotValuationFields:
-    @pytest.mark.parametrize("name", list(dm.SCENARIOS))
+    @pytest.mark.parametrize("name", list(BEFORE))
     async def test_snapshot_valuation_fields_follow_the_valuation_assessment(self, name: str) -> None:
         """OC-G6: snapshot valuation_gate == action_zones.valuation_assessment.gate and is_unprofitable ==
         (valuation_assessment.is_unprofitable or None), both equal to the recorded 2.0.0 snapshot.

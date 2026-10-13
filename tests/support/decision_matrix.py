@@ -1,12 +1,17 @@
 """Step 2 WP2.0: the analyze decision scenario matrix (offline, every tool stubbed, clock pinned).
 
-The characterization tests in tests/test_step2/ and the committed before table under
+The characterization tests in tests/test_step2/ and the committed fixtures under
 tests/fixtures/decision_matrix/ are built from these scenarios. Their inputs come from the
 Step 2 research probes, ported here so the evidence lives in the repo.
 
-Regenerate the committed fixtures only on purpose (they record the code they were built from):
+The baseline (before.json, README.md, snapshots_2_0_0/) records 0609fde. It is recorded once and
+never overwritten, so later WPs keep the original 2.0.0 snapshots for the 3.0.0 migration tests:
 
-    uv run --frozen --offline python -m tests.support.decision_matrix --write
+    uv run --frozen --offline python -m tests.support.decision_matrix --baseline
+
+A WP that changes decisions records the current table separately (after.json, after.md):
+
+    uv run --frozen --offline python -m tests.support.decision_matrix --after
 """
 
 from __future__ import annotations
@@ -28,6 +33,7 @@ import pytz
 from stock_analysis.tools.analyze.projection import project_analyze_result
 from stock_analysis.utils.market_calendar import last_completed_session
 from stock_analysis.utils.normalize import SNAPSHOT_VERSION
+from stock_analysis.utils.provenance import build_meta, build_provenance
 
 orchestrator = importlib.import_module("stock_analysis.tools.analyze.orchestrator")
 
@@ -161,8 +167,126 @@ NEAR = {"earnings": {"days_until": 3, "next_date": "2026-10-12", "next_date_stat
 
 NEWS = {"articles": [{"title": "Why investors should buy Acme on this dip", "date": "2026-10-08"},
                      {"title": "Acme insiders keep adding shares", "date": "2026-10-07"}]}
-INSIDER_BUYING = {"insider_activity": {"sentiment": "buying", "net_shares_3m": 1000},
-                  "institutional": {"top_holders": [], "total_institutional_pct": 0.7}}
+
+# V1 only: S3 with every vendor subtree populated (output_contract annex §10). Each key is one the real
+# producer emits (tools/news.py, options_signals.py, ownership.py, fundamentals.py); values are synthetic
+# and consistent with ACME at 88. None of it moves the decision or the snapshot.
+VENDOR_AS_OF = "2026-10-10T00:00:00Z"  # the matrix clock's fetch time
+
+
+def vendor_envelope(tool: str, source: str) -> dict[str, Any]:
+    return {"meta": build_meta(tool, 0.0),
+            "data_provenance": {source: build_provenance(source="yfinance", as_of=VENDOR_AS_OF)}}
+
+
+def _article(date: str, title: str, summary: str, slug: str, sentiment: str, positive: list[str] | None,
+             negative: list[str] | None, tags: dict[str, list[str]]) -> dict[str, Any]:
+    return {"date": date, "title": title, "summary": summary, "provider": "Example Wire",
+            "url": f"https://news.example.com/acme/{slug}", "sentiment": sentiment, "matched_positive": positive,
+            "matched_negative": negative, "catalyst_tags": {"bullish": [], "bearish": [], "neutral": [], **tags}}
+
+
+# The two NEWS headlines first; sentiment and catalyst_intelligence are what news.py computes from all five.
+NEWS_VENDOR_RICH = {
+    **vendor_envelope("stock_news", "news"),
+    "period_days": 7, "source_status": "ok", "source": "news", "rejected_count": 0, "article_count": 5,
+    "articles": [
+        _article("2026-10-08", "Why investors should buy Acme on this dip",
+                 "Analysts keep a buy rating on the shares after the pullback.", "buy-the-dip", "positive",
+                 ["buy", "buy rating"], None, {"bullish": ["analyst_upgrade"]}),
+        _article("2026-10-07", "Acme insiders keep adding shares",
+                 "Form 4 filings show a director buy of 8,000 shares in September.", "insiders-adding", "positive",
+                 ["buy"], None, {"bullish": ["insider_buying"]}),
+        _article("2026-10-06", "Acme price target raised to $130 at Example Securities",
+                 "The broker cites steady demand and a 20% net margin.", "price-target-130", "positive",
+                 ["price target raised", "raised"], None, {"bullish": ["analyst_upgrade"]}),
+        _article("2026-10-05", "Acme to host investor day on October 20", "Management will review its five-year plan.",
+                 "investor-day", "neutral", None, None, {"neutral": ["conference_or_presentation"]}),
+        _article("2026-10-05", "Acme named in patent lawsuit by a rival", "The suit seeks unspecified damages.",
+                 "patent-suit", "negative", None, ["lawsuit"], {"bearish": ["litigation_or_investigation"]}),
+    ],
+    "sentiment": {"overall": "positive", "confidence": "moderate", "counts": {"positive": 3, "negative": 1, "neutral": 1},
+                  "method": "keyword_v2",
+                  "headline_triggers": {"positive": ["buy", "buy rating", "price target raised", "raised"],
+                                        "negative": ["lawsuit"]},
+                  "sentiment_7d": "positive", "sample_size_7d": 5, "confidence_7d": "moderate",
+                  "sentiment_30d": "positive", "sample_size_30d": 5, "confidence_30d": "moderate"},
+    "catalyst_intelligence": {"bullish": [{"tag": "analyst_upgrade", "count": 2}, {"tag": "insider_buying", "count": 1}],
+                              "bearish": [{"tag": "litigation_or_investigation", "count": 1}],
+                              "neutral": [{"tag": "conference_or_presentation", "count": 1}],
+                              "sample_size": 5, "method": "keyword_catalyst_v1"},
+    "recent_earnings": None,  # FAR: no report inside the 7-day lookback
+    "warnings": None,
+}
+# Put/call 0.92 and ATM IV 0.32 stay under analyze's signal thresholds (1.5, 0.5).
+OPTIONS_ACTIVE = {
+    **vendor_envelope("options_signals", "options"),
+    "expiration_used": "2026-11-20",
+    "implied_volatility": {"atm_avg_iv": 0.3184, "iv_rank_note": "normal"},
+    "put_call_ratio": {"volume_based": 0.92, "oi_based": 0.81, "signal": "neutral"},
+    "unusual_activity": {"count": 2, "top_strikes": [
+        {"strike": 85.0, "type": "put", "volume": 4200, "open_interest": 1000, "ratio": 4.2},
+        {"strike": 95.0, "type": "call", "volume": 1860, "open_interest": 600, "ratio": 3.1}]},
+    "warnings": None,
+}
+# Net 3m = +8000 +5000 -1000, 6m adds -2500, 12m adds -5000; transactions top 5 by |value| as ownership.py
+# orders them. insider_pct and total_institutional_pct come from major_holders, which yfinance 1.0 never
+# shapes the way ownership.py parses, so live output omits them; the producer's schema has them.
+INSIDER_BUYING = {
+    **vendor_envelope("ownership_analysis", "ownership"),
+    "insider_activity": {
+        "net_shares_3m": 12000.0, "net_shares_6m": 9500.0, "net_shares_12m": 4500.0, "sentiment": "buying",
+        "recent_transactions": [
+            {"date": "2026-09-22", "insider": "DOE JANE", "text": "Purchase at price 87.50 per share.",
+             "shares": 8000.0, "value": 700000.0},
+            {"date": "2026-08-14", "insider": "ROE RICHARD", "text": "Purchase at price 91.00 per share.",
+             "shares": 5000.0, "value": 455000.0},
+            {"date": "2025-11-10", "insider": "ROE RICHARD", "text": "Sale at price 85.00 per share.",
+             "shares": 5000.0, "value": 425000.0},
+            {"date": "2026-05-20", "insider": "POE ALEX", "text": "Sale at price 98.00 per share.",
+             "shares": 2500.0, "value": 245000.0},
+            {"date": "2026-07-30", "insider": "POE ALEX", "text": "Sale at price 93.00 per share.",
+             "shares": 1000.0, "value": 93000.0}],
+        "insider_pct": 0.0125},
+    "institutional": {
+        "top_holders": [
+            {"name": "Example Capital Management LLC", "shares": 9200000.0, "pct_held": 0.081,
+             "value": 874000000.0, "date_reported": "2026-06-30"},
+            {"name": "Sample Index Advisors Inc", "shares": 7100000.0, "pct_held": 0.0625,
+             "value": 674500000.0, "date_reported": "2026-06-30"},
+            {"name": "Placeholder Asset Partners LP", "shares": 3400000.0, "pct_held": 0.0299,
+             "value": 323000000.0, "date_reported": "2026-06-30"}],
+        "total_institutional_pct": 0.7},
+    "warnings": None,
+}
+# PROFITABLE plus the blocks fundamentals_snapshot always emits. No data_provenance: it would feed data_quality.
+PROFITABLE_VENDOR_RICH = {
+    **PROFITABLE,
+    "analyst_coverage": {"rating": "strong_buy", "rating_score": 1.6, "num_analysts": 20,
+                         "price_target_low": 95.0, "price_target_mean": 130.0, "price_target_high": 160.0,
+                         "price_target_median": 128.0, "upside_to_mean_target": 0.4773,
+                         "upside_to_median_target": 0.4545},
+    "short_interest": {"shares_short": 3_366_000, "short_pct_of_float": 0.03, "days_to_cover": 0.6,
+                       "short_change_mom": 0.1, "as_of_date": "2026-09-15"},
+    "ownership": {"insider_pct": 0.0125, "institutional_pct": 0.7, "float_shares": 112_200_000},
+    "governance": {"audit_risk": 3, "board_risk": 4, "compensation_risk": 5, "shareholder_rights_risk": 2,
+                   "overall_risk": 4},
+    "analyst_estimates": {
+        "eps_current_quarter": {"avg": 2.9, "low": 2.7, "high": 3.1, "num_analysts": 18.0},
+        "eps_next_quarter": {"avg": 3.0, "low": 2.8, "high": 3.2, "num_analysts": 17.0},
+        "eps_current_year": {"avg": 11.4, "low": 10.9, "high": 11.9, "num_analysts": 20.0},
+        "eps_next_year": {"avg": 12.3, "low": 11.5, "high": 13.2, "num_analysts": 19.0},
+        "rev_current_quarter": {"avg": 1.35e9, "low": 1.3e9, "high": 1.4e9, "num_analysts": 16.0},
+        "rev_next_quarter": {"avg": 1.45e9, "low": 1.38e9, "high": 1.52e9, "num_analysts": 15.0},
+        "rev_current_year": {"avg": 5.6e9, "low": 5.4e9, "high": 5.8e9, "num_analysts": 18.0},
+        "rev_next_year": {"avg": 6.0e9, "low": 5.7e9, "high": 6.3e9, "num_analysts": 17.0},
+        "forward_pe_from_estimates": 7.15},
+    "quality": {"roic": 0.18, "gross_profit": 2.6e9, "ebitda": 1.5e9, "ebitda_margin": 0.27,
+                "revenue_per_share": 49.3, "quick_ratio": 1.4},
+    "valuation_context": {"pe_current": 9.0, "pe_5y_avg": None, "pe_percentile_5y": None, "ps_current": None,
+                          "ps_5y_avg": None, "history_points": 0, "history_span_years": None, "status": "partial",
+                          "status_reason": "historical_pe_ps_unavailable"},
+}
 
 EQUITY = {"name": "Acme", "currency": "USD", "quote_type": "EQUITY", "market_cap": 1e10}
 ETF = {"name": "SPDR S&P 500", "currency": "USD", "quote_type": "ETF", "market_cap": None}
@@ -227,8 +351,9 @@ SCENARIOS: dict[str, Scenario] = {
     "C1_headwind_hold_or_add": Scenario("OC C1", STRONG, HEADWIND, CALM),
     "C2_headwind_earnings_gate": Scenario("OC C2", STRONG, HEADWIND, CALM, events=NEAR),
     "C3_headwind_plain_avoid": Scenario("OC C3", POOR_NOT_KNIFE, HEADWIND, CALM),
-    "V1_vendor_rich_plain_avoid": Scenario("OC V1", POOR_NOT_KNIFE, PROFITABLE, CALM, news=NEWS,
-                                           ownership=INSIDER_BUYING),
+    "V1_vendor_rich_plain_avoid": Scenario("OC V1", POOR_NOT_KNIFE, PROFITABLE_VENDOR_RICH, CALM,
+                                           news=NEWS_VENDOR_RICH, ownership=INSIDER_BUYING,
+                                           options=OPTIONS_ACTIVE),
     # Holder-guidance cases (policy_holder annex §7).
     "A_broken_bearish": Scenario("PH A", BEARISH, POOR_BUSINESS, MODERATE),
     "B_broken_bearish_knife": Scenario("PH B", KNIFE, POOR_BUSINESS, MODERATE),
@@ -348,10 +473,14 @@ async def build() -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
     return table, snapshots
 
 
-def _markdown(table: dict[str, Any]) -> str:
-    lines = ["# Decision matrix: before table", "",
-             "Generated by `python -m tests.support.decision_matrix --write` from the code it was recorded",
-             "on. Do not edit by hand. Full rows: `before.json`.", "",
+def _dump(value: Any) -> str:
+    return json.dumps(value, indent=2, sort_keys=True) + "\n"
+
+
+def _markdown(table: dict[str, Any], name: str, flag: str) -> str:
+    lines = [f"# Decision matrix: {name} table", "",
+             f"Generated by `python -m tests.support.decision_matrix {flag}` from the code it was recorded",
+             f"on. Do not edit by hand. Full rows: `{name}.json`.", "",
              "| Scenario | Source | action_now | Hard gates | Policy mid / long | Modes core / balanced / speculative |",
              "|---|---|---|---|---|---|"]
     for name, row in table.items():
@@ -361,25 +490,41 @@ def _markdown(table: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def write_fixtures() -> None:
+def record_baseline(fixture_dir: Path = FIXTURE_DIR) -> None:
+    """Write the baseline files that are missing. Refuses, writing nothing, if any existing one would change."""
     if SNAPSHOT_VERSION != "2.0.0":
         raise SystemExit(f"refusing to record 2.0.0 snapshots from SNAPSHOT_VERSION {SNAPSHOT_VERSION}")
     table, snapshots = asyncio.run(build())
-    FIXTURE_DIR.mkdir(parents=True, exist_ok=True)
-    (FIXTURE_DIR / "before.json").write_text(json.dumps(table, indent=2, sort_keys=True) + "\n")
-    (FIXTURE_DIR / "README.md").write_text(_markdown(table))
-    SNAPSHOT_DIR.mkdir(exist_ok=True)
-    for name, snapshot in snapshots.items():
-        (SNAPSHOT_DIR / f"{name}.json").write_text(json.dumps(snapshot, indent=2, sort_keys=True) + "\n")
+    files = {fixture_dir / "before.json": _dump(table), fixture_dir / "README.md": _markdown(table, "before", "--baseline")}
+    files |= {fixture_dir / SNAPSHOT_DIR.name / f"{name}.json": _dump(snapshot) for name, snapshot in snapshots.items()}
+    changed = [path.relative_to(fixture_dir).as_posix() for path, text in files.items()
+               if path.exists() and path.read_bytes() != text.encode()]
+    if changed:
+        raise SystemExit(f"refusing to overwrite the recorded baseline: {', '.join(changed)}")
+    for path, text in files.items():
+        if not path.exists():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(text.encode())
+
+
+def write_after(fixture_dir: Path = FIXTURE_DIR) -> None:
+    """Refresh the current decision table. Never touches the baseline."""
+    table, _ = asyncio.run(build())
+    fixture_dir.mkdir(parents=True, exist_ok=True)
+    (fixture_dir / "after.json").write_text(_dump(table))
+    (fixture_dir / "after.md").write_text(_markdown(table, "after", "--after"))
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Write the WP2.0 decision-matrix fixtures.")
-    parser.add_argument("--write", action="store_true", help="overwrite tests/fixtures/decision_matrix/")
+    parser = argparse.ArgumentParser(description="Write the decision-matrix fixtures.")
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--baseline", action="store_true", help="record the missing 0609fde baseline files")
+    mode.add_argument("--after", action="store_true", help="refresh after.json and after.md")
     args = parser.parse_args()
-    if not args.write:
-        parser.error("pass --write to regenerate the committed fixtures")
-    write_fixtures()
+    if args.baseline:
+        record_baseline()
+    else:
+        write_after()
 
 
 if __name__ == "__main__":

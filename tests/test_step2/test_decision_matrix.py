@@ -1,12 +1,14 @@
-"""WP2.0: the decision scenario matrix and its committed before table.
+"""WP2.0: the decision scenario matrix and its committed baseline.
 
-`tests/fixtures/decision_matrix/` records today's decisions and 2.0.0 snapshots for every
-scenario in `tests/support/decision_matrix.py`. Later Step 2 WPs change rows on purpose and
-record each intended change in their before/after table.
+`tests/fixtures/decision_matrix/` records 0609fde's decisions (before.json) and 2.0.0 snapshots for
+every scenario in `tests/support/decision_matrix.py`. The baseline is never re-recorded: later Step 2
+WPs change rows on purpose and record the current table separately (after.json, `--after`).
 """
 
+import hashlib
 import json
 from datetime import UTC
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -15,6 +17,57 @@ from stock_analysis.tools.diff_analysis import validate_previous_snapshot
 from tests.support import decision_matrix as dm
 
 BEFORE = json.loads((dm.FIXTURE_DIR / "before.json").read_text())
+BASELINE_SHA256 = "167642b05e592bf77317f45025fc563c3ed203e5a86dedc8b5e8df4a569f7e4d"
+
+
+# V1's vendor subtrees and the tiers that project them (projection.py: governance, ownership_flow and
+# options_signals are full-tier only).
+V1_STANDARD_PATHS = [
+    "news_summary.catalyst_intelligence.bullish", "news_summary.catalyst_intelligence.bearish",
+    "news_summary.catalyst_intelligence.neutral", "news_summary.sentiment.overall",
+    "short_interest.shares_short", "short_interest.short_pct_of_float", "short_interest.days_to_cover",
+    "short_interest.short_change_mom", "short_interest.as_of_date",
+    "ownership.insider_pct", "ownership.institutional_pct", "ownership.float_shares",
+    "analyst_coverage.price_target_low", "analyst_coverage.price_target_median", "analyst_coverage.price_target_high",
+    "fundamentals_summary.analyst_estimates.eps_next_year", "fundamentals_summary.analyst_estimates.rev_next_quarter",
+    "section_summaries.ownership", "section_summaries.short_interest", "section_summaries.governance",
+    "section_summaries.valuation_context",
+]
+V1_FULL_PATHS = V1_STANDARD_PATHS + [
+    "options_signals.expiration_used", "options_signals.implied_volatility.atm_avg_iv",
+    "options_signals.put_call_ratio.volume_based", "options_signals.unusual_activity.top_strikes",
+    "ownership_flow.insider_activity.recent_transactions", "ownership_flow.institutional.top_holders",
+    "governance.overall_risk", "quality.roic", "valuation_context.status", "decision_modes.speculative.next_90d_catalysts",
+    "data_provenance.news", "data_provenance.options", "data_provenance.ownership",
+]
+
+
+def at(payload: dict[str, Any], path: str) -> Any:
+    for key in path.split("."):
+        payload = (payload or {}).get(key)
+    return payload
+
+
+def baseline_sha256(fixture_dir: Path) -> str:
+    digest = hashlib.sha256()
+    paths = [fixture_dir / "before.json", fixture_dir / "README.md", *(fixture_dir / dm.SNAPSHOT_DIR.name).glob("*.json")]
+    for path in sorted(paths):
+        digest.update(path.relative_to(fixture_dir).as_posix().encode() + b"\0" + path.read_bytes() + b"\0")
+    return digest.hexdigest()
+
+
+@pytest.fixture
+def one_row_build(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    """Replace dm.build with S1's recorded row and snapshot, so the generator tests stay fast."""
+    snapshot = json.loads((dm.SNAPSHOT_DIR / "S1_hold_or_add_clean.json").read_text())
+    built: dict[str, Any] = {"table": {"S1_hold_or_add_clean": BEFORE["S1_hold_or_add_clean"]},
+                             "snapshots": {"S1_hold_or_add_clean": snapshot}}
+
+    async def build() -> tuple[dict[str, Any], dict[str, Any]]:
+        return built["table"], built["snapshots"]
+
+    monkeypatch.setattr(dm, "build", build)
+    return built
 
 
 def _normalized(value: Any) -> Any:
@@ -24,7 +77,9 @@ def _normalized(value: Any) -> Any:
 class TestBeforeTable:
     async def test_the_committed_before_table_matches_the_code(self) -> None:
         """DM-CH1: every scenario's decision digest equals tests/fixtures/decision_matrix/before.json.
-        Flipped row by row by WP2.1-2.4, each of which lists its intended changes."""
+        CH: flipped by the first WP that changes a row (expected WP2.1), which records after.json with
+        `--after` and points this test at it; each WP lists its intended row changes. before.json stays
+        as recorded (DM-G6)."""
         table, _ = await dm.build()
 
         assert set(table) == set(BEFORE)
@@ -33,7 +88,9 @@ class TestBeforeTable:
 
     async def test_the_recorded_snapshots_match_the_code(self) -> None:
         """DM-CH2: each scenario's watchlist_snapshot equals its recorded 2.0.0 fixture.
-        Flipped by WP2.4 (snapshot 3.0.0); the 2.0.0 fixtures stay as recorded."""
+        CH: flipped by the first WP that changes a snapshot field (expected WP2.1, through hard_gate_ids
+        or decision_action_now), which narrows it to the unchanged rows; WP2.4 (snapshot 3.0.0) retires
+        it. The 2.0.0 fixtures stay as recorded (DM-G6) for the 3.0.0 migration tests."""
         _, snapshots = await dm.build()
 
         assert {p.stem for p in dm.SNAPSHOT_DIR.glob("*.json")} == set(snapshots)
@@ -65,14 +122,75 @@ class TestMatrixGuards:
         assert validate_previous_snapshot(snapshot, "ACME") == []
 
     def test_the_generator_refuses_to_record_from_another_snapshot_version(
-        self, monkeypatch: pytest.MonkeyPatch
+        self, monkeypatch: pytest.MonkeyPatch, one_row_build: dict[str, Any], tmp_path: Path
     ) -> None:
         """DM-G4: snapshots_2_0_0/ can only be written by 2.0.0 code. Holds throughout Step 2."""
         monkeypatch.setattr(dm, "SNAPSHOT_VERSION", "3.0.0")
 
-        with pytest.raises(SystemExit, match="refusing"):
-            dm.write_fixtures()
+        with pytest.raises(SystemExit, match="^refusing to record 2.0.0 snapshots from SNAPSHOT_VERSION 3.0.0$"):
+            dm.record_baseline(tmp_path)
+        assert list(tmp_path.iterdir()) == []
 
     def test_the_default_clock_is_friday_evening_after_the_close(self) -> None:
         """DM-G5: the shared clock is off-session, after Friday 2026-10-09's close. Holds throughout Step 2."""
         assert dm.FRIDAY_EVENING.astimezone(UTC).isoformat() == "2026-10-10T00:00:00+00:00"
+
+    def test_the_committed_baseline_is_byte_for_byte_as_recorded(self) -> None:
+        """DM-G6: before.json, README.md and snapshots_2_0_0/ are exactly the files recorded from 0609fde
+        at WP2.0. Holds throughout Step 2: the baseline is never re-recorded."""
+        assert baseline_sha256(dm.FIXTURE_DIR) == BASELINE_SHA256
+
+    def test_recording_the_baseline_never_overwrites_it(self, one_row_build: dict[str, Any], tmp_path: Path) -> None:
+        """DM-G7: --baseline writes missing files and accepts identical ones, but refuses, writing nothing,
+        when an existing file would change. Holds throughout Step 2."""
+        dm.record_baseline(tmp_path)
+        recorded = baseline_sha256(tmp_path)
+        dm.record_baseline(tmp_path)
+        assert baseline_sha256(tmp_path) == recorded
+
+        snapshot_file = tmp_path / dm.SNAPSHOT_DIR.name / "S1_hold_or_add_clean.json"
+        snapshot_text = snapshot_file.read_text()
+        (tmp_path / "README.md").unlink()
+        snapshots = one_row_build["snapshots"]
+        snapshots["S1_hold_or_add_clean"] = {**snapshots["S1_hold_or_add_clean"], "decision_action_now": "wait"}
+
+        with pytest.raises(SystemExit, match="refusing to overwrite the recorded baseline: snapshots_2_0_0/S1"):
+            dm.record_baseline(tmp_path)
+        assert snapshot_file.read_text() == snapshot_text
+        assert not (tmp_path / "README.md").exists()
+
+    def test_a_table_only_change_is_refused_too(self, one_row_build: dict[str, Any], tmp_path: Path) -> None:
+        """DM-G7: a changed row with an unchanged snapshot (WP2.2-2.3 move modes, dip and sizing that way)
+        is refused for before.json and README.md. Holds throughout Step 2."""
+        dm.record_baseline(tmp_path)
+        recorded = baseline_sha256(tmp_path)
+        one_row_build["table"]["S1_hold_or_add_clean"] = {**BEFORE["S1_hold_or_add_clean"], "action_now": "wait"}
+
+        with pytest.raises(SystemExit, match="refusing to overwrite the recorded baseline: before.json, README.md$"):
+            dm.record_baseline(tmp_path)
+        assert baseline_sha256(tmp_path) == recorded
+
+    def test_the_after_table_leaves_the_baseline_alone(self, one_row_build: dict[str, Any], tmp_path: Path) -> None:
+        """DM-G8: --after writes only after.json and after.md. Holds throughout Step 2."""
+        dm.record_baseline(tmp_path)
+        recorded = baseline_sha256(tmp_path)
+        one_row_build["table"]["S1_hold_or_add_clean"] = {**BEFORE["S1_hold_or_add_clean"], "action_now": "wait"}
+
+        dm.write_after(tmp_path)
+
+        assert baseline_sha256(tmp_path) == recorded
+        assert json.loads((tmp_path / "after.json").read_text())["S1_hold_or_add_clean"]["action_now"] == "wait"
+        assert sorted(p.name for p in tmp_path.iterdir()) == ["README.md", "after.json", "after.md", "before.json",
+                                                              dm.SNAPSHOT_DIR.name]
+
+    async def test_v1_carries_every_vendor_subtree(self) -> None:
+        """DM-G9: V1 populates catalyst, options, ownership, short-interest, analyst, governance, quality and
+        valuation-context data at every tier that projects them, so the output-contract checks see real
+        vendor leaves; the decision tier still shows the insider pro and signal. Holds throughout Step 2."""
+        shown = dm.tiers(await dm.run("V1_vendor_rich_plain_avoid"))
+
+        for tier, paths in (("standard", V1_STANDARD_PATHS), ("full", V1_FULL_PATHS)):
+            empty = [path for path in paths if at(shown[tier], path) in (None, "", [], {})]
+            assert empty == [], tier
+        assert shown["decision"]["watchlist_snapshot"]["bullish_signals"] == ["insider_buying"]
+        assert shown["decision"]["verdict"]["pros"] == ["Insider buying activity (net positive 3M)"]
