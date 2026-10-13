@@ -436,24 +436,6 @@ class TestGatesThatDoNotBind:
 
 
 class TestBeforeTableRows:
-    async def test_ch1_analyze_calls_events_without_its_clock(self) -> None:
-        """RA-CH1: analyze calls events_calendar with the symbol only, so events reads the wall
-        clock instead of analyze's pinned _now (orchestrator.py:430).
-        CH: flipped by WP2.1 (RA.12, BL-D9 clock half: analyze passes _now)."""
-        scenario = dm.SCENARIOS["S2_buy_clean"]
-        calls: list[tuple[tuple[Any, ...], dict[str, Any]]] = []
-        with dm.stubbed(scenario), pytest.MonkeyPatch.context() as mp:
-            stub = dm.orchestrator.events_calendar
-
-            async def spy(symbol: str, *args: Any, **kwargs: Any) -> dict[str, Any]:
-                calls.append((args, kwargs))
-                return await stub(symbol)
-
-            mp.setattr(dm.orchestrator, "events_calendar", spy)
-            await dm.orchestrator.analyze_stock("ACME", account_size=scenario.account_size, _now=scenario.now)
-
-        assert calls == [((), {})]
-
     @pytest.mark.parametrize(("evidence", "today"), [(E2, date(2026, 10, 8)), (E1, date(2026, 10, 15))],
                              ids=["E2_active_window", "E15_single_date_day_0"])
     async def test_ch2_analyze_next_review_is_the_run_date(
@@ -467,19 +449,6 @@ class TestBeforeTableRows:
         card = (await dm.run("S2_buy_clean", events=events_data, now=evening(today)))["decision_card"]
 
         assert card["next_review"] == {"date": today.isoformat(), "reason": "next earnings (~0 days)"}
-
-    async def test_ch3_day_zero_drops_the_earnings_warning(self, events_at: EventsAt) -> None:
-        """RA-CH3: earnings_within_7_days is missing on day 0 (E2 on Oct 8) though present at
-        3 days (E1 on Oct 12): orchestrator.py:948 tests days_until for truthiness.
-        CH: flipped by WP2.1 (the new B4 test: days_until 0 gives earnings_within_7_days)."""
-        warnings: dict[int, list[str]] = {}
-        for evidence, today in ((E2, date(2026, 10, 8)), (E1, date(2026, 10, 12))):
-            events_data = await events_at(evidence, today)
-            result = await dm.run("S2_buy_clean", events=events_data, now=evening(today))
-            warnings[events_data["earnings"]["days_until"]] = result["data_quality"]["warnings"]
-
-        assert "earnings_within_7_days" not in warnings[0]
-        assert "earnings_within_7_days" in warnings[3]
 
     @pytest.mark.parametrize(("events_data", "tool_failures"),
                              [(UNVERIFIABLE, []), ({}, [{"tool": "events_calendar", "error": "timeout"}])],
@@ -497,21 +466,3 @@ class TestBeforeTableRows:
         assert (with_setup["action"], "earnings_unverifiable" in blocker_ids(with_setup)) == ("watch", True)
         assert no_setup["action"] == "no_setup"
         assert "earnings_unverifiable" not in blocker_ids(no_setup)
-
-    @pytest.mark.parametrize(("evidence", "today"), [(E2, date(2026, 10, 8)), (E1, date(2026, 10, 15))],
-                             ids=["E2_active_window", "E15_single_date_day_0"])
-    async def test_ch5_blackout_reason_reads_zero_days(
-        self, events_at: EventsAt, evidence: Evidence, today: date
-    ) -> None:
-        """RA-CH5: in analyze and on the trade card the blackout reason reads 'earnings in 0 days'
-        for an active window and for a single date on day 0 (gates.py:30).
-        CH: flipped by WP2.1 (RA.15 reason text: 'earnings window Oct 7-15 active', 'earnings today')."""
-        events_data = await events_at(evidence, today)
-        analyze_card = (await dm.run("S2_buy_clean", events=events_data, now=evening(today)))["decision_card"]
-        trade_card = build_card(events_data=events_data)
-
-        def blackout_reasons(gates: list[dict[str, str]]) -> list[str]:
-            return [g["reason"] for g in gates if g["id"] == "earnings_blackout"]
-
-        assert blackout_reasons(analyze_card["hard_gates"]["blocking"]) == ["earnings in 0 days (<= 5)"]
-        assert blackout_reasons(trade_card["blockers"]) == ["earnings in 0 days (<= 5)"]

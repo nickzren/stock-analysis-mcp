@@ -30,7 +30,7 @@ from stock_analysis.tools.analyze.executive_summary import (
     build_executive_summary,
     build_policy_action,
 )
-from stock_analysis.tools.analyze.gates import check_price_freshness
+from stock_analysis.tools.analyze.gates import check_price_freshness, earnings_window
 from stock_analysis.tools.analyze.investor_profile import (
     build_decision_modes,
     resolve_investor_profile,
@@ -429,7 +429,7 @@ async def analyze_stock(
                 risk_per_trade=investor_profile.get("risk_per_trade_decimal") or 0.01,
             ),
         ),
-        ("events_calendar", events_calendar(normalized_symbol)),
+        ("events_calendar", events_calendar(normalized_symbol, _now=now)),
         ("stock_news", stock_news(normalized_symbol)),
         ("ownership_analysis", ownership_analysis(normalized_symbol)),
         ("options_signals", options_signals(normalized_symbol)),
@@ -947,7 +947,7 @@ async def analyze_stock(
         missing_critical.append("current_price")
 
     warnings: list[str] = []
-    if earnings.get("days_until") and earnings.get("days_until") <= 7:
+    if earnings_window(earnings, now.date()).warns:
         warnings.append("earnings_within_7_days")
     bar_validity = tech_data.get("bar_validity")
     if bar_validity:
@@ -1149,6 +1149,7 @@ async def analyze_stock(
         data_quality=data_quality,
         technicals_data=tech_data,
         dislocation_framework=dislocation_framework,
+        now=now,
         freshness_blockers=price_freshness_blockers,
     )
 

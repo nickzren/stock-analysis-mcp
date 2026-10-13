@@ -506,7 +506,7 @@ class TestToolResponseSchemas:
                 },
             }
 
-        async def fake_events(symbol: str) -> dict[str, object]:
+        async def fake_events(symbol: str, _now: datetime | None = None) -> dict[str, object]:
             return {
                 "symbol": symbol,
                 "earnings": {
@@ -815,7 +815,7 @@ class TestToolResponseSchemas:
                 },
             }
 
-        async def fake_events(symbol: str) -> dict[str, object]:
+        async def fake_events(symbol: str, _now: datetime | None = None) -> dict[str, object]:
             resolved_symbols.append(symbol)
             return {
                 "symbol": symbol,

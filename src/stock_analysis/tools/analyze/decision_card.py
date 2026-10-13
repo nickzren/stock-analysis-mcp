@@ -223,7 +223,7 @@ def _build_conditions(
     }
 
 
-def _build_next_review(events_data: dict[str, Any], now: datetime | None = None) -> dict[str, Any]:
+def _build_next_review(events_data: dict[str, Any], now: datetime) -> dict[str, Any]:
     """Pick the next review date: next earnings if within ~90 days, else default."""
     earnings = events_data.get("earnings") or {}
     next_earnings = earnings.get("next_date")
@@ -239,8 +239,7 @@ def _build_next_review(events_data: dict[str, Any], now: datetime | None = None)
             "reason": f"next earnings (~{int(days_until_earnings)} days)",
         }
 
-    anchor = now or datetime.now()
-    review_date = anchor + timedelta(days=_DEFAULT_REVIEW_HORIZON_DAYS)
+    review_date = now + timedelta(days=_DEFAULT_REVIEW_HORIZON_DAYS)
     return {
         "date": review_date.date().isoformat(),
         "reason": f"default {_DEFAULT_REVIEW_HORIZON_DAYS}-day re-evaluation",
@@ -259,6 +258,7 @@ def build_decision_card(
     data_quality: dict[str, Any],
     technicals_data: dict[str, Any] | None,
     dislocation_framework: dict[str, Any] | None,
+    now: datetime,
     freshness_blockers: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Build the compact small-account decision card.
@@ -296,7 +296,7 @@ def build_decision_card(
         "entry": _build_entry(action_zones, summary),
         "exit": _build_exit(action_zones),
         "conditions": _build_conditions(policy_action, hard_gates, dislocation_framework),
-        "next_review": _build_next_review(events_data),
+        "next_review": _build_next_review(events_data, now),
         "confidence": verdict.get("confidence", "low"),
         "horizon_fit": {
             "mid_term": policy_action.get("mid_term"),

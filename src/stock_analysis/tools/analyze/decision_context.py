@@ -919,7 +919,7 @@ def build_decision_context(
 
     # === NEXT CATALYST ===
     next_catalyst: dict[str, Any] | None = None
-    if days_until_earnings is not None and days_until_earnings > 0 and next_earnings_date:
+    if days_until_earnings is not None and days_until_earnings >= 0 and next_earnings_date:
         next_catalyst = {
             "event": "earnings",
             "date": next_earnings_date,

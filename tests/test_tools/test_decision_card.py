@@ -1,5 +1,7 @@
 """Tests for the small-account decision card and its hard gates."""
 
+from datetime import datetime
+
 import pytest
 
 from stock_analysis.tools.analyze.decision_card import (
@@ -8,7 +10,7 @@ from stock_analysis.tools.analyze.decision_card import (
     _resolve_action_now,
     build_decision_card,
 )
-from tests.support.decision_matrix import KNIFE
+from tests.support.decision_matrix import ET, KNIFE
 
 
 def _empty_policy_action(mid_term: str = "buy") -> dict:
@@ -364,6 +366,7 @@ class TestDecisionCardSchema:
             "data_quality": {"fundamentals_status": "available"},
             "technicals_data": {},
             "dislocation_framework": {"action": {"add_only_if": ["fcf_turns_positive"]}},
+            "now": ET.localize(datetime(2026, 5, 16, 10, 0)),
         }
 
     def test_full_card_has_all_top_level_keys(self, fixture: dict) -> None:

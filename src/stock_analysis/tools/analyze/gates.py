@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 import pytz
@@ -28,23 +29,108 @@ WEAK_LIQUIDITY_DOLLARS_PER_DAY = 1_000_000.0
 # Days before earnings during which entries are blocked.
 EARNINGS_BLACKOUT_DAYS = 5
 
+# Days before earnings during which analyze's data_quality warns (earnings_within_7_days).
+EARNINGS_WARNING_DAYS = 7
+
 # Falling-knife rubric threshold (same rubric as dip assessment).
 FALLING_KNIFE_SCORE_THRESHOLD = 4
 
+Interval = tuple[date, date]
+_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")  # not %b: locale
+
+
+@dataclass(frozen=True)
+class EarningsWindow:
+    """One reading of the events tool's earnings block (B4)."""
+
+    fires: bool  # the blackout predicate: 0 <= days_until <= EARNINGS_BLACKOUT_DAYS
+    days_until: int | None
+    events_today: date | None  # next_date - days_until: the day the events tool ran
+    intervals: tuple[Interval, ...]  # every shown earnings interval, sorted and unique
+    active_window: Interval | None  # a multi-day window containing events_today
+    datable: bool  # fires, and the shown intervals cover the caller's today, the events run date
+    warns: bool  # 0 <= days_until <= EARNINGS_WARNING_DAYS
+    reason: str | None  # the blackout reason, iff fires
+
+    def covers(self, day: date) -> tuple[Interval, ...]:
+        return _covering(self.intervals, day)
+
+
+def _covering(intervals: tuple[Interval, ...], day: date) -> tuple[Interval, ...]:
+    """The intervals that black out ``day``: not over, and starting within the blackout reach."""
+    return tuple((start, end) for start, end in intervals
+                 if end >= day and (max(start, day) - day).days <= EARNINGS_BLACKOUT_DAYS)
+
+
+def _iso_day(value: Any) -> date | None:
+    return _iso_date(value[:10]) if isinstance(value, str) else None
+
+
+def _interval(window: Any) -> Interval | None:
+    """A window's (start, end); None when either date is unparsable or the window is reversed."""
+    if not isinstance(window, Mapping):
+        return None
+    start, end = _iso_day(window.get("start")), _iso_day(window.get("end"))
+    if start is None or end is None or end < start:
+        return None
+    return start, end
+
+
+def _format_interval(start: date, end: date) -> str:
+    head = f"{_MONTHS[start.month - 1]} {start.day}"
+    if start.year != end.year:
+        return f"{head}, {start.year}–{_MONTHS[end.month - 1]} {end.day}, {end.year}"
+    if start.month != end.month:
+        return f"{head}–{_MONTHS[end.month - 1]} {end.day}"
+    return f"{head}–{end.day}"
+
+
+def earnings_window(earnings: Mapping[str, Any] | None, today: date | None) -> EarningsWindow:
+    """The blackout, the warning and the shown earnings intervals behind them.
+
+    The reason describes the evidence, so it is anchored on the events run date; ``today`` only
+    decides datability (None: never datable).
+    """
+    earnings = earnings if isinstance(earnings, Mapping) else {}
+    raw_days = earnings.get("days_until")
+    days: float | None = raw_days if isinstance(raw_days, (int, float)) else None
+    fires = days is not None and 0 <= days <= EARNINGS_BLACKOUT_DAYS
+    warns = days is not None and 0 <= days <= EARNINGS_WARNING_DAYS
+    days_until = int(days) if days is not None and math.isfinite(days) else None
+
+    windows = earnings.get("windows")
+    windows = windows if isinstance(windows, list) else []
+    shown = [interval for interval in map(_interval, windows) if interval]
+    candidates = earnings.get("candidate_dates")
+    if isinstance(candidates, Mapping):
+        shown += [(day, day) for day in map(_iso_day, candidates.values()) if day]
+    next_date = _iso_day(earnings.get("next_date"))
+    if next_date and not any(start <= next_date <= end for start, end in shown):
+        shown.append((next_date, next_date))
+    intervals = tuple(sorted(set(shown)))
+
+    events_today = None if next_date is None or days_until is None else next_date - timedelta(days=days_until)
+    active = None if events_today is None else next(
+        (interval for interval in map(_interval, [earnings.get("next_window"), *windows])
+         if interval and interval[0] < interval[1] and interval[0] <= events_today <= interval[1]), None)
+
+    reason = None
+    if fires:
+        if active is not None:
+            reason = f"earnings window {_format_interval(*active)} active"
+        elif days_until == 0:
+            reason = "earnings today"
+        else:
+            reason = f"earnings in {days_until} days (<= {EARNINGS_BLACKOUT_DAYS})"
+    datable = fires and today is not None and events_today == today and bool(_covering(intervals, today))
+    return EarningsWindow(fires, days_until, events_today, intervals, active, datable, warns, reason)
+
 
 def check_earnings_blackout(events_data: dict[str, Any]) -> tuple[bool, dict[str, str] | None]:
-    earnings = events_data.get("earnings") or {}
-    days_until = earnings.get("days_until")
-    fired = (
-        isinstance(days_until, (int, float))
-        and 0 <= days_until <= EARNINGS_BLACKOUT_DAYS
-    )
-    if not fired or not isinstance(days_until, (int, float)):
+    window = earnings_window(events_data.get("earnings"), None)
+    if window.reason is None:
         return False, None
-    return True, {
-        "id": "earnings_blackout",
-        "reason": f"earnings in {int(days_until)} days (<= {EARNINGS_BLACKOUT_DAYS})",
-    }
+    return True, {"id": "earnings_blackout", "reason": window.reason}
 
 
 def check_earnings_unverifiable(
