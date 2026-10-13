@@ -5,7 +5,7 @@ Today's watchlist_snapshot and detect_changes rules on the WP2.0 decision matrix
 stay green through 2a: each previous snapshot is the live producer's own (or a frozen 1.x
 producer's), never a version literal.
 
-Ported annex probes (/tmp/claude-501/s2v2/snapshot*/): probe_rules.py §1 (SN-C4), §5 and §6
+Ported annex probes: probe_rules.py §1 (SN-C4), §5 and §6
 (SN-C6); probe_profile.py and probe_profile_verify.py (SN-C5); probe_orig.py §5 (SN-C2).
 """
 
