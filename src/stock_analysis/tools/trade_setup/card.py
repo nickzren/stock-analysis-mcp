@@ -6,11 +6,14 @@ from datetime import datetime
 from typing import Any
 
 from stock_analysis.tools.analyze.gates import (
+    GATES,
     check_data_quality,
     check_earnings_blackout,
     check_earnings_unverifiable,
     check_liquidity,
+    disclose,
     is_falling_knife_technicals,
+    merge_blockers,
 )
 from stock_analysis.tools.trade_setup.freshness import freshness_blockers
 from stock_analysis.tools.trade_setup.plan import PlanInvariantError, build_plan
@@ -28,6 +31,8 @@ from stock_analysis.utils.valuation_basis import (
 )
 
 _ACTIONABLE = frozenset({"trade_now", "enter_on_trigger"})
+SWING_HORIZON = "swing"
+_VETO_OUTCOME = {"data": "wait_for_data", "price_risk": "avoid", "liquidity": "avoid"}
 _CONFIDENCE_BY_QUALITY = {"A": "high", "B": "medium", "C": "low"}
 
 _DELAYED_DATA_NOTE = (
@@ -57,7 +62,8 @@ def build_trade_setup_card(
     tool_failures: list[dict[str, Any]] | None = None,
     expected_move: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    blockers: list[dict[str, str]] = []
+    blockers: list[dict[str, Any]] = []
+    unevaluated: list[dict[str, str]] = []
 
     # Rule 1 inputs: freshness + trade-critical data quality.
     fresh_blockers = freshness_blockers(freshness)
@@ -88,6 +94,8 @@ def build_trade_setup_card(
                 "id": "falling_knife",
                 "reason": "severe decline with broken trends — wait for stabilization",
             })
+    else:
+        unevaluated.append(_unevaluated("falling_knife"))
     # WP4 (D5): fail closed on an unknown instrument or currency; a non-USD price
     # makes no dollar-liquidity claim and gets no executable plan.
     support = summary_support(summary_data, symbol)
@@ -104,6 +112,11 @@ def build_trade_setup_card(
     if earnings_blocker:
         blockers.append(earnings_blocker)
     events_unverifiable, unverifiable_blocker = check_earnings_unverifiable(events_data, tool_failures)
+    if unverifiable_blocker:
+        blockers.append(unverifiable_blocker)
+    events_failed = any(tf.get("tool") == "events_calendar" for tf in tool_failures or [])
+    if events_failed and not earnings_blackout:
+        unevaluated.append(_unevaluated("earnings_blackout"))
     earnings = (events_data.get("earnings") or {}) if events_data else {}
 
     setup: dict[str, Any] | None = None
@@ -118,8 +131,6 @@ def build_trade_setup_card(
         if setup is None:
             action = "no_setup"
         else:
-            if unverifiable_blocker:
-                blockers.append(unverifiable_blocker)
             if earnings_blackout or events_unverifiable:
                 action = "watch"
             elif setup["trigger_satisfied"] and session == "regular" and not freshness["stale"]:
@@ -156,6 +167,9 @@ def build_trade_setup_card(
                 "reason": f"plan geometry invalid — {exc}",
             })
 
+    blockers = [disclose(b, SWING_HORIZON) for b in merge_blockers(blockers)]
+    decided_by = _decided_by(action, _base_outcome(setup, session), blockers)
+
     days_until = earnings.get("days_until")
     next_date = earnings.get("next_date")
     em_pct = (expected_move or {}).get("pct")
@@ -177,6 +191,7 @@ def build_trade_setup_card(
 
     return {
         "symbol": symbol,
+        "horizon": SWING_HORIZON,
         "currency": summary_data.get("currency"),
         "support": support,
         "freshness": freshness,
@@ -184,6 +199,8 @@ def build_trade_setup_card(
         "setup": setup,
         "plan": plan,
         "blockers": blockers,
+        "decided_by": decided_by,
+        "unevaluated": unevaluated,
         "event_risk": {
             "earnings_in_days": int(days_until) if isinstance(days_until, (int, float)) else None,
             "next_earnings_date": str(next_date) if next_date else None,
@@ -217,3 +234,27 @@ def _next_review(
         "date": add_trading_days(now.date(), DEFAULT_REVIEW_TRADING_DAYS).isoformat(),
         "reason": "setup re-check",
     }
+
+
+def _unevaluated(gate_id: str) -> dict[str, str]:
+    return {"id": gate_id, "reason": GATES[gate_id].unevaluated_when[SWING_HORIZON]}
+
+
+def _base_outcome(setup: dict[str, Any] | None, session: str) -> str | None:
+    """The swing outcome before any cap; None when no setup was detected."""
+    if setup is None:
+        return None
+    if setup["trigger_satisfied"] and session == "regular":
+        return "trade_now"
+    if setup.get("trigger_price") is not None:
+        return "enter_on_trigger"
+    return "watch"
+
+
+def _decided_by(action: str, base: str | None, blockers: list[dict[str, Any]]) -> str | None:
+    """The highest-ranked fired gate whose outcome is the shown action and tighter than the base."""
+    if action in ("wait_for_data", "avoid"):
+        return next((b["id"] for b in blockers if _VETO_OUTCOME.get(b["class"]) == action), None)
+    if action == "watch" and base in _ACTIONABLE:
+        return next((b["id"] for b in blockers if b["effect"] == "cap"), None)
+    return None

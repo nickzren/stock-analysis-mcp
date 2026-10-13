@@ -449,20 +449,3 @@ class TestBeforeTableRows:
         card = (await dm.run("S2_buy_clean", events=events_data, now=evening(today)))["decision_card"]
 
         assert card["next_review"] == {"date": today.isoformat(), "reason": "next earnings (~0 days)"}
-
-    @pytest.mark.parametrize(("events_data", "tool_failures"),
-                             [(UNVERIFIABLE, []), ({}, [{"tool": "events_calendar", "error": "timeout"}])],
-                             ids=["verification_unverifiable", "events_tool_failed"])
-    def test_ch4_card_without_a_setup_omits_earnings_unverifiable(
-        self, monkeypatch: pytest.MonkeyPatch, events_data: dict[str, Any], tool_failures: list[dict[str, Any]]
-    ) -> None:
-        """RA-CH4: the trade card adds earnings_unverifiable only inside the setup branch
-        (card.py:118-129): with a setup it is listed, with no setup it is not.
-        CH: flipped by WP2.1 (RA.18: disclosed on every card outcome)."""
-        with_setup = build_card(events_data=events_data, tool_failures=tool_failures)
-        monkeypatch.setattr(card_module, "detect_setup", lambda *args, **kwargs: None)
-        no_setup = build_card(events_data=events_data, tool_failures=tool_failures)
-
-        assert (with_setup["action"], "earnings_unverifiable" in blocker_ids(with_setup)) == ("watch", True)
-        assert no_setup["action"] == "no_setup"
-        assert "earnings_unverifiable" not in blocker_ids(no_setup)

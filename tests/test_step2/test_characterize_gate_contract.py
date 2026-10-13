@@ -82,16 +82,15 @@ FROZEN_CARD_ROWS: dict[str, CardRow] = {
     "plan_invalid+etf": ("watch", ["unsupported_instrument"], PULLBACK, None),
 }
 
-# The rows WP2.1's card disclosure fix changes (plan §4 "Gate inputs"; annex C1).
+# The rows WP2.1's card disclosure fix changed (plan §4 "Gate inputs"; annex C1).
 WP21_CARD_ROWS: dict[str, CardRow] = {
-    # earnings_unverifiable is appended only inside the setup branch (card.py:122-127)
-    "no_setup+earn_unverifiable": ("no_setup", [], None, None),
-    "no_setup+events_tool_failed": ("no_setup", [], None, None),
-    "knife+earn_unverifiable": ("avoid", ["falling_knife"], None, None),
-    "events_tool_failed+stale": ("wait_for_data", ["stale_data"], None, None),
-    # both data_quality_critical branches fire (card.py:68-78)
-    "risk_metrics_failed+no_features": ("wait_for_data", ["data_quality_critical", "data_quality_critical",
-                                                          "liquidity_missing"], None, None),
+    # earnings_unverifiable is disclosed on every outcome (GC-R9)
+    "no_setup+earn_unverifiable": ("no_setup", ["earnings_unverifiable"], None, None),
+    "no_setup+events_tool_failed": ("no_setup", ["earnings_unverifiable"], None, None),
+    "knife+earn_unverifiable": ("avoid", ["falling_knife", "earnings_unverifiable"], None, None),
+    "events_tool_failed+stale": ("wait_for_data", ["stale_data", "earnings_unverifiable"], None, None),
+    # both data_quality_critical branches merge into one entry (GC-R11)
+    "risk_metrics_failed+no_features": ("wait_for_data", ["data_quality_critical", "liquidity_missing"], None, None),
 }
 
 
@@ -110,8 +109,8 @@ class TestCardGateMatrix:
 
     @pytest.mark.parametrize("name", WP21_CARD_ROWS)
     def test_rows_the_disclosure_fix_changes(self, name: str) -> None:
-        """GC-C1: no_setup, avoid and wait_for_data cards omit earnings_unverifiable; dq can repeat.
-        Flipped by WP2.1: the card discloses earnings_unverifiable on every outcome and merges ids (GC-R9, R11)."""
+        """GC-C1: no_setup, avoid and wait_for_data cards list earnings_unverifiable; dq is listed once.
+        G from WP2.1 (GC-R9, R11): the card discloses earnings_unverifiable on every outcome and merges ids."""
         assert card_row(sm.card_case(name)) == WP21_CARD_ROWS[name]
 
 

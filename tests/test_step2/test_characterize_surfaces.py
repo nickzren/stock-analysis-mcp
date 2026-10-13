@@ -97,21 +97,12 @@ class TestSwingVsMidTerm:
         assert (fit["mid_term"], fit["long_term"]) == ("ok", "avoid")
         assert (card["action"], card["setup"]["type"], card["blockers"]) == ("trade_now", "pullback_in_uptrend", [])
 
-    async def test_neither_surface_states_its_horizon(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
-        """SC-CH8: no horizon key on the trade card (pure and pipeline), on a card-produced scan row, or on
-        analyze's decision_card at any tier. CH: flipped by WP2.1 (card and scan rows gain
-        horizon: swing, plan §4) and WP2.2 (decision_card.horizon: mid_term, plan §2)."""
-        sm.install(monkeypatch, sm.SCAN_SCENARIOS["fresh_breakout"])
-        pipeline_card = await sm.trade_card()
-        scan = await sm.scan(tmp_path)
+    async def test_analyze_decision_card_states_no_horizon(self) -> None:
+        """SC-CH8: no horizon key on analyze's decision_card at any tier; the card and scan-row clauses
+        moved to S-C8 (test_wp21_card.py, scan rows with stage 1).
+        CH: flipped by WP2.2 (decision_card.horizon: mid_term, plan §2)."""
         shown = dm.tiers(await dm.run(PULLBACK_POOR_BUSINESS))
 
-        assert scan["full_cards"] == 1
-        assert "horizon" not in pullback_card()
-        assert "horizon" not in pipeline_card
-        assert "horizon" not in scan["rows"][0]
         for tier, payload in shown.items():
             assert "horizon" not in payload["decision_card"], tier
 
