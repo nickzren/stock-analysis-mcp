@@ -123,6 +123,7 @@ def card_case(name: str) -> dict[str, Any]:
 
 ET = pytz.timezone("America/New_York")
 PRE_MARKET = ET.localize(datetime(2026, 3, 10, 8, 0))  # Tuesday pre-market; expected daily bar 2026-03-09
+REGULAR = ET.localize(datetime(2026, 3, 10, 11, 0))  # the same Tuesday in session: the card reads a 5m quote
 SYMBOL = "EXMP"
 
 BREAKOUT = tuple(80.0 + i * 0.12 for i in range(260))
@@ -189,13 +190,19 @@ SCAN_SCENARIOS: dict[str, ScanScenario] = {
 }
 
 
-def install(monkeypatch: pytest.MonkeyPatch, scenario: ScanScenario) -> pd.DataFrame:
+def install(
+    monkeypatch: pytest.MonkeyPatch, scenario: ScanScenario, probe_close: float | None = None
+) -> pd.DataFrame:
     """Serve the scenario's daily frame to the scan, technicals, risk_metrics and the card.
 
-    Intraday fetches fail (pre-market, so freshness reads the daily leg only); there is no
+    Intraday fetches fail (pre-market, so freshness reads the daily leg only), unless ``probe_close``
+    gives the card one 5m bar at that close, stamped five minutes before REGULAR. There is no
     options chain offline, so the card's earnings expected move is None.
     """
     df = scenario.frame()
+    probe = None if probe_close is None else pd.DataFrame({
+        "date": [(REGULAR - timedelta(minutes=5)).astimezone(pytz.UTC).isoformat()], "open": [probe_close],
+        "high": [probe_close], "low": [probe_close], "close": [probe_close], "volume": [1.0]})
 
     async def history(params: FetchParams) -> pd.DataFrame:
         if params.interval != "1d":
@@ -203,7 +210,9 @@ def install(monkeypatch: pytest.MonkeyPatch, scenario: ScanScenario) -> pd.DataF
         return df.copy()
 
     async def quiet_history(params: FetchParams) -> pd.DataFrame | None:
-        return df.copy() if params.interval == "1d" else None
+        if params.interval == "1d":
+            return df.copy()
+        return None if probe is None else probe.copy()
 
     async def summary(symbol: str, **kwargs: Any) -> dict[str, Any]:
         return {"symbol": symbol, "name": "Example", "currency": "USD", "quote_type": scenario.quote_type,
@@ -225,18 +234,19 @@ def install(monkeypatch: pytest.MonkeyPatch, scenario: ScanScenario) -> pd.DataF
     return df
 
 
-async def trade_card() -> dict[str, Any]:
+async def trade_card(now: datetime = PRE_MARKET) -> dict[str, Any]:
     """The real analyze_trade_setup card on the installed scenario."""
-    card: dict[str, Any] = await trade_setup.analyze_trade_setup(SYMBOL, _now=PRE_MARKET)
+    card: dict[str, Any] = await trade_setup.analyze_trade_setup(SYMBOL, _now=now)
     return card
 
 
-async def scan(data_dir: Path, prior_action: str | None = None) -> dict[str, Any]:
-    """One scan_watchlist run; a ``prior_action`` seeds the scan state (an actionable one forces the card)."""
-    await watchlist.manage_watchlist("add", [SYMBOL], _today=PRE_MARKET.date(), data_dir=data_dir)
+async def scan(data_dir: Path, prior_action: str | None = None, now: datetime = PRE_MARKET) -> dict[str, Any]:
+    """One scan_watchlist run; a ``prior_action`` seeds a pre-WP2.1 scan state entry (no source, no
+    rules_version; an actionable one forces the card)."""
+    await watchlist.manage_watchlist("add", [SYMBOL], _today=now.date(), data_dir=data_dir)
     if prior_action is not None:
         save_scan_state(data_dir, {"scanned_at": "prior", "symbols": {SYMBOL: {
             "action": prior_action, "setup_type": "breakout", "trigger_satisfied": False,
             "blockers": [], "trigger_price": 100.0}}})
-    result: dict[str, Any] = await watchlist.scan_watchlist(_now=PRE_MARKET, data_dir=data_dir)
+    result: dict[str, Any] = await watchlist.scan_watchlist(_now=now, data_dir=data_dir)
     return result

@@ -76,7 +76,8 @@ class TestManage:
 
 def screen_result(**over: Any) -> dict[str, Any]:
     base = {"promote": False, "action_hint": "no_setup", "setup_type": None,
-            "trigger_price": None, "last_close": 100.0, "blocker_ids": []}
+            "trigger_price": None, "trigger_satisfied": False, "last_close": 100.0,
+            "blocker_ids": [], "unevaluated": []}
     base.update(over)
     return base
 
@@ -109,9 +110,9 @@ class TestScan:
         await wl_mod.manage_watchlist("add", ["HOOD", "SNOW"], _today=TODAY,
                                       data_dir=scan_env)
         monkeypatch.setattr(wl_mod, "screen_symbol",
-                            lambda df: screen_result(promote=True, action_hint="candidate",
-                                                     setup_type="breakout",
-                                                     trigger_price=102.0))
+                            lambda df, **_: screen_result(promote=True, action_hint="candidate",
+                                                          setup_type="breakout",
+                                                          trigger_price=102.0))
 
         async def fake_card(symbol: str, **kwargs: Any) -> dict[str, Any]:
             return card("enter_on_trigger")
@@ -135,9 +136,9 @@ class TestScan:
                      "trigger_satisfied": False, "blockers": [],
                      "trigger_price": None}}})
         monkeypatch.setattr(wl_mod, "screen_symbol",
-                            lambda df: screen_result(promote=True, setup_type="breakout",
-                                                     trigger_price=102.0,
-                                                     action_hint="candidate"))
+                            lambda df, **_: screen_result(promote=True, setup_type="breakout",
+                                                          trigger_price=102.0,
+                                                          action_hint="candidate"))
 
         async def fake_card(symbol: str, **kwargs: Any) -> dict[str, Any]:
             return card("enter_on_trigger")
@@ -158,7 +159,7 @@ class TestScan:
                      "trigger_satisfied": False, "blockers": [],
                      "trigger_price": 102.0}}})
         monkeypatch.setattr(wl_mod, "screen_symbol",
-                            lambda df: screen_result())  # screen says no_setup now
+                            lambda df, **_: screen_result())  # screen says no_setup now
         calls: list[str] = []
 
         async def fake_card(symbol: str, **kwargs: Any) -> dict[str, Any]:
@@ -186,7 +187,7 @@ class TestScan:
             return daily_df()
 
         monkeypatch.setattr(wl_mod, "fetch_history", flaky_history)
-        monkeypatch.setattr(wl_mod, "screen_symbol", lambda df: screen_result())
+        monkeypatch.setattr(wl_mod, "screen_symbol", lambda df, **_: screen_result())
         r = await wl_mod.scan_watchlist(_now=NOW, data_dir=scan_env)
         assert [e["symbol"] for e in r["errors"]] == ["BAD"]
         state, _ = load_scan_state(scan_env)
@@ -214,7 +215,7 @@ class TestScan:
     ) -> None:
         await wl_mod.manage_watchlist("add", ["HOOD"], _today=TODAY, data_dir=scan_env)
         save_scan_state(scan_env, {"scanned_at": "x", "symbols": [1, 2]})
-        monkeypatch.setattr(wl_mod, "screen_symbol", lambda df: screen_result())
+        monkeypatch.setattr(wl_mod, "screen_symbol", lambda df, **_: screen_result())
         r = await wl_mod.scan_watchlist(_now=NOW, data_dir=scan_env)
         assert r.get("error") is None
         assert any(w["id"] == "state_unreadable" for w in r["warnings"])
@@ -226,7 +227,7 @@ class TestScan:
     ) -> None:
         await wl_mod.manage_watchlist("add", ["HOOD"], _today=TODAY, data_dir=scan_env)
         save_scan_state(scan_env, {"scanned_at": "x", "symbols": {"HOOD": "garbage"}})
-        monkeypatch.setattr(wl_mod, "screen_symbol", lambda df: screen_result())
+        monkeypatch.setattr(wl_mod, "screen_symbol", lambda df, **_: screen_result())
         r = await wl_mod.scan_watchlist(_now=NOW, data_dir=scan_env)
         assert r.get("error") is None
         assert r["changes"] == []  # no prior => no transition reported
@@ -236,9 +237,9 @@ class TestScan:
                                                     monkeypatch: pytest.MonkeyPatch) -> None:
         await wl_mod.manage_watchlist("add", ["HOOD"], _today=TODAY, data_dir=scan_env)
         monkeypatch.setattr(wl_mod, "screen_symbol",
-                            lambda df: screen_result(promote=True, action_hint="candidate",
-                                                     setup_type="breakout",
-                                                     trigger_price=102.0))
+                            lambda df, **_: screen_result(promote=True, action_hint="candidate",
+                                                          setup_type="breakout",
+                                                          trigger_price=102.0))
 
         async def fake_card(symbol: str, **kwargs: Any) -> dict[str, Any]:
             c = card("enter_on_trigger")

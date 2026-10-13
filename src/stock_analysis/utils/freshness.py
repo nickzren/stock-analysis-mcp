@@ -26,6 +26,8 @@ FRESHNESS_CEILING_MINUTES = 15
 STALE_DATA = "stale_data"
 FRESHNESS_UNVERIFIABLE = "freshness_unverifiable"
 FRESHNESS_GATE_IDS = frozenset({STALE_DATA, FRESHNESS_UNVERIFIABLE})
+# The reason codes that blame the daily frame; every other code blames the regular-session quote.
+DAILY_LEG_REASON_CODES = frozenset({"stale_daily", "daily_unusable"})
 
 # A bar timestamped further ahead of `now` than this is a data defect
 # (clock skew tolerance), not a genuinely fresher quote.
@@ -50,6 +52,11 @@ def _daily_state(daily_df: pd.DataFrame | None) -> tuple[date | None, bool]:
     if daily_df is None or len(daily_df) == 0 or "close" not in daily_df.columns:
         return last, False
     return last, valid_price(daily_df["close"].iloc[-1]) is not None
+
+
+def _daily_ok(daily_bar: date | None, close_valid: bool, expected: date, today: date) -> bool:
+    """The regular session's daily leg: a valid-close daily bar from the last expected trading day on."""
+    return daily_bar is not None and expected <= daily_bar <= today and close_valid
 
 
 def _unverifiable(
@@ -103,11 +110,7 @@ def build_freshness(
             return _unverifiable(session, "future_timestamp", daily_bar, expected)
         age = max(0, int(age_raw))
         quote_stale = age > FRESHNESS_CEILING_MINUTES * 60
-        daily_ok = (
-            daily_bar is not None
-            and expected <= daily_bar <= now.date()
-            and daily_close_valid
-        )
+        daily_ok = _daily_ok(daily_bar, daily_close_valid, expected, now.date())
         stale = quote_stale or not daily_ok
         reason_code = None
         if stale:
@@ -164,6 +167,37 @@ def freshness_blockers(freshness: dict[str, Any]) -> list[dict[str, str]]:
             reason = f"newest daily bar {freshness['as_of']} predates the last expected trading day"
         return [{"id": STALE_DATA, "reason": reason}]
     return []
+
+
+def daily_leg_freshness(
+    daily_df: pd.DataFrame | None, *, session: str, now: datetime,
+) -> dict[str, Any]:
+    """The card's daily leg alone, for scan stage 1, which reads no intraday quote."""
+    if session != "regular":
+        return build_freshness(intraday_df=None, daily_df=daily_df, session=session, now=now)
+    daily_bar, close_valid = _daily_state(daily_df)
+    expected = previous_trading_day(now.date())
+    stale = not _daily_ok(daily_bar, close_valid, expected, now.date())
+    daily_bar_date = daily_bar.isoformat() if daily_bar else None
+    return {
+        "as_of": daily_bar_date,
+        "basis": "bar_timestamp",
+        "session": session,
+        "quote_age_seconds": None,
+        "stale": stale,
+        "reason_code": "stale_daily" if stale else None,
+        "daily_bar_date": daily_bar_date,
+        "daily_expected_date": expected.isoformat(),
+    }
+
+
+def freshness_leg(freshness: dict[str, Any]) -> str | None:
+    """The leg a card's freshness block failed on ("quote" or "daily"); None when it passed."""
+    if freshness.get("basis") != "unverifiable" and not freshness.get("stale"):
+        return None
+    if freshness.get("session") != "regular" or freshness.get("reason_code") in DAILY_LEG_REASON_CODES:
+        return "daily"
+    return "quote"
 
 
 def _last_bar_timestamp_utc(df: pd.DataFrame | None) -> datetime | None:

@@ -120,7 +120,7 @@ def prices(monkeypatch: pytest.MonkeyPatch) -> Any:
 class TestFallingKnifeSurvivesEmptySessions:
     @pytest.mark.parametrize("empty", GAPS, ids=GAP_IDS)
     def test_scan(self, empty: tuple[int, ...]) -> None:
-        verdict = screen_symbol(knife_frame(empty))
+        verdict = screen_symbol(knife_frame(empty), now=SATURDAY, session="closed")
         assert verdict["action_hint"] == "avoid"
         assert "falling_knife" in verdict["blocker_ids"]
 
@@ -183,5 +183,6 @@ class TestFallingKnifeSurvivesEmptySessions:
         assert (snapshot["bullish_signals"], snapshot["bearish_signals"]) == (None, None)
 
     def test_an_empty_latest_session_still_waits_for_data(self) -> None:
-        verdict = screen_symbol(knife_frame((251,)))
-        assert (verdict["action_hint"], verdict["blocker_ids"]) == ("wait_for_data", ["data_quality_critical"])
+        verdict = screen_symbol(knife_frame((251,)), now=SATURDAY, session="closed")
+        assert (verdict["action_hint"], verdict["blocker_ids"]) == (
+            "wait_for_data", ["data_quality_critical", "freshness_unverifiable@daily", "liquidity_missing"])

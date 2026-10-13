@@ -20,6 +20,7 @@ from stock_analysis.utils.indicators import (
     calculate_volatility,
     session_returns,
 )
+from stock_analysis.utils.liquidity import RISK_METRICS_MIN_BARS, mean_dollar_volume
 from stock_analysis.utils.price_basis import last_valid_bar_date
 from stock_analysis.utils.provenance import (
     FetchError,
@@ -65,10 +66,10 @@ async def risk_metrics(
     except FetchError as fe:
         return fe.response
 
-    if len(df) < 50:
+    if len(df) < RISK_METRICS_MIN_BARS:
         return build_error_response(
             error_type="insufficient_data",
-            message=f"Need at least 50 data points, got {len(df)}",
+            message=f"Need at least {RISK_METRICS_MIN_BARS} data points, got {len(df)}",
             symbol=symbol,
         )
 
@@ -252,10 +253,7 @@ def _build_liquidity(
     current_price: float | None,
 ) -> tuple[dict[str, Any], float | None]:
     """Build liquidity metrics and return raw average dollar volume."""
-    avg_volume = float(volume.mean()) if not volume.isna().all() else None
-    avg_dollar_volume: float | None = None
-    if avg_volume is not None and current_price is not None:
-        avg_dollar_volume = avg_volume * current_price
+    avg_dollar_volume = mean_dollar_volume(volume, current_price)
 
     return {
         "avg_dollar_volume": safe_round(avg_dollar_volume, 2),

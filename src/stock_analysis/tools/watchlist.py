@@ -11,12 +11,14 @@ import pytz
 
 from stock_analysis.data.cache_manager import classify_session
 from stock_analysis.data.yfinance_client import fetch_history
+from stock_analysis.tools.trade_setup.card import SWING_HORIZON
 from stock_analysis.tools.trade_setup.orchestrator import (
     analyze_trade_setup,
     validate_sizing_params,
 )
+from stock_analysis.utils.freshness import FRESHNESS_GATE_IDS, freshness_leg
 from stock_analysis.utils.provenance import build_error_response
-from stock_analysis.utils.scan_screen import screen_symbol
+from stock_analysis.utils.scan_screen import DAILY_LEG, screen_symbol
 from stock_analysis.utils.validators import FetchParams
 from stock_analysis.utils.watch_store import (
     MAX_WATCHLIST,
@@ -30,6 +32,8 @@ from stock_analysis.utils.watch_store import (
 _ET = pytz.timezone("America/New_York")
 _ACTIONABLE = frozenset({"trade_now", "enter_on_trigger"})
 _ACTIONS = frozenset({"add", "remove", "list"})
+# Hand-bumped when stage-1, row or diff rules change; a state without it predates WP2.1.
+SCAN_RULES_VERSION = 2
 
 
 async def manage_watchlist(
@@ -126,10 +130,19 @@ async def scan_watchlist(
             "id": "state_unreadable",
             "reason": "scan state malformed — treating as empty",
         })
+    elif state.get("rules_version") != SCAN_RULES_VERSION:
+        warnings.append({
+            "id": "rules_changed",
+            "reason": (
+                f"scan rules changed since the last scan (rules_version "
+                f"{state.get('rules_version')!r} -> {SCAN_RULES_VERSION}); "
+                "changes may reflect the new rules, not the market"
+            ),
+        })
 
     symbols = sorted(stored)
     screens = await asyncio.gather(
-        *(_screen_one(symbol) for symbol in symbols)
+        *(_screen_one(symbol, now, session) for symbol in symbols)
     )
 
     rows: list[dict[str, Any]] = []
@@ -190,12 +203,14 @@ async def scan_watchlist(
         new_state_symbols[symbol] = summary
 
     save_scan_state(directory, {
+        "rules_version": SCAN_RULES_VERSION,
         "scanned_at": now.isoformat(),
         "symbols": new_state_symbols,
     })
     return {
         "scanned_at": now.isoformat(),
         "session": session,
+        "rules_version": SCAN_RULES_VERSION,
         "symbols_scanned": len(symbols),
         "full_cards": full_cards,
         "changes": changes,
@@ -205,12 +220,12 @@ async def scan_watchlist(
     }
 
 
-async def _screen_one(symbol: str) -> dict[str, Any] | None:
+async def _screen_one(symbol: str, now: datetime, session: str) -> dict[str, Any] | None:
     try:
         df = await fetch_history(FetchParams(symbol, "1y", "1d", True))
     except Exception:
         return None
-    return screen_symbol(df)
+    return screen_symbol(df, now=now, session=session)
 
 
 def _normalize(symbols: list[str] | None) -> list[str]:
@@ -232,12 +247,19 @@ def _watchlist_response(
 
 def _summary_from_card(card: dict[str, Any]) -> dict[str, Any]:
     setup = card.get("setup") or {}
+    freshness = card.get("freshness") or {}
+    leg = freshness_leg(freshness)
+    unevaluated = {_pair(u["id"], "daily") for u in card.get("unevaluated") or []}
+    if freshness.get("session") == "regular" and freshness.get("basis") == "unverifiable":
+        unevaluated |= DAILY_LEG  # the quote leg returned before the daily leg was read
     return {
         "action": card.get("action"),
         "setup_type": setup.get("type"),
         "trigger_satisfied": bool(setup.get("trigger_satisfied", False)),
-        "blockers": sorted(b["id"] for b in card.get("blockers", [])),
+        "blockers": sorted(_pair(b["id"], leg) for b in card.get("blockers", [])),
         "trigger_price": setup.get("trigger_price"),
+        "source": "card",
+        "unevaluated": sorted(unevaluated),
     }
 
 
@@ -245,10 +267,17 @@ def _summary_from_screen(screen: dict[str, Any]) -> dict[str, Any]:
     return {
         "action": screen["action_hint"],
         "setup_type": screen["setup_type"],
-        "trigger_satisfied": False,
+        "trigger_satisfied": screen["trigger_satisfied"],
         "blockers": sorted(screen["blocker_ids"]),
         "trigger_price": screen["trigger_price"],
+        "source": "screen",
+        "unevaluated": screen["unevaluated"],
     }
+
+
+def _pair(gate_id: str, leg: str | None) -> str:
+    """A row's (id, leg) entry: the freshness gates carry the leg they fired or went unevaluated on."""
+    return f"{gate_id}@{leg}" if gate_id in FRESHNESS_GATE_IDS else gate_id
 
 
 def _row(
@@ -272,6 +301,9 @@ def _row(
         "trigger_price": summary["trigger_price"],
         "distance_to_trigger_pct": distance,
         "blockers": summary["blockers"],
+        "unevaluated": summary["unevaluated"],
+        "source": summary["source"],
+        "horizon": SWING_HORIZON,
         "earnings_in_days": earnings_in_days,
         "expected_move_pct": expected_move_pct,
     }
@@ -281,11 +313,33 @@ def _diff(
     prior: dict[str, Any] | None,
     summary: dict[str, Any],
 ) -> tuple[bool, list[str]]:
+    """Blockers compare as the (id, leg) pairs neither side left unevaluated. A pre-WP2.1 entry
+    (no source) recorded no legs and no unevaluated list: it compares at id level, skipping the
+    ids the new row left unevaluated and fired on no leg."""
     if prior is None:
         return False, []
-    notes: list[str] = []
-    for field in ("action", "setup_type", "trigger_satisfied",
-                  "blockers", "trigger_price"):
-        if prior.get(field) != summary.get(field):
-            notes.append(f"{field}: {prior.get(field)} -> {summary.get(field)}")
+    after_all = set(summary["blockers"])
+    if "source" in prior:
+        skip = _strings(prior.get("unevaluated")) | set(summary["unevaluated"])
+        before, after = _strings(prior.get("blockers")) - skip, after_all - skip
+    else:
+        after_ids = {_gate_id(entry) for entry in after_all}
+        skip = {_gate_id(entry) for entry in summary["unevaluated"]} - after_ids
+        before = {_gate_id(entry) for entry in _strings(prior.get("blockers"))} - skip
+        after = after_ids - skip
+    notes = [f"{field}: {prior.get(field)} -> {summary.get(field)}"
+             for field in ("action", "setup_type", "trigger_satisfied")
+             if prior.get(field) != summary.get(field)]
+    if before != after:
+        notes.append(f"blockers: {sorted(before)} -> {sorted(after)}")
+    if prior.get("trigger_price") != summary.get("trigger_price"):
+        notes.append(f"trigger_price: {prior.get('trigger_price')} -> {summary.get('trigger_price')}")
     return bool(notes), notes
+
+
+def _strings(value: Any) -> set[str]:
+    return {item for item in value if isinstance(item, str)} if isinstance(value, list) else set()
+
+
+def _gate_id(entry: str) -> str:
+    return entry.split("@", 1)[0]

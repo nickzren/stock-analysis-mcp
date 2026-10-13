@@ -17,7 +17,7 @@ from stock_analysis.tools.analyze.projection import project_analyze_result
 from stock_analysis.utils.scan_screen import screen_symbol
 from stock_analysis.utils.validators import FetchParams
 from stock_analysis.utils.valuation_basis import classify_support, sizing_unavailable_reason
-from tests.test_scan_screen import make_df, uptrend_breakout_df
+from tests.test_scan_screen import FRESH, make_df, uptrend_breakout_df
 from tests.test_tools.test_trade_card import blocker_ids, build_card
 
 orchestrator = importlib.import_module("stock_analysis.tools.analyze.orchestrator")
@@ -255,9 +255,8 @@ class TestAnalyzeUnsupportedInstrument:
 class TestScan:
     @pytest.mark.parametrize(
         ("currency", "instrument", "blocker"),
-        [("GBp", "EQUITY", "unsupported_currency"), ("USD", "ETF", "unsupported_instrument"),
-         (None, None, "unsupported_currency")],
-        ids=["r4_7_gbp", "etf", "unknown_fails_closed"],
+        [("GBp", "EQUITY", "unsupported_currency"), ("USD", "ETF", "unsupported_instrument")],
+        ids=["r4_7_gbp", "etf"],
     )
     def test_unsupported_rows_are_flagged_and_not_promoted(
         self, currency: Any, instrument: Any, blocker: str
@@ -265,14 +264,24 @@ class TestScan:
         df = make_df([80.0 + i * 0.12 for i in range(260)], volumes=[1000.0] * 260)  # thin
         df.attrs.update({"currency": currency, "instrument_type": instrument})
 
-        screen = screen_symbol(df)
+        screen = screen_symbol(df, now=FRESH, session="closed")
 
         assert (screen["promote"], screen["action_hint"]) == (False, "watch")
         assert blocker in screen["blocker_ids"]
         assert not {"weak_liquidity", "liquidity_missing"} & set(screen["blocker_ids"])
 
+    def test_unknown_support_is_unevaluated_and_promotes(self) -> None:
+        """Unknown support is unverified, not unsupported: stage 1 leaves it, and liquidity, to the card (D-11)."""
+        df = make_df([80.0 + i * 0.12 for i in range(260)], volumes=[1000.0] * 260)  # thin
+        df.attrs.update({"currency": None, "instrument_type": None})
+
+        screen = screen_symbol(df, now=FRESH, session="closed")
+
+        assert (screen["promote"], screen["action_hint"], screen["blocker_ids"]) == (True, "candidate", [])
+        assert {"unsupported_instrument", "unsupported_currency"} <= set(screen["unevaluated"])
+
     def test_a_supported_us_row_still_promotes(self) -> None:
-        assert screen_symbol(uptrend_breakout_df())["promote"] is True
+        assert screen_symbol(uptrend_breakout_df(), now=FRESH, session="closed")["promote"] is True
 
 
 class TestHistoryMetadata:

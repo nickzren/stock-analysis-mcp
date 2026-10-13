@@ -18,7 +18,7 @@ import pytest
 
 from stock_analysis.tools.analyze.decision_card import _compute_hard_gates, _resolve_action_now
 from stock_analysis.utils.freshness import build_freshness, freshness_blockers
-from stock_analysis.utils.scan_screen import _avg_dollar_volume, screen_symbol
+from stock_analysis.utils.scan_screen import screen_symbol
 from stock_analysis.utils.valuation_basis import classify_support
 from tests.support import decision_matrix as dm
 from tests.support import swing_matrix as sm
@@ -329,73 +329,74 @@ class TestAnalyzeGateBefore:
 Outcome = tuple[str, str | None, list[str]]  # action, setup type, blocker ids
 
 
-class ScanBefore(NamedTuple):
-    screen: Outcome  # stage 1: action_hint, setup_type, blocker_ids
-    card: Outcome  # analyze_trade_setup
+class ScanAfter(NamedTuple):
+    screen: Outcome  # stage 1: action_hint, setup_type, blocker_ids (freshness ids carry their leg)
+    card: Outcome  # analyze_trade_setup (its own ids, no legs)
     row: tuple[str, str, list[str]]  # first scan: the stage that produced the row, its action, its blockers
     forced: tuple[str, list[str]]  # prior state enter_on_trigger, so the card decides: action, blockers
 
 
 PROMOTED: Outcome = ("candidate", "breakout", [])
 NO_SETUP: Outcome = ("no_setup", None, [])
-CAPPED_SCREEN: Outcome = ("watch", None, ["unsupported_instrument"])  # support is terminal at stage 1
-STALE = ["stale_data"]
+STALE = ["stale_data@daily"]
 SHORT_FRAME = ["data_quality_critical", "liquidity_missing"]  # risk_metrics needs 50 bars
 ARMED_OFF_SESSION: Outcome = ("enter_on_trigger", "breakout", ["market_closed"])
-ETF_BREAKOUT = ScanBefore(CAPPED_SCREEN, ("watch", "breakout", ["unsupported_instrument", "market_closed"]),
-                          ("screen", "watch", ["unsupported_instrument"]),
-                          ("watch", ["market_closed", "unsupported_instrument"]))
+# support caps at stage 1: the setup is kept
+ETF_BREAKOUT = ScanAfter(("watch", "breakout", ["unsupported_instrument"]),
+                         ("watch", "breakout", ["unsupported_instrument", "market_closed"]),
+                         ("screen", "watch", ["unsupported_instrument"]),
+                         ("watch", ["market_closed", "unsupported_instrument"]))
 
-SCAN_BEFORE: dict[str, ScanBefore] = {
-    "fresh_breakout": ScanBefore(PROMOTED, ARMED_OFF_SESSION, ("card", "enter_on_trigger", ["market_closed"]),
-                                 ("enter_on_trigger", ["market_closed"])),
-    "stale_frame_boring": ScanBefore(NO_SETUP, ("wait_for_data", None, STALE), ("screen", "no_setup", []),
-                                     ("wait_for_data", STALE)),
-    "stale_frame_breakout": ScanBefore(PROMOTED, ("wait_for_data", None, STALE), ("card", "wait_for_data", STALE),
-                                       ("wait_for_data", STALE)),
-    "liq_recent_collapse_breakout": ScanBefore(("avoid", None, ["weak_liquidity"]), ARMED_OFF_SESSION,
-                                               ("screen", "avoid", ["weak_liquidity"]),
-                                               ("enter_on_trigger", ["market_closed"])),
-    "liq_recent_surge_breakout": ScanBefore(PROMOTED, ("avoid", None, ["weak_liquidity"]),
-                                            ("card", "avoid", ["weak_liquidity"]), ("avoid", ["weak_liquidity"])),
-    "etf_boring": ScanBefore(CAPPED_SCREEN, ("no_setup", None, ["unsupported_instrument"]),
-                             ("screen", "watch", ["unsupported_instrument"]), ("no_setup", ["unsupported_instrument"])),
+SCAN_AFTER: dict[str, ScanAfter] = {
+    "fresh_breakout": ScanAfter(PROMOTED, ARMED_OFF_SESSION, ("card", "enter_on_trigger", ["market_closed"]),
+                                ("enter_on_trigger", ["market_closed"])),
+    # the card's daily freshness leg runs at stage 1
+    "stale_frame_boring": ScanAfter(("wait_for_data", None, STALE), ("wait_for_data", None, ["stale_data"]),
+                                    ("screen", "wait_for_data", STALE), ("wait_for_data", STALE)),
+    "stale_frame_breakout": ScanAfter(("wait_for_data", None, STALE), ("wait_for_data", None, ["stale_data"]),
+                                      ("screen", "wait_for_data", STALE), ("wait_for_data", STALE)),
+    # liquidity on the card's basis (the 1y mean volume x the last close)
+    "liq_recent_collapse_breakout": ScanAfter(PROMOTED, ARMED_OFF_SESSION,
+                                              ("card", "enter_on_trigger", ["market_closed"]),
+                                              ("enter_on_trigger", ["market_closed"])),
+    "liq_recent_surge_breakout": ScanAfter(("avoid", None, ["weak_liquidity"]), ("avoid", None, ["weak_liquidity"]),
+                                           ("screen", "avoid", ["weak_liquidity"]), ("avoid", ["weak_liquidity"])),
+    "etf_boring": ScanAfter(("no_setup", None, ["unsupported_instrument"]),
+                            ("no_setup", None, ["unsupported_instrument"]),
+                            ("screen", "no_setup", ["unsupported_instrument"]),
+                            ("no_setup", ["unsupported_instrument"])),
     "etf_breakout": ETF_BREAKOUT,
-    "boring_earnings_in_2d": ScanBefore(NO_SETUP, ("no_setup", None, ["earnings_blackout"]),
-                                        ("screen", "no_setup", []), ("no_setup", ["earnings_blackout"])),
-    "breakout_earnings_in_2d": ScanBefore(PROMOTED, ("watch", "breakout", ["earnings_blackout"]),
-                                          ("card", "watch", ["earnings_blackout"]), ("watch", ["earnings_blackout"])),
-    "breakout_events_unverifiable": ScanBefore(PROMOTED, ("watch", "breakout", ["earnings_unverifiable"]),
-                                               ("card", "watch", ["earnings_unverifiable"]),
-                                               ("watch", ["earnings_unverifiable"])),
-    "A_30_bars_breakout": ScanBefore(PROMOTED, ("wait_for_data", None, SHORT_FRAME),
-                                     ("card", "wait_for_data", SHORT_FRAME), ("wait_for_data", SHORT_FRAME)),
-    "A_30_bars_boring": ScanBefore(NO_SETUP, ("wait_for_data", None, SHORT_FRAME), ("screen", "no_setup", []),
-                                   ("wait_for_data", SHORT_FRAME)),
-    "A_45_bars_boring": ScanBefore(NO_SETUP, ("wait_for_data", None, SHORT_FRAME), ("screen", "no_setup", []),
-                                   ("wait_for_data", SHORT_FRAME)),
-    # The history attrs carry no instrument_type; stock_summary says EQUITY/USD.
-    "B_attrs_missing_breakout": ScanBefore(CAPPED_SCREEN, ARMED_OFF_SESSION,
-                                           ("screen", "watch", ["unsupported_instrument"]),
-                                           ("enter_on_trigger", ["market_closed"])),
-    "B_attrs_missing_boring": ScanBefore(CAPPED_SCREEN, NO_SETUP, ("screen", "watch", ["unsupported_instrument"]),
-                                         ("no_setup", [])),
-    "C_stale_knife": ScanBefore(("avoid", None, ["falling_knife"]),
-                                ("wait_for_data", None, ["stale_data", "falling_knife"]),
-                                ("screen", "avoid", ["falling_knife"]),
-                                ("wait_for_data", ["falling_knife", "stale_data"])),
-    "C_stale_thin": ScanBefore(("avoid", None, ["weak_liquidity"]),
-                               ("wait_for_data", None, ["stale_data", "weak_liquidity"]),
-                               ("screen", "avoid", ["weak_liquidity"]),
-                               ("wait_for_data", ["stale_data", "weak_liquidity"])),
+    # stage 1 never evaluates earnings
+    "boring_earnings_in_2d": ScanAfter(NO_SETUP, ("no_setup", None, ["earnings_blackout"]),
+                                       ("screen", "no_setup", []), ("no_setup", ["earnings_blackout"])),
+    "breakout_earnings_in_2d": ScanAfter(PROMOTED, ("watch", "breakout", ["earnings_blackout"]),
+                                         ("card", "watch", ["earnings_blackout"]), ("watch", ["earnings_blackout"])),
+    "breakout_events_unverifiable": ScanAfter(PROMOTED, ("watch", "breakout", ["earnings_unverifiable"]),
+                                              ("card", "watch", ["earnings_unverifiable"]),
+                                              ("watch", ["earnings_unverifiable"])),
+    # the card's 50-bar floor
+    "A_30_bars_breakout": ScanAfter(("wait_for_data", None, SHORT_FRAME), ("wait_for_data", None, SHORT_FRAME),
+                                    ("screen", "wait_for_data", SHORT_FRAME), ("wait_for_data", SHORT_FRAME)),
+    "A_30_bars_boring": ScanAfter(("wait_for_data", None, SHORT_FRAME), ("wait_for_data", None, SHORT_FRAME),
+                                  ("screen", "wait_for_data", SHORT_FRAME), ("wait_for_data", SHORT_FRAME)),
+    "A_45_bars_boring": ScanAfter(("wait_for_data", None, SHORT_FRAME), ("wait_for_data", None, SHORT_FRAME),
+                                  ("screen", "wait_for_data", SHORT_FRAME), ("wait_for_data", SHORT_FRAME)),
+    # The history attrs carry no instrument_type; stock_summary says EQUITY/USD. Unverified promotes.
+    "B_attrs_missing_breakout": ScanAfter(PROMOTED, ARMED_OFF_SESSION,
+                                          ("card", "enter_on_trigger", ["market_closed"]),
+                                          ("enter_on_trigger", ["market_closed"])),
+    "B_attrs_missing_boring": ScanAfter(NO_SETUP, NO_SETUP, ("screen", "no_setup", []), ("no_setup", [])),
+    # the data veto decides; every other fired gate is disclosed
+    "C_stale_knife": ScanAfter(("wait_for_data", None, ["falling_knife", "stale_data@daily"]),
+                               ("wait_for_data", None, ["stale_data", "falling_knife"]),
+                               ("screen", "wait_for_data", ["falling_knife", "stale_data@daily"]),
+                               ("wait_for_data", ["falling_knife", "stale_data@daily"])),
+    "C_stale_thin": ScanAfter(("wait_for_data", None, ["stale_data@daily", "weak_liquidity"]),
+                              ("wait_for_data", None, ["stale_data", "weak_liquidity"]),
+                              ("screen", "wait_for_data", ["stale_data@daily", "weak_liquidity"]),
+                              ("wait_for_data", ["stale_data@daily", "weak_liquidity"])),
     "D_etf_breakout": ETF_BREAKOUT,
 }
-
-
-# Fresh, liquid, supported 260-bar frames: no gate stage 1 gains in WP2.1 fires on them, and
-# earnings stay unevaluated at stage 1, so WP2.1 leaves every column of these rows as it is.
-ROWS_WP21_KEEPS = ("fresh_breakout", "boring_earnings_in_2d", "breakout_earnings_in_2d",
-                   "breakout_events_unverifiable")
 
 
 def scan_row(result: dict[str, Any]) -> tuple[str, str, list[str]]:
@@ -404,12 +405,12 @@ def scan_row(result: dict[str, Any]) -> tuple[str, str, list[str]]:
     return "card" if result["full_cards"] else "screen", row["action"], row["blockers"]
 
 
-async def check_before_row(name: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """Stage 1, the card, a first scan and a card-forced scan on one frame, against SCAN_BEFORE."""
-    expected = SCAN_BEFORE[name]
+async def check_row(name: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Stage 1, the card, a first scan and a card-forced scan on one frame, against SCAN_AFTER."""
+    expected = SCAN_AFTER[name]
     df = sm.install(monkeypatch, sm.SCAN_SCENARIOS[name])
 
-    screen = screen_symbol(df.copy())
+    screen = screen_symbol(df.copy(), now=sm.PRE_MARKET, session="pre_market")
     card = await sm.trade_card()
     first = await sm.scan(tmp_path / "first")
     forced = await sm.scan(tmp_path / "forced", prior_action="enter_on_trigger")
@@ -418,73 +419,21 @@ async def check_before_row(name: str, monkeypatch: pytest.MonkeyPatch, tmp_path:
     assert screen["promote"] is (screen["action_hint"] == "candidate")
     assert (card["action"], (card["setup"] or {}).get("type"), ids(card["blockers"])) == expected.card
     assert scan_row(first) == expected.row
+    assert first["rows"][0]["source"] == expected.row[0]
     assert first["rows"][0]["earnings_in_days"] == (
         card["event_risk"]["earnings_in_days"] if expected.row[0] == "card" else None)
     assert scan_row(forced) == ("card", *expected.forced)
 
 
-# name: (the card-forced row, then the screen row: action and blockers; the notes the second scan reports)
-PHANTOM_CHANGES: dict[str, tuple[tuple[str, list[str]], tuple[str, list[str]], list[str]]] = {
-    # stage 1 never evaluates earnings, so the screen row drops the card's blackout
-    "boring_earnings_in_2d": (("no_setup", ["earnings_blackout"]), ("no_setup", []),
-                              ["blockers: ['earnings_blackout'] -> []"]),
-    # the card's residual market_closed, and the setup the screen drops (probe_verify_scan.py D)
-    "D_etf_breakout": (("watch", ["market_closed", "unsupported_instrument"]), ("watch", ["unsupported_instrument"]),
-                       ["setup_type: breakout -> None",
-                        "blockers: ['market_closed', 'unsupported_instrument'] -> ['unsupported_instrument']",
-                        "trigger_price: 111.96 -> None"]),
-}
-
-
-class TestScanVsCardBefore:
+class TestScanVsCard:
     def test_the_table_covers_every_ported_scenario(self) -> None:
-        """GC-C4: the before table has a row for each probe_scan_vs_card.py and probe_verify_scan.py frame.
-        Holds throughout 2a: WP2.1 changes rows, not the scenario set."""
-        assert list(SCAN_BEFORE) == list(sm.SCAN_SCENARIOS)
-        assert set(ROWS_WP21_KEEPS) < set(SCAN_BEFORE)
+        """GC-C4: the table has a row for each probe_scan_vs_card.py and probe_verify_scan.py frame.
+        Holds throughout 2a: WP2.1 changed rows, not the scenario set."""
+        assert list(SCAN_AFTER) == list(sm.SCAN_SCENARIOS)
 
-    @pytest.mark.parametrize("name", [name for name in SCAN_BEFORE if name not in ROWS_WP21_KEEPS])
-    async def test_before_table(self, name: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-        """GC-C4: stage 1, the card and the scan rows on one frame (stale, 21-49 bars, liquidity basis, ETF,
-        missing attrs), pre-market. Flipped by WP2.1: stage 1 evaluates the card's gates, then
-        resolves rank-first (D-11; GC-R14-R18)."""
-        await check_before_row(name, monkeypatch, tmp_path)
-
-    @pytest.mark.parametrize("name", ROWS_WP21_KEEPS)
-    async def test_before_table_rows_wp21_keeps(
-        self, name: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
-        """GC-C4: the same columns on fresh, liquid, supported frames (clean breakout, earnings in 2 days,
-        unverifiable calendar). Holds throughout 2a: no gate stage 1 gains in WP2.1 fires on these frames."""
-        await check_before_row(name, monkeypatch, tmp_path)
-
-    @pytest.mark.parametrize(("name", "screen_millions", "card_millions"),
-                             [("liq_recent_collapse_breakout", 0.11, 3.07), ("liq_recent_surge_breakout", 5.49, 0.68)])
-    async def test_stage1_and_the_card_measure_liquidity_differently(
-        self, name: str, screen_millions: float, card_millions: float, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """GC-C4: stage 1 averages close x volume over the prior 20 bars; the card multiplies the 1y mean
-        volume by the last close. Flipped by WP2.1: stage 1 uses the card's basis (D-11, GC-R14)."""
-        df = sm.install(monkeypatch, sm.SCAN_SCENARIOS[name])
-        risk = await sm.risk_tool.risk_metrics(sm.SYMBOL)
-
-        assert round(_avg_dollar_volume(df) / 1e6, 2) == screen_millions
-        assert round(risk["liquidity"]["avg_dollar_volume"] / 1e6, 2) == card_millions
-
-    @pytest.mark.parametrize("name", PHANTOM_CHANGES)
-    async def test_a_card_then_screen_sequence_reports_a_phantom_change(
-        self, name: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
-        """GC-C4: a frame scanned by the card (prior state actionable), then by the screen, is reported as
-        changed although nothing moved. Flipped by WP2.1: screen rows keep the setup and _diff skips
-        (id, leg) pairs either side left unevaluated (GC-R17, GC-R21; plan §0 #20)."""
-        (card_action, card_blockers), screen_row, notes = PHANTOM_CHANGES[name]
-        sm.install(monkeypatch, sm.SCAN_SCENARIOS[name])
-
-        by_card = await sm.scan(tmp_path, prior_action="enter_on_trigger")
-        by_screen = await sm.scan(tmp_path)
-
-        assert scan_row(by_card) == ("card", card_action, card_blockers)
-        assert scan_row(by_screen) == ("screen", *screen_row)
-        assert by_screen["changes"] == [{"symbol": sm.SYMBOL, "from": card_action, "to": card_action,
-                                         "notes": notes}]
+    @pytest.mark.parametrize("name", SCAN_AFTER)
+    async def test_after_table(self, name: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+        """GC-C4: stage 1, the card and the scan rows on one frame, pre-market. G from WP2.1 (GC-R14-R18): stage 1
+        evaluates the card's gates (50-bar floor, daily leg, liquidity basis, support cap, unverified support)
+        and resolves rank-first, so a screen row agrees with the card (D-11)."""
+        await check_row(name, monkeypatch, tmp_path)

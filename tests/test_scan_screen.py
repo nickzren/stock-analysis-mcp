@@ -3,13 +3,18 @@
 import math
 import subprocess
 import sys
+from datetime import datetime
 from typing import Any
 
 import pandas as pd
+import pytz
 
 from stock_analysis.tools.trade_setup.setups import detect_setup
 from stock_analysis.utils.scan_screen import build_screen_payload, screen_symbol
 from stock_analysis.utils.swing_features import compute_setup_features
+
+# make_df frames end on Friday 2026-05-29, current on the Saturday after.
+FRESH = pytz.timezone("America/New_York").localize(datetime(2026, 5, 30, 12, 0))
 
 
 class TestNoCircularImport:
@@ -94,7 +99,7 @@ class TestConsistencyBattery:
 
     def test_breakout_promotes(self) -> None:
         df = uptrend_breakout_df()
-        screen = screen_symbol(df)
+        screen = screen_symbol(df, now=FRESH, session="closed")
         assert screen["promote"] is True
         assert screen["setup_type"] == self._card_side(df)["type"]
         assert screen["trigger_price"] == self._card_side(df)["trigger_price"]
@@ -105,7 +110,7 @@ class TestConsistencyBattery:
         payload = build_screen_payload(df)
         assert payload["rsi"]["value"] >= 30.0
         assert payload["returns"]["return_1w_zscore"] < -2.0
-        screen = screen_symbol(df)
+        screen = screen_symbol(df, now=FRESH, session="closed")
         assert screen["promote"] is True
         assert screen["setup_type"] == "oversold_mean_reversion"
 
@@ -120,7 +125,7 @@ class TestConsistencyBattery:
             noise = 0.35 * math.sin(i * 2.1) + 0.2 * math.sin(i * 0.9 + 1.3)
             closes.append(level + noise)
         df = make_df(closes)
-        screen = screen_symbol(df)
+        screen = screen_symbol(df, now=FRESH, session="closed")
         assert screen["promote"] is False
         assert screen["action_hint"] == "no_setup"
         assert self._card_side(df) is None
@@ -128,7 +133,7 @@ class TestConsistencyBattery:
     def test_knife_terminates_avoid(self) -> None:
         closes = [150.0 - i * 0.25 for i in range(260)]  # long decline, below SMA200
         df = make_df(closes)
-        screen = screen_symbol(df)
+        screen = screen_symbol(df, now=FRESH, session="closed")
         assert screen["promote"] is False
         assert screen["action_hint"] == "avoid"
         assert "falling_knife" in screen["blocker_ids"]
@@ -136,19 +141,19 @@ class TestConsistencyBattery:
     def test_thin_liquidity_terminates_avoid(self) -> None:
         df = uptrend_breakout_df()
         df["volume"] = 3000.0  # ~ $300k/day dollar volume
-        screen = screen_symbol(df)
+        screen = screen_symbol(df, now=FRESH, session="closed")
         assert screen["promote"] is False
         assert "weak_liquidity" in screen["blocker_ids"]
 
     def test_missing_volume_is_liquidity_missing_blocker(self) -> None:
         df = uptrend_breakout_df()
         df["volume"] = float("nan")
-        screen = screen_symbol(df)
+        screen = screen_symbol(df, now=FRESH, session="closed")
         assert screen["promote"] is False
         assert "liquidity_missing" in screen["blocker_ids"]  # AMENDMENT shape rule
 
     def test_insufficient_data_is_wait_for_data(self) -> None:
-        screen = screen_symbol(make_df([100.0] * 10))
+        screen = screen_symbol(make_df([100.0] * 10), now=FRESH, session="closed")
         assert screen["promote"] is False
         assert screen["action_hint"] == "wait_for_data"
         assert "data_quality_critical" in screen["blocker_ids"]
