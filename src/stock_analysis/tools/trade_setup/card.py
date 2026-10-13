@@ -8,6 +8,7 @@ from typing import Any
 from stock_analysis.tools.analyze.gates import (
     check_data_quality,
     check_earnings_blackout,
+    check_earnings_unverifiable,
     check_liquidity,
     is_falling_knife_technicals,
 )
@@ -102,10 +103,8 @@ def build_trade_setup_card(
     earnings_blackout, earnings_blocker = check_earnings_blackout(events_data)
     if earnings_blocker:
         blockers.append(earnings_blocker)
-    events_failed = any(tf.get("tool") == "events_calendar" for tf in tool_failures or [])
+    events_unverifiable, unverifiable_blocker = check_earnings_unverifiable(events_data, tool_failures)
     earnings = (events_data.get("earnings") or {}) if events_data else {}
-    events_degraded = earnings.get("verification") == "unverifiable"
-    events_unverifiable = events_failed or events_degraded
 
     setup: dict[str, Any] | None = None
     plan: dict[str, Any] | None = None
@@ -119,12 +118,8 @@ def build_trade_setup_card(
         if setup is None:
             action = "no_setup"
         else:
-            if events_unverifiable:
-                cause = _unverifiable_cause(earnings, events_failed)
-                blockers.append({
-                    "id": "earnings_unverifiable",
-                    "reason": f"earnings calendar unverifiable ({cause}) — event risk unverified",
-                })
+            if unverifiable_blocker:
+                blockers.append(unverifiable_blocker)
             if earnings_blackout or events_unverifiable:
                 action = "watch"
             elif setup["trigger_satisfied"] and session == "regular" and not freshness["stale"]:
@@ -222,13 +217,3 @@ def _next_review(
         "date": add_trading_days(now.date(), DEFAULT_REVIEW_TRADING_DAYS).isoformat(),
         "reason": "setup re-check",
     }
-
-
-def _unverifiable_cause(earnings: dict[str, Any], events_failed: bool) -> str:
-    if events_failed:
-        return "tool fetch"
-    causes = [f"{name} failed" for name in earnings.get("sources_failed") or []]
-    causes += [f"{name} stale" for name in earnings.get("sources_stale") or []]
-    if any(window.get("window_basis") == "assumed" for window in earnings.get("windows") or []):
-        causes.append("estimate window assumed")
-    return ", ".join(causes) or "no verified source"
