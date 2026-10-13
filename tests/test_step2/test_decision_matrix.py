@@ -77,9 +77,9 @@ def _normalized(value: Any) -> Any:
 class TestBeforeTable:
     async def test_the_committed_before_table_matches_the_code(self) -> None:
         """DM-CH1: every scenario's decision digest equals tests/fixtures/decision_matrix/before.json.
-        CH: flipped by the first WP that changes a row (expected WP2.1), which records after.json with
-        `--after` and points this test at it; each WP lists its intended row changes. before.json stays
-        as recorded (DM-G6)."""
+        CH: flipped by the first WP that changes a row (expected WP2.2; WP2.1 changed none, its after.json
+        equals before.json), which records after.json with `--after` and points this test at it; each WP
+        lists its intended row changes. before.json stays as recorded (DM-G6)."""
         table, _ = await dm.build()
 
         assert set(table) == set(BEFORE)
@@ -88,9 +88,10 @@ class TestBeforeTable:
 
     async def test_the_recorded_snapshots_match_the_code(self) -> None:
         """DM-CH2: each scenario's watchlist_snapshot equals its recorded 2.0.0 fixture.
-        CH: flipped by the first WP that changes a snapshot field (expected WP2.1, through hard_gate_ids
-        or decision_action_now), which narrows it to the unchanged rows; WP2.4 (snapshot 3.0.0) retires
-        it. The 2.0.0 fixtures stay as recorded (DM-G6) for the 3.0.0 migration tests."""
+        CH: flipped by the first WP that changes a snapshot field (expected WP2.2, through hard_gate_ids
+        or decision_action_now; WP2.1 changed none), which narrows it to the unchanged rows; WP2.4
+        (snapshot 3.0.0) retires it. The 2.0.0 fixtures stay as recorded (DM-G6) for the 3.0.0 migration
+        tests."""
         _, snapshots = await dm.build()
 
         assert {p.stem for p in dm.SNAPSHOT_DIR.glob("*.json")} == set(snapshots)
