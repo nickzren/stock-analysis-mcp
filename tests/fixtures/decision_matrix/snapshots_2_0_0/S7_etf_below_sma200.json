@@ -1,0 +1,44 @@
+{
+  "action_long_term": "insufficient_data",
+  "action_mid_term": "hold",
+  "as_of_kind": "session_close",
+  "bearish_signals": [
+    "price_below_sma200"
+  ],
+  "bullish_signals": [
+    "golden_cross",
+    "macd_bullish",
+    "strong_3m_momentum"
+  ],
+  "confidence": "low",
+  "decision_action_now": "hold",
+  "hard_gate_ids": [
+    "unsupported_instrument"
+  ],
+  "is_unprofitable": null,
+  "long_term_fit": "unknown",
+  "market_cap": null,
+  "mid_term_fit": "ok",
+  "next_catalyst": {
+    "reason": "calendar_data_unavailable",
+    "status": "unavailable",
+    "type": "earnings"
+  },
+  "price": 85.0,
+  "price_as_of": "2026-10-09",
+  "price_source": "daily_close",
+  "price_stale": false,
+  "risk_regime": "medium",
+  "score": 0.15,
+  "sector": null,
+  "snapshot_as_of_date": "2026-10-10",
+  "snapshot_hash": "2a8961f839ec1e89",
+  "snapshot_version": "2.0.0",
+  "support_currency": "supported",
+  "support_instrument": "unsupported",
+  "symbol": "ACME",
+  "tilt": "neutral",
+  "valuation_gate": "not_applicable",
+  "volatility_ann": 0.22,
+  "zone": "accumulate"
+}
