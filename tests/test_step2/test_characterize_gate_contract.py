@@ -300,10 +300,11 @@ class TestAnalyzeGateBefore:
             "watch", ["data_quality_critical", "unsupported_instrument", "unsupported_currency"])
         assert (card["action"], ids(card["blockers"])) == ("watch", ["unsupported_instrument", "unsupported_currency"])
 
-    async def test_a_fresh_quote_hides_a_stale_daily_frame_from_analyze(self) -> None:
-        """GC-C3: in session, analyze prices off a fresh 5m quote and only warns that the daily frame is 11
-        sessions behind; the card's build_freshness blocks the same legs as stale_daily.
-        Flipped by WP2.1: analyze's freshness gate checks the daily leg in every session (D-7, GC-R12)."""
+    async def test_a_fresh_quote_no_longer_hides_a_stale_daily_frame(self) -> None:
+        """GC-R12 (freshness half, flipped from GC-C3 by WP2.1): in session, analyze still prices off the fresh
+        5m quote, but leg H reads technicals' own daily history (11 sessions behind) and fires stale_data with
+        daily_history_stale; the card's build_freshness blocks the same legs as stale_daily. PD D-7.
+        The action clause is the WP2.1 interim (hard-gate path); WP2.2 moves it to decide() (FR-R-F2)."""
         result = await dm.run(FRESH_QUOTE_STALE_DAILY)
         provenance = result["summary"]["price_provenance"]
         data_quality = result["data_quality"]
@@ -315,7 +316,11 @@ class TestAnalyzeGateBefore:
         assert {k: data_quality["component_freshness"]["price"][k] for k in ("sessions_behind", "stale")} == {
             "sessions_behind": 11, "stale": True}
         assert data_quality["staleness_warnings"] == ["price_stale_11_sessions", "risk_stale_11_sessions"]
-        assert (result["decision_card"]["action_now"], dm.gate_ids(result)) == ("hold_or_add", [])
+        assert (data_quality["freshness"]["codes"], data_quality["freshness"]["daily_sessions_behind"]) == (
+            ["daily_history_stale"], 11)
+        assert [(g["id"], g.get("codes")) for g in result["decision_card"]["hard_gates"]["blocking"]] == [
+            ("stale_data", ["daily_history_stale"])]
+        assert result["decision_card"]["action_now"] == "wait_for_data"
         assert (freshness["reason_code"], ids(freshness_blockers(freshness))) == ("stale_daily", ["stale_data"])
 
 

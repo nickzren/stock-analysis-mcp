@@ -3,7 +3,8 @@
 Order: a fresh intraday bar in the regular session, else the latest valid close of a
 completed session, else the info quote as a labelled fallback (it can sit in the cache
 for hours). Daily closes are aged in sessions against the last completed session;
-timestamped quotes in hours, in UTC. Staleness here is a disclosure, not a gate.
+timestamped quotes in hours, in UTC. Staleness here is disclosed; analyze's freshness gate
+(``tools/analyze/gates.check_price_freshness``) reads this provenance as its quote leg (plan §5).
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ import pandas as pd
 import pytz
 
 from stock_analysis.utils.freshness import FRESHNESS_CEILING_MINUTES, FUTURE_SKEW_TOLERANCE_SECONDS
+from stock_analysis.utils.helpers import valid_price
 from stock_analysis.utils.market_calendar import (
     classify_session,
     last_completed_session,
@@ -44,20 +46,13 @@ def to_utc(value: Any) -> datetime | None:
     return None if pd.isna(ts) else ts.to_pydatetime()
 
 
-def _valid_price(value: Any) -> float | None:
-    price = pd.to_numeric(value, errors="coerce")
-    if pd.isna(price) or not math.isfinite(float(price)) or float(price) <= 0:
-        return None
-    return float(price)
-
-
 def last_valid_bar_date(df: pd.DataFrame | None) -> Any:
     """The ``date`` of the newest bar with a valid close, as stored; None when no bar
     has one. An empty vendor session kept by ``keepna`` is not the freshest bar."""
     if df is None or len(df) == 0 or "close" not in df.columns or "date" not in df.columns:
         return None
     for raw_date, raw_close in zip(reversed(df["date"].tolist()), reversed(df["close"].tolist()), strict=True):
-        if _valid_price(raw_close) is not None:
+        if valid_price(raw_close) is not None:
             return raw_date
     return None
 
@@ -74,11 +69,25 @@ def latest_session_close(df: pd.DataFrame | None, now: datetime) -> dict[str, An
             session_date = date.fromisoformat(str(raw_date)[:10])
         except ValueError:
             continue
-        close = _valid_price(raw_close)
+        close = valid_price(raw_close)
         if session_date <= completed and close is not None:
             return {"close": round(close, 4), "session_date": session_date.isoformat(),
                     "fetched_at": df.attrs.get("fetched_at"), "cache_hit": False}
     return None
+
+
+def build_daily_history(df: pd.DataFrame | None, now: datetime) -> dict[str, Any] | None:
+    """Technicals' own daily frame, for analyze's freshness leg H (plan §5). None without a frame."""
+    if df is None or len(df) == 0 or "close" not in df.columns or "date" not in df.columns:
+        return None
+    last_valid = last_valid_bar_date(df)
+    completed = latest_session_close(df, now)
+    return {
+        "last_row_date": str(df["date"].iloc[-1])[:10],  # reason text only
+        "last_valid_date": None if last_valid is None else str(last_valid)[:10],
+        "last_row_valid": valid_price(df["close"].iloc[-1]) is not None,
+        "completed_valid_date": None if completed is None else completed["session_date"],
+    }
 
 
 def latest_intraday_bar(df: pd.DataFrame | None) -> dict[str, Any] | None:
@@ -87,7 +96,7 @@ def latest_intraday_bar(df: pd.DataFrame | None) -> dict[str, Any] | None:
         return None
     for raw_date, raw_close in zip(reversed(df["date"].tolist()), reversed(df["close"].tolist()), strict=True):
         ts = to_utc(raw_date)
-        close = _valid_price(raw_close)
+        close = valid_price(raw_close)
         if ts is not None and close is not None:
             return {"close": round(close, 4), "bar_time": ts.isoformat(),
                     "fetched_at": df.attrs.get("fetched_at"), "cache_hit": False}
@@ -167,7 +176,7 @@ def select_price(
         intraday_rejected = "intraday_quote_unavailable"
         bar = intraday_quote or {}
         ts = to_utc(bar.get("bar_time"))
-        price = _valid_price(bar.get("close"))
+        price = valid_price(bar.get("close"))
         if ts is not None and price is not None:
             clock = _clock(now, bar)
             age = (clock - ts).total_seconds()
@@ -179,14 +188,14 @@ def select_price(
                 return price, _provenance("intraday_quote", ts.isoformat(), "bar_time", bar,
                                           quote_staleness(ts, clock))
     if session_close:
-        price = _valid_price(session_close.get("close"))
+        price = valid_price(session_close.get("close"))
         session_date = session_close.get("session_date")
         if price is not None and isinstance(session_date, str):
             return price, _provenance("daily_close", session_date, "session_close", session_close,
                                       session_staleness(date.fromisoformat(session_date), now),
                                       intraday_rejected)
     info = info_quote or {}
-    price = _valid_price(info.get("price"))
+    price = valid_price(info.get("price"))
     if price is None:
         return None, _provenance(None, None, None, {}, None, "no_price")
     ts = to_utc(info.get("quote_time"))

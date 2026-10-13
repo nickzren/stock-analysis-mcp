@@ -4,9 +4,23 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
+from datetime import date, datetime
 from typing import Any
 
+import pytz
+
 from stock_analysis.tools.analyze.constants import CRITICAL_ANALYZE_TOOLS
+from stock_analysis.utils.freshness import (
+    FRESHNESS_CEILING_MINUTES,
+    FRESHNESS_UNVERIFIABLE,
+    STALE_DATA,
+)
+from stock_analysis.utils.market_calendar import (
+    classify_session,
+    last_completed_session,
+    session_method,
+    trading_days_between,
+)
 
 # Liquidity threshold below which we block new buys for small accounts.
 WEAK_LIQUIDITY_DOLLARS_PER_DAY = 1_000_000.0
@@ -183,6 +197,126 @@ def is_falling_knife_technicals(technicals_data: dict[str, Any]) -> tuple[bool, 
     return score >= FALLING_KNIFE_SCORE_THRESHOLD, reasons
 
 
+# --- The freshness gate (plan §5, D-7): leg Q (the selected price), leg H (technicals' daily history) ---
+
+FRESHNESS_CODE_IDS: dict[str, str] = {  # plan §5's id table: leg Q codes, then leg H codes in rule order
+    "info_quote_fallback": FRESHNESS_UNVERIFIABLE,
+    "intraday_quote_unavailable": FRESHNESS_UNVERIFIABLE,
+    "intraday_quote_stale": STALE_DATA,
+    "intraday_future_timestamp": FRESHNESS_UNVERIFIABLE,
+    "daily_close_stale": STALE_DATA,
+    "daily_history_unavailable": FRESHNESS_UNVERIFIABLE,
+    "daily_latest_bar_invalid": FRESHNESS_UNVERIFIABLE,
+    "daily_history_stale": STALE_DATA,
+    "daily_future_bar": FRESHNESS_UNVERIFIABLE,
+    "daily_bar_after_last_session": FRESHNESS_UNVERIFIABLE,
+}
+INCLUDES_FORMING_BAR, CALENDAR_UNVERIFIED = "includes_forming_bar", "calendar_unverified"
+_INTRADAY_REJECTIONS = frozenset({"intraday_quote_unavailable", "intraday_quote_stale", "intraday_future_timestamp"})
+_ET = pytz.timezone("America/New_York")
+
+
+def _iso_date(value: Any) -> date | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _sessions(n: Any) -> str:
+    return f"{n} session{'' if n == 1 else 's'}"
+
+
+def check_price_freshness(
+    *, now: datetime, price_provenance: dict[str, Any] | None, daily_history: Any,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """(blockers, data_quality.freshness) for analyze's selected price. Pure; never raises.
+
+    No selected price adds no code: that is data_quality_critical's case (current_price missing).
+    Flags are disclosure only.
+    """
+    now_et = now.astimezone(_ET)
+    session = classify_session(now_et)
+    expected = last_completed_session(now_et)
+    today = now_et.date()
+    prov = price_provenance if isinstance(price_provenance, dict) else {}
+    source = prov.get("price_source")
+    behind_q = (prov.get("staleness") or {}).get("sessions_behind")
+    codes: list[str] = []
+    flags: list[str] = []
+
+    # Leg Q: in the regular session select_price returns an intraday quote only when it is fresh.
+    if source == "info_quote_fallback":
+        codes.append("info_quote_fallback")
+    elif source == "daily_close" and session == "regular":
+        rejected = prov.get("fallback_reason")
+        codes.append(rejected if rejected in _INTRADAY_REJECTIONS else "intraday_quote_unavailable")
+    elif source == "daily_close" and (not isinstance(behind_q, int) or behind_q >= 1):
+        codes.append("daily_close_stale")
+
+    # Leg H, every session.
+    history = daily_history if isinstance(daily_history, dict) else {}
+    last_valid = _iso_date(history.get("last_valid_date"))
+    completed = _iso_date(history.get("completed_valid_date"))
+    behind_h: int | None = None
+    if last_valid is None or not isinstance(history.get("last_row_valid"), bool):
+        codes.append("daily_history_unavailable")
+        last_valid = completed = None
+    else:
+        if history["last_row_valid"] is False:
+            codes.append("daily_latest_bar_invalid")
+        if completed is None:
+            codes.append("daily_history_unavailable")
+        else:
+            behind_h = trading_days_between(completed, expected)
+            if behind_h >= 1:
+                codes.append("daily_history_stale")
+        forming = session == "regular" and last_valid == today
+        if last_valid > today:
+            codes.append("daily_future_bar")
+        elif last_valid > expected and not forming:
+            codes.append("daily_bar_after_last_session")
+        elif forming:
+            flags.append(INCLUDES_FORMING_BAR)
+    if session_method(now_et) != "calendar_static":
+        flags.append(CALENDAR_UNVERIFIED)
+
+    reasons = {
+        "info_quote_fallback": (
+            f"price from the info quote fallback (quoted {prov.get('price_as_of') or 'at an unknown time'})"),
+        "intraday_quote_unavailable": "no usable intraday quote in the regular session",
+        "intraday_quote_stale": f"intraday quote older than {FRESHNESS_CEILING_MINUTES} min",
+        "intraday_future_timestamp": "intraday quote timestamped in the future",
+        "daily_close_stale": (f"last close {prov.get('price_as_of')} is {_sessions(behind_q)} behind "
+                              f"(expected {expected})"),
+        "daily_history_unavailable": "daily history unavailable or malformed",
+        "daily_latest_bar_invalid": f"latest daily row {history.get('last_row_date')} has no valid close",
+        "daily_history_stale": (f"daily history {_sessions(behind_h)} behind "
+                                f"(last completed bar {completed}, expected {expected})"),
+        "daily_future_bar": f"daily history has a row dated {last_valid}, after today",
+        "daily_bar_after_last_session": (f"daily history has a valid row dated {last_valid}, "
+                                         f"after the last completed session {expected}"),
+    }
+    blockers: list[dict[str, Any]] = []
+    for gate_id in (STALE_DATA, FRESHNESS_UNVERIFIABLE):
+        mine = [code for code in codes if FRESHNESS_CODE_IDS[code] == gate_id]
+        if mine:
+            blockers.append({"id": gate_id, "reason": "; ".join(reasons[code] for code in mine), "codes": mine})
+    disclosure = {
+        "session": session,
+        "expected_session": expected.isoformat(),
+        "price_source": source,
+        "daily_last_valid_date": None if last_valid is None else last_valid.isoformat(),
+        "daily_completed_session": None if completed is None else completed.isoformat(),
+        "daily_sessions_behind": behind_h,
+        "codes": codes,
+        "flags": flags,
+    }
+    return blockers, disclosure
+
+
 # --- The gate registry (plan §4) ---
 
 NOT_APPLICABLE, UNEVALUATED = "not_applicable", "unevaluated"
@@ -234,12 +368,12 @@ _LIQUIDITY_FLOOR = f"${WEAK_LIQUIDITY_DOLLARS_PER_DAY / 1_000_000:.0f}M"
 
 # Insertion order is the within-rank disclosure order.
 GATES: dict[str, Gate] = {
-    "stale_data": Gate(
+    STALE_DATA: Gate(
         "data", "veto", _WAIT_FOR_DATA,
         predicate="the selected price or the daily history is >= 1 session behind the last completed session",
         clears_when=_MARKET_DATA_CURRENT, unevaluated_when={"screen": _QUOTE_LEG},
         tool_predicates=_FRESHNESS_TOOL_PREDICATES),
-    "freshness_unverifiable": Gate(
+    FRESHNESS_UNVERIFIABLE: Gate(
         "data", "veto", _WAIT_FOR_DATA,
         predicate="no verifiable timestamp, or no valid (finite, > 0) price, for the selected price or the daily history",
         clears_when=_MARKET_DATA_CURRENT, unevaluated_when={"screen": _QUOTE_LEG},

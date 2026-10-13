@@ -3,7 +3,8 @@
 Annex: docs/plans/step2-v2-research/freshness.md, "Corrected proposal" > "Tests". These
 record today's behavior (0609fde); they are not red-first. Each test is ported from an annex
 probe (probe_calendar.py, probe_price_basis.py, probe_technicals_fields.py,
-probe_risk_nan_latest.py, v3_corrected_gate.py). Every clock is pinned.
+probe_risk_nan_latest.py, v3_corrected_gate.py). Every clock is pinned. FR-C5 was flipped by
+WP2.1 and now pins PD D-12 (one valid-price predicate: finite and > 0).
 """
 
 import importlib
@@ -179,30 +180,30 @@ class TestRiskMetricsEmptyLatestBar:
 ZERO_CLOSE_ROWS = [
     pytest.param([(6, 101.0), (1, 0.0)], id="R16_last_row_zero"),
     pytest.param([(1, 0.0)], id="R17_only_bar_zero"),
+    pytest.param([(1, -1.0)], id="only_bar_negative"),
 ]
 
 
-class TestCardTakesAZeroClose:
+class TestCardRejectsAZeroClose:
     @pytest.mark.parametrize("bars", ZERO_CLOSE_ROWS)
-    def test_build_freshness_allows_it(self, bars: list[tuple[float, float]]) -> None:
-        """FR-C5: the card's freshness checks the raw last 5m row for finiteness only, so a
-        0.0 close a minute old passes: fresh, not stale, no blocker.
-        CH: flipped by WP2.1 (PD D-12, approved): a 0.0 close blocks with its own reason."""
+    def test_build_freshness_blocks_it(self, bars: list[tuple[float, float]]) -> None:
+        """FR-C5: the card's freshness reads the raw last 5m row with valid_price (finite and > 0),
+        so a 0.0 or negative close a minute old is unverifiable with its own reason, nonpositive_close.
+        PD D-12 (flipped by WP2.1)."""
         freshness = build_freshness(intraday_df=five_min(REGULAR, bars),
                                     daily_df=daily("2026-10-12"), session="regular", now=REGULAR)
 
         assert (freshness["basis"], freshness["stale"], freshness["reason_code"],
-                freshness["quote_age_seconds"]) == ("bar_timestamp", False, None, 60)
-        assert freshness_blockers(freshness) == []
+                freshness["quote_age_seconds"]) == ("unverifiable", True, "nonpositive_close", None)
+        assert [b["id"] for b in freshness_blockers(freshness)] == ["freshness_unverifiable"]
 
     @pytest.mark.parametrize("bars", ZERO_CLOSE_ROWS)
-    async def test_the_orchestrator_prices_the_card_at_zero(
+    async def test_the_orchestrator_never_prices_the_card_at_zero(
         self, monkeypatch: pytest.MonkeyPatch, bars: list[tuple[float, float]]
     ) -> None:
-        """FR-C5: analyze_trade_setup takes the 0.0 5m close as actionable_price, and the card
-        shows no_setup with no blocker instead of waiting for data. No setup detector qualifies
-        at 0.0, so the plan_invariant_violation downgrade that plan §5 describes is never reached.
-        CH: flipped by WP2.1 (PD D-12, approved): one valid-price predicate (finite and > 0)."""
+        """FR-C5: analyze_trade_setup never takes a 0.0 or negative 5m close as actionable_price (it
+        falls back to the daily close, 101.0), and the card waits for data with freshness_unverifiable
+        (nonpositive_close) instead of showing no_setup. PD D-12 (flipped by WP2.1)."""
         async def summary(symbol: str, **kwargs: Any) -> dict[str, Any]:
             return {"symbol": symbol, "name": "Acme", "currency": "USD", "quote_type": "EQUITY",
                     "current_price": 101.0}
@@ -234,5 +235,6 @@ class TestCardTakesAZeroClose:
 
         card = await trade_orch.analyze_trade_setup("ACME", _now=REGULAR)
 
-        assert seen["actionable_price"] == 0.0
-        assert (card["action"], card["blockers"]) == ("no_setup", [])
+        assert seen["actionable_price"] == 101.0
+        assert (card["action"], [b["id"] for b in card["blockers"]], card["freshness"]["reason_code"]) == (
+            "wait_for_data", ["freshness_unverifiable"], "nonpositive_close")

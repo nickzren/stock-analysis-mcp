@@ -27,7 +27,9 @@ from stock_analysis.tools.trade_setup.setup_rules import (
     PROBE_PERIOD,
 )
 from stock_analysis.utils.expected_move import compute_expected_move, select_event_expiration
+from stock_analysis.utils.helpers import valid_price
 from stock_analysis.utils.provenance import build_error_response, build_meta
+from stock_analysis.utils.swing_features import daily_actionable_price
 from stock_analysis.utils.validators import FetchParams
 
 _ET = pytz.timezone("America/New_York")
@@ -128,18 +130,16 @@ async def analyze_trade_setup(
     features = compute_setup_features(daily_df)
 
     probe_close: float | None = None
-    if session == "regular" and probe_df is not None and len(probe_df) > 0:
-        last_close = pd.to_numeric(probe_df["close"], errors="coerce").iloc[-1]
-        if not pd.isna(last_close) and math.isfinite(float(last_close)):
-            probe_close = float(last_close)
+    if session == "regular" and probe_df is not None and len(probe_df) > 0 and "close" in probe_df.columns:
+        probe_close = valid_price(probe_df["close"].iloc[-1])  # the raw last row, as build_freshness reads it
 
     actionable_price: float | None
     if probe_close is not None:
         actionable_price = probe_close
     elif features is not None:
-        actionable_price = features["last_close"]
+        actionable_price = daily_actionable_price(features)
     else:
-        actionable_price = (cleaned.get("technicals") or {}).get("current_price")
+        actionable_price = valid_price((cleaned.get("technicals") or {}).get("current_price"))
 
     expected_move: dict[str, Any] | None = None
     earnings = (cleaned.get("events_calendar") or {}).get("earnings") or {}

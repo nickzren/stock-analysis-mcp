@@ -30,6 +30,7 @@ from stock_analysis.tools.analyze.executive_summary import (
     build_executive_summary,
     build_policy_action,
 )
+from stock_analysis.tools.analyze.gates import check_price_freshness
 from stock_analysis.tools.analyze.investor_profile import (
     build_decision_modes,
     resolve_investor_profile,
@@ -333,12 +334,13 @@ def _session_freshness_entry(prov: dict[str, Any], now: datetime) -> tuple[dict[
     return entry, staleness["sessions_behind"] if staleness["stale"] else None
 
 
-# (prov_key, component_name, stale_threshold_hours) — price/risk share the price provenance
-# and are measured in sessions (None); fundamentals/events get a 1-week threshold, news 2 weeks.
+# (prov_key, component_name, stale_threshold_hours) — price is technicals' own completed daily bar
+# (the freshness gate's), risk is risk_metrics' own; both are measured in sessions (None).
+# fundamentals/events get a 1-week threshold, news 2 weeks.
 _FRESHNESS_SPECS: tuple[tuple[str, str, int | None], ...] = (
-    ("price", "price", None),
+    ("technicals_daily", "price", None),
     ("fundamentals", "fundamentals", 168),
-    ("price", "risk", None),
+    ("risk_daily", "risk", None),
     ("news", "news", 336),
     ("events", "events", 168),
 )
@@ -535,6 +537,8 @@ async def analyze_stock(
             "cache_hit": summary_data.get("cache_hit"),
         },
     )
+    price_freshness_blockers, price_freshness = check_price_freshness(
+        now=now, price_provenance=price_provenance, daily_history=tech_data.get("daily_history"))
 
     # Summary section
     summary: dict[str, Any] = {
@@ -1008,8 +1012,14 @@ async def analyze_stock(
     staleness_warnings: list[str] = []
     now_utc = now.astimezone(UTC)
 
+    sources: dict[str, Any] = {
+        **data_provenance,
+        "technicals_daily": {"as_of": ((tech_data.get("data_provenance") or {}).get("price") or {}).get("as_of"),
+                             "last_bar_date": price_freshness["daily_completed_session"]},
+        "risk_daily": (risk_data.get("data_provenance") or {}).get("price") or {},
+    }
     for prov_key, component_name, threshold_h in _FRESHNESS_SPECS:
-        prov = data_provenance.get(prov_key, {})
+        prov = sources.get(prov_key, {})
         if threshold_h is None:
             entry, sessions_behind = _session_freshness_entry(prov, now)
             if sessions_behind is not None:
@@ -1046,6 +1056,7 @@ async def analyze_stock(
         "in_flight_jobs": in_flight_jobs,
         "bar_validity": bar_validity,
         "warnings": warnings,
+        "freshness": price_freshness,
     }
 
     decision_context = build_decision_context(
@@ -1138,6 +1149,7 @@ async def analyze_stock(
         data_quality=data_quality,
         technicals_data=tech_data,
         dislocation_framework=dislocation_framework,
+        freshness_blockers=price_freshness_blockers,
     )
 
     # Top-level error signaling for invalid/unanalyzable symbols.

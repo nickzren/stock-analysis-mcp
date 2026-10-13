@@ -10,7 +10,7 @@ SUMMARY_KEYS = (
 )
 VERDICT_DECISION_KEYS = ("score", "tilt", "confidence", "components", "pros", "cons")
 DATA_QUALITY_DECISION_KEYS = (
-    "completeness", "missing_critical", "data_gaps", "in_flight_jobs", "bar_validity", "warnings",
+    "completeness", "missing_critical", "data_gaps", "in_flight_jobs", "bar_validity", "warnings", "freshness",
 )
 ACTION_ZONES_STANDARD_KEYS = (
     "current_zone",

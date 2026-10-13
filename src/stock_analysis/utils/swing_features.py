@@ -7,13 +7,18 @@ from typing import Any
 
 import pandas as pd
 
-from stock_analysis.utils.helpers import safe_round
+from stock_analysis.utils.helpers import safe_round, valid_price
 
 BANDWIDTH_WINDOW = 20
 BANDWIDTH_STD_MULT = 4.0  # (upper - lower) / middle with 2.0-std bands
 BANDWIDTH_LOOKBACK = 126  # ~6 months of trading days
 SWING_PIVOT_WINDOW = 3
 SWING_LOOKBACK = 20
+
+
+def daily_actionable_price(features: dict[str, Any]) -> float | None:
+    """The card's actionable price when no intraday quote prices it: the last daily close, if valid (D-12)."""
+    return valid_price(features["last_close"])
 
 
 def compute_setup_features(df: pd.DataFrame | None) -> dict[str, Any] | None:

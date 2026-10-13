@@ -500,7 +500,8 @@ FRIDAY_PRE_OPEN = at(2026, 10, 9, 8)
 @pytest.fixture
 def analyze(monkeypatch: pytest.MonkeyPatch) -> Any:
     async def run(*, technicals: dict[str, Any] | None = None, summary: dict[str, Any] | None = None,
-                  now: datetime = FRIDAY_PRE_OPEN, account_size: float | None = 10_000) -> dict[str, Any]:
+                  risk: dict[str, Any] | None = None, now: datetime = FRIDAY_PRE_OPEN,
+                  account_size: float | None = 10_000) -> dict[str, Any]:
         seen: dict[str, Any] = {}
 
         async def fake_summary(symbol: str, **kwargs: Any) -> dict[str, Any]:
@@ -516,7 +517,8 @@ def analyze(monkeypatch: pytest.MonkeyPatch) -> Any:
                     **(technicals or {})}
 
         async def fake_risk(symbol: str, **kwargs: Any) -> dict[str, Any]:
-            return {"symbol": symbol, "atr": {"value": 2.0, "as_pct_of_price": 0.025}, "beta": {"value": 1.0}}
+            return {"symbol": symbol, "atr": {"value": 2.0, "as_pct_of_price": 0.025}, "beta": {"value": 1.0},
+                    **(risk or {})}
 
         async def fake_fundamentals(symbol: str, **kwargs: Any) -> dict[str, Any]:
             return {"symbol": symbol, "valuation": {"pe_trailing": 15.0, "trailing_eps": 6.0},
@@ -623,7 +625,10 @@ class TestComponentFreshness:
 
     async def test_analyze_warns_in_sessions(self, analyze: Any) -> None:
         prov = {"price": {"source": "yfinance", "as_of": "2026-10-09T12:00:00Z", "last_bar_date": "2026-10-07"}}
-        result = await analyze(technicals={"data_provenance": prov})
+        history = {"last_row_date": "2026-10-07", "last_valid_date": "2026-10-07", "last_row_valid": True,
+                   "completed_valid_date": "2026-10-07"}
+        result = await analyze(technicals={"data_provenance": prov, "daily_history": history},
+                               risk={"data_provenance": prov})
 
         dq = result["data_quality"]
         assert dq["component_freshness"]["price"]["sessions_behind"] == 1

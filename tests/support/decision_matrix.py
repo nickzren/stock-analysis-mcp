@@ -44,6 +44,7 @@ SNAPSHOT_DIR = FIXTURE_DIR / "snapshots_2_0_0"
 TOOLS = ("stock_summary", "technicals", "fundamentals_snapshot", "risk_metrics",
          "events_calendar", "stock_news", "ownership_analysis", "options_signals")
 TIERS = ("decision", "standard", "full")
+OMIT: Any = object()  # a technicals key set to OMIT is left out of the payload (e.g. daily_history)
 
 # --- technicals --------------------------------------------------------------------------
 
@@ -312,8 +313,9 @@ class Scenario:
 
     def payloads(self) -> dict[str, dict[str, Any] | None]:
         """Tool payloads, with a current daily history unless the scenario sets its own: the
-        technicals' latest completed-session close and both daily tools' provenance at the
-        session that just completed for ``now``."""
+        technicals' latest completed-session close, its daily_history (derived from that close)
+        and both daily tools' provenance at the session that just completed for ``now``.
+        Technicals keys set to ``OMIT`` are left out."""
         session = last_completed_session(self.now.astimezone(ET)).isoformat()
         fetched = self.now.astimezone(pytz.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         provenance = {"price": {"source": "yfinance", "as_of": fetched, "last_bar_date": session}}
@@ -324,6 +326,12 @@ class Scenario:
             if price is not None:
                 technicals.setdefault("session_close", {"close": price, "session_date": session,
                                                         "fetched_at": fetched, "cache_hit": False})
+            if "daily_history" not in technicals:
+                close = technicals.get("session_close")
+                day = close.get("session_date") if isinstance(close, dict) else None
+                technicals["daily_history"] = {"last_row_date": day, "last_valid_date": day,
+                                               "last_row_valid": day is not None, "completed_valid_date": day}
+            technicals = {key: value for key, value in technicals.items() if value is not OMIT}
         if risk is not None:
             risk = {"data_provenance": provenance, **risk}
         summary = {**({"current_price": price} if price is not None else {}), **self.summary}

@@ -1,11 +1,20 @@
 """Shared helper functions for type conversion and formatting."""
 
+import math
 import re
 from typing import Any
 
 import pandas as pd
 
 # --- Type conversion helpers ---
+
+
+def valid_price(value: Any) -> float | None:
+    """A usable price: finite and > 0, else None. The one validity predicate (D-12)."""
+    price = pd.to_numeric(value, errors="coerce")
+    if pd.isna(price) or not math.isfinite(float(price)) or float(price) <= 0:
+        return None
+    return float(price)
 
 
 def safe_float(value: Any) -> float | None:

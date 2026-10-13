@@ -12,6 +12,7 @@ from typing import Any
 
 import pandas as pd
 
+from stock_analysis.utils.helpers import valid_price
 from stock_analysis.utils.market_calendar import (
     most_recent_trading_day,
     previous_trading_day,
@@ -20,6 +21,11 @@ from stock_analysis.utils.market_calendar import (
 # Generic freshness property (minutes); trade-setup re-exports it for
 # backward compatibility.
 FRESHNESS_CEILING_MINUTES = 15
+
+# The data-class gates a stale or unverifiable price raises, in the card and in analyze.
+STALE_DATA = "stale_data"
+FRESHNESS_UNVERIFIABLE = "freshness_unverifiable"
+FRESHNESS_GATE_IDS = frozenset({STALE_DATA, FRESHNESS_UNVERIFIABLE})
 
 # A bar timestamped further ahead of `now` than this is a data defect
 # (clock skew tolerance), not a genuinely fresher quote.
@@ -39,13 +45,11 @@ def most_recent_expected_trading_day(now: datetime, session: str) -> date:
 
 
 def _daily_state(daily_df: pd.DataFrame | None) -> tuple[date | None, bool]:
-    """(last_daily_date, last_close_finite)."""
+    """(last_daily_date, last_close_valid): the raw last row's close is finite and > 0 (D-12)."""
     last = _last_daily_date(daily_df)
     if daily_df is None or len(daily_df) == 0 or "close" not in daily_df.columns:
         return last, False
-    close = pd.to_numeric(daily_df["close"], errors="coerce").iloc[-1]
-    finite = not pd.isna(close) and math.isfinite(float(close))
-    return last, finite
+    return last, valid_price(daily_df["close"].iloc[-1]) is not None
 
 
 def _unverifiable(
@@ -69,11 +73,11 @@ def build_freshness(
 ) -> dict[str, Any]:
     """Build the freshness block. `now` must be tz-aware (America/New_York).
 
-    Regular session gates on two legs: a fresh, finite-close intraday bar AND
+    Regular session gates on two legs: a fresh, valid-close intraday bar AND
     a daily frame current as of the last expected trading day — a fresh probe
     no longer authorizes setups computed from an arbitrarily stale daily bar.
     """
-    daily_bar, daily_close_finite = _daily_state(daily_df)
+    daily_bar, daily_close_valid = _daily_state(daily_df)
 
     if session == "regular":
         expected = previous_trading_day(now.date())
@@ -90,6 +94,9 @@ def build_freshness(
             # A timestamp without a finite close is not a reliable actionable
             # price (contract invariant).
             return _unverifiable(session, "nonfinite_close", daily_bar, expected)
+        if valid_price(last_close) is None:
+            # Finite but <= 0: not a usable actionable price either (D-12).
+            return _unverifiable(session, "nonpositive_close", daily_bar, expected)
         age_raw = (now.astimezone(UTC) - ts).total_seconds()
         if age_raw < -FUTURE_SKEW_TOLERANCE_SECONDS:
             # Bar timestamped further ahead than clock skew explains.
@@ -99,7 +106,7 @@ def build_freshness(
         daily_ok = (
             daily_bar is not None
             and expected <= daily_bar <= now.date()
-            and daily_close_finite
+            and daily_close_valid
         )
         stale = quote_stale or not daily_ok
         reason_code = None
@@ -117,7 +124,7 @@ def build_freshness(
         }
 
     expected = most_recent_expected_trading_day(now, session)
-    if daily_bar is None or not daily_close_finite or daily_bar > now.date():
+    if daily_bar is None or not daily_close_valid or daily_bar > now.date():
         return _unverifiable(session, "daily_unusable", daily_bar, expected)
     stale = daily_bar < expected
     return {
@@ -135,7 +142,7 @@ def build_freshness(
 def freshness_blockers(freshness: dict[str, Any]) -> list[dict[str, str]]:
     if freshness["basis"] == "unverifiable":
         return [{
-            "id": "freshness_unverifiable",
+            "id": FRESHNESS_UNVERIFIABLE,
             "reason": (
                 "no reliable market-data timestamp for the actionable price"
                 f" ({freshness.get('reason_code')})"
@@ -155,7 +162,7 @@ def freshness_blockers(freshness: dict[str, Any]) -> list[dict[str, str]]:
                 )
         else:
             reason = f"newest daily bar {freshness['as_of']} predates the last expected trading day"
-        return [{"id": "stale_data", "reason": reason}]
+        return [{"id": STALE_DATA, "reason": reason}]
     return []
 
 

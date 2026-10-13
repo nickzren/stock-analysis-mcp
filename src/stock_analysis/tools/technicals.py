@@ -30,6 +30,7 @@ from stock_analysis.utils.indicators import (
 )
 from stock_analysis.utils.intraday_features import build_intraday_block
 from stock_analysis.utils.price_basis import (
+    build_daily_history,
     last_valid_bar_date,
     latest_intraday_bar,
     latest_session_close,
@@ -149,6 +150,7 @@ async def technicals(
         "fibonacci": fib_levels,
         "price_action": price_action,
         "session_close": latest_session_close(df, now),
+        "daily_history": build_daily_history(df, now),
         "bar_validity": _build_bar_validity(close, high, low, volume),
     }
 
