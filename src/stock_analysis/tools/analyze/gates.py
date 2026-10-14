@@ -62,8 +62,22 @@ def _covering(intervals: tuple[Interval, ...], day: date) -> tuple[Interval, ...
                  if end >= day and (max(start, day) - day).days <= EARNINGS_BLACKOUT_DAYS)
 
 
+def _iso_date(value: Any) -> date | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
+
+
 def _iso_day(value: Any) -> date | None:
     return _iso_date(value[:10]) if isinstance(value, str) else None
+
+
+def _listed(earnings: Mapping[str, Any], key: str) -> list[Any]:
+    value = earnings.get(key)
+    return value if isinstance(value, list) else []
 
 
 def _interval(window: Any) -> Interval | None:
@@ -99,7 +113,7 @@ def earnings_window(earnings: Mapping[str, Any] | None, today: date | None) -> E
     days_until = int(days) if days is not None and math.isfinite(days) else None
 
     windows = _listed(earnings, "windows")
-    shown =[interval for interval in map(_interval, windows) if interval]
+    shown = [interval for interval in map(_interval, windows) if interval]
     candidates = earnings.get("candidate_dates")
     if isinstance(candidates, Mapping):
         shown += [(day, day) for day in map(_iso_day, candidates.values()) if day]
@@ -147,11 +161,6 @@ def check_earnings_unverifiable(
     cause = _unverifiable_cause(earnings, events_failed)
     return True, {"id": "earnings_unverifiable",
                   "reason": f"earnings calendar unverifiable ({cause}) — event risk unverified"}
-
-
-def _listed(earnings: Mapping[str, Any], key: str) -> list[Any]:
-    value = earnings.get(key)
-    return value if isinstance(value, list) else []
 
 
 def _unverifiable_cause(earnings: dict[str, Any], events_failed: bool) -> str:
@@ -308,15 +317,6 @@ FRESHNESS_CODE_IDS: dict[str, str] = {  # plan §5's id table: leg Q codes, then
 INCLUDES_FORMING_BAR, CALENDAR_UNVERIFIED = "includes_forming_bar", "calendar_unverified"
 _INTRADAY_REJECTIONS = frozenset({"intraday_quote_unavailable", "intraday_quote_stale", "intraday_future_timestamp"})
 _ET = pytz.timezone("America/New_York")
-
-
-def _iso_date(value: Any) -> date | None:
-    if not isinstance(value, str):
-        return None
-    try:
-        return date.fromisoformat(value)
-    except ValueError:
-        return None
 
 
 def _sessions(n: Any) -> str:

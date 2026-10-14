@@ -34,10 +34,7 @@ from stock_analysis.utils.indicators import (
 from stock_analysis.utils.liquidity import RISK_METRICS_MIN_BARS, mean_dollar_volume
 from stock_analysis.utils.swing_features import compute_setup_features, daily_actionable_price
 from stock_analysis.utils.validators import check_rule_expr
-from stock_analysis.utils.valuation_basis import (
-    classify_support,
-    sizing_unavailable_reason,
-)
+from stock_analysis.utils.valuation_basis import classify_support, sizing_unavailable_reason
 
 MIN_SCREEN_BARS = 21  # the payload floor; matches compute_setup_features' floor
 # Freshness gates carry the leg they fire or go unevaluated on ("stale_data@daily").

@@ -24,6 +24,7 @@ import stock_analysis.tools.trade_setup.card as card_module
 import stock_analysis.tools.watchlist as watchlist
 from stock_analysis.utils.validators import FetchParams
 from stock_analysis.utils.watch_store import save_scan_state
+from tests.support.freshness_frames import five_min
 from tests.test_tools.test_setup_detection import make_features, make_technicals
 from tests.test_tools.test_trade_card import EOD_FRESH, NOW_EVENING, STALE, UNVERIFIABLE, build_card
 
@@ -200,9 +201,7 @@ def install(
     options chain offline, so the card's earnings expected move is None.
     """
     df = scenario.frame()
-    probe = None if probe_close is None else pd.DataFrame({
-        "date": [(REGULAR - timedelta(minutes=5)).astimezone(pytz.UTC).isoformat()], "open": [probe_close],
-        "high": [probe_close], "low": [probe_close], "close": [probe_close], "volume": [1.0]})
+    probe = None if probe_close is None else five_min(REGULAR, [(5, probe_close)])
 
     async def history(params: FetchParams) -> pd.DataFrame:
         if params.interval != "1d":
