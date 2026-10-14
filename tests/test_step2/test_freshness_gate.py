@@ -17,6 +17,7 @@ import pytest
 from stock_analysis.tools.analyze.gates import FRESHNESS_CODE_IDS, check_price_freshness
 from stock_analysis.utils.freshness import build_freshness, freshness_blockers
 from stock_analysis.utils.helpers import valid_price
+from stock_analysis.utils.market_calendar import classify_session
 from stock_analysis.utils.price_basis import build_daily_history, select_price
 from tests.support import decision_matrix as dm
 from tests.support import freshness_frames as fr
@@ -34,6 +35,10 @@ CODE_IDS = {
 }
 LEG_H_CODES = ("daily_history_unavailable", "daily_latest_bar_invalid", "daily_history_stale", "daily_future_bar",
                "daily_bar_after_last_session")
+FRESHNESS_KEYS = ["session", "expected_session", "price_source", "daily_last_valid_date", "daily_completed_session",
+                  "daily_sessions_behind", "codes", "flags"]  # data_quality.freshness, exactly and in order
+# rows whose history has no usable last_valid_date or last_row_valid (rule 1): every daily_* value is null
+RULE_1_ROWS = {"R13", "O11", "M1", "M2", "M3"}
 
 
 def split(codes: tuple[str, ...] | list[str]) -> list[tuple[str, list[str]]]:
@@ -75,13 +80,19 @@ async def codes_of(name: str) -> list[str]:
 class TestPureGate:
     @pytest.mark.parametrize("name", fr.TRUTH_TABLE)
     def test_row(self, name: str) -> None:
-        """FR-R-F1: check_price_freshness over every truth-table row gives the exact codes in order, the
-        flags, E and the daily sessions behind; each id carries exactly its own codes, stale_data first.
+        """FR-R-F1: check_price_freshness over every truth-table row gives the disclosure's exact keys, the
+        session, the codes in order, the flags, E, the history's newest valid row and completed bar (null under
+        rule 1) and the daily sessions behind; each id carries exactly its own codes, stale_data first.
         PD D-7: legs Q and H, every session."""
         row = fr.TRUTH_TABLE[name]
+        history = fr.price_inputs(row)["daily_history"]
+        dates = (None, None) if name in RULE_1_ROWS else (history["last_valid_date"], history["completed_valid_date"])
 
         blockers, disclosure = pure(name)
 
+        assert list(disclosure) == FRESHNESS_KEYS
+        assert (disclosure["session"], disclosure["daily_last_valid_date"], disclosure["daily_completed_session"]) == (
+            classify_session(row.now), *dates)
         assert disclosure["price_source"] == row.price_source
         assert (disclosure["codes"], disclosure["flags"]) == (list(row.codes), list(row.flags))
         assert (disclosure["expected_session"], disclosure["daily_sessions_behind"]) == (
@@ -141,19 +152,25 @@ MALFORMED: dict[str, Any] = {
     "completed_garbage": {"last_valid_date": "2026-10-12", "last_row_valid": True, "completed_valid_date": "x"},
     "completed_missing": {"last_valid_date": "2026-10-12", "last_row_valid": True},
 }
+# rule 1 accepts these: only the completed date is unusable, so the newest valid row stays disclosed
+COMPLETED_UNUSABLE = {"completed_garbage", "completed_missing"}
 
 
 class TestMalformedHistory:
-    @pytest.mark.parametrize("history", MALFORMED.values(), ids=MALFORMED.keys())
-    def test_fails_closed_without_raising(self, history: Any) -> None:
+    @pytest.mark.parametrize("name", MALFORMED)
+    def test_fails_closed_without_raising(self, name: str) -> None:
         """FR-R-F17: a malformed daily_history gives daily_history_unavailable, one freshness_unverifiable
-        blocker, and never raises. RF: fail closed (plan §5)."""
-        inputs = {**fr.price_inputs(fr.TRUTH_TABLE["R2"]), "daily_history": history}
+        blocker, a null completed session and sessions behind, and a null newest valid row unless only the
+        completed date is unusable; it never raises. RF: fail closed (plan §5)."""
+        inputs = {**fr.price_inputs(fr.TRUTH_TABLE["R2"]), "daily_history": MALFORMED[name]}
 
         blockers, disclosure = check_price_freshness(**inputs)
 
         assert disclosure["codes"] == ["daily_history_unavailable"]
         assert pairs(blockers) == [(FRESHNESS_UNVERIFIABLE, ["daily_history_unavailable"])]
+        assert (disclosure["daily_last_valid_date"], disclosure["daily_completed_session"],
+                disclosure["daily_sessions_behind"]) == (
+            "2026-10-12" if name in COMPLETED_UNUSABLE else None, None, None)
 
     async def test_analyze_survives_it(self) -> None:
         """FR-R-F17: analyze returns with the blocker when technicals carries a malformed daily_history.
@@ -248,6 +265,23 @@ async def test_price_is_technicals_own_completed_bar(name: str, behind: int) -> 
     assert data_quality["staleness_warnings"] == [f"price_stale_{behind}_sessions"]
 
 
+LAGGING_RISK = {**dm.CALM, "data_provenance": {"price": {"source": "yfinance", "as_of": dm.VENDOR_AS_OF,
+                                                         "last_bar_date": "2026-10-07"}}}  # E is Fri 10-09
+
+
+async def test_risk_is_risk_metrics_own_provenance() -> None:
+    """FR-R-F11: component_freshness.risk reads risk_metrics' own provenance, never technicals': unavailable
+    when risk_metrics fails, and two sessions behind when its own last bar lags technicals' current one.
+    RF: one daily history per tool (plan §5)."""
+    failed = (await dm.run("S1_hold_or_add_clean", risk=None))["data_quality"]
+    lagging = (await dm.run("S1_hold_or_add_clean", risk=LAGGING_RISK))["data_quality"]
+    components = lagging["component_freshness"]
+
+    assert failed["component_freshness"]["risk"] == {"as_of": None, "last_bar_date": None, "status": "unavailable"}
+    assert (components["price"]["sessions_behind"], components["risk"]["sessions_behind"]) == (0, 2)
+    assert lagging["staleness_warnings"] == ["risk_stale_2_sessions"]
+
+
 # --- FR-R-F13: analyze vs the card on shared frames ------------------------------------------
 
 OUTCOME_DIFF = {"R9": "card", "R16": "card", "R11": "analyze", "R11b": "analyze", "O5": "analyze",
@@ -295,6 +329,7 @@ async def test_every_code_reaches_analyze_at_every_tier(name: str) -> None:
     codes = list(fr.TRUTH_TABLE[name].codes)
 
     assert freshness_ids(result) == split(codes)
+    assert list(result["data_quality"]["freshness"]) == FRESHNESS_KEYS
     for tier, shown in dm.tiers(result).items():
         assert shown["data_quality"]["freshness"] == result["data_quality"]["freshness"], tier
         assert shown["data_quality"]["freshness"]["codes"] == codes, tier
@@ -333,6 +368,7 @@ STALE_HISTORY = {"last_row_date": "2026-10-08", "last_valid_date": "2026-10-08",
     ("S1_hold_or_add_clean", "wait_for_data"), ("S2_buy_clean", "wait_for_data"),
     ("T2_starter_weak_setup_quality", "wait_for_data"), ("T3_plain_wait_weak_setup", "wait"),
     ("S3_plain_avoid", "avoid"), ("S9_weak_liquidity", "wait_for_data"), ("ETF_strong", "watch"),
+    ("S8_fundamentals_failed", "insufficient_data"),
 ])
 async def test_freshness_reaches_action_now_through_the_hard_gates(scenario: str, action: str) -> None:
     """Interim: a freshness blocker is one more hard gate, so _resolve_action_now sends buy, starter and

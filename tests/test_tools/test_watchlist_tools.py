@@ -218,7 +218,7 @@ class TestScan:
         monkeypatch.setattr(wl_mod, "screen_symbol", lambda df, **_: screen_result())
         r = await wl_mod.scan_watchlist(_now=NOW, data_dir=scan_env)
         assert r.get("error") is None
-        assert any(w["id"] == "state_unreadable" for w in r["warnings"])
+        assert [w["id"] for w in r["warnings"]] == ["state_unreadable"]  # never rules_changed
         assert r["changes"] == []
 
     @pytest.mark.asyncio

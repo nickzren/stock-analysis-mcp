@@ -109,7 +109,10 @@ def earnings_window(earnings: Mapping[str, Any] | None, today: date | None) -> E
         shown.append((next_date, next_date))
     intervals = tuple(sorted(set(shown)))
 
-    events_today = None if next_date is None or days_until is None else next_date - timedelta(days=days_until)
+    try:
+        events_today = None if next_date is None or days_until is None else next_date - timedelta(days=days_until)
+    except (OverflowError, ValueError):  # no calendar date that far back; the blackout still fires on the count
+        events_today = None
     active = None if events_today is None else next(
         (interval for interval in map(_interval, [earnings.get("next_window"), *windows])
          if interval and interval[0] < interval[1] and interval[0] <= events_today <= interval[1]), None)
@@ -152,7 +155,8 @@ def _unverifiable_cause(earnings: dict[str, Any], events_failed: bool) -> str:
         return "tool fetch"
     causes = [f"{name} failed" for name in earnings.get("sources_failed") or []]
     causes += [f"{name} stale" for name in earnings.get("sources_stale") or []]
-    if any(window.get("window_basis") == "assumed" for window in earnings.get("windows") or []):
+    if any(isinstance(window, Mapping) and window.get("window_basis") == "assumed"
+           for window in earnings.get("windows") or []):
         causes.append("estimate window assumed")
     return ", ".join(causes) or "no verified source"
 

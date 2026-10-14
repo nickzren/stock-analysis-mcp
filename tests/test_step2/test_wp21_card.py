@@ -14,7 +14,7 @@ from typing import Any
 import pytest
 
 import stock_analysis.tools.trade_setup.card as card_module
-from stock_analysis.tools.analyze.gates import gate_rank
+from stock_analysis.tools.analyze.gates import disclosure_order, gate_rank
 from stock_analysis.utils.validators import FetchParams
 from tests.support import swing_matrix as sm
 from tests.test_step2.test_characterize_reassessment import UNVERIFIABLE
@@ -73,6 +73,8 @@ def test_unevaluated_lists() -> None:
     no_technicals = build_card(technicals_data={}, tool_failures=[TECHNICALS_FAILED])
     no_events = build_card(events_data={}, tool_failures=[EVENTS_FAILED])
     neither = build_card(technicals_data={}, events_data={}, tool_failures=[TECHNICALS_FAILED, EVENTS_FAILED])
+    # a direct caller passing both earnings data and an events failure: the blackout fired, so it is evaluated
+    blackout = build_card(**copy.deepcopy(sm.EARNINGS_IN_3D), tool_failures=[EVENTS_FAILED])
     cases = {name: sm.card_case(name) for name in sm.ALL_CARD_CASES}
 
     assert (no_technicals["action"], ids(no_technicals["blockers"]), no_technicals["unevaluated"]) == (
@@ -80,9 +82,10 @@ def test_unevaluated_lists() -> None:
     assert (no_events["action"], ids(no_events["blockers"]), no_events["unevaluated"]) == (
         "watch", ["earnings_unverifiable"], [BLACKOUT_UNEVALUATED])
     assert neither["unevaluated"] == [KNIFE_UNEVALUATED, BLACKOUT_UNEVALUATED]
+    assert (ids(blackout["blockers"]), blackout["unevaluated"]) == (["earnings_blackout", "earnings_unverifiable"], [])
     assert {name: ids(card["unevaluated"]) for name, card in cases.items() if card["unevaluated"]} == {
         "no_setup+events_tool_failed": ["earnings_blackout"], "events_tool_failed+stale": ["earnings_blackout"]}
-    for card in (no_technicals, no_events, neither, *cases.values()):
+    for card in (no_technicals, no_events, neither, blackout, *cases.values()):
         assert not set(ids(card["unevaluated"])) & set(ids(card["blockers"])), card["unevaluated"]
 
 
@@ -186,6 +189,19 @@ def test_decided_by(name: str) -> None:
     veto on avoid, and the first cap on a watch whose base was actionable; otherwise null, so a no_setup card
     and the conditional market_closed never decide. RF: plan §1 change (1), §4 decided_by."""
     assert sm.card_case(name)["decided_by"] == DECIDED_BY[name]
+
+
+def test_within_rank_order_decides() -> None:
+    """Card disclosure: when the blackout and earnings_unverifiable both fire on a setup (an estimated date 3
+    days out), the blockers follow the registry's within-rank order and the blackout decides the watch.
+    RF: plan §1 change (1), §4 decided_by (rank 5: earnings_blackout, then earnings_unverifiable)."""
+    window = {"start": "2026-03-13", "end": "2026-03-17", "window_basis": "assumed"}
+    card = build_card(events_data={"earnings": {"next_date": "2026-03-13", "days_until": 3,
+                                                "verification": "unverifiable", "windows": [window]}})
+
+    assert ids(card["blockers"]) == [g for g in disclosure_order("swing") if g in ids(card["blockers"])] == [
+        "earnings_blackout", "earnings_unverifiable"]
+    assert (card["action"], card["decided_by"]) == ("watch", "earnings_blackout")
 
 
 @pytest.mark.parametrize("name", sm.SCAN_SCENARIOS)

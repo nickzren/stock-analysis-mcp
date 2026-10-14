@@ -132,6 +132,31 @@ def test_event_blocker_parity_with_card(events: dict[str, Any], tool_failures: l
     assert unverifiable(gates["blocking"]) == unverifiable(card["blockers"])
 
 
+# name: (an earnings payload the events tool never emits, the event gate ids analyze and the card list)
+MALFORMED_EARNINGS: dict[str, tuple[dict[str, Any], list[str]]] = {
+    "window_not_a_dict": ({"verification": "unverifiable", "windows": [None]}, ["earnings_unverifiable"]),
+    # no events date that far back: 1e12 days is outside the blackout's reach, so only B1 fires
+    "days_until_1e12": ({"days_until": 1e12, "next_date": "2026-10-12", "verification": "unverifiable"},
+                        ["earnings_unverifiable"]),
+    # the events date falls before year 1: the blackout still fires on the count
+    "events_date_before_year_1": ({"days_until": 3, "next_date": "0001-01-02", "verification": "verified_date"},
+                                  ["earnings_blackout"]),
+}
+
+
+@pytest.mark.parametrize("case", MALFORMED_EARNINGS)
+async def test_malformed_earnings_fail_closed(case: str) -> None:
+    """GC-R12: a non-dict window or a days_until no calendar date can carry never raises in analyze or the
+    card; earnings_unverifiable still fires on an unverifiable calendar, and the blackout fires on its day
+    count alone. RF: fail closed (plan §4, B1)."""
+    earnings, event_ids = MALFORMED_EARNINGS[case]
+    result = await dm.run("S1_hold_or_add_clean", events={"earnings": earnings})
+    card = build_card(events_data={"earnings": earnings})
+
+    assert [g for g in dm.gate_ids(result) if g.startswith("earnings_")] == event_ids
+    assert [g for g in ids(card["blockers"]) if g.startswith("earnings_")] == event_ids
+
+
 # --- GC-R11, analyze: one entry per id, in registry order ----------------------------------------
 
 ANALYZE_RUNS: dict[str, dm.Scenario] = {

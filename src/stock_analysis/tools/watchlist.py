@@ -117,6 +117,7 @@ async def scan_watchlist(
     warnings = [*warnings, *state_warnings]
     prior_symbols = state.get("symbols")
     first_scan = "symbols" not in state
+    old_rules: list[Any] = []  # the rules_version behind each comparison made under other rules
     if first_scan:
         prior_symbols = {}
         warnings.append({
@@ -131,14 +132,7 @@ async def scan_watchlist(
             "reason": "scan state malformed — treating as empty",
         })
     elif state.get("rules_version") != SCAN_RULES_VERSION:
-        warnings.append({
-            "id": "rules_changed",
-            "reason": (
-                f"scan rules changed since the last scan (rules_version "
-                f"{state.get('rules_version')!r} -> {SCAN_RULES_VERSION}); "
-                "changes may reflect the new rules, not the market"
-            ),
-        })
+        old_rules.append(state.get("rules_version"))
 
     symbols = sorted(stored)
     screens = await asyncio.gather(
@@ -190,6 +184,8 @@ async def scan_watchlist(
             summary = _summary_from_screen(screen)
             row = _row(symbol, summary, screen, None)
 
+        if prior is not None and "source" not in prior:  # pre-WP2.1, even when kept past a failed scan
+            old_rules.append(None)
         changed, notes = _diff(prior, summary)
         row["changed"] = changed
         rows.append(row)
@@ -202,6 +198,15 @@ async def scan_watchlist(
             })
         new_state_symbols[symbol] = summary
 
+    if old_rules:
+        warnings.append({
+            "id": "rules_changed",
+            "reason": (
+                f"scan rules changed since the last scan (rules_version "
+                f"{old_rules[0]!r} -> {SCAN_RULES_VERSION}); "
+                "changes may reflect the new rules, not the market"
+            ),
+        })
     save_scan_state(directory, {
         "rules_version": SCAN_RULES_VERSION,
         "scanned_at": now.isoformat(),

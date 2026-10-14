@@ -75,6 +75,10 @@ def with_attrs(scenario: sm.ScanScenario, **attrs: Any) -> pd.DataFrame:
     return df
 
 
+async def failed_fetch(*args: Any, **kwargs: Any) -> None:
+    raise RuntimeError("fetch failed")
+
+
 # --- GC-R14: liquidity on the card's basis ---------------------------------------------------------
 
 
@@ -225,6 +229,25 @@ async def test_screen_support_is_cap(monkeypatch: pytest.MonkeyPatch, tmp_path: 
             row["distance_to_trigger_pct"], result["full_cards"]) == ("screen", "watch", "breakout", 111.96, 0.0079, 0)
 
 
+# an ETF that swings +-5, then +-0.1 for 25 bars, then closes at 101.5 on spike volume: above its 101.1 trigger
+CROSSED_ETF = sm.ScanScenario("GC-R17", tuple(100 + (5 if i % 2 else -5) for i in range(234))
+                              + tuple(100 + (0.1 if i % 2 else -0.1) for i in range(25)) + (101.5,),
+                              sm.SPIKE_VOLUME, quote_type="ETF")
+
+
+async def test_a_capped_setup_keeps_trigger_satisfied(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """GC-R17: a capped breakout whose last close is above its trigger keeps trigger_satisfied True on the screen
+    result and on the screen row's state entry. PD D-11: support is a cap, not terminal."""
+    result = screen(CROSSED_ETF.frame())
+    sm.install(monkeypatch, CROSSED_ETF)
+    scan = await sm.scan(tmp_path)
+    entry = load_scan_state(tmp_path)[0]["symbols"][sm.SYMBOL]
+
+    assert (result["action_hint"], result["setup_type"], result["trigger_price"], result["trigger_satisfied"]) == (
+        "watch", "breakout", 101.1, True)
+    assert (scan_row(scan), entry["trigger_satisfied"]) == (("screen", "watch", ["unsupported_instrument"]), True)
+
+
 async def test_screen_unverified_support_promotes(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """GC-R18: support the history attrs leave unverified is unevaluated at stage 1, per dimension: a breakout
     promotes and the card arms it, a boring chart is no_setup. PD D-11: unverified is not unsupported."""
@@ -284,6 +307,29 @@ async def test_scan_rows_disclose_source_and_unevaluated(monkeypatch: pytest.Mon
         "card", "wait_for_data", ["freshness_unverifiable@quote"], ["freshness_unverifiable@daily", "stale_data@daily"]]
     for row in (unverified, unverified_regular, short, card, card_no_quote):
         assert malformed(row["blockers"] + row["unevaluated"]) == [], row
+
+
+async def test_card_rows_list_what_the_card_skipped(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """GC-R19: a card row's unevaluated list is the card's own (earnings_blackout when the events tool failed),
+    plus the daily leg only when the quote leg returned first: an in-session card with a fresh 5m bar leaves
+    nothing unevaluated, so its daily-leg firing on a stale frame next scan is a reported blockers change, and
+    no pair is both a blocker and unevaluated. RF: annex status rule 3, plan §4 disclosure."""
+    close = scan_screen.build_screen_payload(sm.SCAN_SCENARIOS["fresh_breakout"].frame())["current_price"]
+    sm.install(monkeypatch, sm.SCAN_SCENARIOS["fresh_breakout"], close)
+    fresh = await sm.scan(tmp_path / "quote", now=sm.REGULAR)
+    sm.install(monkeypatch, sm.SCAN_SCENARIOS["stale_frame_breakout"], close)
+    stale = await sm.scan(tmp_path / "quote", now=sm.REGULAR)
+    sm.install(monkeypatch, sm.SCAN_SCENARIOS["fresh_breakout"])
+    monkeypatch.setattr(sm.trade_setup, "events_calendar", failed_fetch)
+    no_events = await sm.scan(tmp_path / "events")
+    rows = [row_of(result) for result in (fresh, stale, no_events)]
+
+    assert [[row[key] for key in ("source", "action", "blockers", "unevaluated")] for row in rows] == [
+        ["card", "enter_on_trigger", [], []], ["card", "wait_for_data", ["stale_data@daily"], []],
+        ["card", "watch", ["earnings_unverifiable"], ["earnings_blackout"]]]
+    assert "blockers: [] -> ['stale_data@daily']" in stale["changes"][0]["notes"]
+    for row in rows:
+        assert not set(row["blockers"]) & set(row["unevaluated"]), row
 
 
 # case: (clock, the 5m probe, the daily frame, build_freshness's reason_code, the leg it failed on)
@@ -369,6 +415,16 @@ async def test_stage1_soundness(name: str, mode: str, monkeypatch: pytest.Monkey
         assert (setup.get("type"), setup.get("trigger_price")) == (result["setup_type"], result["trigger_price"])
 
 
+def test_in_session_a_zero_daily_close_is_the_quote_legs() -> None:
+    """GC-R20: zero_last_close runs pre-market only (scan spec A11), so its in-session screen row is pinned here:
+    in session stage 1 leaves the actionable daily price to the quote leg, so the zero close fails only the daily
+    freshness leg and adds no data_quality_critical. PD D-11 (plan §6 #9: the price clause is off-session only)."""
+    result = screen(EXTRA_FRAMES["zero_last_close"].frame(), sm.REGULAR, "regular")
+
+    assert (result["action_hint"], result["blocker_ids"]) == (
+        "wait_for_data", ["falling_knife", "stale_data@daily", "weak_liquidity"])
+
+
 # --- GC-R21: _diff compares the pairs neither side left unevaluated ------------------------------------
 
 # name: the card-forced row, then the screen row; both rows' setup type and trigger
@@ -429,6 +485,22 @@ async def test_a_quote_leg_firing_is_never_a_phantom_change(
     assert [change["notes"] for change in by_screen["changes"]] == [["action: wait_for_data -> no_setup"]]
 
 
+async def test_a_pair_only_the_prior_left_unevaluated_is_skipped(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """GC-R21: in session without a 5m bar the card's quote leg returns before its daily leg, so the card row
+    leaves stale_data@daily unevaluated; the screen's stale_data@daily on the same frame next scan is no change.
+    RF: plan §4 Diffing, §0 #20 (the pairs neither side left unevaluated)."""
+    sm.install(monkeypatch, sm.SCAN_SCENARIOS["stale_frame_breakout"])
+    by_card = await sm.scan(tmp_path, prior_action="enter_on_trigger", now=sm.REGULAR)
+    by_screen = await sm.scan(tmp_path, now=sm.REGULAR)
+
+    assert (scan_row(by_card), row_of(by_card)["unevaluated"], scan_row(by_screen)) == (
+        ("card", "wait_for_data", ["freshness_unverifiable@quote"]), ["freshness_unverifiable@daily", "stale_data@daily"],
+        ("screen", "wait_for_data", ["stale_data@daily"]))
+    assert (by_screen["changes"], row_of(by_screen)["changed"]) == ([], False)
+
+
 # pre-WP2.1 entries (no source, no unevaluated, no legs) on the frames that would show a phantom change
 LEGACY_ENTRIES: dict[str, dict[str, Any]] = {
     "boring_earnings_in_2d": {"action": "no_setup", "setup_type": None, "trigger_satisfied": False,
@@ -452,6 +524,25 @@ async def test_a_legacy_entry_compares_at_id_level(
     result = await watchlist.scan_watchlist(_now=sm.PRE_MARKET, data_dir=tmp_path)
 
     assert (result["changes"], [w["id"] for w in result["warnings"]]) == ([], ["rules_changed"])
+
+
+async def test_a_legacy_entry_keeps_an_id_fired_on_another_leg(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """GC-R21: in session the screen leaves stale_data unevaluated on the quote leg but fires it on the daily
+    leg, so against a pre-WP2.1 no_setup entry the id still compares and the stale frame is reported.
+    RF: plan §4 Diffing (rule C5: skip only the ids the new row fired on no leg)."""
+    sm.install(monkeypatch, sm.SCAN_SCENARIOS["stale_frame_boring"])
+    await watchlist.manage_watchlist("add", [sm.SYMBOL], _today=sm.REGULAR.date(), data_dir=tmp_path)
+    save_scan_state(tmp_path, {"scanned_at": "prior", "symbols": {sm.SYMBOL: {
+        "action": "no_setup", "setup_type": None, "trigger_satisfied": False, "blockers": [], "trigger_price": None}}})
+
+    result = await watchlist.scan_watchlist(_now=sm.REGULAR, data_dir=tmp_path)
+    row = row_of(result)
+
+    assert (row["blockers"], "stale_data@quote" in row["unevaluated"]) == (["stale_data@daily"], True)
+    assert result["changes"] == [{"symbol": sm.SYMBOL, "from": "no_setup", "to": "wait_for_data", "notes": [
+        "action: no_setup -> wait_for_data", "blockers: [] -> ['stale_data']"]}]
 
 
 # --- GC-R24: rules_version --------------------------------------------------------------------------
@@ -593,6 +684,9 @@ async def test_scan_row_ids_unique(name: str, monkeypatch: pytest.MonkeyPatch, t
 # what 0609fde saves for breakout_events_unverifiable when risk_metrics fails
 RA18_LEGACY_ENTRY = {"action": "wait_for_data", "setup_type": None, "trigger_satisfied": False,
                      "blockers": ["data_quality_critical", "liquidity_missing"], "trigger_price": None}
+RA18_CHANGE = {"symbol": sm.SYMBOL, "from": "wait_for_data", "to": "wait_for_data", "notes": [
+    "blockers: ['data_quality_critical', 'liquidity_missing'] -> "
+    "['data_quality_critical', 'earnings_unverifiable', 'liquidity_missing']"]}
 
 
 async def test_ra18_first_scan_after_upgrade_reports_the_one_time_diff(
@@ -602,11 +696,7 @@ async def test_ra18_first_scan_after_upgrade_reports_the_one_time_diff(
     wait_for_data card as a one-time blockers change against the pre-WP2.1 entry, with rules_changed; the next
     scan reports nothing. RF: RA.18 scan clause (reported, not suppressed)."""
     sm.install(monkeypatch, sm.SCAN_SCENARIOS["breakout_events_unverifiable"])
-
-    async def no_history(params: Any) -> None:
-        raise RuntimeError("history fetch failed")
-
-    monkeypatch.setattr(sm.risk_tool, "fetch_history", no_history)
+    monkeypatch.setattr(sm.risk_tool, "fetch_history", failed_fetch)
     await watchlist.manage_watchlist("add", [sm.SYMBOL], _today=sm.PRE_MARKET.date(), data_dir=tmp_path)
     save_scan_state(tmp_path, {"scanned_at": "prior", "symbols": {sm.SYMBOL: RA18_LEGACY_ENTRY}})
 
@@ -615,11 +705,36 @@ async def test_ra18_first_scan_after_upgrade_reports_the_one_time_diff(
 
     assert (first["full_cards"], row_of(first)["blockers"]) == (
         1, ["data_quality_critical", "earnings_unverifiable", "liquidity_missing"])
-    assert first["changes"] == [{"symbol": sm.SYMBOL, "from": "wait_for_data", "to": "wait_for_data", "notes": [
-        "blockers: ['data_quality_critical', 'liquidity_missing'] -> "
-        "['data_quality_critical', 'earnings_unverifiable', 'liquidity_missing']"]}]
+    assert first["changes"] == [RA18_CHANGE]
     assert [w["id"] for w in first["warnings"]] == ["rules_changed"]
     assert second["changes"] == []
+
+
+async def test_a_legacy_entry_kept_past_a_failed_scan_still_warns(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """GC-R24: a pre-WP2.1 entry kept unchanged by a first post-upgrade scan whose daily fetch failed is still
+    compared at id level by the next scan, so that scan's one-time RA.18 diff comes with rules_changed although
+    the state already says rules_version 2; the scan after it is quiet. RF: rules_version (plan §4), RA.18 scan
+    clause (reported, not suppressed)."""
+    sm.install(monkeypatch, sm.SCAN_SCENARIOS["breakout_events_unverifiable"])
+    monkeypatch.setattr(sm.risk_tool, "fetch_history", failed_fetch)
+    daily_fetch = watchlist.fetch_history
+    await watchlist.manage_watchlist("add", [sm.SYMBOL], _today=sm.PRE_MARKET.date(), data_dir=tmp_path)
+    save_scan_state(tmp_path, {"scanned_at": "prior", "symbols": {sm.SYMBOL: RA18_LEGACY_ENTRY}})
+
+    monkeypatch.setattr(watchlist, "fetch_history", failed_fetch)
+    failed = await watchlist.scan_watchlist(_now=sm.PRE_MARKET, data_dir=tmp_path)
+    kept, _ = load_scan_state(tmp_path)
+    monkeypatch.setattr(watchlist, "fetch_history", daily_fetch)
+    second = await watchlist.scan_watchlist(_now=sm.PRE_MARKET, data_dir=tmp_path)
+    third = await watchlist.scan_watchlist(_now=sm.PRE_MARKET, data_dir=tmp_path)
+
+    assert ([w["id"] for w in failed["warnings"]], failed["errors"], failed["changes"]) == (
+        ["rules_changed"], [{"symbol": sm.SYMBOL, "error_type": "data_unavailable"}], [])
+    assert (kept["rules_version"], kept["symbols"][sm.SYMBOL]) == (2, RA18_LEGACY_ENTRY)
+    assert (second["changes"], [w["id"] for w in second["warnings"]]) == ([RA18_CHANGE], ["rules_changed"])
+    assert (third["changes"], third["warnings"]) == ([], [])
 
 
 async def test_scan_rows_state_swing_horizon(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
