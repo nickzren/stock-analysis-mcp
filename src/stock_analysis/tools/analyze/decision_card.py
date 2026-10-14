@@ -1,12 +1,10 @@
-"""Decision card: a compact, gated "what do I do now?" block.
+"""Decision card: analyze's canonical decision in a compact "what do I do now?" block.
 
-Consolidates the scattered outputs (`policy_action`, `decision_modes`, `action_zones`,
-events, data_quality, technicals, burn_metrics) into a single small-account-friendly
-block. Applies hard pre-buy gates *before* surfacing any bullish or starter action so
-a single blocking condition (e.g., earnings within 5 days, falling knife, missing
-runway on an unprofitable burner) overrides the headline action.
-
-This is additive — it does not replace the existing fields, just synthesizes them.
+evaluate_gates computes every analyze hard gate once (hard_gates) and the ids of the applicable
+gates it could not compute; decision.decide() resolves them against the uncapped candidate
+policy; build_decision_card assembles decide()'s output with hard_gates, sizing, entry, exit,
+conditions and next_review. The older fields (`policy_action`, `decision_modes`, ...) stay
+alongside it until WP2.3.
 """
 
 from __future__ import annotations
@@ -24,6 +22,7 @@ from stock_analysis.tools.analyze.gates import (
     check_near_52w_high,
     check_thesis_broken,
     earnings_window,
+    events_tool_failed,
     format_day,
     is_falling_knife_technicals,
     merge_blockers,
@@ -104,13 +103,11 @@ def evaluate_gates(
         fundamentals_summary=fundamentals_summary, risk_data=risk_data, support=support,
         freshness_blockers=freshness_blockers, thesis_blocker=thesis_blocker, zone_blocker=zone_blocker,
     )
-    events_failed = any(isinstance(tf, dict) and tf.get("tool") == "events_calendar"
-                        for tf in data_quality.get("tool_failures") or [])
     not_computed = {
         "falling_knife": not technicals_data,
         "missing_runway": fundamentals_status == "missing",
         "thesis_broken": thesis_status == UNEVALUATED,
-        "earnings_blackout": events_failed,
+        "earnings_blackout": events_tool_failed(data_quality.get("tool_failures")),
         "near_52w_high": zone_status == UNEVALUATED,
     }
     return hard_gates, frozenset(gate for gate, missing in not_computed.items() if missing)

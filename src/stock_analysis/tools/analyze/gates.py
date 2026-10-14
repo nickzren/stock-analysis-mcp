@@ -36,6 +36,9 @@ EARNINGS_WARNING_DAYS = 7
 # Falling-knife rubric threshold (same rubric as dip assessment).
 FALLING_KNIFE_SCORE_THRESHOLD = 4
 
+# An earnings interval ending further out than this is vendor garbage (e.g. a date.max end): undatable.
+_CLEAR_SESSION_MAX_DAYS = 366
+
 Interval = tuple[date, date]
 _MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")  # not %b: locale
 
@@ -58,18 +61,18 @@ class EarningsWindow:
 
     def clear_session(self, today: date) -> tuple[date, date] | None:
         """(the first NYSE session after ``today`` that no shown interval blacks out, the latest interval end
-        passed on the way); None when no interval blacks out ``today``. Steps sessions, never calendar days."""
+        passed on the way); None when no interval blacks out ``today``, or when one passed ends more than
+        _CLEAR_SESSION_MAX_DAYS after it (undatable). Steps sessions, never calendar days."""
         hits = self.covers(today)
         if not hits:
             return None
-        through = max(end for _, end in hits)
-        try:
-            day = add_trading_days(today, 1)
-            while hits := self.covers(day):
-                through = max(through, *(end for _, end in hits))
-                day = add_trading_days(day, 1)
-        except OverflowError:  # a window ending at date.max: no session to name
-            return None
+        day = through = today
+        while hits:
+            through = max(through, *(end for _, end in hits))
+            if (through - today).days > _CLEAR_SESSION_MAX_DAYS:
+                return None
+            day = add_trading_days(day, 1)
+            hits = self.covers(day)
         return day, through
 
 
@@ -170,12 +173,17 @@ def check_earnings_blackout(events_data: dict[str, Any]) -> tuple[bool, dict[str
     return True, {"id": "earnings_blackout", "reason": window.reason}
 
 
+def events_tool_failed(tool_failures: list[dict[str, Any]] | None) -> bool:
+    """The events tool failed: earnings_unverifiable fires and earnings_blackout is unevaluated."""
+    return any(isinstance(tf, dict) and tf.get("tool") == "events_calendar" for tf in tool_failures or [])
+
+
 def check_earnings_unverifiable(
     events_data: dict[str, Any] | None,
     tool_failures: list[dict[str, Any]] | None,
 ) -> tuple[bool, dict[str, str] | None]:
     """Earnings risk unverified: the events tool failed, or no source verified the next date (B1)."""
-    events_failed = any(isinstance(tf, dict) and tf.get("tool") == "events_calendar" for tf in tool_failures or [])
+    events_failed = events_tool_failed(tool_failures)
     earnings = (events_data or {}).get("earnings") or {}
     if not events_failed and earnings.get("verification") != "unverifiable":
         return False, None

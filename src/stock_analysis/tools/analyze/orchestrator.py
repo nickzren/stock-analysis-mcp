@@ -88,10 +88,10 @@ _READ_SHARE_OF_TOOL_DEADLINE = 0.9
 _ET = pytz.timezone("America/New_York")
 
 
-# New-money codes: policy_action horizons use the policy codes, decision_modes
-# actions the mode codes (a superset).
+# New-money codes: policy_action horizons use the policy codes; the balanced and speculative
+# modes add their starter codes. Core needs none: decide()'s support gate already caps it at watch.
 _NEW_MONEY_POLICY_CODES = ENTRY_CANDIDATE_CODES
-_NEW_MONEY_MODE_CODES = _NEW_MONEY_POLICY_CODES | {"build_position", "starter_position_only", "starter_then_add"}
+_NEW_MONEY_MODE_CODES = _NEW_MONEY_POLICY_CODES | {"starter_position_only", "starter_then_add"}
 _DIP_NEW_MONEY_RECOMMENDATIONS = frozenset({
     "strong_buy_the_dip", "buy_the_dip", "cautious_accumulation", "small_speculative_position",
     "starter_only_wait_for_stabilization",

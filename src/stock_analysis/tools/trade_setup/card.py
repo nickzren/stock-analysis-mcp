@@ -12,6 +12,7 @@ from stock_analysis.tools.analyze.gates import (
     check_earnings_unverifiable,
     check_liquidity,
     disclose,
+    events_tool_failed,
     is_falling_knife_technicals,
     merge_blockers,
 )
@@ -114,8 +115,7 @@ def build_trade_setup_card(
     events_unverifiable, unverifiable_blocker = check_earnings_unverifiable(events_data, tool_failures)
     if unverifiable_blocker:
         blockers.append(unverifiable_blocker)
-    events_failed = any(tf.get("tool") == "events_calendar" for tf in tool_failures or [])
-    if events_failed and not earnings_blackout:
+    if events_tool_failed(tool_failures) and not earnings_blackout:
         unevaluated.append(_unevaluated("earnings_blackout"))
     earnings = (events_data.get("earnings") or {}) if events_data else {}
 

@@ -233,7 +233,8 @@ PLAN_TABLE = {  # plan §4 "Combination rule" table, analyze column: (mid code, 
 }
 
 
-PLAN_DECIDED_BY = {"data_and_support": "unsupported_instrument", "stale_and_knife": "falling_knife"}
+PLAN_DECIDED_BY = {"data_and_support": "unsupported_instrument", "risk_metrics_outage": "data_quality_critical",
+                   "stale_and_knife": "falling_knife"}
 
 
 @pytest.mark.parametrize("case", PLAN_TABLE)
@@ -459,7 +460,7 @@ async def test_the_card_carries_one_decision(name: str) -> None:
     """Card shape: the decision_card at every tier: horizon, new_money, if_held, long_term in plan §2's
     vocabularies; action_now aliases new_money.action and the snapshot's decision_action_now follows it (D-13);
     hard_gates lists every fired gate (blocking = new_money.blocked_by without class and effect; long term drops
-    the not_applicable near_52w_high) and checks every analyze gate. RF (plan §2)."""
+    the not_applicable near_52w_high) and checks every analyze gate in disclosure order. RF (plan §2)."""
     result = await dm.run(name)
     card = result["decision_card"]
     mid, long = card["new_money"], card["long_term"]["new_money"]
@@ -477,6 +478,78 @@ async def test_the_card_carries_one_decision(name: str) -> None:
         "hard_gates"]["blocking"]
     assert ids(long["blocked_by"]) == [g for g in ids(mid["blocked_by"]) if g != "near_52w_high"]
     assert card["hard_gates"]["checks"] == {g: g in ids(mid["blocked_by"]) for g in ANALYZE_GATE_IDS}
+    assert list(card["hard_gates"]["checks"]) == list(ANALYZE_GATE_IDS)
     assert result["watchlist_snapshot"]["hard_gate_ids"] == sorted(ids(mid["blocked_by"]))
     for tier, shown in dm.tiers(result).items():
         assert {k: shown["decision_card"][k] for k in CARD_KEYS} == {k: card[k] for k in CARD_KEYS}, tier
+
+
+@pytest.mark.parametrize(("name", "rationale"), [
+    ("S1_hold_or_add_clean", ["policy_action.mid_term=hold_or_add -> starter"]),
+    ("S4_earnings_gate_on_hold_or_add", ["policy_action.mid_term=hold_or_add -> wait", "decided_by=earnings_blackout"])])
+async def test_the_rationale_names_the_emitted_code_and_the_deciding_gate(name: str, rationale: list[str]) -> None:
+    """Card shape (C8): the rationale is the emitted mid code and new_money's action, plus a decided_by line only
+    when a gate decided (S1 none; S4 earnings_blackout). RF (plan §2)."""
+    assert (await dm.run(name))["decision_card"]["rationale"] == rationale
+
+
+# --- Interim 2.2 surfaces (CH for WP2.3) --------------------------------------------------------------------
+# Until WP2.3 the derived surfaces read the emitted, knife-free policy (integrated plan §5), so they can contradict
+# new_money. These tests pin the contradictions the plan accepts; WP2.3 flips them.
+
+KNIFE_BOUNCE = {  # still a falling knife (below a falling SMA200, -25% over 3m, 52w high 200 days ago), bouncing
+    "current_price": 80.0,
+    "moving_averages": {"sma_20": 77.6, "sma_50": 78.4, "sma_200": 89.6, "sma_200_slope_pct_per_day": -0.001,
+                        "rules": {"above_sma20": {"triggered": True}, "above_sma50": {"triggered": True},
+                                  "above_sma200": {"triggered": False}, "golden_cross": {"triggered": False},
+                                  "death_cross": {"triggered": False}}},
+    "rsi": {"value": 28.0, "rules": {"oversold": {"triggered": True}, "overbought": {"triggered": False}}},
+    "macd": {"rules": {"bullish_cross": {"triggered": True}, "bearish_cross": {"triggered": False}}},
+    "returns": {"return_1w": 0.03, "return_1w_zscore": 0.5, "return_1m": 0.05, "return_3m": -0.25, "return_1y": -0.1},
+    "price_position": {"position_in_range": 0.3, "week_52_low": 72.0, "week_52_high": 120.0, "from_52w_high": -0.33,
+                       "days_since_52w_high": 200},
+}
+KNIFE_NOT_DISLOCATION = dm.Scenario(  # the whole-WP review's knife_evidence.py inputs
+    "WP2.2 review knife", KNIFE_BOUNCE,
+    {**dm.QUALITY, "analyst_coverage": dm.PROFITABLE["analyst_coverage"],
+     "growth": {"revenue_yoy": 0.30, "rules": {"high_growth": {"triggered": True}}},
+     "profitability": {"net_margin": 0.25, "rules": {"profitable": {"triggered": True}}}},
+    dm.CALM, news=dm.NEWS_VENDOR_RICH, ownership=dm.INSIDER_BUYING)
+
+
+async def test_a_non_dislocation_knife_keeps_the_admitting_surfaces() -> None:
+    """IS-CH1: a falling knife that is not a dislocation candidate (mismatch unclear) and whose knife-free candidate
+    admits new money (bullish tilt, caution fit) gives new_money avoid [falling_knife], while the surfaces derived
+    from the emitted policy show speculative_small_position: policy_action.mid_term, the executive summary's
+    "Policy: mid-term small starter position", modes.balanced.action, dislocation can_start_now true / buy_now
+    small_starter and the snapshot's action_mid_term (v0.2.0: wait_for_entry, can_start_now false).
+    CH: flipped by WP2.3 (derived surfaces follow new_money)."""
+    result = await dm.run(KNIFE_NOT_DISLOCATION)
+    card = result["decision_card"]
+    dislocation = result["dislocation_framework"]
+
+    assert (result["dip_assessment"]["dip_classification"]["type"], dislocation["mismatch_verdict"]["status"]) == (
+        "falling_knife", "unclear")
+    assert (result["verdict"]["tilt"], result["verdict"]["horizon_fit"]["mid_term"]) == ("bullish", "caution")
+    assert (card["new_money"]["action"], ids(card["new_money"]["blocked_by"]), card["new_money"]["decided_by"]) == (
+        "avoid", ["falling_knife"], "falling_knife")
+    assert (result["policy_action"]["mid_term"], result["decision_modes"]["balanced"]["action"],
+            result["watchlist_snapshot"]["action_mid_term"]) == ("speculative_small_position",) * 3
+    assert result["executive_summary"].endswith("Policy: mid-term small starter position; size ~2.5-8.0%.")
+    assert (dislocation["action"]["can_start_now"], dislocation["action"]["buy_now"]) == (True, "small_starter")
+
+
+async def test_a_thesis_capped_row_keeps_the_dislocation_starter() -> None:
+    """IS-CH2: H (2-quarter burner) gives new_money avoid (thesis_broken) and if_held review_exit while
+    dislocation_framework.action keeps can_start_now true / buy_now small_starter and the card's
+    conditions.add_only_if keeps the framework's upgrade conditions.
+    CH: flipped by WP2.3 (derived surfaces follow new_money)."""
+    result = await dm.run("H_burner_runway_2q")
+    card = result["decision_card"]
+    action = result["dislocation_framework"]["action"]
+
+    assert (card["new_money"]["action"], card["new_money"]["decided_by"], card["if_held"]["action"]) == (
+        "avoid", "thesis_broken", "review_exit")
+    assert (action["can_start_now"], action["buy_now"]) == (True, "small_starter")
+    assert card["conditions"]["add_only_if"] == action["add_only_if"] == [
+        "profitMargins > 0 for 2 consecutive quarters", "freeCashflow > 0 for 2 consecutive quarters"]

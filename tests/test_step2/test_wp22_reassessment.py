@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 
-from stock_analysis.tools.analyze import decision, reassessment
+from stock_analysis.tools.analyze import decision, gates, reassessment
 from stock_analysis.tools.analyze.gates import (
     GATES,
     THESIS_CLEARS_WHEN,
@@ -232,13 +232,19 @@ async def test_unverifiable_only(events_at: EventsAt, case: str) -> None:
 
 async def test_permanent_support_lists_only_itself(events_at: EventsAt) -> None:
     """RA.9: an unsupported instrument or currency gives basis unsupported, no date, and only the permanent
-    gate(s) outstanding (E21; GBp; case G's long term omits the knife and blackout). RF."""
+    gate(s) outstanding (E21; GBp; a GBp-quoted ETF lists both; case G's long term omits the knife and
+    blackout). RF."""
     etf = await analyze(events_at, E1, D(2026, 10, 12), scenario="ETF_strong")
     gbp = await dm.run("GBp_strong", events=dm.NEAR)
+    gbp_etf = await dm.run("ETF_strong", summary={**dm.ETF, "currency": "GBp"})
     case_g = await dm.run("G_unsupported_currency_knife", events=dm.NEAR)
 
     assert (er(etf), er(etf, "long_term")) == (
         undated({"id": "unsupported_instrument", "clears_when": NEVER}, basis="unsupported"), None)
+    assert dm.gate_ids(gbp_etf) == ["unsupported_instrument", "unsupported_currency"]
+    assert (er(gbp_etf), er(gbp_etf, "long_term")) == (
+        undated({"id": "unsupported_instrument", "clears_when": NEVER},
+                {"id": "unsupported_currency", "clears_when": NEVER}, basis="unsupported"), None)
     for horizon in ("mid_term", "long_term"):
         assert er(gbp, horizon) == undated({"id": "unsupported_currency", "clears_when": NEVER}, basis="unsupported")
     assert (er(case_g), er(case_g, "long_term")) == (
@@ -319,9 +325,29 @@ async def test_earliest_reads_analyze_clock() -> None:
 
 
 def test_no_clock_call() -> None:
-    """RA.12: the reassessment and the clear-session helper never read the clock. G."""
+    """RA.12: the reassessment and the clear-session helper never read the clock. RF."""
     for source in (inspect.getsource(reassessment), inspect.getsource(EarningsWindow.clear_session)):
         assert "now(" not in source and "today(" not in source
+
+
+@pytest.mark.parametrize(("end", "expected"), [
+    ("2026-10-15", (D(2026, 10, 16), D(2026, 10, 15))), ("2027-10-13", (D(2027, 10, 14), D(2027, 10, 13))),
+    ("2027-10-14", None), ("9999-12-31", None)], ids=["this_week", "366_days", "367_days", "date_max"])
+def test_a_far_window_is_undatable(end: str, expected: tuple[date, date] | None,
+                                   monkeypatch: pytest.MonkeyPatch) -> None:
+    """RA risk 7: an interval ending more than 366 days after today is undatable: clear_session returns None
+    within a bounded number of session steps (a date.max end no longer steps ~2M sessions); an interval ending
+    366 days out, or this week, keeps its date. RF."""
+    today, real, steps = D(2026, 10, 12), gates.add_trading_days, []
+
+    def counted(day: date, n: int) -> date:
+        steps.append(day)
+        assert len(steps) <= 260, "unbounded session stepping"
+        return real(day, n)
+
+    monkeypatch.setattr(gates, "add_trading_days", counted)
+
+    assert earnings_window({"windows": [{"start": "2026-10-12", "end": end}]}, today).clear_session(today) == expected
 
 
 @pytest.mark.parametrize("earnings", [{"days_until": 3}, {"days_until": 3, "next_date": "2026-10-15"},
