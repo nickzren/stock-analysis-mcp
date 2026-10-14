@@ -18,7 +18,6 @@ from stock_analysis.tools.analyze.gates import (
     CLASS_RANK,
     GATES,
     NOT_APPLICABLE,
-    REGISTERED_NOT_EVALUATED,
     SCREEN_UNEVALUATED,
     SURFACES,
     UNEVALUATED,
@@ -104,10 +103,10 @@ def test_registry_complete() -> None:
     assert all(text for g in per_tool for text in GATES[g].tool_predicates.values())
     assert {g for g, gate in GATES.items() if gate.requires_supported} == {"weak_liquidity", "liquidity_missing"}
 
-    assert {"thesis_broken", "near_52w_high"} == REGISTERED_NOT_EVALUATED
-    assert ANALYZE_GATE_IDS == ("stale_data", "freshness_unverifiable", "data_quality_critical", "missing_runway",
-                                "liquidity_missing", "falling_knife", "weak_liquidity", "unsupported_instrument",
-                                "unsupported_currency", "earnings_blackout", "earnings_unverifiable")
+    assert ANALYZE_GATE_IDS == disclosure_order("mid_term") == (
+        "stale_data", "freshness_unverifiable", "data_quality_critical", "missing_runway", "liquidity_missing",
+        "falling_knife", "weak_liquidity", "thesis_broken", "unsupported_instrument", "unsupported_currency",
+        "earnings_blackout", "earnings_unverifiable", "near_52w_high")
     assert disclosure_order("swing") == disclosure_order("screen") == SWING_ORDER
     assert {"earnings_blackout", "earnings_unverifiable", "market_closed",
             "plan_invariant_violation"} == SCREEN_UNEVALUATED

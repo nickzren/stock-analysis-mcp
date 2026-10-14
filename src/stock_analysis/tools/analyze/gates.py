@@ -17,6 +17,7 @@ from stock_analysis.utils.freshness import (
     STALE_DATA,
 )
 from stock_analysis.utils.market_calendar import (
+    add_trading_days,
     classify_session,
     last_completed_session,
     session_method,
@@ -55,6 +56,22 @@ class EarningsWindow:
     def covers(self, day: date) -> tuple[Interval, ...]:
         return _covering(self.intervals, day)
 
+    def clear_session(self, today: date) -> tuple[date, date] | None:
+        """(the first NYSE session after ``today`` that no shown interval blacks out, the latest interval end
+        passed on the way); None when no interval blacks out ``today``. Steps sessions, never calendar days."""
+        hits = self.covers(today)
+        if not hits:
+            return None
+        through = max(end for _, end in hits)
+        try:
+            day = add_trading_days(today, 1)
+            while hits := self.covers(day):
+                through = max(through, *(end for _, end in hits))
+                day = add_trading_days(day, 1)
+        except OverflowError:  # a window ending at date.max: no session to name
+            return None
+        return day, through
+
 
 def _covering(intervals: tuple[Interval, ...], day: date) -> tuple[Interval, ...]:
     """The intervals that black out ``day``: not over, and starting within the blackout reach."""
@@ -90,8 +107,12 @@ def _interval(window: Any) -> Interval | None:
     return start, end
 
 
+def format_day(day: date) -> str:
+    return f"{_MONTHS[day.month - 1]} {day.day}"
+
+
 def _format_interval(start: date, end: date) -> str:
-    head = f"{_MONTHS[start.month - 1]} {start.day}"
+    head = format_day(start)
     if start.year != end.year:
         return f"{head}, {start.year}–{_MONTHS[end.month - 1]} {end.day}, {end.year}"
     if start.month != end.month:
@@ -459,6 +480,15 @@ _FRESHNESS_TOOL_PREDICATES = {
 _ANALYZE_DQ = ("check_data_quality(CRITICAL_ANALYZE_TOOLS): a critical tool failed, current_price missing, "
                "or fundamentals_status missing (beta not required, B3)")
 _LIQUIDITY_FLOOR = f"${WEAK_LIQUIDITY_DOLLARS_PER_DAY / 1_000_000:.0f}M"
+BUSINESS_BROKEN, RUNWAY_CRITICAL = "business_broken", "runway_critical"
+# The thesis predicate's components, in predicate order (plan §4: generated conditions list only failing ones).
+THESIS_REASONS = {BUSINESS_BROKEN: "business broken (business_status broken)",
+                  RUNWAY_CRITICAL: "cash runway below 4 quarters (balance sheet unsafe)"}
+THESIS_CLEARS_WHEN = {
+    BUSINESS_BROKEN: ("business_status no longer broken (business_quality not poor; when unknown, growth and "
+                      "profitability not both failing)"),
+    RUNWAY_CRITICAL: "cash runway no longer below 4 quarters",
+}
 
 # Insertion order is the within-rank disclosure order.
 GATES: dict[str, Gate] = {
@@ -505,8 +535,7 @@ GATES: dict[str, Gate] = {
     "thesis_broken": Gate(
         "thesis", "cap", _outcome("avoid", "avoid", _NA, _NA),
         predicate="business_status == broken or balance_status == unsafe (classify_dislocation_opportunity)",
-        clears_when=("business_status no longer broken (business_quality not poor; when unknown, growth and "
-                     "profitability not both failing) and cash runway no longer below 4 quarters"),
+        clears_when=" and ".join(THESIS_CLEARS_WHEN.values()),
         unevaluated_when={"mid_term": _FUNDAMENTALS_MISSING, "long_term": _FUNDAMENTALS_MISSING}),
     "unsupported_instrument": Gate(
         "support", "cap", _SUPPORT_CAP,
@@ -558,10 +587,51 @@ def disclosure_order(surface: str) -> tuple[str, ...]:
     return tuple(sorted(applicable, key=lambda g: gate_rank(g, surface)))
 
 
-# Registered in WP2.1; analyze evaluates them from WP2.2 (decide()), which deletes this set.
-REGISTERED_NOT_EVALUATED = frozenset({"thesis_broken", "near_52w_high"})
-ANALYZE_GATE_IDS = tuple(g for g in disclosure_order("mid_term") if g not in REGISTERED_NOT_EVALUATED)
+ANALYZE_GATE_IDS = disclosure_order("mid_term")
 SCREEN_UNEVALUATED = frozenset(g for g, gate in GATES.items() if gate.outcome["screen"] == UNEVALUATED)
+
+
+FIRED, CLEAR = "fired", "clear"
+
+
+def thesis_codes(fundamentals_status: str | None, signals: Mapping[str, Any]) -> tuple[str, ...]:
+    """The failing thesis components (classify_dislocation_opportunity); none unless fundamentals apply."""
+    if fundamentals_status in ("missing", "not_applicable"):
+        return ()
+    failing = ((BUSINESS_BROKEN, signals.get("business_status") == "broken"),
+               (RUNWAY_CRITICAL, signals.get("balance_status") == "unsafe"))
+    return tuple(code for code, fails in failing if fails)
+
+
+def check_thesis_broken(fundamentals_status: str | None, signals: Mapping[str, Any]) -> tuple[str, dict[str, Any] | None]:
+    """(status, blocker) for thesis_broken: not_applicable for unsupported instruments, unevaluated when
+    fundamentals are missing; the blocker's codes name the failing components (plan §4)."""
+    if fundamentals_status == "not_applicable":
+        return NOT_APPLICABLE, None
+    if fundamentals_status == "missing":
+        return UNEVALUATED, None
+    codes = thesis_codes(fundamentals_status, signals)
+    if not codes:
+        return CLEAR, None
+    reason = "thesis broken: " + " and ".join(THESIS_REASONS[code] for code in codes)
+    return FIRED, {"id": "thesis_broken", "reason": reason, "codes": list(codes)}
+
+
+def check_near_52w_high(zone: str | None) -> tuple[str, dict[str, Any] | None]:
+    """(status, blocker) for near_52w_high: the zone classification is reduce. The zone caps never move a zone
+    into or out of reduce, undetermined or None, so the capped current_zone reads the same here."""
+    if zone is None or zone == "undetermined":
+        return UNEVALUATED, None
+    if zone != "reduce":
+        return CLEAR, None
+    return FIRED, {"id": "near_52w_high", "reason": "price in the near-52-week-high band"}
+
+
+def clears_when_for(blocker: Mapping[str, Any]) -> str:
+    """The blocker's clears_when; thesis_broken names only its failing components."""
+    if blocker["id"] == "thesis_broken":
+        return " and ".join(THESIS_CLEARS_WHEN[code] for code in blocker["codes"])
+    return GATES[blocker["id"]].clears_when
 
 
 def merge_blockers(blockers: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:

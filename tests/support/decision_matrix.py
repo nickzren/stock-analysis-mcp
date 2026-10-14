@@ -22,7 +22,7 @@ import contextlib
 import copy
 import importlib
 import json
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
@@ -30,6 +30,8 @@ from typing import Any
 
 import pytz
 
+from stock_analysis.tools.analyze.decision import decide
+from stock_analysis.tools.analyze.gates import earnings_window
 from stock_analysis.tools.analyze.projection import project_analyze_result
 from stock_analysis.utils.market_calendar import last_completed_session
 from stock_analysis.utils.normalize import SNAPSHOT_VERSION
@@ -418,6 +420,18 @@ def tiers(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
 def gate_ids(result: dict[str, Any]) -> list[str]:
     """The blocking gate ids on a full analyze result's decision card."""
     return [g["id"] for g in result["decision_card"]["hard_gates"]["blocking"]]
+
+
+def decide_on(policy_action: Mapping[str, Any], blocking: Sequence[dict[str, Any]] = (), *,
+              unevaluated: frozenset[str] = frozenset(), thesis: tuple[str, ...] = (), dislocation: bool = False,
+              tilt: str | None = "neutral", support: dict[str, Any] | None = None) -> dict[str, Any]:
+    """decide() on a policy's codes (long term insufficient_data unless given) and fixed blockers, with no
+    earnings on the matrix clock's date."""
+    today = FRIDAY_EVENING.date()
+    return decide(candidate={"mid_term": policy_action["mid_term"],
+                             "long_term": policy_action.get("long_term", "insufficient_data")},
+                  blocking=list(blocking), unevaluated=unevaluated, thesis=thesis, dislocation=dislocation,
+                  tilt=tilt, window=earnings_window({}, today), today=today, support=support)
 
 
 # --- the before table --------------------------------------------------------------------

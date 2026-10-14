@@ -14,6 +14,7 @@ from stock_analysis.tools.analyze.action_zones import (
     build_action_zones,
 )
 from stock_analysis.tools.analyze.constants import CRITICAL_ANALYZE_TOOLS
+from stock_analysis.tools.analyze.decision import ENTRY_CANDIDATE_CODES
 from stock_analysis.tools.analyze.decision_card import build_decision_card
 from stock_analysis.tools.analyze.decision_context import (
     build_decision_context,
@@ -88,10 +89,7 @@ _ET = pytz.timezone("America/New_York")
 
 # New-money codes: policy_action horizons use the policy codes, decision_modes
 # actions the mode codes (a superset).
-_NEW_MONEY_POLICY_CODES = frozenset({
-    "buy", "hold_or_add", "accumulate", "speculative_small_position",
-    "speculative_with_thesis", "speculative_only", "small_position_with_stops",
-})
+_NEW_MONEY_POLICY_CODES = ENTRY_CANDIDATE_CODES
 _NEW_MONEY_MODE_CODES = _NEW_MONEY_POLICY_CODES | {"build_position", "starter_position_only", "starter_then_add"}
 _DIP_NEW_MONEY_RECOMMENDATIONS = frozenset({
     "strong_buy_the_dip", "buy_the_dip", "cautious_accumulation", "small_speculative_position",
