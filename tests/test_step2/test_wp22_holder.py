@@ -263,15 +263,19 @@ async def test_coherence_through_the_matrix(name: str) -> None:
 def test_gates_never_change_if_held(gate_id: str) -> None:
     """PH-RF8 / GC-R6: with the evidence fixed (θ at every value, () included), firing any analyze gate alone or
     with any other leaves if_held's action and basis equal to the gate-free run; the thesis gate fires with codes
-    [business_broken] whatever θ is. add_allowed follows the gated new_money (R2.6(h)). RF."""
+    [business_broken] whatever θ is. With the thesis gate fired iff θ is broken, coded θ (up to three gates), it
+    leaves them equal to the run with no other gate. add_allowed follows the gated new_money (R2.6(h)). RF."""
     others = [(), *((g,) for g in ANALYZE_GATE_IDS if g != gate_id)]
     for (mid, tilt, zone, disl), thesis in product(grid(), THESES):
         cand = candidate(mid, tilt, zone, disl, knife=False)
         base = held(dm.decide_on(cand, [], thesis=thesis, dislocation=disl, tilt=tilt))
+        consistent = held(run_decide(cand, [], thesis, disl, tilt))
         for other in others:
             gated = dm.decide_on(cand, fire([gate_id, *other]), thesis=thesis, dislocation=disl, tilt=tilt)
             assert held(gated) == base, (gate_id, other, mid, tilt, zone, disl, thesis)
             assert gated["if_held"]["add_allowed"] is (gated["new_money"]["action"] in ENTRY)
+            assert held(run_decide(cand, [gate_id, *other], thesis, disl, tilt)) == consistent, (
+                gate_id, other, mid, tilt, zone, disl, thesis)
 
 
 @pytest.mark.parametrize("gate_id", UNEVALUABLE)
