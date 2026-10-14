@@ -98,9 +98,8 @@ def earnings_window(earnings: Mapping[str, Any] | None, today: date | None) -> E
     warns = days is not None and 0 <= days <= EARNINGS_WARNING_DAYS
     days_until = int(days) if days is not None and math.isfinite(days) else None
 
-    windows = earnings.get("windows")
-    windows = windows if isinstance(windows, list) else []
-    shown = [interval for interval in map(_interval, windows) if interval]
+    windows = _listed(earnings, "windows")
+    shown =[interval for interval in map(_interval, windows) if interval]
     candidates = earnings.get("candidate_dates")
     if isinstance(candidates, Mapping):
         shown += [(day, day) for day in map(_iso_day, candidates.values()) if day]
@@ -150,13 +149,18 @@ def check_earnings_unverifiable(
                   "reason": f"earnings calendar unverifiable ({cause}) — event risk unverified"}
 
 
+def _listed(earnings: Mapping[str, Any], key: str) -> list[Any]:
+    value = earnings.get(key)
+    return value if isinstance(value, list) else []
+
+
 def _unverifiable_cause(earnings: dict[str, Any], events_failed: bool) -> str:
     if events_failed:
         return "tool fetch"
-    causes = [f"{name} failed" for name in earnings.get("sources_failed") or []]
-    causes += [f"{name} stale" for name in earnings.get("sources_stale") or []]
+    causes = [f"{name} failed" for name in _listed(earnings, "sources_failed")]
+    causes += [f"{name} stale" for name in _listed(earnings, "sources_stale")]
     if any(isinstance(window, Mapping) and window.get("window_basis") == "assumed"
-           for window in earnings.get("windows") or []):
+           for window in _listed(earnings, "windows")):
         causes.append("estimate window assumed")
     return ", ".join(causes) or "no verified source"
 
