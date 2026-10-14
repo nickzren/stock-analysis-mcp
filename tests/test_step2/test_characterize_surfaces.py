@@ -69,42 +69,46 @@ def pullback_card() -> dict[str, Any]:
 class TestGatedSummary:
     @pytest.mark.parametrize("name", ["S4_earnings_gate_on_hold_or_add", "S9_weak_liquidity"])
     async def test_a_gated_hold_or_add_keeps_the_ungated_summary(self, name: str) -> None:
-        """SC-CH1: with action_now=wait_for_data, the executive summary is word for word S1's (no gate):
-        "Policy: mid-term hold or add; size ~2.5-8.0%." CH: flipped by WP2.3 (executive-summary segments
-        for new money, if held and long term, plan §7)."""
+        """SC-CH1: with new_money wait (S4, event) or avoid (S9, weak liquidity), the executive summary is word
+        for word S1's (starter, no gate): "Policy: mid-term hold or add; size ~2.5-8.0%." The action clause
+        flipped in WP2.2 (D-2, D-5a); CH: flipped by WP2.3 (executive-summary segments for new money, if held and
+        long term, plan §7)."""
         gated = await dm.run(name)
         clean = await dm.run("S1_hold_or_add_clean")
 
         assert (gated["decision_card"]["action_now"], clean["decision_card"]["action_now"]) == (
-            "wait_for_data", "hold_or_add")
+            {"S4_earnings_gate_on_hold_or_add": "wait", "S9_weak_liquidity": "avoid"}[name], "starter")
         assert gated["executive_summary"] == clean["executive_summary"]
         assert gated["executive_summary"].endswith("Policy: mid-term hold or add; size ~2.5-8.0%.")
 
 
 class TestSwingVsMidTerm:
-    async def test_analyze_holds_where_the_card_trades_now(self) -> None:
-        """SC-CH8: on one uptrend pullback with a poor business, analyze says hold (speculative wait, core
-        avoid, no gate) and the trade card, which reads no fundamentals, says trade_now.
-        CH: flipped by WP2.2 (action_now aliases new_money.action: hold maps to wait, D-2); the card
-        keeps trade_now and gains horizon: swing in WP2.1."""
+    async def test_analyze_avoids_where_the_card_trades_now(self) -> None:
+        """SC-CH8: on one uptrend pullback with a poor business, analyze's mid-term new_money is avoid
+        [thesis_broken] with if_held review_exit (speculative wait, core avoid) while the trade card, which reads
+        no fundamentals, says trade_now (swing, WP2.1). The action clause flipped in WP2.2 (PD D-1c: the poor
+        business breaks the thesis, so not D-2's wait). CH: flipped by WP2.3 (speculative is capped by new_money,
+        PH-RF19)."""
         result = await dm.run(PULLBACK_POOR_BUSINESS)
         modes = result["decision_modes"]
         fit = result["verdict"]["horizon_fit"]
         card = pullback_card()
 
-        assert (result["decision_card"]["action_now"], dm.gate_ids(result)) == ("hold", [])
+        assert (result["decision_card"]["action_now"], dm.gate_ids(result)) == ("avoid", ["thesis_broken"])
+        assert result["decision_card"]["if_held"]["action"] == "review_exit"
         assert (modes["speculative"]["action"], modes["core"]["action"]) == ("wait", "avoid")
         assert (fit["mid_term"], fit["long_term"]) == ("ok", "avoid")
         assert (card["action"], card["setup"]["type"], card["blockers"]) == ("trade_now", "pullback_in_uptrend", [])
 
-    async def test_analyze_decision_card_states_no_horizon(self) -> None:
-        """SC-CH8: no horizon key on analyze's decision_card at any tier; the card and scan-row clauses
-        moved to S-C8 (test_wp21_card.py, scan rows with stage 1).
-        CH: flipped by WP2.2 (decision_card.horizon: mid_term, plan §2)."""
+    async def test_analyze_decision_card_states_its_horizon(self) -> None:
+        """SC-CH8: analyze's decision_card states mid_term and its long_term block long_term at every tier; the
+        card and scan-row clauses are S-C8's (test_wp21_card.py, scan rows with stage 1).
+        G from WP2.2 (plan §2, D-3; flipped from "no horizon key")."""
         shown = dm.tiers(await dm.run(PULLBACK_POOR_BUSINESS))
 
         for tier, payload in shown.items():
-            assert "horizon" not in payload["decision_card"], tier
+            card = payload["decision_card"]
+            assert (card["horizon"], card["long_term"]["horizon"]) == ("mid_term", "long_term"), tier
 
 
 class TestStandardTierHasNoAction:
@@ -292,10 +296,10 @@ class TestSavedRecords:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """SC-CH16: for ACME on the S-C8 chart and business, analyze's watchlist_snapshot saves
-        decision_action_now=hold while the scan state saves the trade card's trade_now; the snapshot
-        names no horizon. CH: flipped by WP2.2 (decision_action_now follows new_money: hold maps to
-        wait, D-2) and WP2.4 (snapshot 3.0.0 replaces it with new_money_action; docs label the snapshot
-        mid-term and the scan state swing, with still no snapshot horizon field, plan §8)."""
+        decision_action_now=avoid [thesis_broken] (new_money, WP2.2: D-1c) while the scan state saves the trade
+        card's trade_now; the snapshot names no horizon. CH: flipped by WP2.4 (snapshot 3.0.0 replaces it with
+        new_money_action; docs label the snapshot mid-term and the scan state swing, with still no snapshot
+        horizon field, plan §8)."""
         snapshot = (await dm.run(PULLBACK_POOR_BUSINESS))["watchlist_snapshot"]
         card = pullback_card()
 
@@ -309,6 +313,7 @@ class TestSavedRecords:
         state, warnings = load_scan_state(tmp_path)
 
         assert (scan["full_cards"], warnings) == (1, [])
-        assert (snapshot["symbol"], snapshot["decision_action_now"], snapshot["hard_gate_ids"]) == ("ACME", "hold", [])
+        assert (snapshot["symbol"], snapshot["decision_action_now"], snapshot["hard_gate_ids"]) == (
+            "ACME", "avoid", ["thesis_broken"])
         assert state["symbols"]["ACME"]["action"] == "trade_now"
         assert "horizon" not in snapshot

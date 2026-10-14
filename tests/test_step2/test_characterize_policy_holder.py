@@ -14,7 +14,6 @@ from typing import Any
 import pytest
 
 from stock_analysis.tools.analyze.action_zones import apply_dip_gates_to_action_zones
-from stock_analysis.tools.analyze.decision_card import _compute_hard_gates, _resolve_action_now
 from stock_analysis.tools.analyze.decision_context import _build_thesis_checkpoints
 from stock_analysis.tools.analyze.dislocation_framework import classify_dislocation_opportunity
 from stock_analysis.tools.analyze.executive_summary import build_policy_action
@@ -22,8 +21,7 @@ from stock_analysis.tools.analyze.investor_profile import build_decision_modes
 from tests.support import decision_matrix as dm
 
 KNIFE_DIP = {"dip_classification": {"type": "falling_knife"}}
-NO_GATES: dict[str, Any] = {"any_blocking": False, "blocking": []}
-KNIFE_GATE = {"any_blocking": True, "blocking": [{"id": "falling_knife", "reason": "r"}]}
+NEAR_HIGH = [{"id": "near_52w_high", "reason": "r"}]
 
 
 def policy(mid: str, long: str, tilt: str | None, *, zone: str = "hold_neutral", gate: str = "neutral",
@@ -36,10 +34,6 @@ def policy(mid: str, long: str, tilt: str | None, *, zone: str = "hold_neutral",
                                dip_assessment=dip, fundamentals_summary={})
 
 
-def action_now(policy_action: dict[str, Any], hard_gates: dict[str, Any] = NO_GATES) -> str:
-    return _resolve_action_now(policy_action, hard_gates)[0]
-
-
 def thesis(result: dict[str, Any]) -> str:
     return result["dislocation_framework"]["thesis_integrity"]["status"]
 
@@ -48,49 +42,26 @@ class TestKnifeOverride:
     @pytest.mark.parametrize(("mid", "tilt", "before"),
                              [("avoid", "bearish", "avoid"), ("ok", None, "insufficient_data"),
                               ("ok", "bearish", "hold_or_reduce")])
-    def test_the_knife_rewrites_non_dislocation_mid_codes_to_wait_for_entry(
-        self, mid: str, tilt: str | None, before: str
-    ) -> None:
-        """PH-CH1: a falling knife rewrites avoid, insufficient_data and hold_or_reduce to wait_for_entry.
-        Flipped by WP2.2: build_policy_action loses its knife override (plan §1; TestR95FallingKnife migrates)."""
+    def test_the_knife_leaves_the_mid_code_alone(self, mid: str, tilt: str | None, before: str) -> None:
+        """PH-CH1: a falling knife no longer rewrites avoid, insufficient_data or hold_or_reduce, and adds no
+        rationale line. G from WP2.2 (plan §1: build_policy_action loses its knife override; the knife is the
+        falling_knife gate)."""
         knifed = policy(mid, "avoid", tilt, dip=KNIFE_DIP)
 
-        assert policy(mid, "avoid", tilt)["mid_term"] == before
-        assert knifed["mid_term"] == "wait_for_entry"
-        assert "dip_type=falling_knife" in knifed["rationale"]
-
-    def test_the_knife_loosens_action_now_from_avoid_to_wait(self) -> None:
-        """PH-CH2: the knife turns action_now avoid into wait; its gate never overrides wait.
-        Flipped by WP2.2 (PH-RF2): adding the knife never loosens new money."""
-        plain = policy("avoid", "avoid", "bearish")
-        knifed = policy("avoid", "avoid", "bearish", dip=KNIFE_DIP)
-
-        assert action_now(plain) == "avoid"
-        assert action_now(knifed, KNIFE_GATE) == "wait"
-
-    async def test_codex_probe_a_to_b_loosens_action_now_while_the_thesis_stays_broken(self) -> None:
-        """PH-CH2: pipeline A (broken + bearish) gives action_now avoid; B (A + knife) gives wait.
-        Flipped by WP2.2 (PD D-1c, PH-RF3): A and B both give new_money avoid and if_held review_exit."""
-        a = await dm.run("A_broken_bearish")
-        b = await dm.run("B_broken_bearish_knife")
-
-        assert (a["policy_action"]["mid_term"], a["decision_card"]["action_now"], dm.gate_ids(a)) == (
-            "avoid", "avoid", [])
-        assert (b["policy_action"]["mid_term"], b["decision_card"]["action_now"], dm.gate_ids(b)) == (
-            "wait_for_entry", "wait", ["falling_knife"])
-        assert "dip_type=falling_knife" in b["policy_action"]["rationale"]
-        assert thesis(a) == thesis(b) == "broken"
+        assert policy(mid, "avoid", tilt)["mid_term"] == knifed["mid_term"] == before
+        assert not [line for line in knifed["rationale"] if "falling_knife" in line]
 
     @pytest.mark.parametrize(("dip_type", "zone", "knife_free", "policy_today"),
                              [(None, "accumulate", "buy", "buy"),
-                              ("falling_knife", "hold_neutral", "hold_or_add", "wait_for_entry"),
+                              ("falling_knife", "hold_neutral", "hold_or_add", "hold_or_add"),
                               ("extended_decline", "accumulate", "buy", "buy")])
     def test_the_zone_cap_lets_the_knife_split_buy_from_hold_or_add(
         self, dip_type: str | None, zone: str, knife_free: str, policy_today: str
     ) -> None:
         """PH-CH10: ok + bullish + accumulate gives buy; the knife caps the zone to hold_neutral, so the
-        knife-free candidate is hold_or_add; extended_decline leaves the zone (V5, annex §0.1).
-        Flipped by WP2.2 (knife row only): without the knife override the policy shows that candidate."""
+        knife-free candidate is hold_or_add; extended_decline leaves the zone (V5, annex §0.1). Without the knife
+        override the policy shows that candidate. G from WP2.2 (knife row flipped; annex §0.1: the knife reaches
+        the candidate only through the zone cap)."""
         verdict = {"tilt": "bullish", "horizon_fit": {"mid_term": "ok", "long_term": "ok"}, "decomposed": {}}
         dip = {"dip_classification": {"type": dip_type}}
         zones = apply_dip_gates_to_action_zones(
@@ -108,29 +79,30 @@ class TestKnifeOverride:
 
 
 class TestZoneAndDislocationCodes:
-    @pytest.mark.parametrize(("mid", "code", "now"), [("ok", "hold_or_add", "hold_or_add"),
-                                                      ("caution", "speculative_small_position", "starter")])
-    def test_the_reduce_zone_with_a_bullish_tilt_admits_new_money_a7(self, mid: str, code: str,
-                                                                     now: str) -> None:
-        """PH-CH3: A7: reduce zone + bullish gives hold_or_add (ok) or speculative_small_position
-        (caution), both new-money action_now codes with no gate.
-        Flipped by WP2.2 (PD D-4, PH-RF11): the near_52w_high cap makes new_money wait; the policy codes stay."""
+    @pytest.mark.parametrize(("mid", "code"), [("ok", "hold_or_add"), ("caution", "speculative_small_position")])
+    def test_the_reduce_zone_with_a_bullish_tilt_admits_new_money_a7(self, mid: str, code: str) -> None:
+        """PH-CH3: A7: reduce zone + bullish gives hold_or_add (ok) or speculative_small_position (caution),
+        both mapping to starter; the near_52w_high gate caps that at wait. PD D-4, D-2 (flipped by WP2.2;
+        the policy codes stay, §1 "A7 is a new-money cap, not a candidate change")."""
         action = policy(mid, "ok", "bullish", zone="reduce", quality="strong")
+        capped = dm.decide_on(action, NEAR_HIGH)["new_money"]
 
         assert action["mid_term"] == code
-        assert action_now(action) == now
+        assert dm.decide_on(action)["new_money"]["action"] == "starter"
+        assert (capped["action"], capped["decided_by"]) == ("wait", "near_52w_high")
 
-    @pytest.mark.parametrize(("mid", "code", "without_dislocation", "now"),
-                             [("ok", "hold_or_reduce", "hold_or_reduce", "hold_or_reduce"),
-                              ("caution", "speculative_small_position", "wait_for_entry", "starter"),
-                              ("avoid", "avoid", "avoid", "avoid")])
+    @pytest.mark.parametrize(("mid", "code", "without_dislocation", "now", "basis"),
+                             [("ok", "hold_or_reduce", "hold_or_reduce", "wait", "price_broken_more_than_business"),
+                              ("caution", "speculative_small_position", "wait_for_entry", "starter",
+                               "candidate_admits_new_money"),
+                              ("avoid", "avoid", "avoid", "avoid", "price_broken_more_than_business")])
     def test_dislocation_with_a_bearish_tilt_is_non_monotone_in_mid_fit(
-        self, mid: str, code: str, without_dislocation: str, now: str
+        self, mid: str, code: str, without_dislocation: str, now: str, basis: str
     ) -> None:
         """PH-CH9: dislocation + bearish: ok gives hold_or_reduce, caution speculative_small_position,
-        avoid avoid; only the caution branch reads the dislocation flag (V2).
-        Flipped by WP2.2 (ok row's action_now only; PD D-2): as the new_money alias it maps hold_or_reduce to
-        wait. The policy codes stay (§0 #16); PH-RF13 (PD D-1b) adds if_held hold for all three."""
+        avoid avoid; only the caution branch reads the dislocation flag (V2). new_money maps them (wait,
+        starter, avoid) and if_held holds for all three. PD D-2, D-1b (flipped by WP2.2; the policy codes stay,
+        §0 #16; PH-RF13 owns the if_held rows)."""
         verdict = {"tilt": "bearish", "decomposed": {"business_quality": "strong"},
                    "horizon_fit": {"mid_term": mid, "long_term": "ok"}}
         zones = {"current_zone": "accumulate",
@@ -151,7 +123,9 @@ class TestZoneAndDislocationCodes:
         assert signals["is_dislocation_candidate"] is True
         assert dislocated["mid_term"] == code
         assert policy_with(None)["mid_term"] == without_dislocation
-        assert action_now(dislocated) == now
+        decided = dm.decide_on(dislocated, dislocation=True, tilt="bearish")
+        assert (decided["new_money"]["action"], decided["if_held"]["action"], decided["if_held"]["basis"]) == (
+            now, "hold", basis)
 
 
 def modes(long_fit: str, policy_action: dict[str, Any], tilt: str | None, gate: str) -> dict[str, Any]:
@@ -208,30 +182,11 @@ class TestLongTermPolicy:
         assert policy("ok", "caution", tilt, unprofitable=True)["long_term"] == "speculative_only"
 
 
-BURNER_VERDICT = {"tilt": "bullish",
-                  "horizon_fit": {"mid_term": "caution", "long_term": "caution",
-                                  "long_term_gates": ["unprofitable", "low_runway_confidence"]},
-                  "decomposed": {"business_quality": "unprofitable"}}
-BURNER_ZONES = {"current_zone": "hold_neutral", "valuation_assessment": {"gate": "neutral", "is_unprofitable": True}}
-
-
-def burner_fundamentals(burn: dict[str, Any]) -> dict[str, Any]:
-    return {"growth": {"revenue_yoy": 0.3}, "profitability": {"net_margin": -0.2, "fcf_positive": False},
-            "health": {"net_cash_positive": True, "debt_to_equity": 0.1},
-            "valuation": {"valuation_note": "pe_not_meaningful"}, "burn_metrics": burn}
-
-
 # fundamentals_snapshot payloads for the analyze twin of p5: cash 1e8 against a quarterly FCF burn
 # of 5e7 is a 2.0-quarter runway; without the cash figure the runway is unavailable.
-BURNER_HEALTH = {"debt_to_equity": 0.1, "rules": {"net_cash_positive": {"triggered": True},
-                                                  "low_debt": {"triggered": True}}}
-BURNER_SNAPSHOT = {"valuation": {"pe_trailing": None, "trailing_eps": -1.0, "ps_trailing": 4.0},
-                   "growth": {"revenue_yoy": 0.3, "rules": {"high_growth": {"triggered": True}}},
-                   "profitability": {"net_margin": -0.2},
-                   "cash_flow": {"free_cash_flow_ttm": -2e8, "operating_cf_ttm": -1.6e8,
-                                 "rules": {"positive_fcf": {"triggered": False}}},
-                   "financial_health": {**BURNER_HEALTH, "cash_and_st_investments": 1e8}}
-UNKNOWN_RUNWAY_SNAPSHOT = {**BURNER_SNAPSHOT, "financial_health": BURNER_HEALTH}
+BURNER_SNAPSHOT = dm.BURNER
+UNKNOWN_RUNWAY_SNAPSHOT = {**dm.BURNER, "financial_health": {
+    k: v for k, v in dm.BURNER["financial_health"].items() if k != "cash_and_st_investments"}}
 
 
 class TestThesisSurfaces:
@@ -247,44 +202,17 @@ class TestThesisSurfaces:
         assert triggers["runway_critical"]["condition"] == "cash_runway < 4 quarters"
         assert all(set(t) == {"trigger", "condition", "action", "rationale"} for t in triggers.values())
 
-    @pytest.mark.parametrize(("burn", "balance", "gates", "now"), [
-        ({"status": "available", "cash_runway_quarters": 2.0}, "unsafe", [], "starter"),
-        ({"status": "unavailable"}, "safe", ["missing_runway"], "wait_for_data"),
-    ], ids=["runway_2q", "runway_unknown"])
-    def test_a_known_short_runway_has_no_gate_but_an_unknown_one_does(
-        self, burn: dict[str, Any], balance: str, gates: list[str], now: str
-    ) -> None:
-        """PH-CH7: a 2-quarter burner (balance unsafe) gets no gate and starter codes (mid
-        speculative_small_position, long speculative_only); its unknown-runway twin is blocked by
-        missing_runway (p5).
-        Flipped by WP2.2 (PD D-1c, PH-RF12) if the thesis_broken cap lands in these helpers; else retire it
-        (the analyze twin below flips either way)."""
-        fundamentals = burner_fundamentals(burn)
-        signals = classify_dislocation_opportunity(verdict=BURNER_VERDICT, action_zones=BURNER_ZONES,
-                                                   fundamentals_summary=fundamentals, dip_assessment=None)
-        action = build_policy_action(verdict=BURNER_VERDICT, action_zones=BURNER_ZONES,
-                                     decomposed=BURNER_VERDICT["decomposed"], dip_assessment=None,
-                                     fundamentals_summary=fundamentals)
-        hard_gates = _compute_hard_gates(events_data={}, data_quality={}, technicals_data=None,
-                                         fundamentals_summary=fundamentals,
-                                         risk_data={"liquidity": {"avg_dollar_volume": 5e8}})
-
-        assert (signals["business_status"], signals["balance_status"]) == ("mixed", balance)
-        assert (action["mid_term"], action["long_term"]) == ("speculative_small_position", "speculative_only")
-        assert [g["id"] for g in hard_gates["blocking"]] == gates
-        assert action_now(action, hard_gates) == now
-
     @pytest.mark.parametrize(("snapshot", "runway", "balance", "thesis_status", "gates", "now"), [
-        (BURNER_SNAPSHOT, 2.0, "unsafe", "broken", [], "starter"),
+        (BURNER_SNAPSHOT, 2.0, "unsafe", "broken", ["thesis_broken"], "avoid"),
         (UNKNOWN_RUNWAY_SNAPSHOT, None, "safe", "watch", ["missing_runway"], "wait_for_data"),
     ], ids=["runway_2q", "runway_unknown"])
-    async def test_the_runway_inversion_holds_through_analyze(
+    async def test_a_known_short_runway_is_blocked_like_an_unknown_one(
         self, snapshot: dict[str, Any], runway: float | None, balance: str, thesis_status: str,
         gates: list[str], now: str
     ) -> None:
-        """PH-CH7: through analyze (weak bullish chart), the 2-quarter burner shows thesis broken and
-        action_now starter with no gate; its unknown-runway twin is blocked by missing_runway.
-        Flipped by WP2.2 (PD D-1c, PH-RF12): the thesis_broken cap makes the 2-quarter burner's action_now avoid."""
+        """PH-CH7: through analyze (weak bullish chart), the 2-quarter burner (thesis broken) is blocked by
+        thesis_broken (new_money avoid) and its unknown-runway twin by missing_runway: the p5 inversion is closed.
+        PD D-1c (G from WP2.2; flipped from "no gate, starter"; PH-RF12 owns the burner)."""
         result = await dm.run(dm.Scenario("PH CH7 burner (p5)", dm.WEAK, snapshot, dm.MODERATE))
         dislocation = result["dislocation_framework"]
 
@@ -299,8 +227,9 @@ class TestThesisSurfaces:
 
     async def test_case_e_shows_a_broken_thesis_next_to_hold_or_add(self) -> None:
         """PH-CH8: case E (poor business, bullish chart): thesis broken, core avoid and long-term
-        avoid_core_position, yet action_now hold_or_add with no gate.
-        Flipped by WP2.2 (PD D-1c, PH-RF12): new_money avoid [thesis_broken] and if_held review_exit."""
+        avoid_core_position; the pre-gate mid-term policy stays hold_or_add next to new_money avoid [thesis_broken].
+        Action clause flipped by WP2.2 (PD D-1c, PH-RF12); flipped again by WP2.3 (policy_action moves to
+        diagnostics.pre_gate_policy, D-9)."""
         result = await dm.run("E_poor_business_bullish_chart")
         dislocation = result["dislocation_framework"]
 
@@ -310,8 +239,8 @@ class TestThesisSurfaces:
         assert result["policy_action"]["long_term"] == "avoid_core_position"
         assert result["decision_modes"]["core"]["action"] == "avoid"
         assert (result["policy_action"]["mid_term"], result["decision_card"]["action_now"]) == (
-            "hold_or_add", "hold_or_add")
-        assert dm.gate_ids(result) == []
+            "hold_or_add", "avoid")
+        assert dm.gate_ids(result) == ["thesis_broken"]
 
 
 class TestGateCombination:

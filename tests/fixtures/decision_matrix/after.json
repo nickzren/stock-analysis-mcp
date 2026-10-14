@@ -1,4 +1,117 @@
 {
+  "A7_near_52w_high_bullish": {
+    "action_now": "wait",
+    "card_sizing": {
+      "full_dollars": 800.0,
+      "full_pct_cap": 8.0,
+      "starter_dollars": 250.0,
+      "starter_pct": 2.5,
+      "whole_shares": 2
+    },
+    "conditions": {
+      "add_only_if": [],
+      "buy_only_if": []
+    },
+    "decision": {
+      "if_held": {
+        "action": "hold",
+        "add_allowed": false,
+        "basis": "candidate_admits_new_money"
+      },
+      "long_term": {
+        "action": "buy",
+        "blocked_by": [],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      },
+      "new_money": {
+        "action": "wait",
+        "blocked_by": [
+          "near_52w_high"
+        ],
+        "decided_by": "near_52w_high",
+        "earliest_reassessment": {
+          "basis": "conditions_only",
+          "date": null
+        },
+        "unevaluated": []
+      }
+    },
+    "dip": {
+      "entry_actions": [],
+      "recommendation": "wait_for_better_setup",
+      "type": "healthy_pullback"
+    },
+    "dislocation": {
+      "buy_now": null,
+      "can_start_now": false,
+      "mismatch": "unclear",
+      "status": null,
+      "thesis": "watch"
+    },
+    "hard_gates": [
+      "near_52w_high"
+    ],
+    "horizon_fit": {
+      "long_term": "accumulate",
+      "mid_term": "hold_or_add"
+    },
+    "modes": {
+      "balanced": {
+        "action": "hold_or_add",
+        "long_term_view": "accumulate"
+      },
+      "core": {
+        "action": "build_position",
+        "long_term_view": null
+      },
+      "speculative": {
+        "action": "wait",
+        "long_term_view": null
+      }
+    },
+    "policy": {
+      "long_term": "accumulate",
+      "mid_term": "hold_or_add"
+    },
+    "sizing_present": {
+      "decision": {
+        "card": true,
+        "range": false
+      },
+      "full": {
+        "card": true,
+        "range": true
+      },
+      "standard": {
+        "card": true,
+        "range": true
+      }
+    },
+    "snapshot": {
+      "action_long_term": "accumulate",
+      "action_mid_term": "hold_or_add",
+      "decision_action_now": "wait",
+      "hard_gate_ids": [
+        "near_52w_high"
+      ],
+      "snapshot_hash": "603991eca64f97e6",
+      "zone": "reduce"
+    },
+    "source": "PH A7 (D-4)",
+    "valuation_gate": "attractive",
+    "verdict": {
+      "business_quality": "moderate",
+      "fit": {
+        "long_term": "ok",
+        "mid_term": "ok"
+      },
+      "score": 0.3,
+      "tilt": "bullish"
+    },
+    "zone": "reduce"
+  },
   "A_broken_bearish": {
     "action_now": "avoid",
     "card_sizing": {
@@ -16,6 +129,31 @@
         "revenue_yoy > -20%"
       ]
     },
+    "decision": {
+      "if_held": {
+        "action": "review_exit",
+        "add_allowed": false,
+        "basis": "business_broken"
+      },
+      "long_term": {
+        "action": "avoid",
+        "blocked_by": [
+          "thesis_broken"
+        ],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      },
+      "new_money": {
+        "action": "avoid",
+        "blocked_by": [
+          "thesis_broken"
+        ],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      }
+    },
     "dip": {
       "entry_actions": [],
       "recommendation": "wait_for_better_setup",
@@ -28,7 +166,9 @@
       "status": null,
       "thesis": "broken"
     },
-    "hard_gates": [],
+    "hard_gates": [
+      "thesis_broken"
+    ],
     "horizon_fit": {
       "long_term": "avoid_core_position",
       "mid_term": "avoid"
@@ -69,8 +209,10 @@
       "action_long_term": "avoid_core_position",
       "action_mid_term": "avoid",
       "decision_action_now": "avoid",
-      "hard_gate_ids": [],
-      "snapshot_hash": "d57da677c22c987d",
+      "hard_gate_ids": [
+        "thesis_broken"
+      ],
+      "snapshot_hash": "f21172a15f7b1cbc",
       "zone": "accumulate"
     },
     "source": "PH A",
@@ -87,7 +229,7 @@
     "zone": "accumulate"
   },
   "B_broken_bearish_knife": {
-    "action_now": "wait",
+    "action_now": "avoid",
     "card_sizing": {
       "full_dollars": 800.0,
       "full_pct_cap": 8.0,
@@ -102,6 +244,33 @@
         "debt_to_equity < 1.5x",
         "revenue_yoy > -20%"
       ]
+    },
+    "decision": {
+      "if_held": {
+        "action": "review_exit",
+        "add_allowed": false,
+        "basis": "business_broken"
+      },
+      "long_term": {
+        "action": "avoid",
+        "blocked_by": [
+          "falling_knife",
+          "thesis_broken"
+        ],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      },
+      "new_money": {
+        "action": "avoid",
+        "blocked_by": [
+          "falling_knife",
+          "thesis_broken"
+        ],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      }
     },
     "dip": {
       "entry_actions": [
@@ -118,15 +287,16 @@
       "thesis": "broken"
     },
     "hard_gates": [
-      "falling_knife"
+      "falling_knife",
+      "thesis_broken"
     ],
     "horizon_fit": {
       "long_term": "avoid_core_position",
-      "mid_term": "wait_for_entry"
+      "mid_term": "avoid"
     },
     "modes": {
       "balanced": {
-        "action": "wait_for_entry",
+        "action": "avoid",
         "long_term_view": "avoid_core_position"
       },
       "core": {
@@ -140,7 +310,7 @@
     },
     "policy": {
       "long_term": "avoid_core_position",
-      "mid_term": "wait_for_entry"
+      "mid_term": "avoid"
     },
     "sizing_present": {
       "decision": {
@@ -158,12 +328,13 @@
     },
     "snapshot": {
       "action_long_term": "avoid_core_position",
-      "action_mid_term": "wait_for_entry",
-      "decision_action_now": "wait",
+      "action_mid_term": "avoid",
+      "decision_action_now": "avoid",
       "hard_gate_ids": [
-        "falling_knife"
+        "falling_knife",
+        "thesis_broken"
       ],
-      "snapshot_hash": "e1f167facb4f7bf1",
+      "snapshot_hash": "b7327ee11e3edd15",
       "zone": "hold_neutral"
     },
     "source": "PH B",
@@ -180,7 +351,7 @@
     "zone": "hold_neutral"
   },
   "C1_headwind_hold_or_add": {
-    "action_now": "hold_or_add",
+    "action_now": "starter",
     "card_sizing": {
       "full_dollars": 800.0,
       "full_pct_cap": 8.0,
@@ -193,6 +364,27 @@
       "buy_only_if": [
         "P/E < 25x (currently headwind)"
       ]
+    },
+    "decision": {
+      "if_held": {
+        "action": "hold",
+        "add_allowed": true,
+        "basis": "candidate_admits_new_money"
+      },
+      "long_term": {
+        "action": "wait",
+        "blocked_by": [],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      },
+      "new_money": {
+        "action": "starter",
+        "blocked_by": [],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      }
     },
     "dip": {
       "entry_actions": [],
@@ -246,9 +438,9 @@
     "snapshot": {
       "action_long_term": "hold_size_conservatively",
       "action_mid_term": "hold_or_add",
-      "decision_action_now": "hold_or_add",
+      "decision_action_now": "starter",
       "hard_gate_ids": [],
-      "snapshot_hash": "128d9dfb9fd99ee6",
+      "snapshot_hash": "af99cfc0fe516601",
       "zone": "hold_bullish"
     },
     "source": "OC C1",
@@ -265,7 +457,7 @@
     "zone": "hold_bullish"
   },
   "C2_headwind_earnings_gate": {
-    "action_now": "wait_for_data",
+    "action_now": "wait",
     "card_sizing": {
       "full_dollars": 800.0,
       "full_pct_cap": 8.0,
@@ -278,6 +470,34 @@
       "buy_only_if": [
         "P/E < 25x (currently headwind)"
       ]
+    },
+    "decision": {
+      "if_held": {
+        "action": "hold",
+        "add_allowed": false,
+        "basis": "candidate_admits_new_money"
+      },
+      "long_term": {
+        "action": "wait",
+        "blocked_by": [
+          "earnings_blackout"
+        ],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      },
+      "new_money": {
+        "action": "wait",
+        "blocked_by": [
+          "earnings_blackout"
+        ],
+        "decided_by": "earnings_blackout",
+        "earliest_reassessment": {
+          "basis": "earnings_clear",
+          "date": "2026-10-13"
+        },
+        "unevaluated": []
+      }
     },
     "dip": {
       "entry_actions": [],
@@ -333,11 +553,11 @@
     "snapshot": {
       "action_long_term": "hold_size_conservatively",
       "action_mid_term": "hold_or_add",
-      "decision_action_now": "wait_for_data",
+      "decision_action_now": "wait",
       "hard_gate_ids": [
         "earnings_blackout"
       ],
-      "snapshot_hash": "a4e3409532731532",
+      "snapshot_hash": "346c8d792870f434",
       "zone": "hold_bullish"
     },
     "source": "OC C2",
@@ -367,6 +587,27 @@
       "buy_only_if": [
         "P/E < 25x (currently headwind)"
       ]
+    },
+    "decision": {
+      "if_held": {
+        "action": "reduce",
+        "add_allowed": false,
+        "basis": "tilt_bearish"
+      },
+      "long_term": {
+        "action": "wait",
+        "blocked_by": [],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      },
+      "new_money": {
+        "action": "avoid",
+        "blocked_by": [],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      }
     },
     "dip": {
       "entry_actions": [
@@ -453,6 +694,34 @@
     "conditions": {
       "add_only_if": [],
       "buy_only_if": []
+    },
+    "decision": {
+      "if_held": {
+        "action": "hold",
+        "add_allowed": false,
+        "basis": "price_broken_more_than_business"
+      },
+      "long_term": {
+        "action": "avoid",
+        "blocked_by": [
+          "falling_knife"
+        ],
+        "decided_by": "falling_knife",
+        "earliest_reassessment": {
+          "basis": "conditions_only",
+          "date": null
+        },
+        "unevaluated": []
+      },
+      "new_money": {
+        "action": "avoid",
+        "blocked_by": [
+          "falling_knife"
+        ],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      }
     },
     "dip": {
       "entry_actions": [
@@ -543,6 +812,34 @@
       "add_only_if": [],
       "buy_only_if": []
     },
+    "decision": {
+      "if_held": {
+        "action": "hold",
+        "add_allowed": false,
+        "basis": "no_reduction_evidence"
+      },
+      "long_term": {
+        "action": "wait",
+        "blocked_by": [
+          "earnings_blackout"
+        ],
+        "decided_by": "earnings_blackout",
+        "earliest_reassessment": {
+          "basis": "earnings_clear",
+          "date": "2026-10-13"
+        },
+        "unevaluated": []
+      },
+      "new_money": {
+        "action": "avoid",
+        "blocked_by": [
+          "earnings_blackout"
+        ],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      }
+    },
     "dip": {
       "entry_actions": [],
       "recommendation": "wait_for_better_setup",
@@ -630,6 +927,27 @@
       "add_only_if": [],
       "buy_only_if": []
     },
+    "decision": {
+      "if_held": {
+        "action": "hold",
+        "add_allowed": false,
+        "basis": "no_reduction_evidence"
+      },
+      "long_term": {
+        "action": "buy",
+        "blocked_by": [],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      },
+      "new_money": {
+        "action": "avoid",
+        "blocked_by": [],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      }
+    },
     "dip": {
       "entry_actions": [],
       "recommendation": "wait_for_better_setup",
@@ -701,7 +1019,7 @@
     "zone": "accumulate"
   },
   "E2_mixed_fcf_bullish_chart": {
-    "action_now": "hold_or_add",
+    "action_now": "starter",
     "card_sizing": {
       "full_dollars": 800.0,
       "full_pct_cap": 8.0,
@@ -712,6 +1030,27 @@
     "conditions": {
       "add_only_if": [],
       "buy_only_if": []
+    },
+    "decision": {
+      "if_held": {
+        "action": "hold",
+        "add_allowed": true,
+        "basis": "candidate_admits_new_money"
+      },
+      "long_term": {
+        "action": "starter",
+        "blocked_by": [],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      },
+      "new_money": {
+        "action": "starter",
+        "blocked_by": [],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      }
     },
     "dip": {
       "entry_actions": [],
@@ -765,9 +1104,9 @@
     "snapshot": {
       "action_long_term": "small_position_with_stops",
       "action_mid_term": "hold_or_add",
-      "decision_action_now": "hold_or_add",
+      "decision_action_now": "starter",
       "hard_gate_ids": [],
-      "snapshot_hash": "547a8d412fee822f",
+      "snapshot_hash": "18f78bb19da06154",
       "zone": "hold_bullish"
     },
     "source": "PH E2",
@@ -795,6 +1134,31 @@
     "conditions": {
       "add_only_if": [],
       "buy_only_if": []
+    },
+    "decision": {
+      "if_held": {
+        "action": "reduce",
+        "add_allowed": false,
+        "basis": "tilt_bearish"
+      },
+      "long_term": {
+        "action": "watch",
+        "blocked_by": [
+          "unsupported_instrument"
+        ],
+        "decided_by": "unsupported_instrument",
+        "earliest_reassessment": null,
+        "unevaluated": []
+      },
+      "new_money": {
+        "action": "avoid",
+        "blocked_by": [
+          "unsupported_instrument"
+        ],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      }
     },
     "dip": {
       "entry_actions": [],
@@ -883,6 +1247,34 @@
       "add_only_if": [],
       "buy_only_if": []
     },
+    "decision": {
+      "if_held": {
+        "action": "hold",
+        "add_allowed": false,
+        "basis": "candidate_admits_new_money"
+      },
+      "long_term": {
+        "action": "watch",
+        "blocked_by": [
+          "unsupported_instrument"
+        ],
+        "decided_by": "unsupported_instrument",
+        "earliest_reassessment": null,
+        "unevaluated": []
+      },
+      "new_money": {
+        "action": "watch",
+        "blocked_by": [
+          "unsupported_instrument"
+        ],
+        "decided_by": "unsupported_instrument",
+        "earliest_reassessment": {
+          "basis": "unsupported",
+          "date": null
+        },
+        "unevaluated": []
+      }
+    },
     "dip": {
       "entry_actions": [],
       "recommendation": null,
@@ -958,7 +1350,7 @@
     "zone": "hold_bullish"
   },
   "E_poor_business_bullish_chart": {
-    "action_now": "hold_or_add",
+    "action_now": "avoid",
     "card_sizing": {
       "full_dollars": 800.0,
       "full_pct_cap": 8.0,
@@ -973,6 +1365,34 @@
         "debt_to_equity < 1.5x"
       ]
     },
+    "decision": {
+      "if_held": {
+        "action": "review_exit",
+        "add_allowed": false,
+        "basis": "business_broken"
+      },
+      "long_term": {
+        "action": "avoid",
+        "blocked_by": [
+          "thesis_broken"
+        ],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      },
+      "new_money": {
+        "action": "avoid",
+        "blocked_by": [
+          "thesis_broken"
+        ],
+        "decided_by": "thesis_broken",
+        "earliest_reassessment": {
+          "basis": "conditions_only",
+          "date": null
+        },
+        "unevaluated": []
+      }
+    },
     "dip": {
       "entry_actions": [],
       "recommendation": "wait_for_better_setup",
@@ -985,7 +1405,9 @@
       "status": null,
       "thesis": "broken"
     },
-    "hard_gates": [],
+    "hard_gates": [
+      "thesis_broken"
+    ],
     "horizon_fit": {
       "long_term": "avoid_core_position",
       "mid_term": "hold_or_add"
@@ -1025,9 +1447,11 @@
     "snapshot": {
       "action_long_term": "avoid_core_position",
       "action_mid_term": "hold_or_add",
-      "decision_action_now": "hold_or_add",
-      "hard_gate_ids": [],
-      "snapshot_hash": "2521dda62faf7f14",
+      "decision_action_now": "avoid",
+      "hard_gate_ids": [
+        "thesis_broken"
+      ],
+      "snapshot_hash": "1ff2e7d0a7e1fc5a",
       "zone": "hold_bullish"
     },
     "source": "PH E",
@@ -1055,6 +1479,27 @@
     "conditions": {
       "add_only_if": [],
       "buy_only_if": []
+    },
+    "decision": {
+      "if_held": {
+        "action": "hold",
+        "add_allowed": false,
+        "basis": "no_reduction_evidence"
+      },
+      "long_term": {
+        "action": "wait",
+        "blocked_by": [],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      },
+      "new_money": {
+        "action": "avoid",
+        "blocked_by": [],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      }
     },
     "dip": {
       "entry_actions": [],
@@ -1138,6 +1583,37 @@
     "conditions": {
       "add_only_if": [],
       "buy_only_if": []
+    },
+    "decision": {
+      "if_held": {
+        "action": "hold",
+        "add_allowed": false,
+        "basis": "candidate_admits_new_money"
+      },
+      "long_term": {
+        "action": "watch",
+        "blocked_by": [
+          "unsupported_currency"
+        ],
+        "decided_by": "unsupported_currency",
+        "earliest_reassessment": {
+          "basis": "unsupported",
+          "date": null
+        },
+        "unevaluated": []
+      },
+      "new_money": {
+        "action": "watch",
+        "blocked_by": [
+          "unsupported_currency"
+        ],
+        "decided_by": "unsupported_currency",
+        "earliest_reassessment": {
+          "basis": "unsupported",
+          "date": null
+        },
+        "unevaluated": []
+      }
     },
     "dip": {
       "entry_actions": [],
@@ -1226,6 +1702,36 @@
       "add_only_if": [],
       "buy_only_if": []
     },
+    "decision": {
+      "if_held": {
+        "action": "hold",
+        "add_allowed": false,
+        "basis": "price_broken_more_than_business"
+      },
+      "long_term": {
+        "action": "avoid",
+        "blocked_by": [
+          "falling_knife",
+          "unsupported_currency"
+        ],
+        "decided_by": "falling_knife",
+        "earliest_reassessment": {
+          "basis": "unsupported",
+          "date": null
+        },
+        "unevaluated": []
+      },
+      "new_money": {
+        "action": "avoid",
+        "blocked_by": [
+          "falling_knife",
+          "unsupported_currency"
+        ],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      }
+    },
     "dip": {
       "entry_actions": [
         "watch"
@@ -1304,8 +1810,129 @@
     },
     "zone": "hold_neutral"
   },
+  "H_burner_runway_2q": {
+    "action_now": "avoid",
+    "card_sizing": {
+      "full_dollars": 800.0,
+      "full_pct_cap": 8.0,
+      "starter_dollars": 250.0,
+      "starter_pct": 2.5,
+      "whole_shares": 2
+    },
+    "conditions": {
+      "add_only_if": [
+        "profitMargins > 0 for 2 consecutive quarters",
+        "freeCashflow > 0 for 2 consecutive quarters"
+      ],
+      "buy_only_if": []
+    },
+    "decision": {
+      "if_held": {
+        "action": "review_exit",
+        "add_allowed": false,
+        "basis": "runway_critical"
+      },
+      "long_term": {
+        "action": "avoid",
+        "blocked_by": [
+          "thesis_broken"
+        ],
+        "decided_by": "thesis_broken",
+        "earliest_reassessment": {
+          "basis": "conditions_only",
+          "date": null
+        },
+        "unevaluated": []
+      },
+      "new_money": {
+        "action": "avoid",
+        "blocked_by": [
+          "thesis_broken"
+        ],
+        "decided_by": "thesis_broken",
+        "earliest_reassessment": {
+          "basis": "conditions_only",
+          "date": null
+        },
+        "unevaluated": []
+      }
+    },
+    "dip": {
+      "entry_actions": [],
+      "recommendation": "wait_for_better_setup",
+      "type": "healthy_pullback"
+    },
+    "dislocation": {
+      "buy_now": "small_starter",
+      "can_start_now": true,
+      "mismatch": "business_broken_more_than_price",
+      "status": null,
+      "thesis": "broken"
+    },
+    "hard_gates": [
+      "thesis_broken"
+    ],
+    "horizon_fit": {
+      "long_term": "speculative_only",
+      "mid_term": "speculative_small_position"
+    },
+    "modes": {
+      "balanced": {
+        "action": "speculative_small_position",
+        "long_term_view": "speculative_only"
+      },
+      "core": {
+        "action": "not_core_yet",
+        "long_term_view": null
+      },
+      "speculative": {
+        "action": "wait",
+        "long_term_view": null
+      }
+    },
+    "policy": {
+      "long_term": "speculative_only",
+      "mid_term": "speculative_small_position"
+    },
+    "sizing_present": {
+      "decision": {
+        "card": true,
+        "range": false
+      },
+      "full": {
+        "card": true,
+        "range": true
+      },
+      "standard": {
+        "card": true,
+        "range": true
+      }
+    },
+    "snapshot": {
+      "action_long_term": "speculative_only",
+      "action_mid_term": "speculative_small_position",
+      "decision_action_now": "avoid",
+      "hard_gate_ids": [
+        "thesis_broken"
+      ],
+      "snapshot_hash": "efc270809e03e7f9",
+      "zone": "hold_bullish"
+    },
+    "source": "PH CH7 burner (D-1c)",
+    "valuation_gate": "neutral",
+    "verdict": {
+      "business_quality": "unprofitable",
+      "fit": {
+        "long_term": "caution",
+        "mid_term": "caution"
+      },
+      "score": 0.22499999999999998,
+      "tilt": "bullish"
+    },
+    "zone": "hold_bullish"
+  },
   "S1_hold_or_add_clean": {
-    "action_now": "hold_or_add",
+    "action_now": "starter",
     "card_sizing": {
       "full_dollars": 800.0,
       "full_pct_cap": 8.0,
@@ -1316,6 +1943,27 @@
     "conditions": {
       "add_only_if": [],
       "buy_only_if": []
+    },
+    "decision": {
+      "if_held": {
+        "action": "hold",
+        "add_allowed": true,
+        "basis": "candidate_admits_new_money"
+      },
+      "long_term": {
+        "action": "buy",
+        "blocked_by": [],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      },
+      "new_money": {
+        "action": "starter",
+        "blocked_by": [],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      }
     },
     "dip": {
       "entry_actions": [],
@@ -1369,9 +2017,9 @@
     "snapshot": {
       "action_long_term": "accumulate",
       "action_mid_term": "hold_or_add",
-      "decision_action_now": "hold_or_add",
+      "decision_action_now": "starter",
       "hard_gate_ids": [],
-      "snapshot_hash": "161ff2f9d8f41746",
+      "snapshot_hash": "c0151eaa05cd4616",
       "zone": "hold_bullish"
     },
     "source": "OC S1",
@@ -1399,6 +2047,27 @@
     "conditions": {
       "add_only_if": [],
       "buy_only_if": []
+    },
+    "decision": {
+      "if_held": {
+        "action": "hold",
+        "add_allowed": true,
+        "basis": "candidate_admits_new_money"
+      },
+      "long_term": {
+        "action": "buy",
+        "blocked_by": [],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      },
+      "new_money": {
+        "action": "buy",
+        "blocked_by": [],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      }
     },
     "dip": {
       "entry_actions": [
@@ -1485,6 +2154,27 @@
       "add_only_if": [],
       "buy_only_if": []
     },
+    "decision": {
+      "if_held": {
+        "action": "reduce",
+        "add_allowed": false,
+        "basis": "tilt_bearish"
+      },
+      "long_term": {
+        "action": "buy",
+        "blocked_by": [],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      },
+      "new_money": {
+        "action": "avoid",
+        "blocked_by": [],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      }
+    },
     "dip": {
       "entry_actions": [
         "accumulate",
@@ -1559,7 +2249,7 @@
     "zone": "accumulate"
   },
   "S4_earnings_gate_on_hold_or_add": {
-    "action_now": "wait_for_data",
+    "action_now": "wait",
     "card_sizing": {
       "full_dollars": 800.0,
       "full_pct_cap": 8.0,
@@ -1570,6 +2260,37 @@
     "conditions": {
       "add_only_if": [],
       "buy_only_if": []
+    },
+    "decision": {
+      "if_held": {
+        "action": "hold",
+        "add_allowed": false,
+        "basis": "candidate_admits_new_money"
+      },
+      "long_term": {
+        "action": "wait",
+        "blocked_by": [
+          "earnings_blackout"
+        ],
+        "decided_by": "earnings_blackout",
+        "earliest_reassessment": {
+          "basis": "earnings_clear",
+          "date": "2026-10-13"
+        },
+        "unevaluated": []
+      },
+      "new_money": {
+        "action": "wait",
+        "blocked_by": [
+          "earnings_blackout"
+        ],
+        "decided_by": "earnings_blackout",
+        "earliest_reassessment": {
+          "basis": "earnings_clear",
+          "date": "2026-10-13"
+        },
+        "unevaluated": []
+      }
     },
     "dip": {
       "entry_actions": [],
@@ -1625,11 +2346,11 @@
     "snapshot": {
       "action_long_term": "accumulate",
       "action_mid_term": "hold_or_add",
-      "decision_action_now": "wait_for_data",
+      "decision_action_now": "wait",
       "hard_gate_ids": [
         "earnings_blackout"
       ],
-      "snapshot_hash": "f810d81db770047f",
+      "snapshot_hash": "93f9a12a1861b41d",
       "zone": "hold_bullish"
     },
     "source": "OC S4",
@@ -1657,6 +2378,34 @@
     "conditions": {
       "add_only_if": [],
       "buy_only_if": []
+    },
+    "decision": {
+      "if_held": {
+        "action": "reduce",
+        "add_allowed": false,
+        "basis": "tilt_bearish"
+      },
+      "long_term": {
+        "action": "wait",
+        "blocked_by": [
+          "earnings_blackout"
+        ],
+        "decided_by": "earnings_blackout",
+        "earliest_reassessment": {
+          "basis": "earnings_clear",
+          "date": "2026-10-13"
+        },
+        "unevaluated": []
+      },
+      "new_money": {
+        "action": "avoid",
+        "blocked_by": [
+          "earnings_blackout"
+        ],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      }
     },
     "dip": {
       "entry_actions": [
@@ -1750,6 +2499,34 @@
       ],
       "buy_only_if": []
     },
+    "decision": {
+      "if_held": {
+        "action": "hold",
+        "add_allowed": false,
+        "basis": "price_broken_more_than_business"
+      },
+      "long_term": {
+        "action": "avoid",
+        "blocked_by": [
+          "falling_knife"
+        ],
+        "decided_by": "falling_knife",
+        "earliest_reassessment": {
+          "basis": "conditions_only",
+          "date": null
+        },
+        "unevaluated": []
+      },
+      "new_money": {
+        "action": "avoid",
+        "blocked_by": [
+          "falling_knife"
+        ],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      }
+    },
     "dip": {
       "entry_actions": [
         "starter_position"
@@ -1827,7 +2604,7 @@
     "zone": "hold_neutral"
   },
   "S7_etf_below_sma200": {
-    "action_now": "hold",
+    "action_now": "watch",
     "card_sizing": {
       "full_dollars": null,
       "full_pct_cap": 8.0,
@@ -1838,6 +2615,31 @@
     "conditions": {
       "add_only_if": [],
       "buy_only_if": []
+    },
+    "decision": {
+      "if_held": {
+        "action": "hold",
+        "add_allowed": false,
+        "basis": "no_reduction_evidence"
+      },
+      "long_term": {
+        "action": "watch",
+        "blocked_by": [
+          "unsupported_instrument"
+        ],
+        "decided_by": "unsupported_instrument",
+        "earliest_reassessment": null,
+        "unevaluated": []
+      },
+      "new_money": {
+        "action": "watch",
+        "blocked_by": [
+          "unsupported_instrument"
+        ],
+        "decided_by": "unsupported_instrument",
+        "earliest_reassessment": null,
+        "unevaluated": []
+      }
     },
     "dip": {
       "entry_actions": [],
@@ -1893,11 +2695,11 @@
     "snapshot": {
       "action_long_term": "insufficient_data",
       "action_mid_term": "hold",
-      "decision_action_now": "hold",
+      "decision_action_now": "watch",
       "hard_gate_ids": [
         "unsupported_instrument"
       ],
-      "snapshot_hash": "2a8961f839ec1e89",
+      "snapshot_hash": "405288705264f99a",
       "zone": "accumulate"
     },
     "source": "OC S7",
@@ -1927,6 +2729,37 @@
       "buy_only_if": [
         "revenue data available for valuation"
       ]
+    },
+    "decision": {
+      "if_held": {
+        "action": "insufficient_data",
+        "add_allowed": false,
+        "basis": "tilt_missing"
+      },
+      "long_term": {
+        "action": "insufficient_data",
+        "blocked_by": [
+          "data_quality_critical"
+        ],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": [
+          "missing_runway",
+          "thesis_broken"
+        ]
+      },
+      "new_money": {
+        "action": "insufficient_data",
+        "blocked_by": [
+          "data_quality_critical"
+        ],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": [
+          "missing_runway",
+          "thesis_broken"
+        ]
+      }
     },
     "dip": {
       "entry_actions": [],
@@ -2003,7 +2836,7 @@
     "zone": "hold_bullish"
   },
   "S9_weak_liquidity": {
-    "action_now": "wait_for_data",
+    "action_now": "avoid",
     "card_sizing": {
       "full_dollars": 800.0,
       "full_pct_cap": 8.0,
@@ -2014,6 +2847,37 @@
     "conditions": {
       "add_only_if": [],
       "buy_only_if": []
+    },
+    "decision": {
+      "if_held": {
+        "action": "hold",
+        "add_allowed": false,
+        "basis": "candidate_admits_new_money"
+      },
+      "long_term": {
+        "action": "avoid",
+        "blocked_by": [
+          "weak_liquidity"
+        ],
+        "decided_by": "weak_liquidity",
+        "earliest_reassessment": {
+          "basis": "conditions_only",
+          "date": null
+        },
+        "unevaluated": []
+      },
+      "new_money": {
+        "action": "avoid",
+        "blocked_by": [
+          "weak_liquidity"
+        ],
+        "decided_by": "weak_liquidity",
+        "earliest_reassessment": {
+          "basis": "conditions_only",
+          "date": null
+        },
+        "unevaluated": []
+      }
     },
     "dip": {
       "entry_actions": [],
@@ -2069,11 +2933,11 @@
     "snapshot": {
       "action_long_term": "accumulate",
       "action_mid_term": "hold_or_add",
-      "decision_action_now": "wait_for_data",
+      "decision_action_now": "avoid",
       "hard_gate_ids": [
         "weak_liquidity"
       ],
-      "snapshot_hash": "7e3eca85c7244743",
+      "snapshot_hash": "8835fb661ba1455a",
       "zone": "hold_bullish"
     },
     "source": "OC S9",
@@ -2103,6 +2967,27 @@
         "risk_regime <= high (volatility < 60%)"
       ],
       "buy_only_if": []
+    },
+    "decision": {
+      "if_held": {
+        "action": "hold",
+        "add_allowed": true,
+        "basis": "candidate_admits_new_money"
+      },
+      "long_term": {
+        "action": "starter",
+        "blocked_by": [],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      },
+      "new_money": {
+        "action": "starter",
+        "blocked_by": [],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      }
     },
     "dip": {
       "entry_actions": [],
@@ -2187,6 +3072,27 @@
       "add_only_if": [],
       "buy_only_if": []
     },
+    "decision": {
+      "if_held": {
+        "action": "hold",
+        "add_allowed": true,
+        "basis": "candidate_admits_new_money"
+      },
+      "long_term": {
+        "action": "buy",
+        "blocked_by": [],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      },
+      "new_money": {
+        "action": "starter",
+        "blocked_by": [],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      }
+    },
     "dip": {
       "entry_actions": [],
       "recommendation": "wait_for_better_setup",
@@ -2270,6 +3176,27 @@
       "add_only_if": [],
       "buy_only_if": []
     },
+    "decision": {
+      "if_held": {
+        "action": "hold",
+        "add_allowed": false,
+        "basis": "no_reduction_evidence"
+      },
+      "long_term": {
+        "action": "buy",
+        "blocked_by": [],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      },
+      "new_money": {
+        "action": "wait",
+        "blocked_by": [],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      }
+    },
     "dip": {
       "entry_actions": [],
       "recommendation": "wait_for_better_setup",
@@ -2352,6 +3279,27 @@
     "conditions": {
       "add_only_if": [],
       "buy_only_if": []
+    },
+    "decision": {
+      "if_held": {
+        "action": "reduce",
+        "add_allowed": false,
+        "basis": "tilt_bearish"
+      },
+      "long_term": {
+        "action": "buy",
+        "blocked_by": [],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      },
+      "new_money": {
+        "action": "avoid",
+        "blocked_by": [],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      }
     },
     "dip": {
       "entry_actions": [

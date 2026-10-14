@@ -1,8 +1,9 @@
 """WP2.0: the decision scenario matrix and its committed baseline.
 
 `tests/fixtures/decision_matrix/` records 0609fde's decisions (before.json) and 2.0.0 snapshots for
-every scenario in `tests/support/decision_matrix.py`. The baseline is never re-recorded: later Step 2
-WPs change rows on purpose and record the current table separately (after.json, `--after`).
+every baseline scenario in `tests/support/decision_matrix.py`. The baseline is never re-recorded: later
+Step 2 WPs change rows on purpose and record the current table separately (after.json, `--after`); each
+WP lists the cells it changes in ROW_CHANGES (DM-CH3). Scenarios added after WP2.0 are in after.json only.
 """
 
 import hashlib
@@ -17,6 +18,38 @@ from stock_analysis.tools.diff_analysis import validate_previous_snapshot
 from tests.support import decision_matrix as dm
 
 BEFORE = json.loads((dm.FIXTURE_DIR / "before.json").read_text())
+AFTER = json.loads((dm.FIXTURE_DIR / "after.json").read_text())
+AFTER_ONLY = {"A7_near_52w_high_bullish", "H_burner_runway_2q"}  # WP2.2: D-4 and D-1c's runway clause
+
+# The cells each WP changes (before -> after), over before.json's paths; snapshot_hash follows the
+# snapshot fields (DM-CH2). WP2.2 step 2: D-2 mapping, D-5/D-5a combination and outcomes, D-1c thesis cap,
+# and the knife override's removal (plan §1, B only).
+ACTION_CHANGES = {
+    **dict.fromkeys(["S1_hold_or_add_clean", "C1_headwind_hold_or_add", "E2_mixed_fcf_bullish_chart"],
+                    ("hold_or_add", "starter")),
+    **dict.fromkeys(["S4_earnings_gate_on_hold_or_add", "C2_headwind_earnings_gate"], ("wait_for_data", "wait")),
+    "S7_etf_below_sma200": ("hold", "watch"),
+    "S9_weak_liquidity": ("wait_for_data", "avoid"),
+    "E_poor_business_bullish_chart": ("hold_or_add", "avoid"),
+    "B_broken_bearish_knife": ("wait", "avoid"),
+}
+GATE_CHANGES = {"A_broken_bearish": ([], ["thesis_broken"]), "E_poor_business_bullish_chart": ([], ["thesis_broken"]),
+                "B_broken_bearish_knife": (["falling_knife"], ["falling_knife", "thesis_broken"])}
+KNIFE_OVERRIDE_CHANGE = ("wait_for_entry", "avoid")  # B's mid-term policy without the knife override
+SNAPSHOT_CHANGES: dict[str, dict[str, Any]] = {
+    name: {**({"decision_action_now": ACTION_CHANGES[name]} if name in ACTION_CHANGES else {}),
+           **({"hard_gate_ids": GATE_CHANGES[name]} if name in GATE_CHANGES else {}),
+           **({"action_mid_term": KNIFE_OVERRIDE_CHANGE} if name == "B_broken_bearish_knife" else {})}
+    for name in {*ACTION_CHANGES, *GATE_CHANGES}
+}
+ROW_CHANGES: dict[str, dict[str, Any]] = {
+    name: {**({"action_now": ACTION_CHANGES[name]} if name in ACTION_CHANGES else {}),
+           **({"hard_gates": GATE_CHANGES[name]} if name in GATE_CHANGES else {}),
+           **{f"snapshot.{field}": change for field, change in SNAPSHOT_CHANGES[name].items()},
+           **(dict.fromkeys(("policy.mid_term", "horizon_fit.mid_term", "modes.balanced.action"),
+                            KNIFE_OVERRIDE_CHANGE) if name == "B_broken_bearish_knife" else {})}
+    for name in SNAPSHOT_CHANGES
+}
 BASELINE_SHA256 = "167642b05e592bf77317f45025fc563c3ed203e5a86dedc8b5e8df4a569f7e4d"
 
 
@@ -74,29 +107,51 @@ def _normalized(value: Any) -> Any:
     return json.loads(json.dumps(value, sort_keys=True))
 
 
+def _flat(row: Any, path: str = "") -> dict[str, Any]:
+    if not isinstance(row, dict):
+        return {path: row}
+    return {k: v for key, value in row.items() for k, v in _flat(value, f"{path}.{key}" if path else key).items()}
+
+
 class TestBeforeTable:
-    async def test_the_committed_before_table_matches_the_code(self) -> None:
-        """DM-CH1: every scenario's decision digest equals tests/fixtures/decision_matrix/before.json.
-        CH: flipped by the first WP that changes a row (expected WP2.2; WP2.1 changed none, its after.json
-        equals before.json), which records after.json with `--after` and points this test at it; each WP
-        lists its intended row changes. before.json stays as recorded (DM-G6)."""
+    async def test_the_committed_after_table_matches_the_code(self) -> None:
+        """DM-CH1: every scenario's decision digest equals tests/fixtures/decision_matrix/after.json, recorded
+        with `--after` (WP2.2 first changed rows; before.json stays as recorded, DM-G6). CH: re-recorded by every
+        WP that changes a row, which extends ROW_CHANGES (DM-CH3)."""
         table, _ = await dm.build()
 
-        assert set(table) == set(BEFORE)
+        assert set(table) == set(AFTER) == set(BEFORE) | AFTER_ONLY
         for name, row in table.items():
-            assert _normalized(row) == BEFORE[name], name
+            assert _normalized(row) == AFTER[name], name
 
     async def test_the_recorded_snapshots_match_the_code(self) -> None:
-        """DM-CH2: each scenario's watchlist_snapshot equals its recorded 2.0.0 fixture.
-        CH: flipped by the first WP that changes a snapshot field (expected WP2.2, through hard_gate_ids
-        or decision_action_now; WP2.1 changed none), which narrows it to the unchanged rows; WP2.4
-        (snapshot 3.0.0) retires it. The 2.0.0 fixtures stay as recorded (DM-G6) for the 3.0.0 migration
-        tests."""
+        """DM-CH2: each baseline scenario's watchlist_snapshot equals its recorded 2.0.0 fixture except for the
+        fields SNAPSHOT_CHANGES lists (decision_action_now follows new_money, hard_gate_ids gains thesis_broken,
+        B's action_mid_term loses the knife override, WP2.2), and the hash moves exactly on those rows.
+        CH: retired by WP2.4 (snapshot 3.0.0). The 2.0.0 fixtures stay as recorded (DM-G6)."""
         _, snapshots = await dm.build()
+        recorded = {p.stem: json.loads(p.read_text()) for p in dm.SNAPSHOT_DIR.glob("*.json")}
 
-        assert {p.stem for p in dm.SNAPSHOT_DIR.glob("*.json")} == set(snapshots)
-        for name, snapshot in snapshots.items():
-            assert _normalized(snapshot) == json.loads((dm.SNAPSHOT_DIR / f"{name}.json").read_text()), name
+        assert set(recorded) == set(BEFORE) <= set(snapshots)
+        for name, old in recorded.items():
+            new = _normalized(snapshots[name])
+            changed = {k: (old[k], new[k]) for k in old if k != "snapshot_hash" and new[k] != old[k]}
+            assert set(new) == set(old), name
+            assert changed == {k: tuple(v) for k, v in SNAPSHOT_CHANGES.get(name, {}).items()}, name
+            assert (new["snapshot_hash"] != old["snapshot_hash"]) is bool(changed), name
+
+    def test_the_after_table_changes_only_the_listed_cells(self) -> None:
+        """DM-CH3: after.json differs from before.json, over before.json's paths, exactly in ROW_CHANGES;
+        the after-only rows are the listed ones. CH: each WP that re-records after.json extends ROW_CHANGES."""
+        delta: dict[str, dict[str, Any]] = {}
+        for name, row in BEFORE.items():
+            old, new = _flat(row), _flat(AFTER[name])
+            cells = {k: (old[k], new[k]) for k in old if k != "snapshot.snapshot_hash" and new[k] != old[k]}
+            if cells:
+                delta[name] = cells
+
+        assert set(AFTER) - set(BEFORE) == AFTER_ONLY
+        assert delta == {name: {k: tuple(v) for k, v in cells.items()} for name, cells in ROW_CHANGES.items()}
 
 
 class TestMatrixGuards:

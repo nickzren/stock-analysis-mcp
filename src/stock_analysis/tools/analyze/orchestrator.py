@@ -14,8 +14,8 @@ from stock_analysis.tools.analyze.action_zones import (
     build_action_zones,
 )
 from stock_analysis.tools.analyze.constants import CRITICAL_ANALYZE_TOOLS
-from stock_analysis.tools.analyze.decision import ENTRY_CANDIDATE_CODES
-from stock_analysis.tools.analyze.decision_card import build_decision_card
+from stock_analysis.tools.analyze.decision import ENTRY_CANDIDATE_CODES, decide
+from stock_analysis.tools.analyze.decision_card import build_decision_card, evaluate_gates
 from stock_analysis.tools.analyze.decision_context import (
     build_decision_context,
     build_relative_performance,
@@ -26,12 +26,13 @@ from stock_analysis.tools.analyze.dip_assessment import (
 )
 from stock_analysis.tools.analyze.dislocation_framework import (
     build_dislocation_framework,
+    classify_dislocation_opportunity,
 )
 from stock_analysis.tools.analyze.executive_summary import (
     build_executive_summary,
     build_policy_action,
 )
-from stock_analysis.tools.analyze.gates import check_price_freshness, earnings_window
+from stock_analysis.tools.analyze.gates import check_price_freshness, earnings_window, thesis_codes
 from stock_analysis.tools.analyze.investor_profile import (
     build_decision_modes,
     resolve_investor_profile,
@@ -1078,6 +1079,22 @@ async def analyze_stock(
         fundamentals_summary=fundamentals_summary,
         investor_profile=investor_profile,
     )
+    # The canonical decision reads the uncapped, knife-free candidate (plan §2), before the
+    # support cap and before anything derived from it.
+    thesis_signals = classify_dislocation_opportunity(verdict, action_zones, fundamentals_summary, dip_assessment)
+    hard_gates, unevaluated = evaluate_gates(
+        events_data=events_data, data_quality=data_quality, technicals_data=tech_data,
+        fundamentals_summary=fundamentals_summary, risk_data=risk_data, support=support,
+        freshness_blockers=price_freshness_blockers, thesis_signals=thesis_signals,
+        zone=action_zones.get("current_zone"),
+    )
+    today = now.date()
+    decision = decide(
+        candidate=policy_action, blocking=hard_gates["blocking"], unevaluated=unevaluated,
+        thesis=thesis_codes(fundamentals_status, thesis_signals),
+        dislocation=thesis_signals["is_dislocation_candidate"], tilt=verdict.get("tilt"),
+        window=earnings_window(earnings, today), today=today, support=support,
+    )
     # WP4 (D5): cap before anything copies the policy (executive summary, decision
     # modes, dislocation, decision card horizon fit).
     supported = instrument_ok and currency_supported(support)
@@ -1141,14 +1158,11 @@ async def analyze_stock(
         verdict=verdict,
         action_zones=action_zones,
         policy_action=policy_action,
-        fundamentals_summary=fundamentals_summary,
-        risk_data=risk_data,
         events_data=events_data,
-        data_quality=data_quality,
-        technicals_data=tech_data,
         dislocation_framework=dislocation_framework,
         now=now,
-        freshness_blockers=price_freshness_blockers,
+        hard_gates=hard_gates,
+        decision=decision,
     )
 
     # Top-level error signaling for invalid/unanalyzable symbols.

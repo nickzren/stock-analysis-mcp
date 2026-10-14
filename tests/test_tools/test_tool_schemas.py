@@ -10,6 +10,7 @@ import pandas as pd
 import pytest
 
 from stock_analysis.tools.analyze.action_zones import build_action_zones
+from stock_analysis.tools.analyze.decision import NEW_MONEY_ACTIONS
 from stock_analysis.tools.analyze.decision_context import build_decision_context
 from stock_analysis.tools.analyze.dip_assessment import (
     _build_oversold_composite,
@@ -620,10 +621,7 @@ class TestToolResponseSchemas:
         # Integration coverage for the small-account decision_card
         decision_card = result["decision_card"]
         assert "action_now" in decision_card
-        assert decision_card["action_now"] in {
-            "buy", "starter", "hold", "hold_or_add", "hold_or_reduce",
-            "wait", "wait_for_data", "avoid", "insufficient_data",
-        }
+        assert decision_card["action_now"] in set(NEW_MONEY_ACTIONS)
         assert "hard_gates" in decision_card
         assert "any_blocking" in decision_card["hard_gates"]
         assert "checks" in decision_card["hard_gates"]

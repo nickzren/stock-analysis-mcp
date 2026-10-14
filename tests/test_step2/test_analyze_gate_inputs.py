@@ -2,8 +2,8 @@
 
 Analyze reads the falling knife from its technicals for every instrument, fires earnings_unverifiable
 through the card's B1 helper, discloses each fired gate once in registry order, and no longer gates
-on a missing beta. No test asserts an action a new gate input produces: until decide() (WP2.2),
-action_now is the interim hard-gate resolution. GC-R7's stage-1 clause lands with scan stage 1.
+on a missing beta. The actions these inputs produce are decide()'s (WP2.2, test_wp22_decide.py).
+GC-R7's stage-1 clause lands with scan stage 1.
 Analyze runs go through tests/support/decision_matrix.py and card runs through
 tests/test_tools/test_trade_card.py; every run pins its clock.
 """
@@ -66,7 +66,7 @@ def analyze_gates(result: dict[str, Any]) -> dict[str, Any]:
 @pytest.mark.parametrize("name", KNIFE_RUNS)
 async def test_knife_shared_predicate(name: str) -> None:
     """GC-R7: analyze fires falling_knife iff is_falling_knife_technicals does, unsupported and unverified
-    instruments included, and checks agrees; the action is not asserted (interim until decide()).
+    instruments included, and checks agrees; the action is GC-R2's (test_wp22_decide.py).
     PD D-5a: the knife is evaluated for every instrument."""
     scenario = KNIFE_RUNS[name]
     knife, _ = is_falling_knife_technicals(scenario.technicals or {})

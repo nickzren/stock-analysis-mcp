@@ -12,6 +12,7 @@ from stock_analysis.tools.analyze.dislocation_framework import (
     classify_dislocation_opportunity,
 )
 from stock_analysis.tools.analyze.executive_summary import build_policy_action
+from tests.support.decision_matrix import decide_on
 
 orchestrator = importlib.import_module("stock_analysis.tools.analyze.orchestrator")
 fundamentals_module = importlib.import_module("stock_analysis.tools.fundamentals")
@@ -188,12 +189,21 @@ class TestR94ExplicitTilt:
 
 
 class TestR95FallingKnife:
-    @pytest.mark.parametrize("tilt", [*MISSING_TILT, {"tilt": "bullish"}], ids=["absent", "null", "bullish"])
-    def test_the_falling_knife_gate_still_wins(self, tilt: dict[str, Any]) -> None:
+    @pytest.mark.parametrize(("tilt", "codes"), [(MISSING_TILT[0], ("insufficient_data", "insufficient_data")),
+                                                 (MISSING_TILT[1], ("insufficient_data", "insufficient_data")),
+                                                 ({"tilt": "bullish"}, ("hold_or_add", "hold_or_add"))],
+                             ids=["absent", "null", "bullish"])
+    def test_the_falling_knife_is_a_gate_not_a_candidate_rule(self, tilt: dict[str, Any],
+                                                               codes: tuple[str, str]) -> None:
+        """WP2.2 (plan §1): the candidate keeps its knife-free code; the falling_knife gate makes new money avoid."""
         knife = {"dip_classification": {"type": "falling_knife"}}
         action = policy(with_fit("ok", "ok", **tilt), dip=knife)
-        assert action["mid_term"] == "wait_for_entry"
-        assert "dip_type=falling_knife" in action["rationale"]
+        new_money = decide_on(action, [{"id": "falling_knife", "reason": "r"}])["new_money"]
+
+        assert (action["mid_term"], action["long_term"]) == codes == tuple(
+            policy(with_fit("ok", "ok", **tilt))[h] for h in ("mid_term", "long_term"))
+        assert not [line for line in action["rationale"] if "falling_knife" in line]
+        assert (new_money["action"], new_money["decided_by"]) == ("avoid", "falling_knife")
 
 
 STRONG_TECHNICALS = {

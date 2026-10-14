@@ -16,11 +16,13 @@ from typing import Any
 
 from stock_analysis.tools.analyze.gates import (
     ANALYZE_GATE_IDS,
-    GATES,
+    UNEVALUATED,
     check_data_quality,
     check_earnings_blackout,
     check_earnings_unverifiable,
     check_liquidity,
+    check_near_52w_high,
+    check_thesis_broken,
     is_falling_knife_technicals,
     merge_blockers,
 )
@@ -43,12 +45,16 @@ def _compute_hard_gates(
     risk_data: dict[str, Any],
     support: dict[str, Any] | None = None,
     freshness_blockers: list[dict[str, Any]] | None = None,
+    *,
+    thesis_blocker: dict[str, Any] | None = None,
+    zone_blocker: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Every gate analyze evaluates, once each, in disclosure order (gates.ANALYZE_GATE_IDS).
 
     The knife reads the technicals for every instrument (D-5a). ``support`` (WP4, D5): an
     unsupported or unverified instrument/currency blocks new money, and a non-USD price makes
-    no dollar-liquidity claim. ``freshness_blockers`` come from the price freshness legs.
+    no dollar-liquidity claim. ``freshness_blockers`` come from the price freshness legs; the
+    thesis and zone blockers from gates.check_thesis_broken and check_near_52w_high.
     """
     burn = fundamentals_summary.get("burn_metrics") or {}
     valuation_summary = fundamentals_summary.get("valuation") or {}
@@ -62,9 +68,11 @@ def _compute_hard_gates(
         _MISSING_RUNWAY if missing_runway else None,
         _FALLING_KNIFE if knife else None,
         *(check_liquidity(risk_data)[2] if liquidity_applies else []),
+        thesis_blocker,
         *(support_blockers(support) if support is not None else []),
         check_earnings_blackout(events_data)[1],
         check_earnings_unverifiable(events_data, data_quality.get("tool_failures"))[1],
+        zone_blocker,
     ]
     merged = merge_blockers(b for b in candidates if b is not None)
     blocking = sorted(merged, key=lambda b: _ANALYZE_ORDER[b["id"]])  # KeyError: an id outside the registry
@@ -73,53 +81,37 @@ def _compute_hard_gates(
             "checks": {gate_id: gate_id in fired for gate_id in ANALYZE_GATE_IDS}}
 
 
-# Map verbose policy_action.mid_term values to compact action_now codes used by
-# the decision card. Falls back to the raw value for anything unrecognized.
-#
-# `hold_or_add` is preserved as its own code (not collapsed to `hold`) because it
-# implies new-money is still appropriate for existing holders — and hard gates
-# should treat it as buy-adjacent for the override.
-_MID_TERM_TO_ACTION: dict[str, str] = {
-    "buy": "buy",
-    "hold_or_add": "hold_or_add",
-    "hold": "hold",
-    "hold_or_reduce": "hold_or_reduce",
-    "speculative_small_position": "starter",
-    "wait_for_entry": "wait",
-    "avoid": "avoid",
-    "insufficient_data": "insufficient_data",
-}
-
-# Actions that allow new money in (subject to hard gates).
-_NEW_MONEY_ACTIONS = frozenset({"buy", "starter", "hold_or_add"})
-_SUPPORT_GATE_IDS = frozenset(g for g, gate in GATES.items() if gate.gate_class == "support")
-
-
-def _resolve_action_now(
-    policy_action: dict[str, Any],
-    hard_gates: dict[str, Any],
-) -> tuple[str, list[str]]:
-    """Pick the compact action_now code, applying hard gates as a pre-filter."""
-    rationale: list[str] = []
-    mid_term = policy_action.get("mid_term") or "insufficient_data"
-    base_action = _MID_TERM_TO_ACTION.get(mid_term, mid_term)
-    rationale.append(f"policy_action.mid_term={mid_term} -> {base_action}")
-
-    # Hard gates override new-money actions only. Hold/reduce/avoid/sell pass
-    # through because a user already holding the position needs different
-    # guidance than someone considering a new entry, and the analysis layer
-    # doesn't know which. Conservative override: actions that admit new money
-    # become "wait_for_data" so the user re-evaluates after the gate clears.
-    if hard_gates["any_blocking"] and base_action in _NEW_MONEY_ACTIONS:
-        gate_ids = ",".join(g["id"] for g in hard_gates["blocking"])
-        if any(g["id"] in _SUPPORT_GATE_IDS for g in hard_gates["blocking"]):
-            # A permanent boundary, not missing data (WP4, D5).
-            rationale.append(f"hard_gates fired ({gate_ids}); unsupported, capping at watch")
-            return "watch", rationale
-        rationale.append(f"hard_gates fired ({gate_ids}); downgrading to wait_for_data")
-        return "wait_for_data", rationale
-
-    return base_action, rationale
+def evaluate_gates(
+    *,
+    events_data: dict[str, Any],
+    data_quality: dict[str, Any],
+    technicals_data: dict[str, Any] | None,
+    fundamentals_summary: dict[str, Any],
+    risk_data: dict[str, Any],
+    support: dict[str, Any] | None,
+    freshness_blockers: list[dict[str, Any]] | None,
+    thesis_signals: dict[str, Any],
+    zone: str | None,
+) -> tuple[dict[str, Any], frozenset[str]]:
+    """(hard_gates, the ids of applicable analyze gates that were not computed) (plan §4, R2.6(f))."""
+    fundamentals_status = data_quality.get("fundamentals_status")
+    thesis_status, thesis_blocker = check_thesis_broken(fundamentals_status, thesis_signals)
+    zone_status, zone_blocker = check_near_52w_high(zone)
+    hard_gates = _compute_hard_gates(
+        events_data=events_data, data_quality=data_quality, technicals_data=technicals_data,
+        fundamentals_summary=fundamentals_summary, risk_data=risk_data, support=support,
+        freshness_blockers=freshness_blockers, thesis_blocker=thesis_blocker, zone_blocker=zone_blocker,
+    )
+    events_failed = any(isinstance(tf, dict) and tf.get("tool") == "events_calendar"
+                        for tf in data_quality.get("tool_failures") or [])
+    not_computed = {
+        "falling_knife": not technicals_data,
+        "missing_runway": fundamentals_status == "missing",
+        "thesis_broken": thesis_status == UNEVALUATED,
+        "earnings_blackout": events_failed,
+        "near_52w_high": zone_status == UNEVALUATED,
+    }
+    return hard_gates, frozenset(gate for gate, missing in not_computed.items() if missing)
 
 
 def _build_sizing(
@@ -252,23 +244,19 @@ def build_decision_card(
     verdict: dict[str, Any],
     action_zones: dict[str, Any],
     policy_action: dict[str, Any],
-    fundamentals_summary: dict[str, Any],
-    risk_data: dict[str, Any],
     events_data: dict[str, Any],
-    data_quality: dict[str, Any],
-    technicals_data: dict[str, Any] | None,
     dislocation_framework: dict[str, Any] | None,
     now: datetime,
-    freshness_blockers: list[dict[str, Any]] | None = None,
+    hard_gates: dict[str, Any],
+    decision: dict[str, Any],
 ) -> dict[str, Any]:
-    """Build the compact small-account decision card.
+    """Build the compact small-account decision card around decide()'s decision.
 
     Schema:
-        action_now: buy | starter | hold | hold_or_add | hold_or_reduce | wait |
-                    wait_for_data | avoid | insufficient_data
-        rationale: short bulleted reasons
-        hard_gates: blocking conditions that override new-money recommendations.
-                    Checks: one boolean per gates.ANALYZE_GATE_IDS.
+        horizon, new_money, if_held, long_term: the canonical decision (decision.decide)
+        hard_gates: every fired gate (blocking) and one boolean per gates.ANALYZE_GATE_IDS (checks)
+        action_now: alias of new_money.action (decision.NEW_MONEY_ACTIONS), kept one release
+        rationale: the emitted mid-term policy code, the new_money action and its deciding gate
         sizing: starter/full pct + dollars + whole/fractional shares
         entry: current zone, price, buy band
         exit: stop / invalidation level
@@ -277,21 +265,16 @@ def build_decision_card(
         confidence: from verdict
         horizon_fit: mid/long-term action labels from policy_action
     """
-    hard_gates = _compute_hard_gates(
-        events_data=events_data,
-        data_quality=data_quality,
-        technicals_data=technicals_data,
-        fundamentals_summary=fundamentals_summary,
-        risk_data=risk_data,
-        support=summary.get("support"),
-        freshness_blockers=freshness_blockers,
-    )
-    action_now, rationale = _resolve_action_now(policy_action, hard_gates)
+    new_money = decision["new_money"]
+    rationale = [f"policy_action.mid_term={policy_action.get('mid_term')} -> {new_money['action']}"]
+    if new_money["decided_by"]:
+        rationale.append(f"decided_by={new_money['decided_by']}")
 
     return {
-        "action_now": action_now,
-        "rationale": rationale,
+        **decision,
         "hard_gates": hard_gates,
+        "action_now": new_money["action"],
+        "rationale": rationale,
         "sizing": _build_sizing(action_zones, summary),
         "entry": _build_entry(action_zones, summary),
         "exit": _build_exit(action_zones),

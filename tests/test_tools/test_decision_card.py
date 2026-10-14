@@ -4,19 +4,19 @@ from datetime import datetime
 
 import pytest
 
+from stock_analysis.tools.analyze.decision import NEW_MONEY_ACTIONS
 from stock_analysis.tools.analyze.decision_card import (
     _build_sizing,
     _compute_hard_gates,
-    _resolve_action_now,
     build_decision_card,
 )
-from tests.support.decision_matrix import ET, KNIFE
+from tests.support.decision_matrix import ET, KNIFE, decide_on
 
 
 def _empty_policy_action(mid_term: str = "buy") -> dict:
     return {
         "mid_term": mid_term,
-        "long_term": "ok",
+        "long_term": "accumulate",
         "rationale": [],
         "conditions_to_upgrade": [],
         "conditions_to_downgrade": [],
@@ -246,78 +246,28 @@ class TestHardGates:
         assert gates["checks"]["liquidity_missing"] is True
 
 
-class TestActionNowResolution:
-    """Hard gates override bullish actions; non-bullish actions pass through."""
+class TestNewMoneyResolution:
+    """decide() maps the candidate (D-2) and takes the most restrictive of it and every fired gate (D-5)."""
 
-    def test_buy_downgraded_to_wait_for_data_when_gate_fires(self) -> None:
-        action, rationale = _resolve_action_now(
-            _empty_policy_action("buy"),
-            {
-                "any_blocking": True,
-                "blocking": [{"id": "earnings_blackout", "reason": "..."}],
-                "checks": {},
-            },
-        )
-        assert action == "wait_for_data"
-        assert any("hard_gates fired" in r for r in rationale)
+    @pytest.mark.parametrize(("mid_term", "gates", "action", "decided_by"), [
+        ("buy", ["earnings_blackout"], "wait", "earnings_blackout"),
+        ("speculative_small_position", ["falling_knife"], "avoid", "falling_knife"),
+        ("hold", ["earnings_blackout"], "wait", None),  # a non-admitting candidate: the gate is disclosed, not binding
+        ("hold_or_add", [], "starter", None),
+        ("hold_or_add", ["earnings_blackout"], "wait", "earnings_blackout"),
+        ("avoid", ["earnings_blackout"], "avoid", None),
+        ("buy", [], "buy", None),
+    ])
+    def test_new_money(self, mid_term: str, gates: list[str], action: str, decided_by: str | None) -> None:
+        decision = decide_on(_empty_policy_action(mid_term), [{"id": g, "reason": "..."} for g in gates])
+        new_money = decision["new_money"]
 
-    def test_starter_downgraded_to_wait_for_data_when_gate_fires(self) -> None:
-        action, _ = _resolve_action_now(
-            _empty_policy_action("speculative_small_position"),
-            {
-                "any_blocking": True,
-                "blocking": [{"id": "falling_knife", "reason": "..."}],
-                "checks": {},
-            },
-        )
-        assert action == "wait_for_data"
+        assert (new_money["action"], new_money["decided_by"]) == (action, decided_by)
+        assert [b["id"] for b in new_money["blocked_by"]] == gates
+        assert decision["if_held"]["add_allowed"] is (action in ("buy", "starter"))
 
-    def test_hold_not_downgraded_by_gate(self) -> None:
-        """Holding through a gate is fine; we only block new entries."""
-        action, _ = _resolve_action_now(
-            _empty_policy_action("hold"),
-            {
-                "any_blocking": True,
-                "blocking": [{"id": "earnings_blackout", "reason": "..."}],
-                "checks": {},
-            },
-        )
-        assert action == "hold"
-
-    def test_hold_or_add_preserved_when_no_gate(self) -> None:
-        """hold_or_add stays as its own code (not collapsed to hold) so callers can
-        distinguish "hold the position, also add more" from "just hold"."""
-        action, _ = _resolve_action_now(
-            _empty_policy_action("hold_or_add"),
-            {"any_blocking": False, "blocking": [], "checks": {}},
-        )
-        assert action == "hold_or_add"
-
-    def test_hold_or_add_downgraded_by_gate(self) -> None:
-        """hold_or_add admits new money, so a hard gate must downgrade it."""
-        action, _ = _resolve_action_now(
-            _empty_policy_action("hold_or_add"),
-            {
-                "any_blocking": True,
-                "blocking": [{"id": "earnings_blackout", "reason": "..."}],
-                "checks": {},
-            },
-        )
-        assert action == "wait_for_data"
-
-    def test_avoid_not_changed_by_gate(self) -> None:
-        action, _ = _resolve_action_now(
-            _empty_policy_action("avoid"),
-            {"any_blocking": True, "blocking": [{"id": "x", "reason": "y"}], "checks": {}},
-        )
-        assert action == "avoid"
-
-    def test_buy_passes_through_when_no_gate(self) -> None:
-        action, _ = _resolve_action_now(
-            _empty_policy_action("buy"),
-            {"any_blocking": False, "blocking": [], "checks": {}},
-        )
-        assert action == "buy"
+    def test_the_vocabulary(self) -> None:
+        assert NEW_MONEY_ACTIONS == ("buy", "starter", "wait", "wait_for_data", "insufficient_data", "watch", "avoid")
 
 
 class TestSizing:
@@ -347,6 +297,20 @@ class TestSizing:
         assert sizing["starter_dollars"] is None
 
 
+def _card(fixture: dict) -> dict:
+    """The card for a fixture: its gates from _compute_hard_gates (fundamentals and liquidity clean), its
+    decision from decide()."""
+    hard_gates = _compute_hard_gates(
+        events_data=fixture["events_data"],
+        data_quality={"fundamentals_status": "available"},
+        technicals_data={},
+        fundamentals_summary={"valuation": {"valuation_note": None}, "burn_metrics": {"status": "not_applicable"}},
+        risk_data={"liquidity": {"avg_dollar_volume": 50_000_000}},
+    )
+    decision = decide_on(fixture["policy_action"], hard_gates["blocking"])
+    return build_decision_card(**fixture, hard_gates=hard_gates, decision=decision)
+
+
 class TestDecisionCardSchema:
     """Top-level shape is stable and includes all expected fields."""
 
@@ -357,21 +321,18 @@ class TestDecisionCardSchema:
             "verdict": {"confidence": "moderate"},
             "action_zones": _empty_action_zones(),
             "policy_action": _empty_policy_action("buy"),
-            "fundamentals_summary": {
-                "valuation": {"valuation_note": None},
-                "burn_metrics": {"status": "not_applicable"},
-            },
-            "risk_data": {"liquidity": {"avg_dollar_volume": 50_000_000}},
             "events_data": {"earnings": {"days_until": 60, "next_date": "2026-07-15"}},
-            "data_quality": {"fundamentals_status": "available"},
-            "technicals_data": {},
             "dislocation_framework": {"action": {"add_only_if": ["fcf_turns_positive"]}},
             "now": ET.localize(datetime(2026, 5, 16, 10, 0)),
         }
 
     def test_full_card_has_all_top_level_keys(self, fixture: dict) -> None:
-        card = build_decision_card(**fixture)
+        card = _card(fixture)
         for key in (
+            "horizon",
+            "new_money",
+            "if_held",
+            "long_term",
             "action_now",
             "rationale",
             "hard_gates",
@@ -386,36 +347,36 @@ class TestDecisionCardSchema:
             assert key in card, f"missing key: {key}"
 
     def test_clean_inputs_yield_buy_action(self, fixture: dict) -> None:
-        card = build_decision_card(**fixture)
-        assert card["action_now"] == "buy"
+        card = _card(fixture)
+        assert card["action_now"] == card["new_money"]["action"] == "buy"
         assert card["hard_gates"]["any_blocking"] is False
 
     def test_earnings_blackout_blocks_buy(self, fixture: dict) -> None:
         fixture["events_data"] = {"earnings": {"days_until": 2, "next_date": "2026-05-14"}}
-        card = build_decision_card(**fixture)
-        assert card["action_now"] == "wait_for_data"
+        card = _card(fixture)
+        assert card["action_now"] == card["new_money"]["action"] == "wait"
         assert card["hard_gates"]["any_blocking"] is True
         # do_not_buy_if should contain the blocking reason
         assert any("earnings" in r.lower() for r in card["conditions"]["do_not_buy_if"])
 
     def test_dislocation_add_only_if_propagated(self, fixture: dict) -> None:
-        card = build_decision_card(**fixture)
+        card = _card(fixture)
         assert "fcf_turns_positive" in card["conditions"]["add_only_if"]
 
     def test_next_review_uses_near_earnings_when_within_90_days(self, fixture: dict) -> None:
         fixture["events_data"] = {"earnings": {"days_until": 30, "next_date": "2026-06-11"}}
-        card = build_decision_card(**fixture)
+        card = _card(fixture)
         assert card["next_review"]["date"] == "2026-06-11"
         assert "earnings" in card["next_review"]["reason"]
 
     def test_next_review_defaults_when_earnings_far_out(self, fixture: dict) -> None:
         fixture["events_data"] = {"earnings": {"days_until": 200, "next_date": "2026-11-30"}}
-        card = build_decision_card(**fixture)
+        card = _card(fixture)
         # Defaults to 30-day re-evaluation reason
         assert "default" in card["next_review"]["reason"]
 
     def test_sizing_includes_fractional_shares(self, fixture: dict) -> None:
-        card = build_decision_card(**fixture)
+        card = _card(fixture)
         assert "fractional_shares" in card["sizing"]
         assert card["sizing"]["fractional_shares"] is not None
 
@@ -429,13 +390,13 @@ class TestDecisionCardSchema:
                 "add_only_if": [],
             }
         }
-        card = build_decision_card(**fixture)
+        card = _card(fixture)
         assert "buy_only_if" in card["conditions"]
         assert "fcf_turns_positive" in card["conditions"]["buy_only_if"]
         assert "burn_metrics_available" in card["conditions"]["buy_only_if"]
         assert card["conditions"]["add_only_if"] == []
 
     def test_both_buy_only_if_and_add_only_if_present_in_schema(self, fixture: dict) -> None:
-        card = build_decision_card(**fixture)
+        card = _card(fixture)
         assert "buy_only_if" in card["conditions"]
         assert "add_only_if" in card["conditions"]

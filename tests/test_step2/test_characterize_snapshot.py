@@ -77,8 +77,7 @@ def detect(monkeypatch: pytest.MonkeyPatch) -> Detect:
 
 async def test_every_gate_analyze_evaluates_has_a_case() -> None:
     """SN-C1: guard, set(GATE_IDS) == the gates analyze evaluates (decision_card.hard_gates.checks).
-    G from WP2.1: set(GATE_IDS) == checks; WP2.2 adds thesis_broken and near_52w_high by deleting
-    REGISTERED_NOT_EVALUATED."""
+    G from WP2.1: set(GATE_IDS) == checks, all 13 analyze gates from WP2.2 (thesis_broken, near_52w_high)."""
     checks = (await dm.run(CLEAN))["decision_card"]["hard_gates"]["checks"]
     assert set(GATE_IDS) == set(checks)
 

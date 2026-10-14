@@ -16,7 +16,7 @@ from typing import Any, NamedTuple
 import pandas as pd
 import pytest
 
-from stock_analysis.tools.analyze.decision_card import _compute_hard_gates, _resolve_action_now
+from stock_analysis.tools.analyze.decision_card import _compute_hard_gates
 from stock_analysis.utils.freshness import build_freshness, freshness_blockers
 from stock_analysis.utils.scan_screen import screen_symbol
 from stock_analysis.utils.valuation_basis import classify_support
@@ -156,39 +156,40 @@ LIQ_OK = {"liquidity": {"avg_dollar_volume": 5e8}}
 KNIFE_TECH = dm.KNIFE
 POLICY_CODES = ("buy", "speculative_small_position", "hold_or_add", "hold", "wait_for_entry", "hold_or_reduce",
                 "avoid")
-PASS_THROUGH = ("hold", "wait", "hold_or_reduce", "avoid")  # gates touch only buy, starter and hold_or_add
-UNGATED = ("buy", "starter", "hold_or_add", *PASS_THROUGH)
-NEW_MONEY_WAIT_FOR_DATA = ("wait_for_data",) * 3 + PASS_THROUGH
-NEW_MONEY_WATCH = ("watch",) * 3 + PASS_THROUGH
+UNGATED = ("buy", "starter", "starter", "wait", "wait", "wait", "avoid")  # the D-2 mapping
+WAIT_FOR_DATA = ("wait_for_data",) * 6 + ("avoid",)  # most-restrictive: only a candidate avoid outranks the gate
+WAIT = ("wait",) * 6 + ("avoid",)
+WATCH = ("watch",) * 6 + ("avoid",)
+AVOID = ("avoid",) * 7
 
-# name: (_compute_hard_gates inputs, blocking ids, action_now for each of POLICY_CODES)
+# name: (_compute_hard_gates inputs, blocking ids, new_money.action for each of POLICY_CODES)
 ANALYZE_GATE_ROWS: dict[str, tuple[dict[str, Any], list[str], tuple[str, ...]]] = {
-    "earnings3": ({"events_data": {"earnings": {"days_until": 3}}}, ["earnings_blackout"], NEW_MONEY_WAIT_FOR_DATA),
-    "earnings0": ({"events_data": {"earnings": {"days_until": 0}}}, ["earnings_blackout"], NEW_MONEY_WAIT_FOR_DATA),
+    "earnings3": ({"events_data": {"earnings": {"days_until": 3}}}, ["earnings_blackout"], WAIT),
+    "earnings0": ({"events_data": {"earnings": {"days_until": 0}}}, ["earnings_blackout"], WAIT),
     "earn_unverifiable": ({"events_data": {"earnings": {"days_until": None, "verification": "unverifiable"}}},
-                          ["earnings_unverifiable"], NEW_MONEY_WAIT_FOR_DATA),
+                          ["earnings_unverifiable"], WAIT),
     "dq_tool_failed": ({"data_quality": {"tool_failures": [{"tool": "risk_metrics"}]}},
-                       ["data_quality_critical"], NEW_MONEY_WAIT_FOR_DATA),
+                       ["data_quality_critical"], WAIT_FOR_DATA),
     # B3: a missing beta is disclosed as a data gap and fires no gate
     "beta_gap": ({"data_quality": {"data_gaps": ["beta_unavailable"]}}, [], UNGATED),
-    "knife": ({"technicals_data": KNIFE_TECH}, ["falling_knife"], NEW_MONEY_WAIT_FOR_DATA),
+    "knife": ({"technicals_data": KNIFE_TECH}, ["falling_knife"], AVOID),
     "weak_liq": ({"risk_data": {"liquidity": {"avg_dollar_volume": 4e5}}}, ["weak_liquidity"],
-                 NEW_MONEY_WAIT_FOR_DATA),
-    "liq_missing": ({"risk_data": {"liquidity": {}}}, ["liquidity_missing"], NEW_MONEY_WAIT_FOR_DATA),
+                 AVOID),
+    "liq_missing": ({"risk_data": {"liquidity": {}}}, ["liquidity_missing"], WAIT_FOR_DATA),
     "missing_runway": ({"fundamentals_summary": {"burn_metrics": {"status": "unavailable"},
                                                  "valuation": {"valuation_note": "pe_not_meaningful"}}},
-                       ["missing_runway"], NEW_MONEY_WAIT_FOR_DATA),
-    "etf": ({"support": ETF}, ["unsupported_instrument"], NEW_MONEY_WATCH),
-    "gbp": ({"support": GBP}, ["unsupported_currency"], NEW_MONEY_WATCH),
-    # support wins over every other gate; the card gives data and knife precedence instead
+                       ["missing_runway"], WAIT_FOR_DATA),
+    "etf": ({"support": ETF}, ["unsupported_instrument"], WATCH),
+    "gbp": ({"support": GBP}, ["unsupported_currency"], WATCH),
+    # most-restrictive (D-5): watch over a data gate, avoid over watch; the card ranks data first instead
     "etf+dq_tool_failed": ({"support": ETF, "data_quality": {"tool_failures": [{"tool": "technicals"}]}},
-                           ["data_quality_critical", "unsupported_instrument"], NEW_MONEY_WATCH),
+                           ["data_quality_critical", "unsupported_instrument"], WATCH),
     "gbp+knife": ({"support": GBP, "technicals_data": KNIFE_TECH}, ["falling_knife", "unsupported_currency"],
-                  NEW_MONEY_WATCH),
+                  AVOID),
     "knife+dq": ({"technicals_data": KNIFE_TECH, "data_quality": {"tool_failures": [{"tool": "technicals"}]}},
-                 ["data_quality_critical", "falling_knife"], NEW_MONEY_WAIT_FOR_DATA),
+                 ["data_quality_critical", "falling_knife"], AVOID),
     "knife+earnings3": ({"technicals_data": KNIFE_TECH, "events_data": {"earnings": {"days_until": 3}}},
-                        ["falling_knife", "earnings_blackout"], NEW_MONEY_WAIT_FOR_DATA),
+                        ["falling_knife", "earnings_blackout"], AVOID),
 }
 
 
@@ -208,36 +209,35 @@ CRASH["price_position"]["position_in_range"] = 0.05
 
 # name: (scenario, action_now, gate ids, policy_action (mid, long, support_gates), dip type or status)
 ANALYZE_PIPELINE_ROWS: dict[str, tuple[dm.Scenario, str, list[str], tuple[str, str, Any], str]] = {
-    # flipped by WP2.2: the knife is a price_risk veto -> avoid (D-5a), over a wait candidate too (D-5)
+    # WP2.2: the knife is a price_risk veto -> avoid (D-5a), and no longer a policy rule, so the
+    # candidate keeps its knife-free code (plan §1)
     "us_crash": (dm.Scenario("GC analyze_matrix", CRASH, dm.PROFITABLE, dm.CRASH_RISK),
-                 "wait", ["falling_knife"], ("wait_for_entry", "accumulate", None), "falling_knife"),
+                 "avoid", ["falling_knife"], ("avoid", "accumulate", None), "falling_knife"),
     "gbp_crash": (dm.Scenario("GC analyze_matrix", CRASH, dm.PROFITABLE, dm.CRASH_RISK, summary=dm.GBP_EQUITY),
-                  "wait", ["falling_knife", "unsupported_currency"],
-                  ("wait_for_entry", "watch", ["unsupported_currency"]), "falling_knife"),
-    # the knife reads technicals for every instrument (WP2.1; the dip stays not_applicable);
-    # flipped by WP2.2: decide() keeps avoid (knife veto)
+                  "avoid", ["falling_knife", "unsupported_currency"],
+                  ("avoid", "watch", ["unsupported_currency"]), "falling_knife"),
+    # the knife reads technicals for every instrument (WP2.1; the dip stays not_applicable); decide() keeps
+    # avoid (knife veto, WP2.2)
     "etf_crash": (dm.Scenario("GC analyze_matrix", CRASH, dm.PROFITABLE, dm.CRASH_RISK, summary=dm.ETF),
                   "avoid", ["falling_knife", "unsupported_instrument"],
                   ("avoid", "insufficient_data", ["unsupported_instrument"]), "not_applicable"),
-    # B1 fires earnings_unverifiable in analyze (WP2.1, D-6); the wait candidate passes through.
-    # flipped by WP2.2: the knife veto makes it avoid (D-5a, D-5)
+    # B1 fires earnings_unverifiable in analyze (WP2.1, D-6); the knife veto makes it avoid (WP2.2: D-5a, D-5)
     "crash_earnings_unverifiable": (dm.Scenario("GC analyze_matrix", CRASH, dm.PROFITABLE, dm.CRASH_RISK,
                                                 events=sm.UNVERIFIABLE_EVENTS),
-                                    "wait", ["falling_knife", "earnings_unverifiable"],
-                                    ("wait_for_entry", "accumulate", None), "falling_knife"),
-    # the interim hard-gate resolution sends the new-money candidate to wait_for_data (WP2.1);
-    # flipped by WP2.2: the event cap makes it wait (GC-R2 analyze columns, RA.8)
+                                    "avoid", ["falling_knife", "earnings_unverifiable"],
+                                    ("avoid", "accumulate", None), "falling_knife"),
+    # the event cap makes the new-money candidate wait (WP2.2: GC-R2 analyze columns, RA.8)
     "strong_earnings_unverifiable": (dm.Scenario("GC analyze_matrix", dm.STRONG, dm.PROFITABLE, dm.CALM,
                                                  events=sm.UNVERIFIABLE_EVENTS),
-                                     "wait_for_data", ["earnings_unverifiable"], ("hold_or_add", "accumulate", None),
+                                     "wait", ["earnings_unverifiable"], ("hold_or_add", "accumulate", None),
                                      "healthy_pullback"),
-    # flipped by WP2.3: policy_action moves to diagnostics.pre_gate_policy (D-9); the equity's
-    # hold_or_add also becomes starter in WP2.2 (D-2)
+    # flipped by WP2.3: policy_action moves to diagnostics.pre_gate_policy (D-9); the equity's hold_or_add maps to
+    # new_money starter (WP2.2, D-2)
     "etf_strong": (dm.Scenario("GC verify_policy_cap", dm.STRONG, dm.PROFITABLE, dm.CALM, summary=dm.ETF),
                    "watch", ["unsupported_instrument"], ("watch", "insufficient_data", ["unsupported_instrument"]),
                    "not_applicable"),
     "equity_strong": (dm.Scenario("GC verify_policy_cap", dm.STRONG, dm.PROFITABLE, dm.CALM),
-                      "hold_or_add", [], ("hold_or_add", "accumulate", None), "healthy_pullback"),
+                      "starter", [], ("hold_or_add", "accumulate", None), "healthy_pullback"),
 }
 
 
@@ -261,18 +261,20 @@ FRESH_QUOTE_STALE_DAILY = dm.Scenario(
 class TestAnalyzeGateBefore:
     @pytest.mark.parametrize("name", ANALYZE_GATE_ROWS)
     def test_gate_resolution_matrix(self, name: str) -> None:
-        """GC-C3: every analyze gate sends buy, starter and hold_or_add to wait_for_data (support: watch).
-        Flipped by WP2.2 (decide(): D-2 mapping, D-5 most-restrictive, D-5a outcomes)."""
+        """GC-C3: each analyze gate's new_money action over every mid-term candidate code: the class outcome
+        (data wait_for_data, price_risk and liquidity avoid, support watch, event wait) unless the candidate is
+        tighter. PD D-2, D-5, D-5a, D-5c (G from WP2.2; flipped from the interim hard-gate resolution)."""
         inputs, expected_ids, expected_actions = ANALYZE_GATE_ROWS[name]
         gates = hard_gates(inputs)
 
         assert ids(gates["blocking"]) == expected_ids
-        assert tuple(_resolve_action_now({"mid_term": code}, gates)[0] for code in POLICY_CODES) == expected_actions
+        assert tuple(dm.decide_on({"mid_term": code}, gates["blocking"])["new_money"]["action"]
+                     for code in POLICY_CODES) == expected_actions
 
     @pytest.mark.parametrize("name", ANALYZE_PIPELINE_ROWS)
     async def test_pipeline_rows(self, name: str) -> None:
         """GC-C3: full analyze on crashed, strong and unsupported charts (the dip is skipped for an ETF).
-        Flipped row by row by WP2.2 (D-2, D-5a) and WP2.3 (D-9), as each row notes."""
+        The action column is new_money (WP2.2: D-2, D-5a); the policy column is flipped by WP2.3 (D-9)."""
         scenario, action_now, expected_ids, (mid, long, support_gates), dip = ANALYZE_PIPELINE_ROWS[name]
         result = await dm.run(scenario)
         policy = result["policy_action"]
@@ -281,12 +283,15 @@ class TestAnalyzeGateBefore:
         assert (policy["mid_term"], policy["long_term"], policy.get("support_gates")) == (mid, long, support_gates)
         assert dip_label(result) == dip
 
-    async def test_the_support_cap_runs_before_the_decision_card(self) -> None:
-        """GC-C3: an ETF's policy candidate is already watch, so the card's support branch never decides.
-        Flipped by WP2.3: the capped candidate moves to diagnostics.pre_gate_policy, the rationale to decision_trace."""
+    async def test_the_support_gate_decides_from_the_uncapped_candidate(self) -> None:
+        """GC-C3: decide() reads the uncapped candidate, so for an ETF the support gate decides (starter -> watch)
+        while the emitted policy stays support-capped. Flipped by WP2.3: the capped candidate moves to
+        diagnostics.pre_gate_policy and the rationale to diagnostics.decision_trace."""
         result = await dm.run(ANALYZE_PIPELINE_ROWS["etf_strong"][0])
 
-        assert result["decision_card"]["rationale"] == ["policy_action.mid_term=watch -> watch"]
+        assert result["decision_card"]["new_money"]["decided_by"] == "unsupported_instrument"
+        assert result["decision_card"]["rationale"] == ["policy_action.mid_term=watch -> watch",
+                                                        "decided_by=unsupported_instrument"]
 
     async def test_a_stock_summary_failure_splits_the_gates_not_the_action(self) -> None:
         """GC-C3: with stock_summary down, analyze shows watch [dq, unsupported_*] and the card watch [unsupported_*].
@@ -303,7 +308,7 @@ class TestAnalyzeGateBefore:
         """GC-R12 (freshness half, flipped from GC-C3 by WP2.1): in session, analyze still prices off the fresh
         5m quote, but leg H reads technicals' own daily history (11 sessions behind) and fires stale_data with
         daily_history_stale; the card's build_freshness blocks the same legs as stale_daily. PD D-7.
-        The action clause is the WP2.1 interim (hard-gate path); WP2.2 moves it to decide() (FR-R-F2)."""
+        The action is decide()'s (FR-R-F2)."""
         result = await dm.run(FRESH_QUOTE_STALE_DAILY)
         provenance = result["summary"]["price_provenance"]
         data_quality = result["data_quality"]

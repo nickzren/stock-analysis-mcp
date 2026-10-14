@@ -415,13 +415,14 @@ class TestGatesThatDoNotBind:
         assert ("earnings_blackout" in gate_ids(gated), "earnings_blackout" in gate_ids(clear)) == (True, False)
 
     async def test_c8_analyze_hold_passes_a_blackout_through(self) -> None:
-        """RA-C8b: a hold candidate plus a blackout keeps action_now hold, as without the
-        blackout, and lists the gate.
-        CH: flipped by WP2.2 (action_now aliases new_money.action; hold maps to wait, D-2)."""
+        """RA-C8b: a hold candidate (new_money wait) plus a blackout keeps wait, as without the blackout,
+        lists the gate and carries no earliest_reassessment (the gate does not bind).
+        G from WP2.2 (PD D-2; flipped from action_now hold)."""
         gated, clear = await with_and_without_blackout(HOLD)
 
-        assert (gated["action_now"], clear["action_now"]) == ("hold", "hold")
+        assert (gated["action_now"], clear["action_now"]) == ("wait", "wait")
         assert (gate_ids(gated), gate_ids(clear)) == (["earnings_blackout"], [])
+        assert gated["new_money"]["earliest_reassessment"] is None
 
     def test_c8_card_no_setup_lists_the_blackout(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """RA-C8c: the trade card with no setup plus a blackout stays no_setup and lists the

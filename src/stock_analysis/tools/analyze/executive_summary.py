@@ -397,9 +397,6 @@ def build_policy_action(
     valuation_basis = valuation_assessment.get("basis")
     is_unprofitable = valuation_assessment.get("is_unprofitable", False)
     position_sizing = action_zones.get("position_sizing_range", {})
-    dip_type = None
-    if dip_assessment:
-        dip_type = (dip_assessment.get("dip_classification") or {}).get("type")
     fundamentals_summary = fundamentals_summary or {}
 
     # Get decomposed scores for conditions
@@ -454,12 +451,6 @@ def build_policy_action(
     else:  # unknown
         mid_term_action = "insufficient_data"
         rationale.append("mid_term_fit=unknown")
-
-    if dip_type == "falling_knife" and not is_dislocation_candidate:
-        mid_term_action = "wait_for_entry"
-        rationale.append("dip_type=falling_knife")
-    elif dip_type == "falling_knife" and is_dislocation_candidate:
-        rationale.append("dip_type=falling_knife_but_dislocation_candidate")
 
     # === LONG-TERM ACTION (1-5 years) ===
     long_term_action: str

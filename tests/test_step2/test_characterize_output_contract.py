@@ -181,12 +181,12 @@ class TestEntrySizingUnderNonEntryActions:
         assert [s["action"] for s in dip["entry_timing"]["signals"]] == ["starter_position"]
 
     async def test_unsupported_etf_holds_with_percent_sizing_and_an_accumulate_zone(self) -> None:
-        """OC-CH4: S7 (ETF, unsupported_instrument) has action_now=hold, percent sizing, "size ~2.5-8.0%"
-        and zone accumulate on the card. Flipped by WP2.2 (the support gate gives watch) and
-        WP2.3 (no sizing for unsupported instruments; no zone on the card)."""
+        """OC-CH4: S7 (ETF, unsupported_instrument) has action_now=watch (the support gate tightens wait, WP2.2
+        D-5), percent sizing, "size ~2.5-8.0%" and zone accumulate on the card. Flipped by WP2.3 (no sizing for
+        unsupported instruments; no zone on the card)."""
         result = await dm.run("S7_etf_below_sma200")
 
-        assert (result["decision_card"]["action_now"], dm.gate_ids(result)) == ("hold", ["unsupported_instrument"])
+        assert (result["decision_card"]["action_now"], dm.gate_ids(result)) == ("watch", ["unsupported_instrument"])
         for tier, payload in dm.tiers(result).items():
             card = payload["decision_card"]
             assert (card["sizing"]["starter_pct"], card["sizing"]["full_pct_cap"]) == (2.5, 8.0), tier
@@ -205,13 +205,13 @@ class TestEntrySizingUnderNonEntryActions:
 
 class TestConditionsUnderAdmittingActions:
     async def test_headwind_hold_or_add_lists_a_valuation_buy_condition(self) -> None:
-        """OC-CH5: C1 has action_now=hold_or_add with buy_only_if=['P/E < 25x (currently headwind)'],
-        and card.monitor equals the upgrade list. Flipped by WP2.2 (hold_or_add maps to starter, D-2)
-        and WP2.3 (only binding conditions are listed, §7e RF-E1)."""
+        """OC-CH5: C1 has action_now=starter (hold_or_add, WP2.2 D-2) with buy_only_if=['P/E < 25x (currently
+        headwind)'], and card.monitor equals the upgrade list. Flipped by WP2.3 (only binding conditions are
+        listed, §7e RF-E1)."""
         result = await dm.run("C1_headwind_hold_or_add")
         conditions = result["decision_card"]["conditions"]
 
-        assert result["decision_card"]["action_now"] == "hold_or_add"
+        assert result["decision_card"]["action_now"] == "starter"
         assert conditions["buy_only_if"] == ["P/E < 25x (currently headwind)"]
         assert conditions["monitor"] == result["policy_action"]["conditions_to_upgrade"] == [
             "P/E < 25x (currently headwind)"]

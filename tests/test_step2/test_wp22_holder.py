@@ -3,7 +3,7 @@
 Annex: docs/plans/step2-v2-research/policy_holder.md, "Corrected proposal" §3-§10, as amended by plan §0 #7
 (no long-term holder read in 2a: the long-term if_held columns are dropped), #8, #17 (near_52w_high), #24
 (gates leave if_held.action and basis alone; add_allowed follows the gated new money) and #25. Unit grids call
-decide() through dm.decide_on over the real build_policy_action's codes.
+decide() through dm.decide_on; analyze runs go through tests/support/decision_matrix.py, which pins the clock.
 """
 
 import inspect
@@ -41,6 +41,11 @@ MID_FITS = ("ok", "caution", "avoid", "unknown")
 TILTS = ("bullish", "neutral", "bearish", None)
 ZONES = ("accumulate", "hold_bullish", "reduce")
 THESES: tuple[tuple[str, ...], ...] = ((), (BB,), (RC,), (BB, RC))
+A7_CAUTION = dm.Scenario("PH A7 caution", dm.at_price(dm.STRONG, 118.0), dm.QUALITY, dm.EXTREME)
+E_INTACT = dm.Scenario("PH-RF12b intact twin", dm.STRONG,
+                       {**dm.POOR_BUT_BULLISH, "cash_flow": {"rules": {"positive_fcf": {"triggered": True}}},
+                        "financial_health": {"debt_to_equity": 0.3, "rules": {"low_debt": {"triggered": True}}}},
+                       dm.MODERATE)
 
 
 def candidate(mid: str, tilt: str | None, zone: str, dislocation: bool, knife: bool) -> dict[str, str]:
@@ -77,11 +82,31 @@ def held(decision: dict[str, Any]) -> tuple[str, str]:
     return decision["if_held"]["action"], decision["if_held"]["basis"]
 
 
+def ids(blocked: list[dict[str, Any]]) -> list[str]:
+    return [b["id"] for b in blocked]
+
+
 def tightness(action: str) -> int:
     return dc.NEW_MONEY_ACTIONS.index(action)
 
 
-# --- PH-RF2: the knife (PH-RF1's grid lands with the knife-override removal) ----------------------
+# --- PH-RF1, RF2, RF3: the knife ---------------------------------------------------------------------
+
+
+def test_knife_never_changes_if_held() -> None:
+    """PH-RF1: over the policy grid and every thesis, the knife (gate on, override gone) leaves if_held's action
+    and basis unchanged (mid-term only, plan §0 #7). RF."""
+    for (mid, tilt, zone, disl), thesis in product(grid(), THESES):
+        plain = run_decide(candidate(mid, tilt, zone, disl, knife=False), [], thesis, disl, tilt)
+        knifed = run_decide(candidate(mid, tilt, zone, disl, knife=True), ["falling_knife"], thesis, disl, tilt)
+        assert held(plain) == held(knifed), (mid, tilt, zone, disl, thesis)
+
+
+async def test_knife_never_changes_if_held_through_the_pipeline() -> None:
+    """PH-RF1: Codex's probe A (broken, bearish) and B (A + knife) give the same if_held. RF."""
+    a, b = await dm.run("A_broken_bearish"), await dm.run("B_broken_bearish_knife")
+
+    assert held(a["decision_card"]) == held(b["decision_card"]) == ("review_exit", "business_broken")
 
 
 def test_knife_never_loosens_new_money() -> None:
@@ -91,6 +116,18 @@ def test_knife_never_loosens_new_money() -> None:
         knifed = run_decide(candidate(mid, tilt, zone, disl, knife=True), ["falling_knife"], thesis, disl, tilt)
         for decision in (lambda d: d["new_money"], lambda d: d["long_term"]["new_money"]):
             assert tightness(decision(knifed)["action"]) >= tightness(decision(plain)["action"]), (mid, tilt, zone)
+
+
+async def test_codex_probe_a_and_b() -> None:
+    """PH-RF2 and PH-RF3 (mid decision clauses; the candidate clause is WP2.3): A and B both give new_money avoid
+    and if_held review_exit (business_broken); B's blocked_by == [falling_knife, thesis_broken]. PD D-1c."""
+    a, b = await dm.run("A_broken_bearish"), await dm.run("B_broken_bearish_knife")
+
+    for result in (a, b):
+        card = result["decision_card"]
+        assert (card["new_money"]["action"], *held(card)) == ("avoid", "review_exit", "business_broken")
+    assert ids(a["decision_card"]["new_money"]["blocked_by"]) == ["thesis_broken"]
+    assert ids(b["decision_card"]["new_money"]["blocked_by"]) == ["falling_knife", "thesis_broken"]
 
 
 # --- PH-RF4 [D-1a, D-1b, D-1d]: the mid-term if_held table ----------------------------------------------
@@ -150,6 +187,14 @@ def test_table_covers_every_reachable_candidate() -> None:
     assert reached <= rows
 
 
+@pytest.mark.parametrize(("name", "expected"), [("ETF_strong", ("hold", "candidate_admits_new_money")),
+                                                ("ETF_bearish", ("reduce", "tilt_bearish"))])
+async def test_unsupported_reads_the_uncapped_candidate(name: str, expected: tuple[str, str]) -> None:
+    """PH-RF4: an unsupported instrument's if_held reads the uncapped candidate, never the support cap's watch
+    (ETF bullish hold_or_add -> hold; ETF bearish avoid -> reduce). PD D-1a/b/d."""
+    assert held((await dm.run(name))["decision_card"]) == expected
+
+
 # --- PH-RF6 [D-1a], PH-RF7 ------------------------------------------------------------------------------
 
 
@@ -167,6 +212,14 @@ def test_reduce_requires_an_evidence_basis() -> None:
         assert (got["action"] in ("reduce", "review_exit")) is (got["basis"] in dc.EVIDENCE_BASES)
 
 
+async def test_case_d_holds() -> None:
+    """PH-RF6: case D (quality, attractive, poor chart): new_money avoid, if_held hold (no_reduction_evidence):
+    a poor setup alone never makes a holder reduce. PD D-1a."""
+    card = (await dm.run("D_quality_attractive_poor_chart"))["decision_card"]
+
+    assert (card["new_money"]["action"], *held(card)) == ("avoid", "hold", "no_reduction_evidence")
+
+
 def test_same_horizon_coherence() -> None:
     """PH-RF7: reduce or review_exit never stands next to new_money buy or starter, and add_allowed is exactly
     new_money in {buy, starter}, under every single gate. RF."""
@@ -177,6 +230,23 @@ def test_same_horizon_coherence() -> None:
         if holder["action"] in ("reduce", "review_exit"):
             assert new_money not in ENTRY, (mid, tilt, zone, disl, thesis, gate_ids)
         assert holder["add_allowed"] is (new_money in ENTRY)
+
+
+@pytest.mark.parametrize("name", dm.SCENARIOS)
+async def test_coherence_through_the_matrix(name: str) -> None:
+    """PH-RF7 on every matrix scenario and tier; the thesis gate fires exactly when the dislocation framework's
+    thesis is broken and if_held is review_exit (D-1c). RF."""
+    result = await dm.run(name)
+    card = result["decision_card"]
+    holder, new_money = card["if_held"], card["new_money"]["action"]
+
+    if holder["action"] in ("reduce", "review_exit"):
+        assert new_money not in ENTRY
+    assert holder["add_allowed"] is (new_money in ENTRY)
+    thesis_status = (result["dislocation_framework"].get("thesis_integrity") or {}).get("status")
+    assert ("thesis_broken" in dm.gate_ids(result)) is (thesis_status == "broken") is (holder["action"] == "review_exit")
+    for tier, shown in dm.tiers(result).items():
+        assert shown["decision_card"]["if_held"] == holder, tier
 
 
 # --- PH-RF8 = GC-R6 (§0 #24): gates never change if_held ---------------------------------------------------
@@ -196,6 +266,20 @@ def test_gates_never_change_if_held(gate_id: str) -> None:
             assert gated["if_held"]["add_allowed"] is (gated["new_money"]["action"] in ENTRY)
 
 
+@pytest.mark.parametrize(("plain", "gated"), [("S1_hold_or_add_clean", "S4_earnings_gate_on_hold_or_add"),
+                                              ("S1_hold_or_add_clean", "S9_weak_liquidity"),
+                                              ("C1_headwind_hold_or_add", "C2_headwind_earnings_gate"),
+                                              ("D_quality_attractive_poor_chart", "D2_quality_poor_chart_earnings_3d"),
+                                              ("S3_plain_avoid", "S5_earnings_gate_on_avoid")])
+async def test_gate_pairs_through_the_pipeline(plain: str, gated: str) -> None:
+    """PH-RF8 / GC-R6 through analyze: a gated twin keeps its plain twin's if_held action and basis. RF."""
+    p, g = (await dm.run(plain))["decision_card"], (await dm.run(gated))["decision_card"]
+
+    assert held(p) == held(g)
+    assert g["hard_gates"]["blocking"]
+    assert g["if_held"]["add_allowed"] is (g["new_money"]["action"] in ENTRY)
+
+
 def test_if_held_reads_only_its_evidence() -> None:
     """PH-RF8: if_held's inputs are the thesis, the mapped candidate, the dislocation flag and tilt: never gates,
     zone, dip or support (plan §3). G."""
@@ -203,6 +287,21 @@ def test_if_held_reads_only_its_evidence() -> None:
 
 
 # --- PH-RF11 [D-4]: near_52w_high, mid-term new money only (Codex boundary 1) ---------------------------
+
+
+@pytest.mark.parametrize(("scenario", "long_term"), [(dm.SCENARIOS["A7_near_52w_high_bullish"], "buy"),
+                                                     (A7_CAUTION, "starter")], ids=["ok", "caution"])
+async def test_a7_caps_mid_term_new_money_only(scenario: dm.Scenario, long_term: str) -> None:
+    """PH-RF11: A7 (reduce zone, bullish; ok fit hold_or_add, caution speculative_small_position) gives new_money
+    wait [near_52w_high], if_held hold (candidate_admits_new_money) with add_allowed false, and leaves
+    long_term.new_money alone (the core clause is WP2.2 step 3). PD D-4."""
+    card = (await dm.run(scenario))["decision_card"]
+    long = card["long_term"]["new_money"]
+
+    assert (card["new_money"]["action"], ids(card["new_money"]["blocked_by"]), card["new_money"]["decided_by"]) == (
+        "wait", ["near_52w_high"], "near_52w_high")
+    assert card["if_held"] == {"action": "hold", "add_allowed": False, "basis": "candidate_admits_new_money"}
+    assert (long["action"], long["blocked_by"], long["decided_by"], long["unevaluated"]) == (long_term, [], None, [])
 
 
 def test_near_52w_high_never_reaches_long_term_core_or_if_held() -> None:
@@ -230,6 +329,16 @@ def test_near_52w_high_status() -> None:
         assert check_near_52w_high(zone) == ("unevaluated", None)
 
 
+async def test_an_undetermined_zone_leaves_near_52w_high_unevaluated_at_mid_term_only() -> None:
+    """PH-RF11 / GC-R10: no price leaves the zone undetermined, so near_52w_high is listed unevaluated at mid term
+    (registry reason) and not at long term, where it does not apply. PD D-4."""
+    card = (await dm.run(dm.Scenario("PH-RF11 no zone", None, dm.PROFITABLE, dm.CALM)))["decision_card"]
+    reason = GATES["near_52w_high"].unevaluated_when["mid_term"]
+
+    assert {"id": "near_52w_high", "reason": reason} in card["new_money"]["unevaluated"]
+    assert "near_52w_high" not in ids(card["long_term"]["new_money"]["unevaluated"])
+
+
 @pytest.mark.parametrize("zone", ["strong_buy", "accumulate", "hold_bullish", "hold_neutral", "reduce",
                                   "undetermined", None])
 def test_zone_caps_never_move_the_gate_zones(zone: str | None) -> None:
@@ -246,6 +355,28 @@ def test_zone_caps_never_move_the_gate_zones(zone: str | None) -> None:
 
 
 # --- PH-RF12, RF12b [D-1c]: the thesis cap ---------------------------------------------------------------
+
+
+async def test_case_e() -> None:
+    """PH-RF12: case E (poor business, bullish chart) gives new_money avoid [thesis_broken] decided by it,
+    if_held review_exit (business_broken) and long_term.new_money avoid [thesis_broken]. PD D-1c."""
+    card = (await dm.run("E_poor_business_bullish_chart"))["decision_card"]
+    long = card["long_term"]["new_money"]
+
+    assert (card["new_money"]["action"], ids(card["new_money"]["blocked_by"]), card["new_money"]["decided_by"]) == (
+        "avoid", ["thesis_broken"], "thesis_broken")
+    assert held(card) == ("review_exit", "business_broken")
+    assert (long["action"], ids(long["blocked_by"])) == ("avoid", ["thesis_broken"])
+
+
+async def test_burner_runway_2q() -> None:
+    """PH-RF12: a 2-quarter burner gives avoid at both horizons, if_held review_exit (runway_critical) and the
+    blocker's codes [runway_critical]; it closes the p5 inversion (the core clause is WP2.2 step 3). PD D-1c."""
+    card = (await dm.run("H_burner_runway_2q"))["decision_card"]
+
+    assert (card["new_money"]["action"], card["long_term"]["new_money"]["action"]) == ("avoid", "avoid")
+    assert held(card) == ("review_exit", "runway_critical")
+    assert card["new_money"]["blocked_by"][0]["codes"] == ["runway_critical"]
 
 
 def test_thesis_caps_both_horizons() -> None:
@@ -294,6 +425,24 @@ def test_clears_when_names_only_failing_components() -> None:
 
     assert clears_when_for(both) == GATES["thesis_broken"].clears_when
     assert clears_when_for(runway) == THESIS_CLEARS_WHEN[RC] == "cash runway no longer below 4 quarters"
+
+
+async def test_case_e_and_its_intact_twin() -> None:
+    """PH-RF12b through analyze: E (business broken, no burn, runway unknown, balance not unsafe) fires on the
+    business component with no runway clause, in clears_when or in the reassessment's outstanding; its twin
+    with an intact business carries no thesis gate and admits a starter. PD D-1c."""
+    broken, intact = await dm.run("E_poor_business_bullish_chart"), await dm.run(E_INTACT)
+    blocker = broken["decision_card"]["new_money"]["blocked_by"][0]
+    # E's candidate admits (hold_or_add), so the reassessment lists the thesis condition
+    outstanding = broken["decision_card"]["new_money"]["earliest_reassessment"]["outstanding"]
+
+    for result in (broken, intact):
+        assert result["fundamentals_summary"]["burn_metrics"] is None
+        assert result["dislocation_framework"]["balance_sheet_safety"]["status"] != "unsafe"
+    assert (blocker["id"], blocker["codes"]) == ("thesis_broken", [BB])
+    assert outstanding == [{"id": "thesis_broken", "clears_when": THESIS_CLEARS_WHEN[BB]}]
+    assert intact["dislocation_framework"]["business_integrity"]["status"] == "intact"
+    assert (intact["decision_card"]["new_money"]["action"], dm.gate_ids(intact)) == ("starter", [])
 
 
 # --- PH-RF13 [D-1b], PH-RF14 --------------------------------------------------------------------------------

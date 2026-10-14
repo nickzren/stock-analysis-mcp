@@ -12,11 +12,12 @@ from yfinance.scrapers.history import PriceHistory
 
 from stock_analysis.data import yfinance_client
 from stock_analysis.tools.analyze.action_zones import build_position_sizing_range
-from stock_analysis.tools.analyze.decision_card import _compute_hard_gates, _resolve_action_now
+from stock_analysis.tools.analyze.decision_card import _compute_hard_gates
 from stock_analysis.tools.analyze.projection import project_analyze_result
 from stock_analysis.utils.scan_screen import screen_symbol
 from stock_analysis.utils.validators import FetchParams
 from stock_analysis.utils.valuation_basis import classify_support, sizing_unavailable_reason
+from tests.support.decision_matrix import decide_on
 from tests.test_scan_screen import FRESH, make_df, uptrend_breakout_df
 from tests.test_tools.test_trade_card import blocker_ids, build_card
 
@@ -77,9 +78,9 @@ class TestAnalyzeDecision:
             fundamentals_summary={}, risk_data={"liquidity": {"avg_dollar_volume": None}}, support=GBP_STOCK,
         )
 
-        action, _ = _resolve_action_now({"mid_term": "buy"}, gates)
+        decision = decide_on({"mid_term": "buy", "long_term": "accumulate"}, gates["blocking"])
 
-        assert action == "watch"
+        assert (decision["new_money"]["action"], decision["long_term"]["new_money"]["action"]) == ("watch", "watch")
         assert gates["checks"]["unsupported_currency"] is True
         assert gates["checks"]["liquidity_missing"] is False
 
@@ -89,7 +90,12 @@ class TestAnalyzeDecision:
             risk_data={"liquidity": {"avg_dollar_volume": 5e7}}, support=ETF,
         )
 
-        assert _resolve_action_now({"mid_term": "hold_or_reduce"}, gates)[0] == "hold_or_reduce"
+        gated = decide_on({"mid_term": "hold_or_reduce"}, gates["blocking"], tilt="bearish")
+        ungated = decide_on({"mid_term": "hold_or_reduce"}, tilt="bearish")
+
+        assert gated["new_money"]["action"] == "watch"
+        assert gated["if_held"] == ungated["if_held"] == {"action": "reduce", "add_allowed": False,
+                                                           "basis": "tilt_bearish"}
 
     @pytest.mark.parametrize(("support", "sized"), [(GBP_STOCK, False), (ETF, False), (US_STOCK, True)])
     def test_r4_6_r4_7_sizing_only_when_supported(self, support: dict[str, Any], sized: bool) -> None:

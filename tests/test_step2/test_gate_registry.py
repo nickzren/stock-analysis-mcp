@@ -2,8 +2,8 @@
 
 The registry is data: each gate's class, effect, outcome per surface, clears_when and unevaluated
 rule. These tests pin its contents and check every gate id analyze, analyze_trade_setup and
-scan_watchlist emit against it. GC-R2's swing column is here; its screen column lands with scan
-stage 1 and its analyze columns with decide() (WP2.2). Analyze runs go through
+scan_watchlist emit against it. GC-R2's swing column is here, its screen column with scan stage 1,
+and its analyze columns in test_wp22_decide.py (WP2.2). Analyze runs go through
 tests/support/decision_matrix.py and swing runs through tests/support/swing_matrix.py; every run
 pins its clock.
 """

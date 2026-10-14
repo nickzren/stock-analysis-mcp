@@ -2,9 +2,9 @@
 
 Annex: docs/plans/step2-v2-research/freshness.md, "Corrected proposal" (truth table, tests R-F1 to
 R-F17), as amended by plan §0 #4 (ids stale_data and freshness_unverifiable, each with its codes) and
-§5 (the pinned cross-tool differences). Until decide() (WP2.2), action_now is the interim hard-gate
-resolution: only the allow-row parity and the CH interim test assert an action. Frames and clocks
-come from tests/support/freshness_frames.py; analyze runs go through tests/support/decision_matrix.py.
+§5 (the pinned cross-tool differences). From WP2.2 decide() owns the action (FR-R-F2, F14, F18 are in
+test_wp22_decide.py). Frames and clocks come from tests/support/freshness_frames.py; analyze runs go through
+tests/support/decision_matrix.py.
 """
 
 import importlib
@@ -366,14 +366,14 @@ STALE_HISTORY = {"last_row_date": "2026-10-08", "last_valid_date": "2026-10-08",
 
 @pytest.mark.parametrize(("scenario", "action"), [
     ("S1_hold_or_add_clean", "wait_for_data"), ("S2_buy_clean", "wait_for_data"),
-    ("T2_starter_weak_setup_quality", "wait_for_data"), ("T3_plain_wait_weak_setup", "wait"),
-    ("S3_plain_avoid", "avoid"), ("S9_weak_liquidity", "wait_for_data"), ("ETF_strong", "watch"),
+    ("T2_starter_weak_setup_quality", "wait_for_data"), ("T3_plain_wait_weak_setup", "wait_for_data"),
+    ("S3_plain_avoid", "avoid"), ("S9_weak_liquidity", "avoid"), ("ETF_strong", "watch"),
     ("S8_fundamentals_failed", "insufficient_data"),
 ])
-async def test_freshness_reaches_action_now_through_the_hard_gates(scenario: str, action: str) -> None:
-    """Interim: a freshness blocker is one more hard gate, so _resolve_action_now sends buy, starter and
-    hold_or_add to wait_for_data (watch beside a support gate) and passes the other candidates through.
-    CH: flipped by WP2.2 (decide() owns the action: FR-R-F2 action, GC-R3 to R5 rewritten; T3 and S9 move)."""
+async def test_freshness_reaches_new_money_through_decide(scenario: str, action: str) -> None:
+    """A freshness blocker is one more data gate in decide()'s most-restrictive combination: wait_for_data over
+    buy, starter and wait (T3), but never over avoid (S3), weak liquidity's avoid (S9), the support gate's watch
+    or insufficient_data (S8). G from WP2.2 (PD D-7, D-5; flipped from the interim hard-gate resolution)."""
     stale = {**(dm.SCENARIOS[scenario].technicals or {}), "daily_history": STALE_HISTORY}
     result = await dm.run(scenario, technicals=stale)
 
