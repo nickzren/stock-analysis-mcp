@@ -262,20 +262,25 @@ async def test_coherence_through_the_matrix(name: str) -> None:
 @pytest.mark.parametrize("gate_id", ANALYZE_GATE_IDS)
 def test_gates_never_change_if_held(gate_id: str) -> None:
     """PH-RF8 / GC-R6: with the evidence fixed (θ at every value, () included), firing any analyze gate alone or
-    with any other leaves if_held's action and basis equal to the gate-free run; the thesis gate fires with codes
-    [business_broken] whatever θ is. With the thesis gate fired iff θ is broken, coded θ (up to three gates), it
-    leaves them equal to the run with no other gate. add_allowed follows the gated new_money (R2.6(h)). RF."""
+    with any other, with or without every other gate that can be unevaluated listed, leaves if_held's action and
+    basis equal to the gate-free run; the thesis gate fires with codes [business_broken] whatever θ is. With the
+    thesis gate fired iff θ is broken, coded θ (up to three gates), it leaves them equal to the run with no other
+    gate. add_allowed follows the gated new_money on every run (R2.6(h)). RF."""
     others = [(), *((g,) for g in ANALYZE_GATE_IDS if g != gate_id)]
     for (mid, tilt, zone, disl), thesis in product(grid(), THESES):
         cand = candidate(mid, tilt, zone, disl, knife=False)
         base = held(dm.decide_on(cand, [], thesis=thesis, dislocation=disl, tilt=tilt))
         consistent = held(run_decide(cand, [], thesis, disl, tilt))
         for other in others:
-            gated = dm.decide_on(cand, fire([gate_id, *other]), thesis=thesis, dislocation=disl, tilt=tilt)
-            assert held(gated) == base, (gate_id, other, mid, tilt, zone, disl, thesis)
-            assert gated["if_held"]["add_allowed"] is (gated["new_money"]["action"] in ENTRY)
-            assert held(run_decide(cand, [gate_id, *other], thesis, disl, tilt)) == consistent, (
-                gate_id, other, mid, tilt, zone, disl, thesis)
+            fired = [gate_id, *other]
+            gated = dm.decide_on(cand, fire(fired), thesis=thesis, dislocation=disl, tilt=tilt)
+            listed = dm.decide_on(cand, fire(fired), unevaluated=frozenset(UNEVALUABLE).difference(fired),
+                                  thesis=thesis, dislocation=disl, tilt=tilt)
+            consistent_run = run_decide(cand, fired, thesis, disl, tilt)
+            assert held(gated) == held(listed) == base, (gate_id, other, mid, tilt, zone, disl, thesis)
+            assert held(consistent_run) == consistent, (gate_id, other, mid, tilt, zone, disl, thesis)
+            for decision in (gated, listed, consistent_run):
+                assert decision["if_held"]["add_allowed"] is (decision["new_money"]["action"] in ENTRY)
 
 
 @pytest.mark.parametrize("gate_id", UNEVALUABLE)
