@@ -117,9 +117,9 @@ def format_day(day: date) -> str:
 def _format_interval(start: date, end: date) -> str:
     head = format_day(start)
     if start.year != end.year:
-        return f"{head}, {start.year}–{_MONTHS[end.month - 1]} {end.day}, {end.year}"
+        return f"{head}, {start.year}–{format_day(end)}, {end.year}"
     if start.month != end.month:
-        return f"{head}–{_MONTHS[end.month - 1]} {end.day}"
+        return f"{head}–{format_day(end)}"
     return f"{head}–{end.day}"
 
 

@@ -86,11 +86,11 @@ def core_action(long_term_fit: str, long_term_action: str) -> str:
 def _new_money(horizon: str, mapped: str, blocking: Sequence[dict[str, Any]], unevaluated: Collection[str],
                window: EarningsWindow, today: date, support: Mapping[str, Any] | None) -> dict[str, Any]:
     order = disclosure_order(horizon)
-    fired = sorted((b for b in blocking if GATES[b["id"]].outcome[horizon] != NOT_APPLICABLE),
-                   key=lambda b: order.index(b["id"]))
+    outcome = {b["id"]: GATES[b["id"]].outcome[horizon] for b in blocking}
+    fired = sorted((b for b in blocking if outcome[b["id"]] != NOT_APPLICABLE), key=lambda b: order.index(b["id"]))
     blocked_by = [disclose(b, horizon) for b in fired]
-    action = most_restrictive([mapped, *(GATES[b["id"]].outcome[horizon] for b in fired)])
-    decided_by = None if action == mapped else next(b["id"] for b in fired if GATES[b["id"]].outcome[horizon] == action)
+    action = most_restrictive([mapped, *(outcome[b["id"]] for b in fired)])
+    decided_by = None if action == mapped else next(b["id"] for b in fired if outcome[b["id"]] == action)
     return {
         "action": action,
         "blocked_by": blocked_by,

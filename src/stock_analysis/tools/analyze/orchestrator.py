@@ -88,10 +88,9 @@ _READ_SHARE_OF_TOOL_DEADLINE = 0.9
 _ET = pytz.timezone("America/New_York")
 
 
-# New-money codes: policy_action horizons use the policy codes; the balanced and speculative
+# New-money codes: policy_action horizons use the entry candidate codes; the balanced and speculative
 # modes add their starter codes. Core needs none: decide()'s support gate already caps it at watch.
-_NEW_MONEY_POLICY_CODES = ENTRY_CANDIDATE_CODES
-_NEW_MONEY_MODE_CODES = _NEW_MONEY_POLICY_CODES | {"starter_position_only", "starter_then_add"}
+_NEW_MONEY_MODE_CODES = ENTRY_CANDIDATE_CODES | {"starter_position_only", "starter_then_add"}
 _DIP_NEW_MONEY_RECOMMENDATIONS = frozenset({
     "strong_buy_the_dip", "buy_the_dip", "cautious_accumulation", "small_speculative_position",
     "starter_only_wait_for_stabilization",
@@ -103,7 +102,7 @@ def _cap_policy_at_watch(policy_action: dict[str, Any], support: dict[str, Any])
     """WP4 (D5): an unsupported or unverified instrument/currency produces no
     new-money action; hold/reduce/avoid codes pass through."""
     for horizon in ("mid_term", "long_term"):
-        if policy_action.get(horizon) in _NEW_MONEY_POLICY_CODES:
+        if policy_action.get(horizon) in ENTRY_CANDIDATE_CODES:
             policy_action[horizon] = "watch"
     policy_action["support_gates"] = [gate["id"] for gate in support_blockers(support)]
 
@@ -114,7 +113,7 @@ def _cap_modes_at_watch(decision_modes: dict[str, Any]) -> None:
             continue
         if mode.get("action") in _NEW_MONEY_MODE_CODES:
             mode["action"] = "watch"
-        if mode.get("long_term_view") in _NEW_MONEY_POLICY_CODES:
+        if mode.get("long_term_view") in ENTRY_CANDIDATE_CODES:
             mode["long_term_view"] = "watch"
 
 
