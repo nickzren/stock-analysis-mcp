@@ -121,8 +121,9 @@ def pre_gate_policy(result: dict[str, Any]) -> dict[str, Any]:
 class TestEntrySizingUnderNonEntryActions:
     async def test_plain_avoid_carries_entry_sizing_on_every_path(self) -> None:
         """OC-CH1: S3, a plain avoid with no gate, carries entry sizing (card, buy band, zone band, summary,
-        guidance, modes), an accumulate zone and entry codes. Flipped by WP2.3 (sizing and the buy band
-        keyed on entry_allowed, price_zone, dip caps, new-money mode vocabulary)."""
+        guidance, modes), an accumulate zone and entry codes; core is buy (long_term.new_money, WP2.2 D-3).
+        Flipped by WP2.3 (sizing and the buy band keyed on entry_allowed, price_zone, dip caps, new-money mode
+        vocabulary)."""
         result = await dm.run("S3_plain_avoid")
         shown = dm.tiers(result)
         card = result["decision_card"]
@@ -142,7 +143,7 @@ class TestEntrySizingUnderNonEntryActions:
             "core": (200.0, 800.0), "balanced": (250.0, 800.0), "speculative": (100.0, 600.0)}
         assert (result["action_zones"]["current_zone"], card["entry"]["current_zone"]) == ("accumulate", "accumulate")
         assert result["dip_assessment"]["assessment"]["recommendation"] == "buy_the_dip"
-        assert modes["core"]["action"] == "build_position"
+        assert modes["core"]["action"] == "buy"
 
     @pytest.mark.parametrize(("name", "action"), [("T3_plain_wait_weak_setup", "wait"),
                                                   ("C3_headwind_plain_avoid", "avoid")])

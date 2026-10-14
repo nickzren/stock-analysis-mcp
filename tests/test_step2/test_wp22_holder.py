@@ -289,19 +289,21 @@ def test_if_held_reads_only_its_evidence() -> None:
 # --- PH-RF11 [D-4]: near_52w_high, mid-term new money only (Codex boundary 1) ---------------------------
 
 
-@pytest.mark.parametrize(("scenario", "long_term"), [(dm.SCENARIOS["A7_near_52w_high_bullish"], "buy"),
-                                                     (A7_CAUTION, "starter")], ids=["ok", "caution"])
-async def test_a7_caps_mid_term_new_money_only(scenario: dm.Scenario, long_term: str) -> None:
+@pytest.mark.parametrize(("scenario", "long_term", "core"), [
+    (dm.SCENARIOS["A7_near_52w_high_bullish"], "buy", "buy"), (A7_CAUTION, "starter", "wait")], ids=["ok", "caution"])
+async def test_a7_caps_mid_term_new_money_only(scenario: dm.Scenario, long_term: str, core: str) -> None:
     """PH-RF11: A7 (reduce zone, bullish; ok fit hold_or_add, caution speculative_small_position) gives new_money
     wait [near_52w_high], if_held hold (candidate_admits_new_money) with add_allowed false, and leaves
-    long_term.new_money alone (the core clause is WP2.2 step 3). PD D-4."""
-    card = (await dm.run(scenario))["decision_card"]
+    long_term.new_money and core alone. PD D-4."""
+    result = await dm.run(scenario)
+    card = result["decision_card"]
     long = card["long_term"]["new_money"]
 
     assert (card["new_money"]["action"], ids(card["new_money"]["blocked_by"]), card["new_money"]["decided_by"]) == (
         "wait", ["near_52w_high"], "near_52w_high")
     assert card["if_held"] == {"action": "hold", "add_allowed": False, "basis": "candidate_admits_new_money"}
     assert (long["action"], long["blocked_by"], long["decided_by"], long["unevaluated"]) == (long_term, [], None, [])
+    assert result["decision_modes"]["core"]["action"] == core
 
 
 def test_near_52w_high_never_reaches_long_term_core_or_if_held() -> None:
@@ -370,13 +372,15 @@ async def test_case_e() -> None:
 
 
 async def test_burner_runway_2q() -> None:
-    """PH-RF12: a 2-quarter burner gives avoid at both horizons, if_held review_exit (runway_critical) and the
-    blocker's codes [runway_critical]; it closes the p5 inversion (the core clause is WP2.2 step 3). PD D-1c."""
-    card = (await dm.run("H_burner_runway_2q"))["decision_card"]
+    """PH-RF12: a 2-quarter burner gives avoid at both horizons, if_held review_exit (runway_critical), the
+    blocker's codes [runway_critical] and core avoid; it closes the p5 inversion. PD D-1c."""
+    result = await dm.run("H_burner_runway_2q")
+    card = result["decision_card"]
 
     assert (card["new_money"]["action"], card["long_term"]["new_money"]["action"]) == ("avoid", "avoid")
     assert held(card) == ("review_exit", "runway_critical")
     assert card["new_money"]["blocked_by"][0]["codes"] == ["runway_critical"]
+    assert result["decision_modes"]["core"]["action"] == "avoid"
 
 
 def test_thesis_caps_both_horizons() -> None:
@@ -480,7 +484,45 @@ def test_unknown_mid_fit_with_bearish_tilt() -> None:
     assert if_held(cand["mid_term"], "bearish", False) == ("insufficient_data", "candidate_insufficient")
 
 
-# --- PH-RF18 [D-3]: core's own cap ---------------------------------------------------------------------------
+# --- PH-RF15 to RF18 [D-3]: core follows the canonical long-term decision ----------------------------------
+
+
+async def test_core_direction_1_case_d() -> None:
+    """PH-RF15: case D: new_money avoid, long_term.new_money buy, core buy: the mid-term chart never decides
+    core; balanced avoid holds in both vocabularies. PD D-3."""
+    result = await dm.run("D_quality_attractive_poor_chart")
+    card = result["decision_card"]
+
+    assert (card["new_money"]["action"], card["long_term"]["new_money"]["action"],
+            result["decision_modes"]["core"]["action"]) == ("avoid", "buy", "buy")
+    assert result["decision_modes"]["balanced"]["action"] == "avoid"
+
+
+@pytest.mark.parametrize(("name", "long_term", "gates"), [
+    ("D2_quality_poor_chart_earnings_3d", "wait", ["earnings_blackout"]),
+    ("C_quality_knife_dislocation", "avoid", ["falling_knife"]),
+    ("G_unsupported_currency_knife", "avoid", ["falling_knife", "unsupported_currency"])])
+async def test_core_follows_the_gated_long_term(name: str, long_term: str, gates: list[str]) -> None:
+    """PH-RF16: gates reach core through long_term.new_money (D2 wait, C and G avoid) while mid new money is
+    avoid. PD D-3, D-5b."""
+    result = await dm.run(name)
+    card = result["decision_card"]
+
+    assert (card["new_money"]["action"], card["long_term"]["new_money"]["action"],
+            result["decision_modes"]["core"]["action"]) == ("avoid", long_term, long_term)
+    assert ids(card["long_term"]["new_money"]["blocked_by"]) == gates
+
+
+@pytest.mark.parametrize(("name", "new_money", "long_term"), [("E2_mixed_fcf_bullish_chart", "starter", "starter"),
+                                                              ("C1_headwind_hold_or_add", "starter", "wait")])
+async def test_core_direction_2(name: str, new_money: str, long_term: str) -> None:
+    """PH-RF17 (core clauses; balanced is WP2.3): E2 (caution fit) and C1 (headwind) keep mid new money starter
+    and core wait; C1's long term is wait (neither horizon caps the other). PD D-3."""
+    result = await dm.run(name)
+    card = result["decision_card"]
+
+    assert (card["new_money"]["action"], card["long_term"]["new_money"]["action"],
+            result["decision_modes"]["core"]["action"]) == (new_money, long_term, "wait")
 
 
 def test_core_own_cap() -> None:
@@ -498,3 +540,11 @@ def test_core_own_cap() -> None:
     assert dc.core_action("ok", dc.map_candidate("long_term", a2["long_term"])) == "insufficient_data"
     for fit, action in product(dc.CORE, dc.NEW_MONEY_ACTIONS):
         assert dc.core_action(fit, action) == max((dc.CORE[fit], action), key=tightness)
+
+
+@pytest.mark.parametrize(("name", "core"), [("F3_quality_neutral_valuation_poor_chart", "wait"),
+                                            ("C1_headwind_hold_or_add", "wait"), ("T1_extreme_risk_bullish", "wait")])
+async def test_core_own_cap_through_the_pipeline(name: str, core: str) -> None:
+    """PH-RF18 through analyze: F3 (neutral valuation), C1 (headwind) and T1 (caution fit) give core wait where
+    0609fde gave build_position or not_core_yet. PD D-3."""
+    assert (await dm.run(name))["decision_modes"]["core"]["action"] == core

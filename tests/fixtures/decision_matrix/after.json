@@ -63,7 +63,7 @@
         "long_term_view": "accumulate"
       },
       "core": {
-        "action": "build_position",
+        "action": "buy",
         "long_term_view": null
       },
       "speculative": {
@@ -409,7 +409,7 @@
         "long_term_view": "hold_size_conservatively"
       },
       "core": {
-        "action": "build_position",
+        "action": "wait",
         "long_term_view": null
       },
       "speculative": {
@@ -524,7 +524,7 @@
         "long_term_view": "hold_size_conservatively"
       },
       "core": {
-        "action": "build_position",
+        "action": "wait",
         "long_term_view": null
       },
       "speculative": {
@@ -635,7 +635,7 @@
         "long_term_view": "hold_size_conservatively"
       },
       "core": {
-        "action": "build_position",
+        "action": "wait",
         "long_term_view": null
       },
       "speculative": {
@@ -750,7 +750,7 @@
         "long_term_view": "accumulate"
       },
       "core": {
-        "action": "build_position",
+        "action": "avoid",
         "long_term_view": null
       },
       "speculative": {
@@ -865,7 +865,7 @@
         "long_term_view": "accumulate"
       },
       "core": {
-        "action": "build_position",
+        "action": "wait",
         "long_term_view": null
       },
       "speculative": {
@@ -971,7 +971,7 @@
         "long_term_view": "accumulate"
       },
       "core": {
-        "action": "build_position",
+        "action": "buy",
         "long_term_view": null
       },
       "speculative": {
@@ -1075,7 +1075,7 @@
         "long_term_view": "small_position_with_stops"
       },
       "core": {
-        "action": "not_core_yet",
+        "action": "wait",
         "long_term_view": null
       },
       "speculative": {
@@ -1185,7 +1185,7 @@
         "long_term_view": "insufficient_data"
       },
       "core": {
-        "action": "needs_more_data",
+        "action": "watch",
         "long_term_view": null
       },
       "speculative": {
@@ -1300,7 +1300,7 @@
         "long_term_view": "insufficient_data"
       },
       "core": {
-        "action": "needs_more_data",
+        "action": "watch",
         "long_term_view": null
       },
       "speculative": {
@@ -1524,7 +1524,7 @@
         "long_term_view": "hold"
       },
       "core": {
-        "action": "build_position",
+        "action": "wait",
         "long_term_view": null
       },
       "speculative": {
@@ -1760,7 +1760,7 @@
         "long_term_view": "watch"
       },
       "core": {
-        "action": "watch",
+        "action": "avoid",
         "long_term_view": null
       },
       "speculative": {
@@ -1882,7 +1882,7 @@
         "long_term_view": "speculative_only"
       },
       "core": {
-        "action": "not_core_yet",
+        "action": "avoid",
         "long_term_view": null
       },
       "speculative": {
@@ -1988,7 +1988,7 @@
         "long_term_view": "accumulate"
       },
       "core": {
-        "action": "build_position",
+        "action": "buy",
         "long_term_view": null
       },
       "speculative": {
@@ -2094,7 +2094,7 @@
         "long_term_view": "accumulate"
       },
       "core": {
-        "action": "build_position",
+        "action": "buy",
         "long_term_view": null
       },
       "speculative": {
@@ -2201,7 +2201,7 @@
         "long_term_view": "accumulate"
       },
       "core": {
-        "action": "build_position",
+        "action": "buy",
         "long_term_view": null
       },
       "speculative": {
@@ -2317,7 +2317,7 @@
         "long_term_view": "accumulate"
       },
       "core": {
-        "action": "build_position",
+        "action": "wait",
         "long_term_view": null
       },
       "speculative": {
@@ -2435,7 +2435,7 @@
         "long_term_view": "accumulate"
       },
       "core": {
-        "action": "build_position",
+        "action": "wait",
         "long_term_view": null
       },
       "speculative": {
@@ -2554,7 +2554,7 @@
         "long_term_view": "accumulate"
       },
       "core": {
-        "action": "build_position",
+        "action": "avoid",
         "long_term_view": null
       },
       "speculative": {
@@ -2666,7 +2666,7 @@
         "long_term_view": "insufficient_data"
       },
       "core": {
-        "action": "needs_more_data",
+        "action": "watch",
         "long_term_view": null
       },
       "speculative": {
@@ -2786,7 +2786,7 @@
         "long_term_view": "insufficient_data"
       },
       "core": {
-        "action": "needs_more_data",
+        "action": "insufficient_data",
         "long_term_view": null
       },
       "speculative": {
@@ -2904,7 +2904,7 @@
         "long_term_view": "accumulate"
       },
       "core": {
-        "action": "build_position",
+        "action": "avoid",
         "long_term_view": null
       },
       "speculative": {
@@ -3012,7 +3012,7 @@
         "long_term_view": "small_position_with_stops"
       },
       "core": {
-        "action": "not_core_yet",
+        "action": "wait",
         "long_term_view": null
       },
       "speculative": {
@@ -3116,7 +3116,7 @@
         "long_term_view": "accumulate"
       },
       "core": {
-        "action": "build_position",
+        "action": "buy",
         "long_term_view": null
       },
       "speculative": {
@@ -3220,7 +3220,7 @@
         "long_term_view": "accumulate"
       },
       "core": {
-        "action": "build_position",
+        "action": "buy",
         "long_term_view": null
       },
       "speculative": {
@@ -3327,7 +3327,7 @@
         "long_term_view": "accumulate"
       },
       "core": {
-        "action": "build_position",
+        "action": "buy",
         "long_term_view": null
       },
       "speculative": {

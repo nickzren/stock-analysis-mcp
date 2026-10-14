@@ -1034,11 +1034,12 @@ class TestToolResponseSchemas:
             news_summary={"catalyst_intelligence": {"bullish": [], "bearish": [], "neutral": []}},
             fundamentals_summary=fundamentals_summary,
             events_summary={"next_catalyst": {}},
+            long_term_action="starter",  # small_position_with_stops, ungated
         )
 
         assert policy_action["mid_term"] == "speculative_small_position"
         assert policy_action["long_term"] == "small_position_with_stops"
-        assert decision_modes["core"]["action"] == "not_core_yet"
+        assert decision_modes["core"]["action"] == "wait"  # CORE[caution] (WP2.2, D-3)
         assert decision_modes["balanced"]["action"] == "starter_position_only"
         assert decision_modes["speculative"]["action"] == "starter_position_only"
         assert "price_broken_more_than_business" in (decision_modes["balanced"]["why"] or [])

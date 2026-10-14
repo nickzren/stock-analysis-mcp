@@ -22,8 +22,22 @@ AFTER = json.loads((dm.FIXTURE_DIR / "after.json").read_text())
 AFTER_ONLY = {"A7_near_52w_high_bullish", "H_burner_runway_2q"}  # WP2.2: D-4 and D-1c's runway clause
 
 # The cells each WP changes (before -> after), over before.json's paths; snapshot_hash follows the
-# snapshot fields (DM-CH2). WP2.2 step 2: D-2 mapping, D-5/D-5a combination and outcomes, D-1c thesis cap,
-# and the knife override's removal (plan §1, B only).
+# snapshot fields (DM-CH2). WP2.2: D-2 mapping, D-5/D-5a combination and outcomes, D-1c thesis cap, D-3 core
+# rule, and the knife override's removal (plan §1, B only).
+CORE_CHANGES = {
+    **dict.fromkeys(["S1_hold_or_add_clean", "S2_buy_clean", "S3_plain_avoid", "T2_starter_weak_setup_quality",
+                     "T3_plain_wait_weak_setup", "V1_vendor_rich_plain_avoid", "D_quality_attractive_poor_chart"],
+                    ("build_position", "buy")),
+    **dict.fromkeys(["S4_earnings_gate_on_hold_or_add", "S5_earnings_gate_on_avoid", "C1_headwind_hold_or_add",
+                     "C2_headwind_earnings_gate", "C3_headwind_plain_avoid", "D2_quality_poor_chart_earnings_3d",
+                     "F3_quality_neutral_valuation_poor_chart"], ("build_position", "wait")),
+    **dict.fromkeys(["S6_knife_dislocation", "S9_weak_liquidity", "C_quality_knife_dislocation"],
+                    ("build_position", "avoid")),
+    **dict.fromkeys(["T1_extreme_risk_bullish", "E2_mixed_fcf_bullish_chart"], ("not_core_yet", "wait")),
+    **dict.fromkeys(["S7_etf_below_sma200", "ETF_strong", "ETF_bearish"], ("needs_more_data", "watch")),
+    "S8_fundamentals_failed": ("needs_more_data", "insufficient_data"),
+    "G_unsupported_currency_knife": ("watch", "avoid"),
+}
 ACTION_CHANGES = {
     **dict.fromkeys(["S1_hold_or_add_clean", "C1_headwind_hold_or_add", "E2_mixed_fcf_bullish_chart"],
                     ("hold_or_add", "starter")),
@@ -43,12 +57,13 @@ SNAPSHOT_CHANGES: dict[str, dict[str, Any]] = {
     for name in {*ACTION_CHANGES, *GATE_CHANGES}
 }
 ROW_CHANGES: dict[str, dict[str, Any]] = {
-    name: {**({"action_now": ACTION_CHANGES[name]} if name in ACTION_CHANGES else {}),
+    name: {**({"modes.core.action": CORE_CHANGES[name]} if name in CORE_CHANGES else {}),
+           **({"action_now": ACTION_CHANGES[name]} if name in ACTION_CHANGES else {}),
            **({"hard_gates": GATE_CHANGES[name]} if name in GATE_CHANGES else {}),
-           **{f"snapshot.{field}": change for field, change in SNAPSHOT_CHANGES[name].items()},
+           **{f"snapshot.{field}": change for field, change in SNAPSHOT_CHANGES.get(name, {}).items()},
            **(dict.fromkeys(("policy.mid_term", "horizon_fit.mid_term", "modes.balanced.action"),
                             KNIFE_OVERRIDE_CHANGE) if name == "B_broken_bearish_knife" else {})}
-    for name in SNAPSHOT_CHANGES
+    for name in {*CORE_CHANGES, *SNAPSHOT_CHANGES}
 }
 BASELINE_SHA256 = "167642b05e592bf77317f45025fc563c3ed203e5a86dedc8b5e8df4a569f7e4d"
 

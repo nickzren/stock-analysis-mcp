@@ -1124,6 +1124,7 @@ async def analyze_stock(
         fundamentals_summary=fundamentals_summary,
         events_summary=events_summary,
         account_size=investor_profile.get("account_size"),
+        long_term_action=decision["long_term"]["new_money"]["action"],
     )
     if not supported:
         _cap_modes_at_watch(decision_modes)

@@ -373,14 +373,16 @@ async def test_summary_failure_outcomes() -> None:
 
 
 async def test_case_g_is_avoid_at_both_horizons() -> None:
-    """PH-RF21 (horizon clauses; the core clause is WP2.2 step 3): case G (EUR quality crash + knife) gives avoid
-    at both horizons (most-restrictive; support-first would give watch). PD D-5."""
-    shown = horizons(await dm.run("G_unsupported_currency_knife"))
+    """PH-RF21: case G (EUR quality crash + knife) gives avoid at both horizons (most-restrictive; support-first
+    would give watch); core follows long_term (avoid). PD D-5."""
+    result = await dm.run("G_unsupported_currency_knife")
+    shown = horizons(result)
 
     assert (shown["mid_term"]["action"], shown["mid_term"]["decided_by"]) == ("avoid", None)
     assert (shown["long_term"]["action"], shown["long_term"]["decided_by"]) == ("avoid", "falling_knife")
     for decision in shown.values():
         assert ids(decision["blocked_by"]) == ["falling_knife", "unsupported_currency"]
+    assert result["decision_modes"]["core"]["action"] == "avoid"
 
 
 # --- FR-R-F2 (action) [D-7], FR-R-F14 [D-5c], FR-R-F18 ---------------------------------------------------

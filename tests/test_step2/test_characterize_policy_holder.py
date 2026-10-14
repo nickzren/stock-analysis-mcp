@@ -14,10 +14,10 @@ from typing import Any
 import pytest
 
 from stock_analysis.tools.analyze.action_zones import apply_dip_gates_to_action_zones
+from stock_analysis.tools.analyze.decision import core_action
 from stock_analysis.tools.analyze.decision_context import _build_thesis_checkpoints
 from stock_analysis.tools.analyze.dislocation_framework import classify_dislocation_opportunity
 from stock_analysis.tools.analyze.executive_summary import build_policy_action
-from stock_analysis.tools.analyze.investor_profile import build_decision_modes
 from tests.support import decision_matrix as dm
 
 KNIFE_DIP = {"dip_classification": {"type": "falling_knife"}}
@@ -128,45 +128,28 @@ class TestZoneAndDislocationCodes:
             now, "hold", basis)
 
 
-def modes(long_fit: str, policy_action: dict[str, Any], tilt: str | None, gate: str) -> dict[str, Any]:
-    verdict = {"tilt": tilt, "horizon_fit": {"mid_term": "ok", "long_term": long_fit, "long_term_gates": []},
-               "decomposed": {"business_quality": "strong", "risk": "medium"}}
-    return build_decision_modes(summary={"current_price": 100.0}, verdict=verdict, policy_action=policy_action,
-                                action_zones={"valuation_assessment": {"gate": gate}}, dip_assessment=None,
-                                decision_context={}, news_summary={}, fundamentals_summary={}, events_summary={})
-
-
 class TestCoreMode:
-    def test_core_reads_long_term_fit_not_the_long_term_policy_c11_a2(self) -> None:
-        """PH-CH4: core is build_position for long ok with a headwind (C11) or a null tilt and neutral valuation (A2).
-        Flipped by WP2.2 (PD D-3, PH-RF18): core = most_restrictive(CORE[long fit], long_term.new_money)."""
-        headwind = modes("ok", {"mid_term": "hold", "long_term": "hold_size_conservatively"}, "neutral", "headwind")
-        missing_tilt = modes("ok", {"mid_term": "insufficient_data", "long_term": "insufficient_data"}, None,
-                             "neutral")
-
-        assert headwind["core"]["action"] == "build_position"
-        assert missing_tilt["core"]["action"] == "build_position"
-
     @pytest.mark.parametrize(("name", "long_fit", "long_policy", "gates", "core"), [
-        ("C1_headwind_hold_or_add", "ok", "hold_size_conservatively", [], "build_position"),
-        ("F3_quality_neutral_valuation_poor_chart", "ok", "hold", [], "build_position"),
-        ("D_quality_attractive_poor_chart", "ok", "accumulate", [], "build_position"),
-        ("D2_quality_poor_chart_earnings_3d", "ok", "accumulate", ["earnings_blackout"], "build_position"),
-        ("C_quality_knife_dislocation", "ok", "accumulate", ["falling_knife"], "build_position"),
-        ("E2_mixed_fcf_bullish_chart", "caution", "small_position_with_stops", [], "not_core_yet"),
+        ("C1_headwind_hold_or_add", "ok", "hold_size_conservatively", [], "wait"),
+        ("F3_quality_neutral_valuation_poor_chart", "ok", "hold", [], "wait"),
+        ("D_quality_attractive_poor_chart", "ok", "accumulate", [], "buy"),
+        ("D2_quality_poor_chart_earnings_3d", "ok", "accumulate", ["earnings_blackout"], "wait"),
+        ("C_quality_knife_dislocation", "ok", "accumulate", ["falling_knife"], "avoid"),
+        ("E2_mixed_fcf_bullish_chart", "caution", "small_position_with_stops", [], "wait"),
     ])
-    async def test_core_follows_long_term_fit_alone_through_the_pipeline(
+    async def test_core_follows_the_canonical_long_term_decision(
         self, name: str, long_fit: str, long_policy: str, gates: list[str], core: str
     ) -> None:
-        """PH-CH4: core reads long_term_fit only: not the long-term policy (C1, F3), the mid decision
-        (D), fired gates (D2, C) or the long candidate's code (E2) (annex §7 'core (today)').
-        Flipped by WP2.2 (PD D-3, D-5b; PH-RF15-RF18): core follows long_term.new_money under its own cap."""
+        """PH-CH4: core = most_restrictive(CORE[long fit], long_term.new_money): the long-term policy maps and
+        gates reach it (C1, F3 wait; D buy; D2 wait; C avoid), and its own cap holds a caution fit at wait (E2).
+        G from WP2.2 (PD D-3, D-5b; flipped from "core reads long_term_fit alone"; PH-RF15 to RF18 own the cases)."""
         result = await dm.run(name)
 
         assert result["verdict"]["horizon_fit"]["long_term"] == long_fit
         assert result["policy_action"]["long_term"] == long_policy
         assert dm.gate_ids(result) == gates
-        assert result["decision_modes"]["core"]["action"] == core
+        assert result["decision_modes"]["core"]["action"] == core == core_action(
+            long_fit, result["decision_card"]["long_term"]["new_money"]["action"])
 
 
 class TestLongTermPolicy:
@@ -245,9 +228,10 @@ class TestThesisSurfaces:
 
 class TestGateCombination:
     async def test_case_g_unsupported_currency_with_a_knife(self) -> None:
-        """PH-CH11: case G (EUR quality crash + knife): action_now avoid, long-term policy watch
-        (the support cap on accumulate), core watch, gates [falling_knife, unsupported_currency].
-        Flipped by WP2.2 (PD D-5, D-5b; PH-RF21): gates reach the long term, so long_term.new_money and core avoid."""
+        """PH-CH11: case G (EUR quality crash + knife): action_now avoid, gates [falling_knife,
+        unsupported_currency]; the emitted long-term policy is watch (the support cap on accumulate) while
+        long_term.new_money and core are avoid (gates reach the long term). Core clause flipped by WP2.2
+        (PD D-5, D-5b; PH-RF21); flipped again by WP2.3 (policy_action moves to diagnostics, D-9)."""
         result = await dm.run("G_unsupported_currency_knife")
         policy_action = result["policy_action"]
 
@@ -256,4 +240,6 @@ class TestGateCombination:
         assert (policy_action["mid_term"], policy_action["long_term"]) == ("avoid", "watch")
         assert policy_action["support_gates"] == ["unsupported_currency"]
         assert "long_term=ok, valuation=attractive, zone=hold_neutral" in policy_action["rationale"]
-        assert result["decision_modes"]["core"]["action"] == "watch"
+        assert result["decision_modes"]["core"]["action"] == "avoid"
+        long_term = result["decision_card"]["long_term"]["new_money"]
+        assert (long_term["action"], long_term["decided_by"]) == ("avoid", "falling_knife")

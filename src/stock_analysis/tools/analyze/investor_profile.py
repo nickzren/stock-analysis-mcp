@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from stock_analysis.tools.analyze.action_zones import build_position_sizing_range
+from stock_analysis.tools.analyze.decision import core_action
 from stock_analysis.tools.analyze.dislocation_framework import (
     classify_dislocation_opportunity,
 )
@@ -112,8 +113,11 @@ def build_decision_modes(
     fundamentals_summary: dict[str, Any],
     events_summary: dict[str, Any],
     account_size: float | None = None,
+    *,
+    long_term_action: str,
 ) -> dict[str, Any]:
-    """Build default Core / Balanced / Speculative decision blocks."""
+    """Build default Core / Balanced / Speculative decision blocks. Core follows the canonical long-term
+    decision (``long_term.new_money.action``) under its own cap (plan §3 [D-3])."""
     horizon_fit = verdict.get("horizon_fit", {})
     long_term_fit = horizon_fit.get("long_term")
     long_term_gates = horizon_fit.get("long_term_gates") or []
@@ -207,14 +211,6 @@ def build_decision_modes(
     if long_term_gates:
         core_why.extend(_format_tag(gate) for gate in long_term_gates[:2])
 
-    if core_suitability == "fit":
-        core_action = "build_position"
-    elif core_suitability == "caution":
-        core_action = "not_core_yet"
-    elif core_suitability == "needs_more_data":
-        core_action = "needs_more_data"
-    else:
-        core_action = "avoid"
     if is_dislocation_candidate and "price_broken_more_than_business" not in core_why:
         core_why.append("price_broken_more_than_business")
 
@@ -284,7 +280,7 @@ def build_decision_modes(
             "label": "Core",
             "description": _PROFILE_PRESETS["core"]["description"],
             "suitability": core_suitability,
-            "action": core_action,
+            "action": core_action(long_term_fit, long_term_action),
             "why": core_why or None,
             "starter_position": _position_block(mode_sizing["core"], "starter_pct"),
             "max_position": _position_block(mode_sizing["core"], "max_pct"),
@@ -331,6 +327,8 @@ def build_investor_views(
     fundamentals_summary: dict[str, Any],
     events_summary: dict[str, Any],
     investor_profile: dict[str, Any],
+    *,
+    long_term_action: str,
 ) -> dict[str, Any]:
     """Backward-compatible wrapper for older internal callsites."""
     return build_decision_modes(
@@ -344,4 +342,5 @@ def build_investor_views(
         fundamentals_summary=fundamentals_summary,
         events_summary=events_summary,
         account_size=investor_profile.get("account_size"),
+        long_term_action=long_term_action,
     )
