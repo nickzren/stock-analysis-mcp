@@ -357,7 +357,7 @@ class TestOneValidPricePredicate:
         assert daily_off["reason_code"] == (None if ok else "daily_unusable")
 
 
-# --- The 2.1 interim action (CH) ---------------------------------------------------------------
+# --- The action through decide() (G from WP2.2) ------------------------------------------------
 
 # One session behind the matrix clock's last completed session (Fri 2026-10-09).
 STALE_HISTORY = {"last_row_date": "2026-10-08", "last_valid_date": "2026-10-08", "last_row_valid": True,
