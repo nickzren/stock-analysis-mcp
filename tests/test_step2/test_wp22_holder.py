@@ -451,6 +451,8 @@ def test_thesis_status() -> None:
     assert check_thesis_broken("available", {"business_status": "mixed", "balance_status": "watch"}) == ("clear", None)
     status, blocker = check_thesis_broken("not_meaningful", broken)
     assert (status, blocker["codes"]) == ("fired", [BB, RC])
+    assert blocker["reason"] == ("thesis broken: business broken (business_status broken) and cash runway below "
+                                 "4 quarters (balance sheet unsafe)")
 
 
 @pytest.mark.parametrize(("quality", "status"), [("poor", "fired"), ("strong", "clear")])

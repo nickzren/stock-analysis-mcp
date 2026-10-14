@@ -520,10 +520,11 @@ KNIFE_NOT_DISLOCATION = dm.Scenario(  # the whole-WP review's knife_evidence.py 
 async def test_a_non_dislocation_knife_keeps_the_admitting_surfaces() -> None:
     """IS-CH1: a falling knife that is not a dislocation candidate (mismatch unclear) and whose knife-free candidate
     admits new money (bullish tilt, caution fit) gives new_money avoid [falling_knife], while the surfaces derived
-    from the emitted policy show speculative_small_position: policy_action.mid_term, the executive summary's
-    "Policy: mid-term small starter position", modes.balanced.action, dislocation can_start_now true / buy_now
-    small_starter and the snapshot's action_mid_term (v0.2.0: wait_for_entry, can_start_now false).
-    CH: flipped by WP2.3 (derived surfaces follow new_money)."""
+    from the emitted policy show speculative_small_position: policy_action.mid_term, decision_card.horizon_fit,
+    the executive summary's "Policy: mid-term small starter position", modes.balanced.action, dislocation
+    can_start_now true / buy_now small_starter and the snapshot's action_mid_term (v0.2.0: wait_for_entry,
+    can_start_now false). CH: flipped by WP2.3 (derived surfaces follow new_money), except the snapshot clause,
+    flipped by WP2.4 (until then the snapshot reads the pre-gate candidate, plan §0 #22)."""
     result = await dm.run(KNIFE_NOT_DISLOCATION)
     card = result["decision_card"]
     dislocation = result["dislocation_framework"]
@@ -533,8 +534,9 @@ async def test_a_non_dislocation_knife_keeps_the_admitting_surfaces() -> None:
     assert (result["verdict"]["tilt"], result["verdict"]["horizon_fit"]["mid_term"]) == ("bullish", "caution")
     assert (card["new_money"]["action"], ids(card["new_money"]["blocked_by"]), card["new_money"]["decided_by"]) == (
         "avoid", ["falling_knife"], "falling_knife")
-    assert (result["policy_action"]["mid_term"], result["decision_modes"]["balanced"]["action"],
-            result["watchlist_snapshot"]["action_mid_term"]) == ("speculative_small_position",) * 3
+    assert (result["policy_action"]["mid_term"], card["horizon_fit"]["mid_term"],
+            result["decision_modes"]["balanced"]["action"]) == ("speculative_small_position",) * 3
+    assert result["watchlist_snapshot"]["action_mid_term"] == "speculative_small_position"
     assert result["executive_summary"].endswith("Policy: mid-term small starter position; size ~2.5-8.0%.")
     assert (dislocation["action"]["can_start_now"], dislocation["action"]["buy_now"]) == (True, "small_starter")
 
