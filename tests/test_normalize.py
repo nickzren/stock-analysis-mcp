@@ -218,12 +218,8 @@ class TestBuildWatchlistSnapshot:
                 "confidence": "high",
                 "score": 0.75,
             },
-            "policy_action": {
-                "mid_term": "hold_or_add",
-                "long_term": "accumulate",
-                "valuation_gate": "neutral",
-                "is_unprofitable": None,
-            },
+            "diagnostics": {"pre_gate_policy": {"mid_term": "hold_or_add", "long_term": "accumulate"}},
+            "action_zones": {"valuation_assessment": {"gate": "neutral", "is_unprofitable": None}},
             "risk_summary": {
                 "risk_regime": {"classification": "medium"},
                 "annualized_volatility": 0.25,

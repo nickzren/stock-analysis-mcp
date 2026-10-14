@@ -102,7 +102,6 @@ def sizing_presence(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
             "card.entry": card.get("entry") is not None,
             "position_sizing_range": (payload.get("action_zones") or {}).get("position_sizing_range") is not None,
             "summary_size": bool(SIZE_TEXT.search(payload.get("executive_summary") or "")),
-            "sizing_guidance": (payload.get("policy_action") or {}).get("sizing_guidance") is not None,
             "modes": {name: tuple(mode.get(key) is not None
                                   for key in ("starter_position", "max_position", "capital_at_risk"))
                       for name, mode in (payload.get("decision_modes") or {}).items()},
@@ -113,15 +112,16 @@ def sizing_presence(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 
 def pre_gate_policy(result: dict[str, Any]) -> dict[str, Any]:
-    """The pre-gate candidate: top-level policy_action today, diagnostics.pre_gate_policy once WP2.3 moves it."""
-    moved: dict[str, Any] | None = (result.get("diagnostics") or {}).get("pre_gate_policy")
-    return moved or result["policy_action"]
+    """The pre-gate candidate: diagnostics.pre_gate_policy (top-level policy_action until WP2.3)."""
+    pre_gate: dict[str, Any] = result["diagnostics"]["pre_gate_policy"]
+    return pre_gate
 
 
 class TestEntrySizingUnderNonEntryActions:
     async def test_plain_avoid_carries_entry_sizing_on_every_path(self) -> None:
         """OC-CH1: S3, a plain avoid with no gate, carries entry sizing (card, buy band, zone band, summary,
-        guidance, modes), an accumulate zone and entry codes; core is buy (long_term.new_money, WP2.2 D-3).
+        modes), an accumulate zone and entry codes; core is buy (long_term.new_money, WP2.2 D-3). The guidance
+        clause is flipped by WP2.3 (no sizing_guidance: policy_action moved to diagnostics, D-9).
         Flipped by WP2.3 (sizing and the buy band keyed on entry_allowed, price_zone, dip caps, new-money mode
         vocabulary)."""
         result = await dm.run("S3_plain_avoid")
@@ -137,7 +137,8 @@ class TestEntrySizingUnderNonEntryActions:
         for tier in ("standard", "full"):
             assert shown[tier]["action_zones"]["position_sizing_range"]["suggested_pct_range"] == [2.5, 8.0], tier
             assert "size ~2.5-8.0%" in shown[tier]["executive_summary"], tier
-        assert result["policy_action"]["sizing_guidance"]["note"] == "2.5%-8.0% of portfolio"
+        assert "policy_action" not in result
+        assert "sizing_guidance" not in pre_gate_policy(result)
         assert {name: (mode["starter_position"]["dollars"], mode["max_position"]["dollars"])
                 for name, mode in modes.items()} == {
             "core": (200.0, 800.0), "balanced": (250.0, 800.0), "speculative": (100.0, 600.0)}
@@ -214,17 +215,18 @@ class TestConditionsUnderAdmittingActions:
 
         assert result["decision_card"]["action_now"] == "starter"
         assert conditions["buy_only_if"] == ["P/E < 25x (currently headwind)"]
-        assert conditions["monitor"] == result["policy_action"]["conditions_to_upgrade"] == [
+        assert conditions["monitor"] == pre_gate_policy(result)["conditions_to_upgrade"] == [
             "P/E < 25x (currently headwind)"]
 
 
 class TestSizingWordsInCodesAndText:
     @pytest.mark.parametrize("name", HEADWIND_ROWS)
-    async def test_headwind_rows_put_a_sizing_code_on_the_card(self, name: str) -> None:
-        """OC-CH6: C1-C3 carry hold_size_conservatively on card.horizon_fit.long_term at every tier.
-        Flipped by WP2.3 (card.horizon_fit is removed; the canonical long-term code is wait, plan §0 #8)."""
+    async def test_headwind_rows_put_no_sizing_code_on_the_card(self, name: str) -> None:
+        """OC-CH6 (flipped by WP2.3): C1-C3 have no card.horizon_fit at any tier and their long-term action is
+        long_term.new_money.action wait (plan §0 #8). G from WP2.3 (PD D-9)."""
         for tier, payload in dm.tiers(await dm.run(name)).items():
-            assert payload["decision_card"]["horizon_fit"]["long_term"] == "hold_size_conservatively", tier
+            card = payload["decision_card"]
+            assert ("horizon_fit" in card, card["long_term"]["new_money"]["action"]) == (False, "wait"), tier
 
     @pytest.mark.parametrize("name", HEADWIND_ROWS)
     async def test_headwind_rows_put_a_sizing_code_in_the_snapshot(self, name: str) -> None:

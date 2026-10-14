@@ -207,7 +207,7 @@ CRASH["moving_averages"]["sma_200_slope_pct_per_day"] = -0.002
 CRASH["returns"]["return_3m"] = -0.35
 CRASH["price_position"]["position_in_range"] = 0.05
 
-# name: (scenario, action_now, gate ids, policy_action (mid, long, support_gates), dip type or status)
+# name: (scenario, action_now, gate ids, diagnostics.pre_gate_policy (mid, long, support_gates), dip type or status)
 ANALYZE_PIPELINE_ROWS: dict[str, tuple[dm.Scenario, str, list[str], tuple[str, str, Any], str]] = {
     # WP2.2: the knife is a price_risk veto -> avoid (D-5a), and no longer a policy rule, so the
     # candidate keeps its knife-free code (plan §1)
@@ -231,8 +231,8 @@ ANALYZE_PIPELINE_ROWS: dict[str, tuple[dm.Scenario, str, list[str], tuple[str, s
                                                  events=sm.UNVERIFIABLE_EVENTS),
                                      "wait", ["earnings_unverifiable"], ("hold_or_add", "accumulate", None),
                                      "healthy_pullback"),
-    # flipped by WP2.3: policy_action moves to diagnostics.pre_gate_policy (D-9); the equity's hold_or_add maps to
-    # new_money starter (WP2.2, D-2)
+    # the support-capped candidate is diagnostics.pre_gate_policy (WP2.3, D-9, plan §0 #6); the equity's hold_or_add
+    # maps to new_money starter (WP2.2, D-2)
     "etf_strong": (dm.Scenario("GC verify_policy_cap", dm.STRONG, dm.PROFITABLE, dm.CALM, summary=dm.ETF),
                    "watch", ["unsupported_instrument"], ("watch", "insufficient_data", ["unsupported_instrument"]),
                    "not_applicable"),
@@ -274,24 +274,34 @@ class TestAnalyzeGateBefore:
     @pytest.mark.parametrize("name", ANALYZE_PIPELINE_ROWS)
     async def test_pipeline_rows(self, name: str) -> None:
         """GC-C3: full analyze on crashed, strong and unsupported charts (the dip is skipped for an ETF).
-        The action column is new_money (WP2.2: D-2, D-5a); the policy column is flipped by WP2.3 (D-9)."""
+        The action column is new_money (WP2.2: D-2, D-5a); the policy column is the full tier's
+        diagnostics.pre_gate_policy, support-capped, and no top-level policy_action remains (WP2.3, D-9, plan §0 #6).
+        G from WP2.3."""
         scenario, action_now, expected_ids, (mid, long, support_gates), dip = ANALYZE_PIPELINE_ROWS[name]
         result = await dm.run(scenario)
-        policy = result["policy_action"]
+        policy = result["diagnostics"]["pre_gate_policy"]
 
+        assert "policy_action" not in result
         assert (result["decision_card"]["action_now"], dm.gate_ids(result)) == (action_now, expected_ids)
         assert (policy["mid_term"], policy["long_term"], policy.get("support_gates")) == (mid, long, support_gates)
         assert dip_label(result) == dip
 
-    async def test_the_support_gate_decides_from_the_uncapped_candidate(self) -> None:
-        """GC-C3: decide() reads the uncapped candidate, so for an ETF the support gate decides (starter -> watch)
-        while the emitted policy stays support-capped. Flipped by WP2.3: the capped candidate moves to
-        diagnostics.pre_gate_policy and the rationale to diagnostics.decision_trace."""
-        result = await dm.run(ANALYZE_PIPELINE_ROWS["etf_strong"][0])
+    @pytest.mark.parametrize(("scenario", "gate"), [(ANALYZE_PIPELINE_ROWS["etf_strong"][0], "unsupported_instrument"),
+                                                    (dm.SCENARIOS["GBp_strong"], "unsupported_currency")],
+                             ids=["etf", "gbp"])
+    async def test_the_support_gate_decides_from_the_uncapped_candidate(self, scenario: dm.Scenario, gate: str) -> None:
+        """GC-R8 (amended by plan §0 #6): decide() reads the uncapped candidate, so the support gate decides
+        (starter -> watch; map_candidate("watch") would raise) while the emitted candidate is support-capped: the
+        full tier's diagnostics.pre_gate_policy.mid_term is watch with support_gates, no top-level policy_action
+        remains, and the card's rationale is diagnostics.decision_trace (D-9, plan §2). G from WP2.3."""
+        result = await dm.run(scenario)
 
-        assert result["decision_card"]["new_money"]["decided_by"] == "unsupported_instrument"
-        assert result["decision_card"]["rationale"] == ["policy_action.mid_term=watch -> watch",
-                                                        "decided_by=unsupported_instrument"]
+        assert result["decision_card"]["new_money"]["decided_by"] == gate
+        assert ("rationale" in result["decision_card"], "policy_action" in result) == (False, False)
+        diagnostics = result["diagnostics"]
+        assert (diagnostics["pre_gate_policy"]["mid_term"], diagnostics["pre_gate_policy"]["support_gates"]) == (
+            "watch", [gate])
+        assert diagnostics["decision_trace"] == ["pre_gate_policy.mid_term=watch -> watch", f"decided_by={gate}"]
 
     async def test_a_stock_summary_failure_splits_the_gates_not_the_action(self) -> None:
         """GC-C3: with stock_summary down, analyze shows watch [dq, unsupported_*] and the card watch [unsupported_*].

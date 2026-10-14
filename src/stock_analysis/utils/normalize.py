@@ -83,9 +83,9 @@ LIST_PATH_RULES: dict[tuple[str, ...], str] = {
     ("decision_context", "news", "headline_triggers", "bullish"): "set",
     ("decision_context", "news", "headline_triggers", "bearish"): "set",
     ("decision_context", "thesis_checkpoints", "review_triggers"): "set",
-    ("policy_action", "rationale"): "set",
-    ("policy_action", "conditions_to_upgrade"): "set",
-    ("policy_action", "conditions_to_downgrade"): "set",
+    ("diagnostics", "pre_gate_policy", "rationale"): "set",
+    ("diagnostics", "pre_gate_policy", "conditions_to_upgrade"): "set",
+    ("diagnostics", "pre_gate_policy", "conditions_to_downgrade"): "set",
     # Ranked lists (preserve order, tie-break)
     ("decision_context", "top_triggers"): "ranked",
     ("verdict", "pros"): "ranked",
@@ -501,7 +501,10 @@ def build_watchlist_snapshot(raw: dict[str, Any]) -> dict[str, Any]:
     # Extract key fields for watchlist
     summary = _section(normalized.get("summary"))
     verdict = _section(normalized.get("verdict"))
-    policy = _section(normalized.get("policy_action"))
+    # Interim 2.0.0 sources until snapshot 3.0.0 (plan §0 #22, §7a): the pre-gate codes and zone from
+    # diagnostics.pre_gate_policy, the valuation fields from the assessment (values unchanged, OC-G6).
+    policy = _section(_section(normalized.get("diagnostics")).get("pre_gate_policy"))
+    valuation = _section(_section(normalized.get("action_zones")).get("valuation_assessment"))
     events = _section(normalized.get("events_summary"))
     risk = _section(normalized.get("risk_summary"))
     decision_card = _section(normalized.get("decision_card"))
@@ -533,15 +536,15 @@ def build_watchlist_snapshot(raw: dict[str, Any]) -> dict[str, Any]:
         "score": verdict.get("score"),
         "mid_term_fit": horizon_fit.get("mid_term"),
         "long_term_fit": horizon_fit.get("long_term"),
-        # Policy action (primary decision output)
+        # Pre-gate candidate codes (diagnostics; replaced by the canonical actions in 3.0.0)
         "action_mid_term": policy.get("mid_term"),
         "action_long_term": policy.get("long_term"),
-        "valuation_gate": policy.get("valuation_gate"),
-        "is_unprofitable": policy.get("is_unprofitable"),
+        "valuation_gate": valuation.get("gate"),
+        "is_unprofitable": valuation.get("is_unprofitable") or None,
         # Decision card (compact action surface — diffs surface action / gate changes)
         "decision_action_now": decision_card.get("action_now"),
         "hard_gate_ids": _hard_gate_ids(raw.get("decision_card")),
-        "zone": _section(normalized.get("action_zones")).get("current_zone"),
+        "zone": _section(policy.get("inputs")).get("zone"),
         "bullish_signals": _string_list(raw_signals.get("bullish")),
         "bearish_signals": _string_list(raw_signals.get("bearish")),
         # Key risk

@@ -1,7 +1,8 @@
 """Frozen copies of the 1.1.0 snapshot producers (commit 1006647), so WP7's legacy
 tests compare against what analyze and detect_changes really returned before 2.0.0:
 ``legacy_compact_snapshot`` is analyze's ``watchlist_snapshot`` and
-``legacy_enriched_snapshot`` detect_changes' ``current_snapshot``. Do not update."""
+``legacy_enriched_snapshot`` detect_changes' ``current_snapshot``. Do not update them: ``as_0609fde``
+feeds them a WP2.3+ result in the raw shape they read."""
 
 import hashlib
 from typing import Any
@@ -111,3 +112,23 @@ def legacy_enriched_snapshot(result: dict[str, Any]) -> dict[str, Any]:
     snapshot["bearish_signals"] = sorted(signals.get("bearish", []))
 
     return snapshot
+
+
+# --- WP2.3: the producers above stay frozen; this adapter feeds them the raw shape they were written for ---
+
+
+def as_0609fde(result: dict[str, Any]) -> dict[str, Any]:
+    """A WP2.3+ analyze result in the 0609fde raw shape the frozen producers read (plan §0 #22, §7a):
+    top-level ``policy_action`` with the pre-gate codes (``diagnostics.pre_gate_policy``) and the valuation
+    fields 0609fde copied from ``action_zones.valuation_assessment``, and ``action_zones.current_zone`` (the
+    pre-gate zone, ``pre_gate_policy.inputs.zone``)."""
+    pre_gate = (result.get("diagnostics") or {}).get("pre_gate_policy") or {}
+    zones = result.get("action_zones") or {}
+    valuation = zones.get("valuation_assessment") or {}
+    return {
+        **result,
+        "policy_action": {"mid_term": pre_gate.get("mid_term"), "long_term": pre_gate.get("long_term"),
+                          "valuation_gate": valuation.get("gate"),
+                          "is_unprofitable": valuation.get("is_unprofitable") or None},
+        "action_zones": {**zones, "current_zone": (pre_gate.get("inputs") or {}).get("zone")},
+    }

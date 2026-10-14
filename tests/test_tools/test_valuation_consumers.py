@@ -141,7 +141,7 @@ class TestConditionsFollowTheGate:
         result = await analyze({**UNPROFITABLE_NEGATIVE_EV, "marketCap": 100.0})
 
         assert result["action_zones"]["valuation_assessment"]["gate"] == "unknown"
-        upgrades = result["policy_action"]["conditions_to_upgrade"]
+        upgrades = result["diagnostics"]["pre_gate_policy"]["conditions_to_upgrade"]
         assert "positive enterprise value" in upgrades
         assert not any("P/S" in condition for condition in upgrades)
         valuation = result["decision_context"]["valuation"]

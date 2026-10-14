@@ -8,7 +8,11 @@ import pytest
 
 from stock_analysis.tools.analyze.projection import project_analyze_result
 from stock_analysis.utils.normalize import SNAPSHOT_VERSION, build_watchlist_snapshot
-from tests.support.legacy_snapshot import legacy_compact_snapshot, legacy_enriched_snapshot
+from tests.support.legacy_snapshot import (
+    as_0609fde,
+    legacy_compact_snapshot,
+    legacy_enriched_snapshot,
+)
 
 diff_module = importlib.import_module("stock_analysis.tools.diff_analysis")
 orchestrator = importlib.import_module("stock_analysis.tools.analyze.orchestrator")
@@ -29,13 +33,13 @@ def raw_result(**changes: Any) -> dict[str, Any]:
         },
         "verdict": {"tilt": "bullish", "confidence": "medium", "score": 0.4,
                     "horizon_fit": {"mid_term": "good", "long_term": "fair"}},
-        "policy_action": {"mid_term": "hold_or_add", "long_term": "accumulate", "valuation_gate": "neutral",
-                          "is_unprofitable": False},
+        "diagnostics": {"pre_gate_policy": {"mid_term": "hold_or_add", "long_term": "accumulate",
+                                            "inputs": {"zone": "accumulate"}}},
         "decision_card": {"action_now": "buy", "hard_gates": {"blocking": [{"id": "earnings_blackout"}]}},
         "risk_summary": {"risk_regime": {"classification": "medium"}, "annualized_volatility": 0.3},
         "events_summary": {"next_catalyst": {"type": "earnings", "status": "available", "date": "2026-10-30",
                                              "days_until": 18, "source": "calendar"}},
-        "action_zones": {"current_zone": "accumulate"},
+        "action_zones": {"valuation_assessment": {"gate": "neutral", "is_unprofitable": False}},
         "signals": {"bullish": ["above_sma200", "golden_cross"], "bearish": ["high_put_call_ratio"],
                     "neutral": []},
         "data_quality": {"component_freshness": {"price": {"as_of": "2026-10-10T12:00:00Z", "stale": False}}},
@@ -76,7 +80,7 @@ R71_CHANGES = {
     "gate_added": ({"decision_card__hard_gates__blocking": [{"id": "earnings_blackout"}, {"id": "falling_knife"}]},
                    "+hard_gate: falling_knife"),
     "gate_removed": ({"decision_card__hard_gates__blocking": []}, "-hard_gate: earnings_blackout"),
-    "zone": ({"action_zones__current_zone": "hold_neutral"}, "zone: accumulate -> hold_neutral"),
+    "zone": ({"diagnostics__pre_gate_policy__inputs__zone": "hold_neutral"}, "zone: accumulate -> hold_neutral"),
     "horizon_fit": ({"verdict__horizon_fit__mid_term": "poor"}, "mid_term_fit: good -> poor"),
     "signal_added": ({"signals__bullish": ["above_sma200", "golden_cross", "insider_buying"]}, "+bullish: insider_buying"),
     "signal_removed": ({"signals__bearish": []}, "-bearish: high_put_call_ratio"),
@@ -84,7 +88,7 @@ R71_CHANGES = {
 }
 CODEX_CHANGES = {
     "support": ({"summary__support__currency__status": "unverified"}, "support_currency: supported -> unverified"),
-    "valuation": ({"policy_action__valuation_gate": "stretched"}, "valuation_gate: neutral -> stretched"),
+    "valuation": ({"action_zones__valuation_assessment__gate": "stretched"}, "valuation_gate: neutral -> stretched"),
     "confidence": ({"verdict__confidence": "low"}, "confidence: medium -> low"),
     "price_source": ({"summary__price_provenance__price_source": "info_quote_fallback"},
                      "price_source: daily_close -> info_quote_fallback"),
@@ -122,7 +126,7 @@ class TestR71MaterialChanges:
             {"events_summary__next_catalyst__days_until": 17},
             {"data_quality__component_freshness__price__as_of": "2026-10-11T09:00:00Z"},
             {"summary__price_provenance__staleness__stale": True},
-            {"policy_action__is_unprofitable": None},
+            {"action_zones__valuation_assessment__is_unprofitable": None},
         ],
         ids=["fetched_at", "cache_hit", "staleness_age", "days_until", "fetch_date", "stale_by_age",
              "unprofitable_lossy"],
@@ -130,8 +134,7 @@ class TestR71MaterialChanges:
     async def test_fetch_times_cache_hits_and_ages_change_nothing(self, detect: Any, changes: dict[str, Any]) -> None:
         response = await detect(copy.deepcopy(BASE), **changes)
         assert response["material_changes"] == []
-        if "policy_action__is_unprofitable" not in changes:  # a data field, hashed but not compared
-            assert response["hash_changed"] is False
+        assert response["hash_changed"] is False  # is_unprofitable reads False as None (plan §7a)
 
     async def test_a_version_change_alone_is_not_material(self, detect: Any) -> None:
         previous = {**copy.deepcopy(BASE), "snapshot_version": "1.1.0"}
@@ -258,7 +261,7 @@ class TestR72LegacySnapshots:
     """Previous snapshots made by the frozen 1.1.0 producers (tests/support/legacy_snapshot.py)."""
 
     async def test_an_old_compact_snapshot_has_no_phantom_changes(self, detect: Any) -> None:
-        response = await detect(legacy_compact_snapshot(raw_result()))
+        response = await detect(legacy_compact_snapshot(as_0609fde(raw_result())))
 
         assert response["material_changes"] == []
         assert response["not_comparable"] == sorted(
@@ -266,7 +269,7 @@ class TestR72LegacySnapshots:
         assert response["hash_changed"] is None
 
     async def test_an_old_enriched_snapshot_has_no_phantom_changes(self, detect: Any) -> None:
-        response = await detect(legacy_enriched_snapshot(raw_result()))
+        response = await detect(legacy_enriched_snapshot(as_0609fde(raw_result())))
 
         assert response["material_changes"] == []
         assert response["not_comparable"] == sorted([*LEGACY_SIGNALS, *NEW_FIELDS])
@@ -274,7 +277,7 @@ class TestR72LegacySnapshots:
     async def test_a_failed_source_tool_does_not_turn_old_signal_lists_into_alerts(self, detect: Any) -> None:
         failed = {"tool_failures": [{"tool": "ownership_analysis", "error": "data_unavailable"}],
                   "component_freshness": {"price": {"as_of": "2026-10-10T12:00:00Z", "stale": False}}}
-        previous = legacy_enriched_snapshot(raw_result(data_quality=failed))
+        previous = legacy_enriched_snapshot(as_0609fde(raw_result(data_quality=failed)))
 
         response = await detect(previous, data_quality=failed)
 
@@ -283,7 +286,7 @@ class TestR72LegacySnapshots:
         assert response["material_changes"] == []
 
     async def test_a_1_0_0_snapshot_without_decision_fields_compares_cleanly(self, detect: Any) -> None:
-        old = legacy_compact_snapshot(raw_result())
+        old = legacy_compact_snapshot(as_0609fde(raw_result()))
         del old["decision_action_now"], old["hard_gate_ids"]
         response = await detect({**old, "snapshot_version": "1.0.0"})
 
@@ -291,7 +294,7 @@ class TestR72LegacySnapshots:
         assert {"decision_action_now", "hard_gate_ids"} <= set(response["not_comparable"])
 
     async def test_real_changes_still_show_against_an_old_snapshot(self, detect: Any) -> None:
-        response = await detect(legacy_compact_snapshot(raw_result()), decision_card__action_now="avoid")
+        response = await detect(legacy_compact_snapshot(as_0609fde(raw_result())), decision_card__action_now="avoid")
         assert response["material_changes"] == ["action_now: buy -> avoid"]
 
 

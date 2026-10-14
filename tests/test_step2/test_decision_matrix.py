@@ -56,7 +56,7 @@ SNAPSHOT_CHANGES: dict[str, dict[str, Any]] = {
            **({"action_mid_term": KNIFE_OVERRIDE_CHANGE} if name == "B_broken_bearish_knife" else {})}
     for name in {*ACTION_CHANGES, *GATE_CHANGES}
 }
-ROW_CHANGES: dict[str, dict[str, Any]] = {
+WP22_CHANGES: dict[str, dict[str, Any]] = {
     name: {**({"modes.core.action": CORE_CHANGES[name]} if name in CORE_CHANGES else {}),
            **({"action_now": ACTION_CHANGES[name]} if name in ACTION_CHANGES else {}),
            **({"hard_gates": GATE_CHANGES[name]} if name in GATE_CHANGES else {}),
@@ -65,6 +65,17 @@ ROW_CHANGES: dict[str, dict[str, Any]] = {
                             KNIFE_OVERRIDE_CHANGE) if name == "B_broken_bearish_knife" else {})}
     for name in {*CORE_CHANGES, *SNAPSHOT_CHANGES}
 }
+
+# WP2.3: decide()'s decision does not move (no decision.*, action_now, hard_gates, policy.*, zone or snapshot.*
+# cell); the card's horizon_fit is removed (plan §7a), so B's WP2.2 horizon_fit.mid_term cell now ends at None.
+
+
+def _wp23_cells(name: str) -> dict[str, Any]:
+    row = BEFORE[name]
+    return {f"horizon_fit.{h}": (row["horizon_fit"][h], None) for h in ("mid_term", "long_term")}
+
+
+ROW_CHANGES: dict[str, dict[str, Any]] = {name: {**WP22_CHANGES.get(name, {}), **_wp23_cells(name)} for name in BEFORE}
 BASELINE_SHA256 = "167642b05e592bf77317f45025fc563c3ed203e5a86dedc8b5e8df4a569f7e4d"
 
 
@@ -161,7 +172,7 @@ class TestBeforeTable:
         delta: dict[str, dict[str, Any]] = {}
         for name, row in BEFORE.items():
             old, new = _flat(row), _flat(AFTER[name])
-            cells = {k: (old[k], new[k]) for k in old if k != "snapshot.snapshot_hash" and new[k] != old[k]}
+            cells = {k: (old[k], new.get(k)) for k in old if k != "snapshot.snapshot_hash" and new.get(k) != old[k]}
             if cells:
                 delta[name] = cells
 

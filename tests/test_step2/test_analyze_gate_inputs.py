@@ -182,7 +182,7 @@ async def test_blocker_ids_unique() -> None:
         result = await dm.run(scenario)
         blocking = dm.gate_ids(result)
         assessment = result["dip_assessment"].get("assessment") or {}
-        for gate_ids in (blocking, result["policy_action"].get("support_gates") or [],
+        for gate_ids in (blocking, result["diagnostics"]["pre_gate_policy"].get("support_gates") or [],
                          assessment.get("support_gates") or []):
             assert len(gate_ids) == len(set(gate_ids)), name
         assert blocking == [g for g in ANALYZE_GATE_IDS if g in blocking], name
@@ -236,7 +236,7 @@ async def test_gate_inputs_never_move_the_candidate_or_scores(chart: str) -> Non
     (events failing or unverifiable) and B3's (beta None) as without them.
     G: R2.6(h) in 2.1; new gate inputs only gate, they never feed the candidate."""
     def candidate(result: dict[str, Any]) -> tuple[Any, ...]:
-        policy, verdict = result["policy_action"], result["verdict"]
+        policy, verdict = result["diagnostics"]["pre_gate_policy"], result["verdict"]
         return (policy["mid_term"], policy["long_term"], verdict["score"], verdict["tilt"],
                 (result["dip_assessment"].get("dip_classification") or {}).get("type"))
 

@@ -334,7 +334,6 @@ class TestDecisionCardSchema:
             "if_held",
             "long_term",
             "action_now",
-            "rationale",
             "hard_gates",
             "sizing",
             "entry",
@@ -342,9 +341,9 @@ class TestDecisionCardSchema:
             "conditions",
             "next_review",
             "confidence",
-            "horizon_fit",
         ):
             assert key in card, f"missing key: {key}"
+        assert not {"rationale", "horizon_fit"} & set(card)
 
     def test_clean_inputs_yield_buy_action(self, fixture: dict) -> None:
         card = _card(fixture)

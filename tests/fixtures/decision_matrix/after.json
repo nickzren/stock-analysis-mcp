@@ -53,10 +53,7 @@
     "hard_gates": [
       "near_52w_high"
     ],
-    "horizon_fit": {
-      "long_term": "accumulate",
-      "mid_term": "hold_or_add"
-    },
+    "horizon_fit": null,
     "modes": {
       "balanced": {
         "action": "hold_or_add",
@@ -169,10 +166,7 @@
     "hard_gates": [
       "thesis_broken"
     ],
-    "horizon_fit": {
-      "long_term": "avoid_core_position",
-      "mid_term": "avoid"
-    },
+    "horizon_fit": null,
     "modes": {
       "balanced": {
         "action": "avoid",
@@ -290,10 +284,7 @@
       "falling_knife",
       "thesis_broken"
     ],
-    "horizon_fit": {
-      "long_term": "avoid_core_position",
-      "mid_term": "avoid"
-    },
+    "horizon_fit": null,
     "modes": {
       "balanced": {
         "action": "avoid",
@@ -399,10 +390,7 @@
       "thesis": "watch"
     },
     "hard_gates": [],
-    "horizon_fit": {
-      "long_term": "hold_size_conservatively",
-      "mid_term": "hold_or_add"
-    },
+    "horizon_fit": null,
     "modes": {
       "balanced": {
         "action": "hold_or_add",
@@ -514,10 +502,7 @@
     "hard_gates": [
       "earnings_blackout"
     ],
-    "horizon_fit": {
-      "long_term": "hold_size_conservatively",
-      "mid_term": "hold_or_add"
-    },
+    "horizon_fit": null,
     "modes": {
       "balanced": {
         "action": "hold_or_add",
@@ -625,10 +610,7 @@
       "thesis": "watch"
     },
     "hard_gates": [],
-    "horizon_fit": {
-      "long_term": "hold_size_conservatively",
-      "mid_term": "avoid"
-    },
+    "horizon_fit": null,
     "modes": {
       "balanced": {
         "action": "avoid",
@@ -740,10 +722,7 @@
     "hard_gates": [
       "falling_knife"
     ],
-    "horizon_fit": {
-      "long_term": "accumulate",
-      "mid_term": "avoid"
-    },
+    "horizon_fit": null,
     "modes": {
       "balanced": {
         "action": "avoid",
@@ -855,10 +834,7 @@
     "hard_gates": [
       "earnings_blackout"
     ],
-    "horizon_fit": {
-      "long_term": "accumulate",
-      "mid_term": "avoid"
-    },
+    "horizon_fit": null,
     "modes": {
       "balanced": {
         "action": "avoid",
@@ -961,10 +937,7 @@
       "thesis": "intact"
     },
     "hard_gates": [],
-    "horizon_fit": {
-      "long_term": "accumulate",
-      "mid_term": "avoid"
-    },
+    "horizon_fit": null,
     "modes": {
       "balanced": {
         "action": "avoid",
@@ -1065,10 +1038,7 @@
       "thesis": "watch"
     },
     "hard_gates": [],
-    "horizon_fit": {
-      "long_term": "small_position_with_stops",
-      "mid_term": "hold_or_add"
-    },
+    "horizon_fit": null,
     "modes": {
       "balanced": {
         "action": "hold_or_add",
@@ -1175,10 +1145,7 @@
     "hard_gates": [
       "unsupported_instrument"
     ],
-    "horizon_fit": {
-      "long_term": "insufficient_data",
-      "mid_term": "avoid"
-    },
+    "horizon_fit": null,
     "modes": {
       "balanced": {
         "action": "avoid",
@@ -1290,10 +1257,7 @@
     "hard_gates": [
       "unsupported_instrument"
     ],
-    "horizon_fit": {
-      "long_term": "insufficient_data",
-      "mid_term": "watch"
-    },
+    "horizon_fit": null,
     "modes": {
       "balanced": {
         "action": "watch",
@@ -1408,10 +1372,7 @@
     "hard_gates": [
       "thesis_broken"
     ],
-    "horizon_fit": {
-      "long_term": "avoid_core_position",
-      "mid_term": "hold_or_add"
-    },
+    "horizon_fit": null,
     "modes": {
       "balanced": {
         "action": "hold_or_add",
@@ -1514,10 +1475,7 @@
       "thesis": "intact"
     },
     "hard_gates": [],
-    "horizon_fit": {
-      "long_term": "hold",
-      "mid_term": "avoid"
-    },
+    "horizon_fit": null,
     "modes": {
       "balanced": {
         "action": "avoid",
@@ -1630,10 +1588,7 @@
     "hard_gates": [
       "unsupported_currency"
     ],
-    "horizon_fit": {
-      "long_term": "watch",
-      "mid_term": "watch"
-    },
+    "horizon_fit": null,
     "modes": {
       "balanced": {
         "action": "watch",
@@ -1750,10 +1705,7 @@
       "falling_knife",
       "unsupported_currency"
     ],
-    "horizon_fit": {
-      "long_term": "watch",
-      "mid_term": "avoid"
-    },
+    "horizon_fit": null,
     "modes": {
       "balanced": {
         "action": "avoid",
@@ -1872,10 +1824,7 @@
     "hard_gates": [
       "thesis_broken"
     ],
-    "horizon_fit": {
-      "long_term": "speculative_only",
-      "mid_term": "speculative_small_position"
-    },
+    "horizon_fit": null,
     "modes": {
       "balanced": {
         "action": "speculative_small_position",
@@ -1978,10 +1927,7 @@
       "thesis": "watch"
     },
     "hard_gates": [],
-    "horizon_fit": {
-      "long_term": "accumulate",
-      "mid_term": "hold_or_add"
-    },
+    "horizon_fit": null,
     "modes": {
       "balanced": {
         "action": "hold_or_add",
@@ -2084,10 +2030,7 @@
       "thesis": "watch"
     },
     "hard_gates": [],
-    "horizon_fit": {
-      "long_term": "accumulate",
-      "mid_term": "buy"
-    },
+    "horizon_fit": null,
     "modes": {
       "balanced": {
         "action": "buy",
@@ -2191,10 +2134,7 @@
       "thesis": "watch"
     },
     "hard_gates": [],
-    "horizon_fit": {
-      "long_term": "accumulate",
-      "mid_term": "avoid"
-    },
+    "horizon_fit": null,
     "modes": {
       "balanced": {
         "action": "avoid",
@@ -2307,10 +2247,7 @@
     "hard_gates": [
       "earnings_blackout"
     ],
-    "horizon_fit": {
-      "long_term": "accumulate",
-      "mid_term": "hold_or_add"
-    },
+    "horizon_fit": null,
     "modes": {
       "balanced": {
         "action": "hold_or_add",
@@ -2425,10 +2362,7 @@
     "hard_gates": [
       "earnings_blackout"
     ],
-    "horizon_fit": {
-      "long_term": "accumulate",
-      "mid_term": "avoid"
-    },
+    "horizon_fit": null,
     "modes": {
       "balanced": {
         "action": "avoid",
@@ -2544,10 +2478,7 @@
     "hard_gates": [
       "falling_knife"
     ],
-    "horizon_fit": {
-      "long_term": "accumulate",
-      "mid_term": "avoid"
-    },
+    "horizon_fit": null,
     "modes": {
       "balanced": {
         "action": "avoid",
@@ -2656,10 +2587,7 @@
     "hard_gates": [
       "unsupported_instrument"
     ],
-    "horizon_fit": {
-      "long_term": "insufficient_data",
-      "mid_term": "hold"
-    },
+    "horizon_fit": null,
     "modes": {
       "balanced": {
         "action": "hold",
@@ -2776,10 +2704,7 @@
     "hard_gates": [
       "data_quality_critical"
     ],
-    "horizon_fit": {
-      "long_term": "insufficient_data",
-      "mid_term": "insufficient_data"
-    },
+    "horizon_fit": null,
     "modes": {
       "balanced": {
         "action": "insufficient_data",
@@ -2894,10 +2819,7 @@
     "hard_gates": [
       "weak_liquidity"
     ],
-    "horizon_fit": {
-      "long_term": "accumulate",
-      "mid_term": "hold_or_add"
-    },
+    "horizon_fit": null,
     "modes": {
       "balanced": {
         "action": "hold_or_add",
@@ -3002,10 +2924,7 @@
       "thesis": "watch"
     },
     "hard_gates": [],
-    "horizon_fit": {
-      "long_term": "small_position_with_stops",
-      "mid_term": "speculative_small_position"
-    },
+    "horizon_fit": null,
     "modes": {
       "balanced": {
         "action": "speculative_small_position",
@@ -3106,10 +3025,7 @@
       "thesis": "intact"
     },
     "hard_gates": [],
-    "horizon_fit": {
-      "long_term": "accumulate",
-      "mid_term": "speculative_small_position"
-    },
+    "horizon_fit": null,
     "modes": {
       "balanced": {
         "action": "speculative_small_position",
@@ -3210,10 +3126,7 @@
       "thesis": "watch"
     },
     "hard_gates": [],
-    "horizon_fit": {
-      "long_term": "accumulate",
-      "mid_term": "wait_for_entry"
-    },
+    "horizon_fit": null,
     "modes": {
       "balanced": {
         "action": "wait_for_entry",
@@ -3317,10 +3230,7 @@
       "thesis": "watch"
     },
     "hard_gates": [],
-    "horizon_fit": {
-      "long_term": "accumulate",
-      "mid_term": "avoid"
-    },
+    "horizon_fit": null,
     "modes": {
       "balanced": {
         "action": "avoid",

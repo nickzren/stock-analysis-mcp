@@ -21,7 +21,11 @@ from stock_analysis.tools.analyze.gates import ANALYZE_GATE_IDS as GATE_IDS
 from stock_analysis.utils import normalize
 from stock_analysis.utils.normalize import SNAPSHOT_IDENTITY_KEYS, build_watchlist_snapshot
 from tests.support import decision_matrix as dm
-from tests.support.legacy_snapshot import legacy_compact_snapshot, legacy_enriched_snapshot
+from tests.support.legacy_snapshot import (
+    as_0609fde,
+    legacy_compact_snapshot,
+    legacy_enriched_snapshot,
+)
 
 diff_module = importlib.import_module("stock_analysis.tools.diff_analysis")
 
@@ -133,18 +137,21 @@ MUTATIONS: dict[str, tuple[dict[str, Any], str]] = {
     "tilt": ({"verdict__tilt": "neutral"}, "tilt: bullish -> neutral"),
     "confidence": ({"verdict__confidence": "medium"}, "confidence: low -> medium"),
     "risk_regime": ({"risk_summary__risk_regime__classification": "high"}, "risk_regime: medium -> high"),
-    "valuation_gate": ({"policy_action__valuation_gate": "stretched"}, "valuation_gate: attractive -> stretched"),
+    "valuation_gate": ({"action_zones__valuation_assessment__gate": "stretched"},
+                       "valuation_gate: attractive -> stretched"),
     "support_instrument": ({"summary__support__instrument__status": "unverified"},
                            "support_instrument: supported -> unverified"),
     "support_currency": ({"summary__support__currency__status": "unverified"},
                          "support_currency: supported -> unverified"),
     "price_source": ({"summary__price_provenance__price_source": "info_quote_fallback"},
                      "price_source: daily_close -> info_quote_fallback"),
-    # Action and zone rows: WP2.4 swaps them for new_money/if_held/long_term_action and price_zone.
-    "zone": ({"action_zones__current_zone": "hold_neutral"}, "zone: accumulate -> hold_neutral"),
+    # Action and zone rows: WP2.4 swaps them for new_money/if_held/long_term_action and price_zone. Until then
+    # they read the pre-gate candidate in diagnostics (WP2.3, plan §0 #22).
+    "zone": ({"diagnostics__pre_gate_policy__inputs__zone": "hold_neutral"}, "zone: accumulate -> hold_neutral"),
     "decision_action_now": ({"decision_card__action_now": "wait"}, "action_now: buy -> wait"),
-    "action_mid_term": ({"policy_action__mid_term": "wait_for_entry"}, "action_mid_term: buy -> wait_for_entry"),
-    "action_long_term": ({"policy_action__long_term": "hold"}, "action_long_term: accumulate -> hold"),
+    "action_mid_term": ({"diagnostics__pre_gate_policy__mid_term": "wait_for_entry"},
+                        "action_mid_term: buy -> wait_for_entry"),
+    "action_long_term": ({"diagnostics__pre_gate_policy__long_term": "hold"}, "action_long_term: accumulate -> hold"),
 }
 
 
@@ -158,8 +165,9 @@ def test_every_diffed_field_has_a_mutation_case() -> None:
 async def test_each_diffed_field_change_through_the_raw_is_material_and_moves_the_hash(
     detect: Detect, field: str,
 ) -> None:
-    """SN-C3: each mutation, made in the analyze result, is one material line and moves the hash.
-    CH, flipped by WP2.3 (policy_action and zone raw paths move, plan §0 #22) and WP2.4 (rows)."""
+    """SN-C3: each mutation, made in the analyze result, is one material line and moves the hash; the action and
+    zone rows mutate diagnostics.pre_gate_policy and valuation_gate the valuation assessment (WP2.3, plan §0 #22,
+    §7a). CH, flipped by WP2.4 (rows)."""
     changes, line = MUTATIONS[field]
     clean = await dm.run(CLEAN)
 
@@ -294,14 +302,13 @@ def as_1_0_0(snapshot: dict[str, Any]) -> dict[str, Any]:
     return {**older, "snapshot_version": "1.0.0"}
 
 
-# The frozen producers read the 0609fde raw shape (top-level policy_action). WP2.3 moves
-# policy_action (plan §0 #22), so from then on they need a 0609fde-shaped view of the result,
-# or valuation_gate and the 1.x action fields read null: harness drift, not a behavior change.
+# The frozen producers read the 0609fde raw shape (top-level policy_action, action_zones.current_zone); WP2.3
+# moved the policy (plan §0 #22), so they read a 0609fde-shaped view of the result (as_0609fde).
 LEGACY: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
-    "1.0.0_compact": lambda raw: as_1_0_0(legacy_compact_snapshot(raw)),
-    "1.0.0_enriched": lambda raw: as_1_0_0(legacy_enriched_snapshot(raw)),
-    "1.1.0_compact": legacy_compact_snapshot,
-    "1.1.0_enriched": legacy_enriched_snapshot,
+    "1.0.0_compact": lambda raw: as_1_0_0(legacy_compact_snapshot(as_0609fde(raw))),
+    "1.0.0_enriched": lambda raw: as_1_0_0(legacy_enriched_snapshot(as_0609fde(raw))),
+    "1.1.0_compact": lambda raw: legacy_compact_snapshot(as_0609fde(raw)),
+    "1.1.0_enriched": lambda raw: legacy_enriched_snapshot(as_0609fde(raw)),
 }
 
 

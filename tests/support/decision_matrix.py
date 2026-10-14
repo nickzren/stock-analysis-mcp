@@ -455,7 +455,7 @@ def _ids(gates: Any) -> list[str]:
 def digest(result: dict[str, Any]) -> dict[str, Any]:
     """The decision-relevant fields of one full analyze result (no clock or timing fields)."""
     card = result.get("decision_card") or {}
-    policy = result.get("policy_action") or {}
+    policy = (result.get("diagnostics") or {}).get("pre_gate_policy") or {}
     modes = result.get("decision_modes") or {}
     dip = result.get("dip_assessment") or {}
     zones = result.get("action_zones") or {}
@@ -478,7 +478,7 @@ def digest(result: dict[str, Any]) -> dict[str, Any]:
         "dip": {"type": (dip.get("dip_classification") or {}).get("type"),
                 "recommendation": (dip.get("assessment") or {}).get("recommendation"),
                 "entry_actions": [s.get("action") for s in (dip.get("entry_timing") or {}).get("signals") or []]},
-        "zone": zones.get("current_zone"),
+        "zone": (policy.get("inputs") or {}).get("zone"),  # the pre-gate (capped) zone; emitted only there
         "valuation_gate": (zones.get("valuation_assessment") or {}).get("gate"),
         "dislocation": {"status": dislocation.get("status"),
                         "can_start_now": (dislocation.get("action") or {}).get("can_start_now"),

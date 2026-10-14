@@ -146,7 +146,7 @@ class TestCoreMode:
         result = await dm.run(name)
 
         assert result["verdict"]["horizon_fit"]["long_term"] == long_fit
-        assert result["policy_action"]["long_term"] == long_policy
+        assert result["diagnostics"]["pre_gate_policy"]["long_term"] == long_policy
         assert dm.gate_ids(result) == gates
         assert result["decision_modes"]["core"]["action"] == core == core_action(
             long_fit, result["decision_card"]["long_term"]["new_money"]["action"])
@@ -195,6 +195,7 @@ class TestThesisSurfaces:
     ) -> None:
         """PH-CH7: through analyze (weak bullish chart), the 2-quarter burner (thesis broken) is blocked by
         thesis_broken (new_money avoid) and its unknown-runway twin by missing_runway: the p5 inversion is closed.
+        The pre-gate codes are read from diagnostics.pre_gate_policy (WP2.3, D-9).
         PD D-1c (G from WP2.2; flipped from "no gate, starter"; PH-RF12 owns the burner)."""
         result = await dm.run(dm.Scenario("PH CH7 burner (p5)", dm.WEAK, snapshot, dm.MODERATE))
         dislocation = result["dislocation_framework"]
@@ -203,26 +204,29 @@ class TestThesisSurfaces:
         assert (dislocation["business_integrity"]["status"], dislocation["balance_sheet_safety"]["status"]) == (
             "mixed", balance)
         assert thesis(result) == thesis_status
-        assert (result["policy_action"]["mid_term"], result["policy_action"]["long_term"]) == (
-            "speculative_small_position", "speculative_only")
+        policy = result["diagnostics"]["pre_gate_policy"]
+        assert (policy["mid_term"], policy["long_term"]) == ("speculative_small_position", "speculative_only")
         assert dm.gate_ids(result) == gates
         assert result["decision_card"]["action_now"] == now
 
-    async def test_case_e_shows_a_broken_thesis_next_to_hold_or_add(self) -> None:
-        """PH-CH8: case E (poor business, bullish chart): thesis broken, core avoid and long-term
-        avoid_core_position; the pre-gate mid-term policy stays hold_or_add next to new_money avoid [thesis_broken].
-        Action clause flipped by WP2.2 (PD D-1c, PH-RF12); flipped again by WP2.3 (policy_action moves to
-        diagnostics.pre_gate_policy, D-9)."""
+    async def test_case_e_keeps_hold_or_add_only_as_a_superseded_pre_gate_code(self) -> None:
+        """PH-CH8: case E (poor business, bullish chart): thesis broken, core avoid; the pre-gate codes
+        (hold_or_add, avoid_core_position) live only in the full tier's diagnostics.pre_gate_policy, superseded by
+        new_money avoid [thesis_broken] and if_held review_exit. Action clause flipped by WP2.2 (PD D-1c,
+        PH-RF12); flipped by WP2.3 (D-9, §0 #6). G from WP2.3."""
         result = await dm.run("E_poor_business_bullish_chart")
         dislocation = result["dislocation_framework"]
+        policy = result["diagnostics"]["pre_gate_policy"]
 
         assert result["verdict"]["decomposed"]["business_quality"] == "poor"
         assert (thesis(result), dislocation["mismatch_verdict"]["status"]) == (
             "broken", "business_broken_more_than_price")
-        assert result["policy_action"]["long_term"] == "avoid_core_position"
+        assert "policy_action" not in result
+        assert (policy["mid_term"], policy["long_term"]) == ("hold_or_add", "avoid_core_position")
+        assert policy["superseded_by"] == {"new_money": "avoid", "if_held": "review_exit", "long_term": "avoid",
+                                           "blocked_by": ["thesis_broken"]}
         assert result["decision_modes"]["core"]["action"] == "avoid"
-        assert (result["policy_action"]["mid_term"], result["decision_card"]["action_now"]) == (
-            "hold_or_add", "avoid")
+        assert result["decision_card"]["action_now"] == "avoid"
         assert dm.gate_ids(result) == ["thesis_broken"]
 
 
@@ -231,9 +235,10 @@ class TestGateCombination:
         """PH-CH11: case G (EUR quality crash + knife): action_now avoid, gates [falling_knife,
         unsupported_currency]; the emitted long-term policy is watch (the support cap on accumulate) while
         long_term.new_money and core are avoid (gates reach the long term). Core clause flipped by WP2.2
-        (PD D-5, D-5b; PH-RF21); flipped again by WP2.3 (policy_action moves to diagnostics, D-9)."""
+        (PD D-5, D-5b; PH-RF21); the emitted policy is read from diagnostics.pre_gate_policy (WP2.3, D-9, §0 #6).
+        G from WP2.3."""
         result = await dm.run("G_unsupported_currency_knife")
-        policy_action = result["policy_action"]
+        policy_action = result["diagnostics"]["pre_gate_policy"]
 
         assert result["decision_card"]["action_now"] == "avoid"
         assert dm.gate_ids(result) == ["falling_knife", "unsupported_currency"]

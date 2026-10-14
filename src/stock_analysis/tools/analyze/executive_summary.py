@@ -374,14 +374,13 @@ def build_policy_action(
     investor_profile: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
-    Build policy_action - the primary "what to do" decision output.
+    Build the pre-gate policy: the candidate decide() reads, emitted only as diagnostics.pre_gate_policy.
 
-    This is designed to be the first thing an investor reads.
-    Combines: tilt, horizon_fit, zone, valuation_gate, position_sizing.
-    Includes conditions_to_upgrade for actionable next steps.
+    Combines: tilt, horizon_fit, zone, valuation_gate. Includes the candidate's upgrade and downgrade
+    conditions and, under inputs, the zone and valuation it read.
 
     Returns:
-        Dict with mid_term/long_term actions, rationale, and upgrade conditions.
+        Dict with mid_term/long_term codes, rationale, conditions and inputs.
     """
     # WP9: an absent or null tilt is missing, not neutral and not bearish; the
     # branches it would decide become insufficient_data.
@@ -396,7 +395,6 @@ def build_policy_action(
     valuation_gate = valuation_assessment.get("gate")
     valuation_basis = valuation_assessment.get("basis")
     is_unprofitable = valuation_assessment.get("is_unprofitable", False)
-    position_sizing = action_zones.get("position_sizing_range", {})
     fundamentals_summary = fundamentals_summary or {}
 
     # Get decomposed scores for conditions
@@ -495,20 +493,6 @@ def build_policy_action(
         long_term_action = "insufficient_data"
         rationale.append("long_term_fit=unknown")
 
-    # === SIZING GUIDANCE ===
-    sizing_guidance: dict[str, Any] = {}
-    pct_range = position_sizing.get("suggested_pct_range") or []
-    if len(pct_range) >= 2:
-        sizing_guidance["min_pct"] = pct_range[0]
-        sizing_guidance["max_pct"] = pct_range[1]
-        sizing_guidance["note"] = f"{pct_range[0]:.1f}%-{pct_range[1]:.1f}% of portfolio"
-    if position_sizing.get("starter_pct") is not None:
-        sizing_guidance["starter_pct"] = position_sizing.get("starter_pct")
-    if position_sizing.get("risk_per_trade_pct") is not None:
-        sizing_guidance["risk_per_trade_pct"] = position_sizing.get("risk_per_trade_pct")
-    if position_sizing.get("dollars_for_account") is not None:
-        sizing_guidance["dollars_for_account"] = position_sizing.get("dollars_for_account")
-
     # === CONDITIONS TO UPGRADE ===
     # What would need to change for a better assessment?
     conditions_to_upgrade: list[str] = []
@@ -582,11 +566,13 @@ def build_policy_action(
     return {
         "mid_term": mid_term_action,
         "long_term": long_term_action,
-        "sizing_guidance": sizing_guidance if sizing_guidance else None,
         "rationale": rationale,
-        "valuation_gate": valuation_gate,
-        "valuation_basis": valuation_basis,
-        "is_unprofitable": is_unprofitable if is_unprofitable else None,
-        "conditions_to_upgrade": conditions_to_upgrade or [],
-        "conditions_to_downgrade": conditions_to_downgrade or [],
+        "conditions_to_upgrade": conditions_to_upgrade,
+        "conditions_to_downgrade": conditions_to_downgrade,
+        "inputs": {
+            "zone": zone,
+            "valuation_gate": valuation_gate,
+            "valuation_basis": valuation_basis,
+            "is_unprofitable": is_unprofitable if is_unprofitable else None,
+        },
     }

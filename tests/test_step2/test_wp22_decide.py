@@ -441,8 +441,8 @@ async def test_freshness_never_moves_scores_or_the_candidate(row: str, monkeypat
     ungated = await dm.run(fr.scenario(fr.TRUTH_TABLE[row], row))
 
     def boundary(result: dict[str, Any]) -> tuple[Any, ...]:
-        return (result["verdict"]["score"], result["verdict"]["tilt"], result["policy_action"]["mid_term"],
-                result["policy_action"]["long_term"])
+        policy = result["diagnostics"]["pre_gate_policy"]
+        return (result["verdict"]["score"], result["verdict"]["tilt"], policy["mid_term"], policy["long_term"])
 
     assert boundary(gated) == boundary(ungated) == (boundary(gated)[0], boundary(gated)[1], "hold_or_add", "accumulate")
     assert (gated["decision_card"]["new_money"]["action"], ungated["decision_card"]["new_money"]["action"]) == (
@@ -451,7 +451,7 @@ async def test_freshness_never_moves_scores_or_the_candidate(row: str, monkeypat
 
 # --- The card carries one decision (plan §2; D-13 alias) ----------------------------------------------------
 
-CARD_KEYS = ["horizon", "new_money", "if_held", "long_term", "hard_gates", "action_now", "rationale"]
+CARD_KEYS = ["horizon", "new_money", "if_held", "long_term", "hard_gates", "action_now"]
 NEW_MONEY_KEYS = ["action", "blocked_by", "decided_by", "unevaluated", "earliest_reassessment"]
 
 
@@ -465,7 +465,7 @@ async def test_the_card_carries_one_decision(name: str) -> None:
     card = result["decision_card"]
     mid, long = card["new_money"], card["long_term"]["new_money"]
 
-    assert list(card)[:7] == CARD_KEYS
+    assert list(card)[:len(CARD_KEYS)] == CARD_KEYS
     assert (card["horizon"], list(card["long_term"]), card["long_term"]["horizon"]) == (
         "mid_term", ["horizon", "new_money"], "long_term")
     for decision in (mid, long):
@@ -484,13 +484,17 @@ async def test_the_card_carries_one_decision(name: str) -> None:
         assert {k: shown["decision_card"][k] for k in CARD_KEYS} == {k: card[k] for k in CARD_KEYS}, tier
 
 
-@pytest.mark.parametrize(("name", "rationale"), [
-    ("S1_hold_or_add_clean", ["policy_action.mid_term=hold_or_add -> starter"]),
-    ("S4_earnings_gate_on_hold_or_add", ["policy_action.mid_term=hold_or_add -> wait", "decided_by=earnings_blackout"])])
-async def test_the_rationale_names_the_emitted_code_and_the_deciding_gate(name: str, rationale: list[str]) -> None:
-    """Card shape (C8): the rationale is the emitted mid code and new_money's action, plus a decided_by line only
-    when a gate decided (S1 none; S4 earnings_blackout). RF (plan §2)."""
-    assert (await dm.run(name))["decision_card"]["rationale"] == rationale
+@pytest.mark.parametrize(("name", "trace"), [
+    ("S1_hold_or_add_clean", ["pre_gate_policy.mid_term=hold_or_add -> starter"]),
+    ("S4_earnings_gate_on_hold_or_add", ["pre_gate_policy.mid_term=hold_or_add -> wait", "decided_by=earnings_blackout"])])
+async def test_the_decision_trace_names_the_emitted_code_and_the_deciding_gate(name: str, trace: list[str]) -> None:
+    """Card shape (C8): diagnostics.decision_trace (the card's rationale until WP2.3, plan §2) is the emitted mid code
+    and new_money's action, plus a decided_by line only when a gate decided (S1 none; S4 earnings_blackout); the
+    card has no rationale. RF (plan §2)."""
+    result = await dm.run(name)
+
+    assert "rationale" not in result["decision_card"]
+    assert result["diagnostics"]["decision_trace"] == trace
 
 
 # --- Interim 2.2 surfaces (CH for WP2.3) --------------------------------------------------------------------
@@ -519,26 +523,38 @@ KNIFE_NOT_DISLOCATION = dm.Scenario(  # the whole-WP review's knife_evidence.py 
 
 async def test_a_non_dislocation_knife_keeps_the_admitting_surfaces() -> None:
     """IS-CH1: a falling knife that is not a dislocation candidate (mismatch unclear) and whose knife-free candidate
-    admits new money (bullish tilt, caution fit) gives new_money avoid [falling_knife], while the surfaces derived
-    from the emitted policy show speculative_small_position: policy_action.mid_term, decision_card.horizon_fit,
-    the executive summary's "Policy: mid-term small starter position", modes.balanced.action, dislocation
-    can_start_now true / buy_now small_starter and the snapshot's action_mid_term (v0.2.0: wait_for_entry,
-    can_start_now false). CH: flipped by WP2.3 (derived surfaces follow new_money), except the snapshot clause,
-    flipped by WP2.4 (until then the snapshot reads the pre-gate candidate, plan §0 #22)."""
+    admits new money (bullish tilt, caution fit) gives new_money avoid [falling_knife]; speculative_small_position
+    is only the full tier's diagnostics.pre_gate_policy.mid_term, superseded by new_money avoid, and the card has
+    no horizon_fit (G from WP2.3, PD D-9), while the surfaces derived from the emitted policy still show it: the
+    executive summary's "Policy: mid-term small starter position", modes.balanced.action and dislocation
+    can_start_now true / buy_now small_starter (v0.2.0: wait_for_entry, can_start_now false). CH: flipped by
+    WP2.3 (derived surfaces follow new_money); the snapshot clause is
+    test_the_snapshot_keeps_the_knife_free_candidate_until_wp2_4."""
     result = await dm.run(KNIFE_NOT_DISLOCATION)
     card = result["decision_card"]
     dislocation = result["dislocation_framework"]
+    policy = result["diagnostics"]["pre_gate_policy"]
 
     assert (result["dip_assessment"]["dip_classification"]["type"], dislocation["mismatch_verdict"]["status"]) == (
         "falling_knife", "unclear")
     assert (result["verdict"]["tilt"], result["verdict"]["horizon_fit"]["mid_term"]) == ("bullish", "caution")
     assert (card["new_money"]["action"], ids(card["new_money"]["blocked_by"]), card["new_money"]["decided_by"]) == (
         "avoid", ["falling_knife"], "falling_knife")
-    assert (result["policy_action"]["mid_term"], card["horizon_fit"]["mid_term"],
-            result["decision_modes"]["balanced"]["action"]) == ("speculative_small_position",) * 3
-    assert result["watchlist_snapshot"]["action_mid_term"] == "speculative_small_position"
+    assert ("policy_action" in result, "horizon_fit" in card) == (False, False)
+    assert (policy["mid_term"], policy["superseded_by"]["new_money"]) == ("speculative_small_position", "avoid")
+    assert result["decision_modes"]["balanced"]["action"] == "speculative_small_position"
     assert result["executive_summary"].endswith("Policy: mid-term small starter position; size ~2.5-8.0%.")
     assert (dislocation["action"]["can_start_now"], dislocation["action"]["buy_now"]) == (True, "small_starter")
+
+
+async def test_the_snapshot_keeps_the_knife_free_candidate_until_wp2_4() -> None:
+    """IS-CH1b: the 2.0.0 snapshot's action_mid_term reads diagnostics.pre_gate_policy (plan §0 #22), so it shows
+    the knife-free speculative_small_position while new_money is avoid. CH: flipped by WP2.4 (snapshot 3.0.0
+    new_money_action). Keep the live MCP on v0.2.0 until then."""
+    result = await dm.run(KNIFE_NOT_DISLOCATION)
+
+    assert result["decision_card"]["new_money"]["action"] == "avoid"
+    assert result["watchlist_snapshot"]["action_mid_term"] == "speculative_small_position"
 
 
 async def test_a_thesis_capped_row_keeps_the_dislocation_starter() -> None:

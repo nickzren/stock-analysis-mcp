@@ -153,9 +153,10 @@ class TestAnalyzeCaps:
     async def test_new_money_is_watch_on_every_surface(self, analyze: Any, summary: dict[str, Any]) -> None:
         result = await analyze(summary, bullish=True)
 
-        assert (result["policy_action"]["mid_term"], result["policy_action"]["long_term"]) == ("watch", "watch")
+        policy = result["diagnostics"]["pre_gate_policy"]
+        assert (policy["mid_term"], policy["long_term"]) == ("watch", "watch")
         assert result["decision_card"]["action_now"] == "watch"
-        assert not set(result["decision_card"]["horizon_fit"].values()) & NEW_MONEY
+        assert "horizon_fit" not in result["decision_card"] and "policy_action" not in result
         for mode in ("core", "balanced", "speculative"):
             assert result["decision_modes"][mode]["action"] not in NEW_MONEY, mode
             assert result["decision_modes"][mode].get("long_term_view") not in NEW_MONEY, mode
@@ -186,7 +187,7 @@ class TestAnalyzeCaps:
     async def test_control_a_supported_stock_keeps_its_policy(self, analyze: Any) -> None:
         result = await analyze(US_SUMMARY, bullish=True)
 
-        assert result["policy_action"]["mid_term"] == "hold_or_add"
+        assert result["diagnostics"]["pre_gate_policy"]["mid_term"] == "hold_or_add"
 
     @pytest.mark.parametrize(
         ("summary", "reason"),
@@ -243,7 +244,8 @@ class TestAnalyzeUnsupportedInstrument:
         assert result["action_zones"]["valuation_assessment"]["gate"] == "not_applicable"
         assert result["dislocation_framework"]["status"] == "not_applicable"
         assert result["decision_card"]["action_now"] not in {"buy", "starter", "hold_or_add"}
-        assert result["policy_action"]["mid_term"] not in {"buy", "hold_or_add", "speculative_small_position"}
+        assert result["diagnostics"]["pre_gate_policy"]["mid_term"] not in {"buy", "hold_or_add",
+                                                                             "speculative_small_position"}
         for mode in ("core", "balanced", "speculative"):
             assert result["decision_modes"][mode]["action"] not in {
                 "build_position", "starter_position_only", "starter_then_add"

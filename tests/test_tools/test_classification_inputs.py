@@ -242,8 +242,9 @@ class TestMissingTiltEndToEnd:
 
         assert result["verdict"]["tilt"] is None
         assert result["verdict"]["horizon_fit"]["mid_term"] == "ok"
-        assert result["policy_action"]["mid_term"] == "insufficient_data"  # was hold_or_reduce
+        policy = result["diagnostics"]["pre_gate_policy"]
+        assert policy["mid_term"] == "insufficient_data"  # was hold_or_reduce
         assert result["decision_card"]["action_now"] == "insufficient_data"
         balanced = result["decision_modes"]["balanced"]
         assert (balanced["suitability"], balanced["action"]) == ("needs_more_data", "insufficient_data")
-        assert not [r for r in result["policy_action"]["rationale"] if "tilt=bearish" in r or "tilt=None" in r]
+        assert not [r for r in policy["rationale"] if "tilt=bearish" in r or "tilt=None" in r]

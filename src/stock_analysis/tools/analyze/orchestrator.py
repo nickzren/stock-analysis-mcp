@@ -15,7 +15,11 @@ from stock_analysis.tools.analyze.action_zones import (
 )
 from stock_analysis.tools.analyze.constants import CRITICAL_ANALYZE_TOOLS
 from stock_analysis.tools.analyze.decision import ENTRY_CANDIDATE_CODES, decide
-from stock_analysis.tools.analyze.decision_card import build_decision_card, evaluate_gates
+from stock_analysis.tools.analyze.decision_card import (
+    build_decision_card,
+    build_diagnostics,
+    evaluate_gates,
+)
 from stock_analysis.tools.analyze.decision_context import (
     build_decision_context,
     build_relative_performance,
@@ -1094,8 +1098,8 @@ async def analyze_stock(
         dislocation=thesis_signals["is_dislocation_candidate"], tilt=verdict.get("tilt"),
         window=earnings_window(earnings, today), today=today, support=support,
     )
-    # WP4 (D5): cap before anything copies the policy (executive summary, decision
-    # modes, dislocation, decision card horizon fit).
+    # WP4 (D5): the emitted pre-gate copy (diagnostics.pre_gate_policy) is support-capped (plan §0 #6),
+    # as are the surfaces that still copy it (executive summary, decision modes, dislocation).
     supported = instrument_ok and currency_supported(support)
     if not supported:
         _cap_policy_at_watch(policy_action, support)
@@ -1230,7 +1234,6 @@ async def analyze_stock(
         "decision_card": decision_card,
         "dislocation_framework": dislocation_framework,
         "action_zones": action_zones,
-        "policy_action": policy_action,
         "decision_modes": decision_modes,
         "relative_performance": relative_performance,
         "market_context": market_context,
@@ -1240,6 +1243,7 @@ async def analyze_stock(
         "ownership_flow": ownership_data or None,
         "options_signals": options_data or None,
         "data_quality": data_quality,
+        "diagnostics": build_diagnostics(policy_action, decision),
     }
 
     if top_level_error:

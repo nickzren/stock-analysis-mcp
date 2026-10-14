@@ -123,12 +123,12 @@ ANALYZE_RUNS: dict[str, dm.Scenario] = {
 
 
 async def analyze_gate_ids() -> dict[str, list[str]]:
-    """Each analyze run's gate ids: hard_gates.blocking, policy_action's and the dip's support_gates."""
+    """Each analyze run's gate ids: hard_gates.blocking, diagnostics.pre_gate_policy's and the dip's support_gates."""
     emitted: dict[str, list[str]] = {}
     for name, scenario in ANALYZE_RUNS.items():
         result = await dm.run(scenario)
         assessment = result["dip_assessment"].get("assessment") or {}
-        emitted[name] = [*dm.gate_ids(result), *(result["policy_action"].get("support_gates") or []),
+        emitted[name] = [*dm.gate_ids(result), *(result["diagnostics"]["pre_gate_policy"].get("support_gates") or []),
                          *(assessment.get("support_gates") or [])]
     return emitted
 

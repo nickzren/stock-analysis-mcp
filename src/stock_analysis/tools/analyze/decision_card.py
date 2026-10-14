@@ -3,8 +3,7 @@
 evaluate_gates computes every analyze hard gate once (hard_gates) and the ids of the applicable
 gates it could not compute; decision.decide() resolves them against the uncapped candidate
 policy; build_decision_card assembles decide()'s output with hard_gates, sizing, entry, exit,
-conditions and next_review. The older fields (`policy_action`, `decision_modes`, ...) stay
-alongside it until WP2.3.
+conditions and next_review. build_diagnostics emits the pre-gate candidate (full tier only).
 """
 
 from __future__ import annotations
@@ -28,6 +27,8 @@ from stock_analysis.tools.analyze.gates import (
     merge_blockers,
 )
 from stock_analysis.utils.valuation_basis import sizing_unavailable_reason, support_blockers
+
+PRE_GATE_ROLE = "pre_gate_input_not_advice"
 
 # Default look-ahead for "next_review.date" when no earnings date is near.
 _DEFAULT_REVIEW_HORIZON_DAYS = 30
@@ -267,33 +268,41 @@ def build_decision_card(
         horizon, new_money, if_held, long_term: the canonical decision (decision.decide)
         hard_gates: every fired gate (blocking) and one boolean per gates.ANALYZE_GATE_IDS (checks)
         action_now: alias of new_money.action (decision.NEW_MONEY_ACTIONS), kept one release
-        rationale: the emitted mid-term policy code, the new_money action and its deciding gate
         sizing: starter/full pct + dollars + whole/fractional shares
         entry: current zone, price, buy band
         exit: stop / invalidation level
         conditions: buy_only_if / add_only_if / do_not_buy_if / reduce_if / monitor
         next_review: date + reason
         confidence: from verdict
-        horizon_fit: mid/long-term action labels from policy_action
     """
     new_money = decision["new_money"]
-    rationale = [f"policy_action.mid_term={policy_action.get('mid_term')} -> {new_money['action']}"]
-    if new_money["decided_by"]:
-        rationale.append(f"decided_by={new_money['decided_by']}")
-
     return {
         **decision,
         "hard_gates": hard_gates,
         "action_now": new_money["action"],
-        "rationale": rationale,
         "sizing": _build_sizing(action_zones, summary),
         "entry": _build_entry(action_zones, summary),
         "exit": _build_exit(action_zones),
         "conditions": _build_conditions(policy_action, hard_gates, dislocation_framework),
         "next_review": _build_next_review(events_data, now),
         "confidence": verdict.get("confidence", "low"),
-        "horizon_fit": {
-            "mid_term": policy_action.get("mid_term"),
-            "long_term": policy_action.get("long_term"),
+    }
+
+
+def build_diagnostics(pre_gate_policy: dict[str, Any], decision: dict[str, Any]) -> dict[str, Any]:
+    """diagnostics (full tier only, P class; plan §2, §7a): the emitted, support-capped candidate next to the
+    decision that supersedes it, and the decision trace (was decision_card.rationale)."""
+    new_money = decision["new_money"]
+    trace = [f"pre_gate_policy.mid_term={pre_gate_policy['mid_term']} -> {new_money['action']}"]
+    if new_money["decided_by"]:
+        trace.append(f"decided_by={new_money['decided_by']}")
+    return {
+        "pre_gate_policy": {
+            **pre_gate_policy,
+            "role": PRE_GATE_ROLE,
+            "superseded_by": {"new_money": new_money["action"], "if_held": decision["if_held"]["action"],
+                              "long_term": decision["long_term"]["new_money"]["action"],
+                              "blocked_by": [b["id"] for b in new_money["blocked_by"]]},
         },
+        "decision_trace": trace,
     }
