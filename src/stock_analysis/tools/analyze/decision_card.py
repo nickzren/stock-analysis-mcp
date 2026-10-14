@@ -215,8 +215,9 @@ def _build_conditions(
 
 
 def _build_next_review(events_data: dict[str, Any], now: datetime) -> dict[str, Any]:
-    """Pick the next review date: inside an active earnings interval, the first session after it (never
-    on or before today, RA.17); else next earnings if within ~90 days; else default."""
+    """Pick the next review date: inside an active earnings interval, the first session after it, or the
+    default when that interval is undatable (never on or before today, RA.17); else next earnings if within
+    ~90 days; else default."""
     earnings = events_data.get("earnings") or {}
     today = now.date()
     window = earnings_window(earnings, today)
@@ -230,7 +231,8 @@ def _build_next_review(events_data: dict[str, Any], now: datetime) -> dict[str, 
     days_until_earnings = earnings.get("days_until")
 
     if (
-        next_earnings
+        not active
+        and next_earnings
         and isinstance(days_until_earnings, (int, float))
         and 0 <= days_until_earnings <= 90
     ):
@@ -242,7 +244,8 @@ def _build_next_review(events_data: dict[str, Any], now: datetime) -> dict[str, 
     review_date = now + timedelta(days=_DEFAULT_REVIEW_HORIZON_DAYS)
     return {
         "date": review_date.date().isoformat(),
-        "reason": f"default {_DEFAULT_REVIEW_HORIZON_DAYS}-day re-evaluation",
+        "reason": f"default {_DEFAULT_REVIEW_HORIZON_DAYS}-day re-evaluation"
+        + (" (earnings window undatable)" if active else ""),
     }
 
 

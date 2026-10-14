@@ -381,6 +381,16 @@ async def test_after_the_active_window(events_at: EventsAt, evidence: Evidence, 
     assert card["next_review"] == {"date": today.isoformat(), "reason": "next earnings (~0 days)"}
 
 
+async def test_an_undatable_active_window_is_never_reviewed_today(events_at: EventsAt) -> None:
+    """RA.17: inside an active earnings interval that ends more than 366 days out (undatable, RA risk 7), the
+    reassessment date stays null and next_review is the default re-evaluation with its cause, never today. RF."""
+    result = await analyze(events_at, Evidence(calendar("2026-10-12", "2027-10-14")), D(2026, 10, 12))
+
+    assert er(result)["date"] is None and "earnings_blackout" in dm.gate_ids(result)
+    assert result["decision_card"]["next_review"] == {
+        "date": "2026-11-11", "reason": "default 30-day re-evaluation (earnings window undatable)"}
+
+
 @pytest.mark.parametrize("name", DATED)
 async def test_after_today_on_every_dated_row(events_at: EventsAt, name: str) -> None:
     """RA.17: analyze's next_review is after today on every dated row. RF."""
