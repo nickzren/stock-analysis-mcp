@@ -1,4 +1,4 @@
-"""WP2.2: earliest_reassessment (plan §6; BL-D9 rule half).
+"""WP2.2: earliest_reassessment and analyze's next_review rule (plan §6; BL-D9 rule half, RA.17).
 
 Annex: docs/plans/step2-v2-research/reassessment.md, "Corrected proposal" (rules R1-R9, worked examples E1-E29,
 tests RA.2-RA.13, RA.17), as amended by plan §0 #11 (analyze only, per horizon: long_term.new_money carries its
@@ -46,6 +46,7 @@ from tests.test_tools.test_earnings_verification import (
     page,
     window_info,
 )
+from tests.test_tools.test_trade_card import build_card
 
 events_at = ra.events_at  # the real events tool over fixed provider reads, run at noon ET on a given day
 D = date
@@ -305,14 +306,16 @@ async def test_placement_and_tiers(name: str) -> None:
 
 
 async def test_earliest_reads_analyze_clock() -> None:
-    """RA.12 (earliest clause; next_review is WP2.2 step 4): with the wall clock frozen in 2027, analyze run at
-    evening Oct 8 dates the object from its own clock. RF."""
+    """RA.12 (earliest clause): with the wall clock frozen in 2027, analyze run at evening Oct 8 dates both the
+    object and next_review from its own clock. RF."""
     result = await analyze_with_real_events(E2, evening(D(2026, 10, 8)))
+    next_review = result["decision_card"]["next_review"]
 
     for horizon in ("mid_term", "long_term"):
         assert (er(result, horizon)["date"], er(result, horizon)["earnings_risk_through"]) == (
             "2026-10-16", "2026-10-15"), horizon
-    assert "2027" not in repr(er(result)) + repr(er(result, "long_term"))
+    assert next_review == {"date": "2026-10-16", "reason": "after earnings (Oct 15)"}
+    assert "2027" not in repr(er(result)) + repr(er(result, "long_term")) + repr(next_review)
 
 
 def test_no_clock_call() -> None:
@@ -332,6 +335,41 @@ async def test_undatable(earnings: dict[str, Any]) -> None:
     assert dm.gate_ids(result) == ["earnings_blackout"]
     for horizon in ("mid_term", "long_term"):
         assert er(result, horizon) == undated(REVERIFY), horizon
+
+
+@pytest.mark.parametrize(("evidence", "today", "day", "through"), [
+    (E2, D(2026, 10, 8), "2026-10-16", "Oct 15"), (E2, D(2026, 10, 10), "2026-10-16", "Oct 15"),
+    (E1, D(2026, 10, 15), "2026-10-16", "Oct 15"),
+    (Evidence(calendar("2026-10-12", "2026-10-17")), D(2026, 10, 13), "2026-10-19", "Oct 17")],
+    ids=["E2", "E4", "E15", "E25"])
+async def test_after_the_active_window(events_at: EventsAt, evidence: Evidence, today: date, day: str,
+                                       through: str) -> None:
+    """RA.17: inside an active earnings interval analyze's next_review is the first clear session, reason
+    "after earnings (<last interval day>)", equal to the reassessment date; the trade card keeps the run date
+    (CH clause: flipped by 2c). RF."""
+    result = await analyze(events_at, evidence, today)
+    card = build_card(events_data=await events_at(evidence, today))
+
+    assert result["decision_card"]["next_review"] == {"date": day, "reason": f"after earnings ({through})"}
+    assert er(result)["date"] == day
+    assert card["next_review"] == {"date": today.isoformat(), "reason": "next earnings (~0 days)"}
+
+
+@pytest.mark.parametrize("name", DATED)
+async def test_after_today_on_every_dated_row(events_at: EventsAt, name: str) -> None:
+    """RA.17: analyze's next_review is after today on every dated row. RF."""
+    evidence, today, _, _, _ = DATED[name]
+
+    assert (await analyze(events_at, evidence, today))["decision_card"]["next_review"]["date"] > today.isoformat()
+
+
+async def test_unchanged_outside_a_window(events_at: EventsAt) -> None:
+    """RA.17: before the event (E1 at Oct 12) and with earnings far off, next_review is the next earnings date. G."""
+    before = await analyze(events_at, E1, D(2026, 10, 12))
+
+    assert before["decision_card"]["next_review"] == {"date": "2026-10-15", "reason": "next earnings (~3 days)"}
+    assert (await dm.run("S2_buy_clean"))["decision_card"]["next_review"] == {
+        "date": "2026-11-18", "reason": "next earnings (~40 days)"}
 
 
 async def test_known_limits(events_at: EventsAt) -> None:

@@ -434,19 +434,3 @@ class TestGatesThatDoNotBind:
 
         assert card["action"] == "no_setup"
         assert "earnings_blackout" in blocker_ids(card)
-
-
-class TestBeforeTableRows:
-    @pytest.mark.parametrize(("evidence", "today"), [(E2, date(2026, 10, 8)), (E1, date(2026, 10, 15))],
-                             ids=["E2_active_window", "E15_single_date_day_0"])
-    async def test_ch2_analyze_next_review_is_the_run_date(
-        self, events_at: EventsAt, evidence: Evidence, today: date
-    ) -> None:
-        """RA-CH2: inside the blackout on day 0, analyze's next_review is the run date itself,
-        reason '~0 days' (decision_card.py:252-260).
-        CH: flipped by WP2.2 (RA.17: never <= today, 'after earnings (Oct 15)')."""
-        events_data = await events_at(evidence, today)
-
-        card = (await dm.run("S2_buy_clean", events=events_data, now=evening(today)))["decision_card"]
-
-        assert card["next_review"] == {"date": today.isoformat(), "reason": "next earnings (~0 days)"}

@@ -3,8 +3,8 @@
 Annex docs/plans/step2-v2-research/reassessment.md, "Corrected proposal" (RA.1, RA.12, RA.15) and its
 "Related changes (B4)". earnings_window keeps the blackout predicate, names the interval behind it and
 owns analyze's 7-day warning; analyze passes its own clock to events and to the default next_review.
-The reassessment date and RA.17's next_review rule are WP2.2, so no test asserts next_review inside an
-active window. Events runs use the real tool over fixed provider reads (test_characterize_reassessment);
+The reassessment date and RA.17's next_review rule are WP2.2 (test_wp22_reassessment.py). Events runs use
+the real tool over fixed provider reads (test_characterize_reassessment);
 analyze runs go through tests/support/decision_matrix.py and card runs through
 tests/test_tools/test_trade_card.py.
 """

@@ -23,6 +23,8 @@ from stock_analysis.tools.analyze.gates import (
     check_liquidity,
     check_near_52w_high,
     check_thesis_broken,
+    earnings_window,
+    format_day,
     is_falling_knife_technicals,
     merge_blockers,
 )
@@ -216,8 +218,17 @@ def _build_conditions(
 
 
 def _build_next_review(events_data: dict[str, Any], now: datetime) -> dict[str, Any]:
-    """Pick the next review date: next earnings if within ~90 days, else default."""
+    """Pick the next review date: inside an active earnings interval, the first session after it (never
+    on or before today, RA.17); else next earnings if within ~90 days; else default."""
     earnings = events_data.get("earnings") or {}
+    today = now.date()
+    window = earnings_window(earnings, today)
+    active = any(start <= today <= end for start, end in window.intervals)
+    cleared = window.clear_session(today) if active else None
+    if cleared is not None:
+        day, through = cleared
+        return {"date": day.isoformat(), "reason": f"after earnings ({format_day(through)})"}
+
     next_earnings = earnings.get("next_date")
     days_until_earnings = earnings.get("days_until")
 
