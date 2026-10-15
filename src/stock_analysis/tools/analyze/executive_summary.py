@@ -154,10 +154,8 @@ def build_executive_summary(
     technicals_summary: dict[str, Any],
     fundamentals_summary: dict[str, Any],
     risk_summary: dict[str, Any],
-    signals: dict[str, list[str]],
     verdict: dict[str, Any],
     decision_card: dict[str, Any],
-    news_summary: dict[str, Any] | None = None,
 ) -> str:
     """
     Build a MATERIALITY-FIRST deterministic executive summary from structured fields.

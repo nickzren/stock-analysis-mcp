@@ -254,7 +254,7 @@ def build_conditions(
         gates = [clears_when_for(b) for b in new_money["blocked_by"]
                  if b["class"] != "support" and tighter(GATES[b["id"]].outcome[horizon], mapped)]
         target = (ENTRY_ACTIONS if not entry_allowed(mapped)
-                  else frozenset({"buy"}) if new_money["action"] == "starter" else frozenset())
+                  else frozenset({"buy"}) if starter_only(new_money["action"]) else frozenset())
         cleared = [text for factor, codes in replayed if map_candidate(horizon, codes[index]) in target
                    for text in factor.texts]
         binding[horizon] = list(dict.fromkeys(gates + cleared))
@@ -398,7 +398,7 @@ def build_diagnostics(pre_gate_policy: dict[str, Any], decision: dict[str, Any])
             **pre_gate_policy,
             "role": PRE_GATE_ROLE,
             "superseded_by": {"new_money": new_money["action"], "if_held": decision["if_held"]["action"],
-                              "long_term": decision["long_term"]["new_money"]["action"],
+                              "long_term": decision[LONG_TERM]["new_money"]["action"],
                               "blocked_by": [b["id"] for b in new_money["blocked_by"]]},
         },
         "decision_trace": trace,

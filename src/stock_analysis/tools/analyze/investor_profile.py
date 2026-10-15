@@ -263,8 +263,8 @@ def build_decision_modes(
 
     def _sizes(mode: str, action: str) -> dict[str, Any]:
         """starter_position iff entry and the mode's action admits it; max_position only under buy (§0 #21)."""
-        starter = entry and action in ("buy", "starter")
-        full = starter and action == "buy" and new_money_action == "buy"
+        starter = entry and entry_allowed(action)
+        full = action == "buy" and new_money_action == "buy"
         return {"starter_position": _position_block(mode_sizing[mode], "starter_pct") if starter else None,
                 "max_position": _position_block(mode_sizing[mode], "max_pct") if full else None}
 

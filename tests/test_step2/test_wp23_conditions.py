@@ -6,6 +6,7 @@ admit new money; buy under a starter). decision_card.conditions is mid-term; lon
 long-term; core's required_before_full_size mirrors long-term; balanced, speculative, dislocation and dip mirror
 mid-term. Annex: output_contract.md §5 "Corrected proposal" (its U3 cells replaced by §7e)."""
 
+import importlib
 import itertools
 import json
 from typing import Any
@@ -33,7 +34,7 @@ from stock_analysis.tools.analyze.verdict import build_horizon_fit
 from tests.support import decision_matrix as dm
 from tests.support import output_contract as oc
 
-orchestrator = __import__("importlib").import_module("stock_analysis.tools.analyze.orchestrator")
+orchestrator = importlib.import_module("stock_analysis.tools.analyze.orchestrator")
 
 PE = "P/E <= 50x (currently headwind)"
 PEG = "PEG <= 3.0 (currently headwind)"

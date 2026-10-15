@@ -1169,10 +1169,8 @@ async def analyze_stock(
         technicals_summary=technicals_summary,
         fundamentals_summary=fundamentals_summary,
         risk_summary=risk_summary,
-        signals=signals,
         verdict=verdict,
         decision_card=decision_card,
-        news_summary=news_summary,
     )
 
     # Top-level error signaling for invalid/unanalyzable symbols.

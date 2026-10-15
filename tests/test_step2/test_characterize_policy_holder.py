@@ -240,13 +240,13 @@ class TestGateCombination:
         (PD D-5, D-5b; PH-RF21); the emitted policy is read from diagnostics.pre_gate_policy (WP2.3, PD D-9,
         §0 #6). G from WP2.3."""
         result = await dm.run("G_unsupported_currency_knife")
-        policy_action = result["diagnostics"]["pre_gate_policy"]
+        policy = result["diagnostics"]["pre_gate_policy"]
 
         assert result["decision_card"]["action_now"] == "avoid"
         assert dm.gate_ids(result) == ["falling_knife", "unsupported_currency"]
-        assert (policy_action["mid_term"], policy_action["long_term"]) == ("avoid", "watch")
-        assert policy_action["support_gates"] == ["unsupported_currency"]
-        assert "long_term=ok, valuation=attractive, zone=hold_neutral" in policy_action["rationale"]
+        assert (policy["mid_term"], policy["long_term"]) == ("avoid", "watch")
+        assert policy["support_gates"] == ["unsupported_currency"]
+        assert "long_term=ok, valuation=attractive, zone=hold_neutral" in policy["rationale"]
         assert result["decision_modes"]["core"]["action"] == "avoid"
         long_term = result["decision_card"]["long_term"]["new_money"]
         assert (long_term["action"], long_term["decided_by"]) == ("avoid", "falling_knife")

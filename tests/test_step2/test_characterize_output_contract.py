@@ -106,12 +106,6 @@ def sizing_presence(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return presence
 
 
-def pre_gate_policy(result: dict[str, Any]) -> dict[str, Any]:
-    """The pre-gate candidate: diagnostics.pre_gate_policy (top-level policy_action until WP2.3)."""
-    pre_gate: dict[str, Any] = result["diagnostics"]["pre_gate_policy"]
-    return pre_gate
-
-
 class TestEntrySizingUnderNonEntryActions:
     async def test_plain_avoid_carries_no_entry_sizing(self) -> None:
         """OC-CH1 (flipped by WP2.3): S3, a plain avoid with no gate, carries no entry sizing on any path: card
@@ -133,7 +127,7 @@ class TestEntrySizingUnderNonEntryActions:
             assert shown[tier]["action_zones"]["position_sizing_range"] is None, tier
             assert not SIZE_TEXT.search(shown[tier]["executive_summary"]), tier
         assert "policy_action" not in result
-        assert "sizing_guidance" not in pre_gate_policy(result)
+        assert "sizing_guidance" not in result["diagnostics"]["pre_gate_policy"]
         assert {name: (mode["starter_position"], mode["max_position"]) for name, mode in modes.items()} == dict.fromkeys(
             ("core", "balanced", "speculative"), (None, None))
         assert modes["speculative"]["capital_at_risk"] is None
@@ -221,7 +215,7 @@ class TestConditionsUnderAdmittingActions:
         result = await dm.run("C1_headwind_hold_or_add")
         card = result["decision_card"]
         conditions = card["conditions"]
-        upgrade = pre_gate_policy(result)["conditions_to_upgrade"]
+        upgrade = result["diagnostics"]["pre_gate_policy"]["conditions_to_upgrade"]
 
         assert (card["action_now"], card["long_term"]["new_money"]["action"]) == ("starter", "wait")
         assert (conditions["buy_only_if"], conditions["add_only_if"]) == ([], [])
@@ -401,7 +395,7 @@ class TestPreGateCandidate:
         """OC-G4: the pre-gate candidate's mid- and long-term codes equal before.json's policy column.
         Holds throughout 2a: the knife rows are exempt because the knife override is the one
         candidate rule 2a removes (plan §0 #16, §1)."""
-        policy = pre_gate_policy(await dm.run(name))
+        policy = (await dm.run(name))["diagnostics"]["pre_gate_policy"]
 
         assert {"mid_term": policy["mid_term"], "long_term": policy["long_term"]} == BEFORE[name]["policy"]
 
