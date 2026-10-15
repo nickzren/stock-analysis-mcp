@@ -38,7 +38,8 @@ async def test_price_zone_is_the_uncapped_classification(name: str) -> None:
     assert zones["price_zone"] in {*PRICE_ZONES.values(), None}
     for tier, payload in dm.tiers(result).items():
         assert "current_zone" not in (payload.get("action_zones") or {}), tier
-        assert set(payload["decision_card"]["entry"] or {}) <= {"current_price", "buy_zone_low", "buy_zone_high"}, tier
+        entry = payload["decision_card"]["entry"]
+        assert entry is None or set(entry) == {"current_price", "buy_zone_low", "buy_zone_high"}, tier
     assert dm.tiers(result)["standard"]["action_zones"]["price_zone"] == expected
 
 
