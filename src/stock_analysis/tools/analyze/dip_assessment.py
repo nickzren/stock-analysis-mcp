@@ -12,18 +12,18 @@ from stock_analysis.utils.helpers import round_or_none
 _DIP_TYPE_EXPLANATIONS: dict[str, str] = {
     "falling_knife": "Severe decline with broken trends - high risk of further downside",
     "extended_decline": "Prolonged weakness but not in freefall",
-    "healthy_pullback": "Normal retracement in an uptrend - favorable for dip buying",
+    "healthy_pullback": "Normal retracement in an uptrend",
     "mixed_signals": "Conflicting trend signals - proceed with caution",
     "undetermined": "Insufficient data to classify",
 }
 
 _BUY_RECOMMENDATION_RATIONALES: dict[str, str] = {
     "strong_buy_the_dip": "Oversold pullback in uptrend - high probability bounce",
-    "buy_the_dip": "Good entry point in established trend",
-    "cautious_accumulation": "Acceptable entry but use smaller position size",
-    "small_speculative_position": "High risk but extremely oversold - small position only",
+    "buy_the_dip": "Pullback in an established trend",
+    "cautious_accumulation": "Oversold, but trend signals are mixed",
+    "small_speculative_position": "Extremely oversold within an extended decline - high risk",
     "do_not_catch_falling_knife": "Trend is broken - wait for stabilization",
-    "wait_for_better_setup": "Conditions not favorable for dip buying yet",
+    "wait_for_better_setup": "No oversold pullback setup yet",
 }
 
 
@@ -554,7 +554,7 @@ def build_dip_assessment(
         entry_signals.append({
             "signal": "pullback_in_uptrend",
             "action": "accumulate",
-            "rationale": "Healthy pullback to buy in established uptrend",
+            "rationale": "Healthy pullback in an established uptrend",
         })
 
     if price_action.get("higher_closes_2d") is True:
@@ -766,8 +766,7 @@ def align_dip_assessment_with_action(
     assessment["dip_quality"] = "starter_only"
     assessment["recommendation"] = "starter_only_wait_for_stabilization"
     assessment["rationale"] = (
-        "Starter position acceptable for a price-vs-business dislocation, "
-        "but trend is still broken. Wait for stabilization before adding."
+        "Price looks more broken than the business, but the trend is still broken: wait for stabilization."
     )
     assessment["add_only_if"] = list(add_only_if or [])[:4]
     return dip_assessment

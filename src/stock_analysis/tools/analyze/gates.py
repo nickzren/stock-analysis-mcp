@@ -625,12 +625,12 @@ def check_thesis_broken(fundamentals_status: str | None, signals: Mapping[str, A
     return FIRED, {"id": "thesis_broken", "reason": reason, "codes": list(codes)}
 
 
-def check_near_52w_high(zone: str | None) -> tuple[str, dict[str, Any] | None]:
-    """(status, blocker) for near_52w_high: the zone classification is reduce. The zone caps never move a zone
-    into or out of reduce, undetermined or None, so the capped current_zone reads the same here."""
-    if zone is None or zone == "undetermined":
+def check_near_52w_high(price_zone: str | None) -> tuple[str, dict[str, Any] | None]:
+    """(status, blocker) for near_52w_high: action_zones.price_zone, the uncapped classification, is
+    near_52w_high; null or undetermined leaves it unevaluated."""
+    if price_zone is None or price_zone == "undetermined":
         return UNEVALUATED, None
-    if zone != "reduce":
+    if price_zone != "near_52w_high":
         return CLEAR, None
     return FIRED, {"id": "near_52w_high", "reason": "price in the near-52-week-high band"}
 

@@ -104,16 +104,16 @@ def _base_sizing_range(regime_classification: str | None) -> tuple[float, float,
     """Build base position sizing range by risk regime."""
     if regime_classification == "extreme":
         pct_min, pct_max = 0.5, 3.0
-        rationale = "extreme_risk_requires_minimal_exposure"
+        rationale = "extreme_risk_regime"
     elif regime_classification == "high":
         pct_min, pct_max = 2.0, 6.0
-        rationale = "high_risk_warrants_conservative_sizing"
+        rationale = "high_risk_regime"
     elif regime_classification == "medium":
         pct_min, pct_max = 3.0, 8.0
-        rationale = "moderate_risk_standard_sizing"
+        rationale = "medium_risk_regime"
     else:
         pct_min, pct_max = 3.0, 10.0
-        rationale = "low_risk_allows_larger_positions"
+        rationale = "low_risk_regime"
 
     return pct_min, pct_max, {
         "suggested_pct_range": [pct_min, pct_max],
@@ -156,6 +156,11 @@ def _build_level_distance_views(
     }
     level_vs_current_labels = distance_labels.copy()
     return distance_to_levels, price_vs_levels, distance_labels, level_vs_current_labels
+
+
+# The neutral, diagnostic name of each uncapped zone classification (plan §7b): never an entry code.
+PRICE_ZONES = {"strong_buy": "near_52w_low", "reduce": "near_52w_high", "accumulate": "below_sma200",
+               "hold_bullish": "above_sma50", "hold_neutral": "at_or_below_sma50", "undetermined": "undetermined"}
 
 
 def _classify_current_zone(
@@ -407,6 +412,7 @@ def _apply_valuation_gate_to_zone(
 def _missing_price_response() -> dict[str, Any]:
     """Build action-zone payload for missing current price."""
     return {
+        "price_zone": None,
         "current_zone": None,
         "levels": {},
         "distance_to_levels": {},
@@ -441,11 +447,11 @@ def _append_regime_warnings(
     is_extreme_regime: bool,
     is_high_regime: bool,
 ) -> None:
-    """Append risk-regime sizing warnings."""
+    """Append the risk-regime warnings."""
     if is_extreme_regime:
-        zone_warnings.append("extreme_risk_regime:prefer_small_position")
+        zone_warnings.append("extreme_risk_regime")
     elif is_high_regime:
-        zone_warnings.append("high_risk_regime:size_conservatively")
+        zone_warnings.append("high_risk_regime")
 
 
 def build_action_zones(
@@ -518,12 +524,13 @@ def build_action_zones(
         level_vs_current_labels,
     ) = _build_level_distance_views(current_price, levels)
 
-    current_zone: str | None = _classify_current_zone(
+    uncapped_zone = _classify_current_zone(
         current_price=current_price,
         levels=levels,
         sma_50=sma_50,
         sma_200=sma_200,
     )
+    current_zone: str | None = uncapped_zone
 
     # Apply regime-aware zone capping
     # In extreme risk regime, cap "strong_buy" to "accumulate" - be more cautious
@@ -574,7 +581,8 @@ def build_action_zones(
     )
 
     return {
-        "current_zone": current_zone,
+        "price_zone": PRICE_ZONES[uncapped_zone],
+        "current_zone": current_zone,  # the capped label: a pre-gate candidate input, never emitted (plan §7b)
         "levels": levels,
         "distance_to_levels": distance_to_levels,
         "price_vs_levels": price_vs_levels,

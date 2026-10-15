@@ -1089,7 +1089,7 @@ async def analyze_stock(
         events_data=events_data, data_quality=data_quality, technicals_data=tech_data,
         fundamentals_summary=fundamentals_summary, risk_data=risk_data, support=support,
         freshness_blockers=price_freshness_blockers, thesis_signals=thesis_signals,
-        zone=action_zones.get("current_zone"),
+        price_zone=action_zones["price_zone"],
     )
     today = now.date()
     decision = decide(
@@ -1103,6 +1103,7 @@ async def analyze_stock(
     supported = instrument_ok and currency_supported(support)
     if not supported:
         _cap_policy_at_watch(policy_action, support)
+    del action_zones["current_zone"]  # the capped label is a pre-gate input only (pre_gate_policy.inputs.zone)
 
     executive_summary = build_executive_summary(
         summary=summary,

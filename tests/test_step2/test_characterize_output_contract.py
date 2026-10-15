@@ -19,7 +19,7 @@ from stock_analysis.tools.analyze.action_zones import (
     apply_dip_gates_to_action_zones,
     build_action_zones,
 )
-from stock_analysis.tools.analyze.verdict import _build_horizon_fit
+from stock_analysis.tools.analyze.verdict import build_horizon_fit
 from tests.support import decision_matrix as dm
 
 BEFORE = json.loads((dm.FIXTURE_DIR / "before.json").read_text())
@@ -120,10 +120,10 @@ def pre_gate_policy(result: dict[str, Any]) -> dict[str, Any]:
 class TestEntrySizingUnderNonEntryActions:
     async def test_plain_avoid_carries_entry_sizing_on_every_path(self) -> None:
         """OC-CH1: S3, a plain avoid with no gate, carries entry sizing (card, buy band, zone band, summary,
-        modes), an accumulate zone and entry codes; core is buy (long_term.new_money, WP2.2 D-3). The guidance
-        clause is flipped by WP2.3 (no sizing_guidance: policy_action moved to diagnostics, D-9).
-        Flipped by WP2.3 (sizing and the buy band keyed on entry_allowed, price_zone, dip caps, new-money mode
-        vocabulary)."""
+        modes) and entry codes; core is buy (long_term.new_money, WP2.2 D-3). The guidance and zone clauses are
+        flipped by WP2.3 (no sizing_guidance: policy_action moved to diagnostics; no current_zone on any surface,
+        price_zone below_sma200; D-9). Flipped by WP2.3 (sizing and the buy band keyed on entry_allowed, dip caps,
+        new-money mode vocabulary)."""
         result = await dm.run("S3_plain_avoid")
         shown = dm.tiers(result)
         card = result["decision_card"]
@@ -142,7 +142,8 @@ class TestEntrySizingUnderNonEntryActions:
         assert {name: (mode["starter_position"]["dollars"], mode["max_position"]["dollars"])
                 for name, mode in modes.items()} == {
             "core": (200.0, 800.0), "balanced": (250.0, 800.0), "speculative": (100.0, 600.0)}
-        assert (result["action_zones"]["current_zone"], card["entry"]["current_zone"]) == ("accumulate", "accumulate")
+        assert ("current_zone" in result["action_zones"], "current_zone" in card["entry"],
+                result["action_zones"]["price_zone"]) == (False, False, "below_sma200")
         assert result["dip_assessment"]["assessment"]["recommendation"] == "buy_the_dip"
         assert modes["core"]["action"] == "buy"
 
@@ -184,8 +185,9 @@ class TestEntrySizingUnderNonEntryActions:
 
     async def test_unsupported_etf_holds_with_percent_sizing_and_an_accumulate_zone(self) -> None:
         """OC-CH4: S7 (ETF, unsupported_instrument) has action_now=watch (the support gate tightens wait, WP2.2
-        D-5), percent sizing, "size ~2.5-8.0%" and zone accumulate on the card. Flipped by WP2.3 (no sizing for
-        unsupported instruments; no zone on the card)."""
+        D-5), percent sizing and "size ~2.5-8.0%". The zone clause is flipped by WP2.3 (no zone on the card;
+        action_zones.price_zone below_sma200, no current_zone; D-9). Flipped by WP2.3 (no sizing for unsupported
+        instruments)."""
         result = await dm.run("S7_etf_below_sma200")
 
         assert (result["decision_card"]["action_now"], dm.gate_ids(result)) == ("watch", ["unsupported_instrument"])
@@ -193,8 +195,10 @@ class TestEntrySizingUnderNonEntryActions:
             card = payload["decision_card"]
             assert (card["sizing"]["starter_pct"], card["sizing"]["full_pct_cap"]) == (2.5, 8.0), tier
             assert (card["sizing"]["starter_dollars"], card["sizing"]["full_dollars"]) == (None, None), tier
-            assert card["entry"]["current_zone"] == "accumulate", tier
+            assert "current_zone" not in card["entry"], tier
         assert "size ~2.5-8.0%" in result["executive_summary"]
+        assert ("current_zone" in result["action_zones"], result["action_zones"]["price_zone"]) == (
+            False, "below_sma200")
 
     async def test_unsupported_etf_snapshot_zone_is_accumulate(self) -> None:
         """OC-CH4 (snapshot half): S7's watchlist_snapshot.zone is accumulate.
@@ -237,33 +241,32 @@ class TestSizingWordsInCodesAndText:
 
         assert snapshot["action_long_term"] == "hold_size_conservatively"
 
-    def test_mixed_fundamentals_reason_advises_a_smaller_position(self) -> None:
-        """OC-CH6: the verdict's long-term reason for mixed fundamentals is sizing advice (verdict.py:1020).
-        Flipped by WP2.3 (D-text rewrites, plan §7c)."""
-        fit = _build_horizon_fit(setup_label="strong", business_quality_label="mixed",
-                                 business_quality_status="available", risk_label="medium",
-                                 signals={"bullish": [], "bearish": []})
+    def test_mixed_fundamentals_reason_carries_no_sizing_advice(self) -> None:
+        """OC-CH6 (flipped by WP2.3): the verdict's long-term reason for mixed fundamentals names the state, not a
+        position size (verdict.py:1020). G from WP2.3 (PD D-9; plan §7c D-text rewrites)."""
+        fit = build_horizon_fit(setup_label="strong", business_quality_label="mixed",
+                                business_quality_status="available", risk_label="medium",
+                                signals={"bullish": [], "bearish": []})
 
         assert fit["long_term"] == "caution"
-        assert "long_term: mixed fundamentals suggest smaller position" in fit["reasons"]
+        assert [r for r in fit["reasons"] if r.startswith("long_term: mixed fundamentals")]
+        assert not [r for r in fit["reasons"] if re.search(r"(?i)position|siz", r)]
 
 
-class TestZoneCapsLeaveAnEntryLabel:
-    def test_extreme_risk_caps_strong_buy_to_accumulate_at_build(self) -> None:
-        """OC-CH7: an extreme regime caps strong_buy to accumulate at build time, still an entry label,
-        and no uncapped price_zone is kept. In analyze the extreme-risk dip gate then takes the label
-        to hold_neutral. Flipped by WP2.3 (price_zone from the uncapped classification, RF6 unit cases)."""
+class TestZoneCapsLeavePriceZoneUncapped:
+    def test_extreme_risk_cap_leaves_the_uncapped_price_zone(self) -> None:
+        """OC-CH7 (flipped by WP2.3): an extreme regime still caps the internal label strong_buy to accumulate
+        (the cap warning stays), and price_zone keeps the uncapped classification, near_52w_low.
+        G from WP2.3 (PD D-9; plan §7b; RF6 owns the five cap cases)."""
         zones = build_action_zones(current_price=70.0, tech_data=AT_52W_LOW, risk_data=EXTREME_VOL,
                                    fund_data=CHEAP, risk_regime={"classification": "extreme"})
 
-        assert zones["current_zone"] == "accumulate"
+        assert (zones["current_zone"], zones["price_zone"]) == ("accumulate", "near_52w_low")
         assert "zone_capped_due_to_extreme_risk" in zones["zone_warnings"]
-        assert "price_zone" not in zones
 
-    def test_extended_decline_caps_strong_buy_to_accumulate(self) -> None:
-        """OC-CH7: the extended-decline dip gate caps strong_buy to accumulate, still an entry label,
-        and no uncapped price_zone is kept. Flipped by WP2.3 (price_zone from the uncapped
-        classification, RF6 unit cases)."""
+    def test_extended_decline_cap_leaves_the_uncapped_price_zone(self) -> None:
+        """OC-CH7 (flipped by WP2.3): the extended-decline dip gate caps the internal label strong_buy to
+        accumulate, and price_zone stays near_52w_low. G from WP2.3 (PD D-9; plan §7b)."""
         regime = {"classification": "medium"}
         zones = build_action_zones(current_price=70.0, tech_data=AT_52W_LOW, risk_data=CALM_VOL,
                                    fund_data=CHEAP, risk_regime=regime)
@@ -272,23 +275,25 @@ class TestZoneCapsLeaveAnEntryLabel:
         capped = apply_dip_gates_to_action_zones(zones, {"dip_classification": {"type": "extended_decline"}}, regime)
 
         assert (capped["current_zone"], capped["zone_warnings"]) == ("accumulate", ["zone_capped_extended_decline"])
-        assert "price_zone" not in capped
+        assert capped["price_zone"] == "near_52w_low"
 
-    async def test_extended_decline_label_reaches_the_card_under_avoid(self) -> None:
-        """OC-CH7: end to end, an S3 variant at its 52-week low (extended decline, calm risk) is a plain
-        avoid whose capped accumulate label is action_zones.current_zone and card.entry.current_zone at
-        every tier. Flipped by WP2.3 (both fields removed; action_zones.price_zone is near_52w_low)."""
+    async def test_extended_decline_label_stays_out_of_the_actionable_fields(self) -> None:
+        """OC-CH7 (flipped by WP2.3): end to end, an S3 variant at its 52-week low (extended decline, calm risk)
+        is a plain avoid with no zone on the card or in action_zones.current_zone at any tier;
+        action_zones.price_zone is near_52w_low and the capped accumulate label is only the full tier's
+        diagnostics.pre_gate_policy.inputs.zone. G from WP2.3 (PD D-9; plan §7b, §0 #22)."""
         result = await dm.run("S3_plain_avoid", technicals=EXTENDED_DECLINE)
         zones = result["action_zones"]
 
         assert (result["decision_card"]["action_now"], dm.gate_ids(result)) == ("avoid", [])
         assert result["dip_assessment"]["dip_classification"]["type"] == "extended_decline"
-        assert (zones["current_zone"], zones["zone_warnings"]) == ("accumulate", ["zone_capped_extended_decline"])
+        assert (zones["price_zone"], zones["zone_warnings"]) == ("near_52w_low", ["zone_capped_extended_decline"])
+        assert result["diagnostics"]["pre_gate_policy"]["inputs"]["zone"] == "accumulate"
         for tier, payload in dm.tiers(result).items():
-            assert payload["decision_card"]["entry"]["current_zone"] == "accumulate", tier
+            assert "current_zone" not in payload["decision_card"]["entry"], tier
             if "action_zones" in payload:
-                assert payload["action_zones"]["current_zone"] == "accumulate", tier
-                assert "price_zone" not in payload["action_zones"], tier
+                assert "current_zone" not in payload["action_zones"], tier
+                assert payload["action_zones"]["price_zone"] == "near_52w_low", tier
 
 
 class TestModesIgnoreUserCaps:

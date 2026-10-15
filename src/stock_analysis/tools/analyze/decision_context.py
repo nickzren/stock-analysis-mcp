@@ -1116,7 +1116,7 @@ def build_decision_context(
             "horizon": "mid_term",
             "direction": "bearish",
             "gate": "extreme_risk",
-            "reason": "extreme risk requires minimal position size",
+            "reason": "extreme risk regime",
             "current": f"risk_regime={risk_label}",
         })
 

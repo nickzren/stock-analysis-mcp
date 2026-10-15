@@ -93,12 +93,12 @@ def evaluate_gates(
     support: dict[str, Any] | None,
     freshness_blockers: list[dict[str, Any]] | None,
     thesis_signals: dict[str, Any],
-    zone: str | None,
+    price_zone: str | None,
 ) -> tuple[dict[str, Any], frozenset[str]]:
     """(hard_gates, the ids of applicable analyze gates that were not computed) (plan §4, R2.6(f))."""
     fundamentals_status = data_quality.get("fundamentals_status")
     thesis_status, thesis_blocker = check_thesis_broken(fundamentals_status, thesis_signals)
-    zone_status, zone_blocker = check_near_52w_high(zone)
+    zone_status, zone_blocker = check_near_52w_high(price_zone)
     hard_gates = _compute_hard_gates(
         events_data=events_data, data_quality=data_quality, technicals_data=technicals_data,
         fundamentals_summary=fundamentals_summary, risk_data=risk_data, support=support,
@@ -158,10 +158,9 @@ def _build_entry(
     action_zones: dict[str, Any],
     summary: dict[str, Any],
 ) -> dict[str, Any]:
-    """Build the entry block (zone, price, buy band)."""
+    """Build the entry block (price, buy band)."""
     levels = action_zones.get("levels") or {}
     return {
-        "current_zone": action_zones.get("current_zone"),
         "current_price": summary.get("current_price"),
         "buy_zone_low": levels.get("strong_buy_below"),
         "buy_zone_high": levels.get("accumulate_near"),

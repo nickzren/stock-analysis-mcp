@@ -40,6 +40,22 @@ CANDIDATE_ACTIONS: dict[str, dict[str, str]] = {  # plan §2 [D-2]: every pre-ga
 ENTRY_CANDIDATE_CODES = frozenset(code for table in CANDIDATE_ACTIONS.values()
                                   for code, action in table.items() if action in ENTRY_ACTIONS)
 
+# Every code that means "put money in" on any analyze surface (annex output_contract §0), and the starter-sized
+# ones; the dip caps and the output-contract lints read them (plan §7).
+ENTRY_CODES = frozenset({
+    "buy", "starter", "hold_or_add", "accumulate", "speculative_small_position", "speculative_with_thesis",
+    "speculative_only", "small_position_with_stops", "build_position", "starter_position_only", "starter_then_add",
+    "strong_buy_the_dip", "buy_the_dip", "cautious_accumulation", "small_speculative_position",
+    "starter_only_wait_for_stabilization", "consider_small_position", "starter_position", "add_position",
+    "strong_buy", "small_starter", "starter_only",
+})
+STARTER_ONLY_CODES = frozenset({
+    "starter", "speculative_small_position", "small_position_with_stops", "starter_position_only",
+    "small_speculative_position", "starter_only_wait_for_stabilization", "consider_small_position",
+    "starter_position", "small_starter", "starter_only",
+})
+FULL_ENTRY_CODES = ENTRY_CODES - STARTER_ONLY_CODES
+
 IF_HELD_ACTIONS = ("hold", "reduce", "review_exit", "insufficient_data")
 EVIDENCE_BASES = (RUNWAY_CRITICAL, BUSINESS_BROKEN, "tilt_bearish")  # required for reduce and review_exit
 NON_EVIDENCE_BASES = ("candidate_admits_new_money", "price_broken_more_than_business", "no_reduction_evidence",

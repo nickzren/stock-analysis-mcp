@@ -13,7 +13,7 @@ DATA_QUALITY_DECISION_KEYS = (
     "completeness", "missing_critical", "data_gaps", "in_flight_jobs", "bar_validity", "warnings", "freshness",
 )
 ACTION_ZONES_STANDARD_KEYS = (
-    "current_zone",
+    "price_zone",
     "levels",
     "stop_calculation",
     "valuation_assessment",

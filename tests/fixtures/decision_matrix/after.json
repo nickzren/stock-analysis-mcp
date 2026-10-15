@@ -72,6 +72,7 @@
       "long_term": "accumulate",
       "mid_term": "hold_or_add"
     },
+    "price_zone": "near_52w_high",
     "sizing_present": {
       "decision": {
         "card": true,
@@ -185,6 +186,7 @@
       "long_term": "avoid_core_position",
       "mid_term": "avoid"
     },
+    "price_zone": "below_sma200",
     "sizing_present": {
       "decision": {
         "card": true,
@@ -303,6 +305,7 @@
       "long_term": "avoid_core_position",
       "mid_term": "avoid"
     },
+    "price_zone": "below_sma200",
     "sizing_present": {
       "decision": {
         "card": true,
@@ -409,6 +412,7 @@
       "long_term": "hold_size_conservatively",
       "mid_term": "hold_or_add"
     },
+    "price_zone": "above_sma50",
     "sizing_present": {
       "decision": {
         "card": true,
@@ -521,6 +525,7 @@
       "long_term": "hold_size_conservatively",
       "mid_term": "hold_or_add"
     },
+    "price_zone": "above_sma50",
     "sizing_present": {
       "decision": {
         "card": true,
@@ -629,6 +634,7 @@
       "long_term": "hold_size_conservatively",
       "mid_term": "avoid"
     },
+    "price_zone": "below_sma200",
     "sizing_present": {
       "decision": {
         "card": true,
@@ -741,6 +747,7 @@
       "long_term": "accumulate",
       "mid_term": "avoid"
     },
+    "price_zone": "below_sma200",
     "sizing_present": {
       "decision": {
         "card": true,
@@ -853,6 +860,7 @@
       "long_term": "accumulate",
       "mid_term": "avoid"
     },
+    "price_zone": "below_sma200",
     "sizing_present": {
       "decision": {
         "card": true,
@@ -956,6 +964,7 @@
       "long_term": "accumulate",
       "mid_term": "avoid"
     },
+    "price_zone": "below_sma200",
     "sizing_present": {
       "decision": {
         "card": true,
@@ -1057,6 +1066,7 @@
       "long_term": "small_position_with_stops",
       "mid_term": "hold_or_add"
     },
+    "price_zone": "above_sma50",
     "sizing_present": {
       "decision": {
         "card": true,
@@ -1164,6 +1174,7 @@
       "long_term": "insufficient_data",
       "mid_term": "avoid"
     },
+    "price_zone": "below_sma200",
     "sizing_present": {
       "decision": {
         "card": true,
@@ -1276,6 +1287,7 @@
       "long_term": "insufficient_data",
       "mid_term": "watch"
     },
+    "price_zone": "above_sma50",
     "sizing_present": {
       "decision": {
         "card": true,
@@ -1391,6 +1403,7 @@
       "long_term": "avoid_core_position",
       "mid_term": "hold_or_add"
     },
+    "price_zone": "above_sma50",
     "sizing_present": {
       "decision": {
         "card": true,
@@ -1494,6 +1507,7 @@
       "long_term": "hold",
       "mid_term": "avoid"
     },
+    "price_zone": "below_sma200",
     "sizing_present": {
       "decision": {
         "card": true,
@@ -1607,6 +1621,7 @@
       "long_term": "watch",
       "mid_term": "watch"
     },
+    "price_zone": "above_sma50",
     "sizing_present": {
       "decision": {
         "card": true,
@@ -1724,6 +1739,7 @@
       "long_term": "watch",
       "mid_term": "avoid"
     },
+    "price_zone": "below_sma200",
     "sizing_present": {
       "decision": {
         "card": true,
@@ -1843,6 +1859,7 @@
       "long_term": "speculative_only",
       "mid_term": "speculative_small_position"
     },
+    "price_zone": "above_sma50",
     "sizing_present": {
       "decision": {
         "card": true,
@@ -1946,6 +1963,7 @@
       "long_term": "accumulate",
       "mid_term": "hold_or_add"
     },
+    "price_zone": "above_sma50",
     "sizing_present": {
       "decision": {
         "card": true,
@@ -2049,6 +2067,7 @@
       "long_term": "accumulate",
       "mid_term": "buy"
     },
+    "price_zone": "below_sma200",
     "sizing_present": {
       "decision": {
         "card": true,
@@ -2153,6 +2172,7 @@
       "long_term": "accumulate",
       "mid_term": "avoid"
     },
+    "price_zone": "below_sma200",
     "sizing_present": {
       "decision": {
         "card": true,
@@ -2266,6 +2286,7 @@
       "long_term": "accumulate",
       "mid_term": "hold_or_add"
     },
+    "price_zone": "above_sma50",
     "sizing_present": {
       "decision": {
         "card": true,
@@ -2381,6 +2402,7 @@
       "long_term": "accumulate",
       "mid_term": "avoid"
     },
+    "price_zone": "below_sma200",
     "sizing_present": {
       "decision": {
         "card": true,
@@ -2497,6 +2519,7 @@
       "long_term": "accumulate",
       "mid_term": "avoid"
     },
+    "price_zone": "below_sma200",
     "sizing_present": {
       "decision": {
         "card": true,
@@ -2606,6 +2629,7 @@
       "long_term": "insufficient_data",
       "mid_term": "hold"
     },
+    "price_zone": "below_sma200",
     "sizing_present": {
       "decision": {
         "card": true,
@@ -2723,6 +2747,7 @@
       "long_term": "insufficient_data",
       "mid_term": "insufficient_data"
     },
+    "price_zone": "above_sma50",
     "sizing_present": {
       "decision": {
         "card": true,
@@ -2838,6 +2863,7 @@
       "long_term": "accumulate",
       "mid_term": "hold_or_add"
     },
+    "price_zone": "above_sma50",
     "sizing_present": {
       "decision": {
         "card": true,
@@ -2943,6 +2969,7 @@
       "long_term": "small_position_with_stops",
       "mid_term": "speculative_small_position"
     },
+    "price_zone": "above_sma50",
     "sizing_present": {
       "decision": {
         "card": true,
@@ -3044,6 +3071,7 @@
       "long_term": "accumulate",
       "mid_term": "speculative_small_position"
     },
+    "price_zone": "above_sma50",
     "sizing_present": {
       "decision": {
         "card": true,
@@ -3145,6 +3173,7 @@
       "long_term": "accumulate",
       "mid_term": "wait_for_entry"
     },
+    "price_zone": "above_sma50",
     "sizing_present": {
       "decision": {
         "card": true,
@@ -3249,6 +3278,7 @@
       "long_term": "accumulate",
       "mid_term": "avoid"
     },
+    "price_zone": "below_sma200",
     "sizing_present": {
       "decision": {
         "card": true,

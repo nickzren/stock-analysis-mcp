@@ -108,6 +108,9 @@ WEAK = copy.deepcopy(STRONG)
 WEAK["macd"]["rules"] = {"bullish_cross": {"triggered": False}, "bearish_cross": {"triggered": True}}
 WEAK["moving_averages"]["rules"]["golden_cross"] = {"triggered": False}
 WEAK["returns"]["return_3m"] = -0.12
+# WEAK at its SMA200 band after a 5-day-high break: a healthy, mildly oversold pullback (buy_the_dip) with
+# accumulate and add_position entry signals, on a caution-fit bullish starter (plan §7 starter scenario).
+STARTER_DIP = {**copy.deepcopy(WEAK), "current_price": 89.0, "price_action": {"break_5d_high": True}}
 
 
 def at_price(tech: dict[str, Any], price: float, **rules: bool) -> dict[str, Any]:
@@ -479,6 +482,7 @@ def digest(result: dict[str, Any]) -> dict[str, Any]:
                 "recommendation": (dip.get("assessment") or {}).get("recommendation"),
                 "entry_actions": [s.get("action") for s in (dip.get("entry_timing") or {}).get("signals") or []]},
         "zone": (policy.get("inputs") or {}).get("zone"),  # the pre-gate (capped) zone; emitted only there
+        "price_zone": zones.get("price_zone"),
         "valuation_gate": (zones.get("valuation_assessment") or {}).get("gate"),
         "dislocation": {"status": dislocation.get("status"),
                         "can_start_now": (dislocation.get("action") or {}).get("can_start_now"),

@@ -341,9 +341,9 @@ def build_verdict(
     burn_metrics = fundamentals_summary.get("burn_metrics") or {}
 
     # Build horizon fit assessment
-    # mid_term (3-12 months): can lean on setup + regime-aware sizing
+    # mid_term (3-12 months): setup and risk regime
     # long_term (1-5 years): requires business quality + not extreme risk + runway
-    horizon_fit = _build_horizon_fit(
+    horizon_fit = build_horizon_fit(
         setup_label=setup_label,
         business_quality_label=business_quality_label,
         business_quality_status=business_quality_status,
@@ -895,7 +895,7 @@ def _build_confidence_path(
     }
 
 
-def _build_horizon_fit(
+def build_horizon_fit(
     setup_label: str | None,
     business_quality_label: str | None,
     business_quality_status: str,
@@ -909,7 +909,7 @@ def _build_horizon_fit(
     """
     Build horizon fit assessment for mid-term and long-term investors.
 
-    mid_term (3-12 months): can lean on setup + regime-aware sizing
+    mid_term (3-12 months): setup and risk regime
     long_term (1-5 years): requires business quality + not extreme risk + runway
 
     Investment policy gates:
@@ -942,14 +942,14 @@ def _build_horizon_fit(
         reasons.append("mid_term: insufficient technical data")
     elif has_extreme_risk:
         mid_term_fit = "caution"
-        reasons.append("mid_term: extreme risk requires minimal position size")
+        reasons.append("mid_term: extreme risk regime")
     elif setup_label in ("strong", "moderate"):
         if has_high_risk:
             mid_term_fit = "ok"
-            reasons.append("mid_term: setup favorable but size conservatively due to high risk")
+            reasons.append("mid_term: setup favorable, high risk regime")
         else:
             mid_term_fit = "ok"
-            reasons.append("mid_term: setup supports position with standard sizing")
+            reasons.append("mid_term: setup favorable")
     elif setup_label == "weak":
         mid_term_fit = "caution"
         reasons.append("mid_term: weak setup suggests waiting for better entry")
@@ -1017,7 +1017,7 @@ def _build_horizon_fit(
                 reasons.append("long_term: business quality and risk support long-term holding")
         elif business_quality_label == "mixed":
             long_term_fit = "caution"
-            reasons.append("long_term: mixed fundamentals suggest smaller position")
+            reasons.append("long_term: mixed fundamentals")
         else:
             long_term_fit = "unknown"
             reasons.append("long_term: insufficient data for assessment")

@@ -344,7 +344,7 @@ async def test_a7_caps_mid_term_new_money_only(scenario: dm.Scenario, long_term:
     card = result["decision_card"]
     long = card["long_term"]["new_money"]
 
-    assert result["action_zones"]["current_zone"] == "reduce"
+    assert result["action_zones"]["price_zone"] == "near_52w_high"
     assert (card["new_money"]["action"], ids(card["new_money"]["blocked_by"]), card["new_money"]["decided_by"]) == (
         "wait", ["near_52w_high"], "near_52w_high")
     assert card["if_held"] == {"action": "hold", "add_allowed": False, "basis": "candidate_admits_new_money"}
@@ -367,11 +367,11 @@ def test_near_52w_high_never_reaches_long_term_core_or_if_held() -> None:
 
 
 def test_near_52w_high_status() -> None:
-    """PH-RF11: the gate fires on the reduce zone only, and is unevaluated with no zone or an undetermined one.
-    PD D-4."""
-    assert check_near_52w_high("reduce") == ("fired", {"id": "near_52w_high",
-                                                       "reason": "price in the near-52-week-high band"})
-    for zone in ("strong_buy", "accumulate", "hold_bullish", "hold_neutral"):
+    """PH-RF11: the gate fires on price_zone near_52w_high only (the uncapped reduce classification; WP2.3, OC-M8),
+    and is unevaluated with no price_zone or an undetermined one. PD D-4."""
+    assert check_near_52w_high("near_52w_high") == ("fired", {"id": "near_52w_high",
+                                                              "reason": "price in the near-52-week-high band"})
+    for zone in ("near_52w_low", "below_sma200", "above_sma50", "at_or_below_sma50"):
         assert check_near_52w_high(zone) == ("clear", None)
     for zone in (None, "undetermined"):
         assert check_near_52w_high(zone) == ("unevaluated", None)
@@ -391,7 +391,7 @@ async def test_an_undetermined_zone_leaves_near_52w_high_unevaluated_at_mid_term
                                   "undetermined", None])
 def test_zone_caps_never_move_the_gate_zones(zone: str | None) -> None:
     """G-ZONE: the dip and valuation zone caps never move a zone into or out of {reduce, undetermined, None}, so
-    current_zone reads the uncapped classification for near_52w_high until WP2.3 emits price_zone. G."""
+    near_52w_high reading price_zone (WP2.3) fires exactly where the capped label it read in WP2.2 did. G."""
     special = (None, "undetermined", "reduce")
     for dip_type, risk in product(("falling_knife", "extended_decline", None), ("extreme", "high", None)):
         out = apply_dip_gates_to_action_zones({"current_zone": zone}, {"dip_classification": {"type": dip_type}},
