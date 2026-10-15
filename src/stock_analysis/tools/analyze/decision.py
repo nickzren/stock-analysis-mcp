@@ -75,6 +75,10 @@ def most_restrictive(actions: Iterable[str]) -> str:
     return max(actions, key=lambda action: _TIGHTNESS[action])
 
 
+def tighter(action: str, than: str) -> bool:
+    return _TIGHTNESS[action] > _TIGHTNESS[than]
+
+
 def entry_allowed(action: str) -> bool:
     return action in ENTRY_ACTIONS
 

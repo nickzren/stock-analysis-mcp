@@ -8,8 +8,10 @@ from stock_analysis.tools.analyze.decision import NEW_MONEY_ACTIONS
 from stock_analysis.tools.analyze.decision_card import (
     _build_sizing,
     _compute_hard_gates,
+    build_conditions,
     build_decision_card,
 )
+from stock_analysis.tools.analyze.gates import GATES
 from tests.support.decision_matrix import ET, KNIFE, decide_on
 
 
@@ -299,7 +301,7 @@ class TestSizing:
 
 def _card(fixture: dict) -> dict:
     """The card for a fixture: its gates from _compute_hard_gates (fundamentals and liquidity clean), its
-    decision from decide()."""
+    decision from decide(), its binding conditions from build_conditions (gates only: no candidate factors)."""
     hard_gates = _compute_hard_gates(
         events_data=fixture["events_data"],
         data_quality={"fundamentals_status": "available"},
@@ -307,8 +309,11 @@ def _card(fixture: dict) -> dict:
         fundamentals_summary={"valuation": {"valuation_note": None}, "burn_metrics": {"status": "not_applicable"}},
         risk_data={"liquidity": {"avg_dollar_volume": 50_000_000}},
     )
-    decision = decide_on(fixture["policy_action"], hard_gates["blocking"])
-    return build_decision_card(**fixture, hard_gates=hard_gates, decision=decision)
+    policy_action = fixture.pop("policy_action")
+    decision = decide_on(policy_action, hard_gates["blocking"])
+    conditions = build_conditions(decision=decision, candidate=policy_action, factors=[], inputs=None, downgrade=[],
+                                  support=None)
+    return build_decision_card(**fixture, hard_gates=hard_gates, decision=decision, conditions=conditions)
 
 
 class TestDecisionCardSchema:
@@ -344,6 +349,7 @@ class TestDecisionCardSchema:
         ):
             assert key in card, f"missing key: {key}"
         assert not {"rationale", "horizon_fit"} & set(card)
+        assert card["long_term"]["new_money"]["conditions"] == {"buy_only_if": []}
 
     def test_clean_inputs_yield_buy_action(self, fixture: dict) -> None:
         card = _card(fixture)
@@ -358,9 +364,11 @@ class TestDecisionCardSchema:
         # do_not_buy_if should contain the blocking reason
         assert any("earnings" in r.lower() for r in card["conditions"]["do_not_buy_if"])
 
-    def test_dislocation_add_only_if_propagated(self, fixture: dict) -> None:
+    def test_a_clean_buy_lists_no_buy_or_add_condition(self, fixture: dict) -> None:
+        """OC-M6: the plan §7e buy row: nothing binds, so no buy or add condition (the dislocation framework's
+        lists are no longer copied). M."""
         card = _card(fixture)
-        assert "fcf_turns_positive" in card["conditions"]["add_only_if"]
+        assert (card["conditions"]["buy_only_if"], card["conditions"]["add_only_if"]) == ([], [])
 
     def test_next_review_uses_near_earnings_when_within_90_days(self, fixture: dict) -> None:
         fixture["events_data"] = {"earnings": {"days_until": 30, "next_date": "2026-06-11"}}
@@ -379,21 +387,14 @@ class TestDecisionCardSchema:
         assert "fractional_shares" in card["sizing"]
         assert card["sizing"]["fractional_shares"] is not None
 
-    def test_buy_only_if_propagated_when_can_start_now_false(self, fixture: dict) -> None:
-        """When dislocation_framework says can_start_now=False, buy_only_if (not add_only_if)
-        carries the actionable conditions. Both must be surfaced separately."""
-        fixture["dislocation_framework"] = {
-            "action": {
-                "can_start_now": False,
-                "buy_only_if": ["fcf_turns_positive", "burn_metrics_available"],
-                "add_only_if": [],
-            }
-        }
+    def test_a_binding_gate_lists_its_clears_when(self, fixture: dict) -> None:
+        """OC-M6: a blackout that tightens buy to wait binds at both horizons: its clears_when is the buy
+        condition, and the add condition while if_held is hold (plan §7e). M."""
+        fixture["events_data"] = {"earnings": {"days_until": 2, "next_date": "2026-05-14"}}
         card = _card(fixture)
-        assert "buy_only_if" in card["conditions"]
-        assert "fcf_turns_positive" in card["conditions"]["buy_only_if"]
-        assert "burn_metrics_available" in card["conditions"]["buy_only_if"]
-        assert card["conditions"]["add_only_if"] == []
+        clears = GATES["earnings_blackout"].clears_when
+        assert (card["conditions"]["buy_only_if"], card["conditions"]["add_only_if"]) == ([clears], [clears])
+        assert card["long_term"]["new_money"]["conditions"] == {"buy_only_if": [clears]}
 
     def test_both_buy_only_if_and_add_only_if_present_in_schema(self, fixture: dict) -> None:
         card = _card(fixture)

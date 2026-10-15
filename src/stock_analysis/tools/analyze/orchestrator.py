@@ -10,12 +10,15 @@ import pytz
 from stock_analysis.data import jobs
 from stock_analysis.reference_data import build_sector_comparison
 from stock_analysis.tools.analyze.action_zones import (
+    PRICE_ZONES,
     apply_dip_gates_to_action_zones,
     build_action_zones,
 )
+from stock_analysis.tools.analyze.conditions import CandidateInputs, candidate_factors
 from stock_analysis.tools.analyze.constants import CRITICAL_ANALYZE_TOOLS
 from stock_analysis.tools.analyze.decision import ENTRY_CANDIDATE_CODES, decide
 from stock_analysis.tools.analyze.decision_card import (
+    build_conditions,
     build_decision_card,
     build_diagnostics,
     evaluate_gates,
@@ -60,7 +63,7 @@ from stock_analysis.tools.analyze.summaries import (
     build_technicals_summary_text,
     build_valuation_context_summary_text,
 )
-from stock_analysis.tools.analyze.verdict import build_verdict
+from stock_analysis.tools.analyze.verdict import build_verdict, horizon_fit_inputs
 from stock_analysis.tools.events import events_calendar
 from stock_analysis.tools.fundamentals import fundamentals_snapshot, upside_to_target
 from stock_analysis.tools.news import stock_news
@@ -1098,6 +1101,32 @@ async def analyze_stock(
         dislocation=thesis_signals["is_dislocation_candidate"], tilt=verdict.get("tilt"),
         window=earnings_window(earnings, today), today=today, support=support,
     )
+    # Only binding conditions, per horizon (plan §7e), from the same uncapped candidate.
+    valuation_assessment = action_zones.get("valuation_assessment") or {}
+    conditions = build_conditions(
+        decision=decision,
+        candidate=policy_action,
+        factors=candidate_factors(
+            decomposed=verdict.get("decomposed"),
+            valuation_assessment=valuation_assessment,
+            zone_warnings=action_zones.get("zone_warnings") or [],
+            risk_regime=risk_regime,
+            long_term_gates=(verdict.get("horizon_fit") or {}).get("long_term_gates") or [],
+            leverage_status=(fundamentals_summary.get("health") or {}).get("leverage_status"),
+        ),
+        inputs=CandidateInputs(
+            fit=horizon_fit_inputs(decomposed=verdict["decomposed"], signals=signals, fundamentals_data=fund_data,
+                                   fundamentals_summary=fundamentals_summary),
+            tilt=verdict.get("tilt"),
+            valuation_gate=valuation_assessment.get("gate"),
+            is_unprofitable=bool(valuation_assessment.get("is_unprofitable")),
+            dislocation=thesis_signals["is_dislocation_candidate"],
+            uncapped_zone={label: zone for zone, label in PRICE_ZONES.items()}.get(action_zones["price_zone"]),
+            dip_type=((dip_assessment or {}).get("dip_classification") or {}).get("type"),
+        ),
+        downgrade=policy_action["conditions_to_downgrade"],
+        support=support,
+    )
     # WP4 (D5): the emitted pre-gate copy (diagnostics.pre_gate_policy) is support-capped (plan §0 #6),
     # as are the surfaces that still copy it (executive summary, decision modes, dislocation).
     supported = instrument_ok and currency_supported(support)
@@ -1129,6 +1158,7 @@ async def analyze_stock(
         events_summary=events_summary,
         account_size=investor_profile.get("account_size"),
         long_term_action=decision["long_term"]["new_money"]["action"],
+        conditions=conditions,
     )
     if not supported:
         _cap_modes_at_watch(decision_modes)
@@ -1139,13 +1169,13 @@ async def analyze_stock(
         dip_assessment=dip_assessment,
         decision_context=decision_context,
         decision_modes=decision_modes,
-        policy_action=policy_action,
+        conditions=conditions["mid_term"],
     )
     dip_assessment = align_dip_assessment_with_action(
         dip_assessment=dip_assessment,
         mismatch_status=(dislocation_framework.get("mismatch_verdict") or {}).get("status"),
         can_start_now=bool((dislocation_framework.get("action") or {}).get("can_start_now")),
-        add_only_if=(dislocation_framework.get("action") or {}).get("add_only_if"),
+        add_only_if=conditions["mid_term"]["add_only_if"],
     )
     if not supported:
         _cap_dip_at_watch(dip_assessment, support)
@@ -1162,12 +1192,12 @@ async def analyze_stock(
         summary=summary,
         verdict=verdict,
         action_zones=action_zones,
-        policy_action=policy_action,
         events_data=events_data,
         dislocation_framework=dislocation_framework,
         now=now,
         hard_gates=hard_gates,
         decision=decision,
+        conditions=conditions,
     )
 
     # Top-level error signaling for invalid/unanalyzable symbols.

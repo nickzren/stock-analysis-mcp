@@ -494,7 +494,9 @@ def digest(result: dict[str, Any]) -> dict[str, Any]:
         "sizing_present": {tier: {"card": bool((shown[tier].get("decision_card") or {}).get("sizing")),
                                   "range": bool((shown[tier].get("action_zones") or {}).get("position_sizing_range"))}
                            for tier in TIERS},
-        "conditions": {k: (card.get("conditions") or {}).get(k) for k in ("buy_only_if", "add_only_if")},
+        "conditions": {**{k: (card.get("conditions") or {}).get(k) for k in ("buy_only_if", "add_only_if", "monitor")},
+                       "long_term_buy_only_if": ((((card.get("long_term") or {}).get("new_money") or {})
+                                                  .get("conditions") or {}).get("buy_only_if"))},
         "snapshot": {k: snapshot.get(k) for k in ("action_mid_term", "action_long_term", "decision_action_now",
                                                   "hard_gate_ids", "zone", "snapshot_hash")},
         "decision": {"new_money": _horizon(card.get("new_money")),

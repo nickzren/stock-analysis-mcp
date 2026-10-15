@@ -210,17 +210,21 @@ class TestEntrySizingUnderNonEntryActions:
 
 
 class TestConditionsUnderAdmittingActions:
-    async def test_headwind_hold_or_add_lists_a_valuation_buy_condition(self) -> None:
-        """OC-CH5: C1 has action_now=starter (hold_or_add, WP2.2 D-2) with buy_only_if=['P/E < 25x (currently
-        headwind)'], and card.monitor equals the upgrade list. Flipped by WP2.3 (only binding conditions are
-        listed, §7e RF-E1)."""
+    async def test_headwind_starter_lists_the_valuation_condition_at_long_term_only(self) -> None:
+        """OC-CH5 (flipped by WP2.3): C1 is a mid-term starter whose valuation headwind does not bind at mid term,
+        so the card's buy_only_if and add_only_if are empty and monitor keeps the upgrade condition; the long
+        term (wait from the headwind) lists it in long_term.new_money.conditions.buy_only_if and in core's
+        required_before_full_size. G from WP2.3 (§7e, RF-E1's placement)."""
         result = await dm.run("C1_headwind_hold_or_add")
-        conditions = result["decision_card"]["conditions"]
+        card = result["decision_card"]
+        conditions = card["conditions"]
+        upgrade = pre_gate_policy(result)["conditions_to_upgrade"]
 
-        assert result["decision_card"]["action_now"] == "starter"
-        assert conditions["buy_only_if"] == ["P/E < 25x (currently headwind)"]
-        assert conditions["monitor"] == pre_gate_policy(result)["conditions_to_upgrade"] == [
-            "P/E < 25x (currently headwind)"]
+        assert (card["action_now"], card["long_term"]["new_money"]["action"]) == ("starter", "wait")
+        assert (conditions["buy_only_if"], conditions["add_only_if"]) == ([], [])
+        assert len(upgrade) == 1 and conditions["monitor"] == upgrade
+        assert card["long_term"]["new_money"]["conditions"]["buy_only_if"] == upgrade
+        assert result["decision_modes"]["core"]["required_before_full_size"] == upgrade
 
 
 class TestSizingWordsInCodesAndText:

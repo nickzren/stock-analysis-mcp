@@ -9,8 +9,14 @@
       "whole_shares": 2
     },
     "conditions": {
-      "add_only_if": [],
-      "buy_only_if": []
+      "add_only_if": [
+        "price leaves the near-52-week-high band"
+      ],
+      "buy_only_if": [
+        "price leaves the near-52-week-high band"
+      ],
+      "long_term_buy_only_if": [],
+      "monitor": []
     },
     "decision": {
       "if_held": {
@@ -121,8 +127,9 @@
     },
     "conditions": {
       "add_only_if": [],
-      "buy_only_if": [
-        "net_margin > 0%",
+      "buy_only_if": [],
+      "long_term_buy_only_if": [],
+      "monitor": [
         "debt_to_equity < 1.5x",
         "revenue_yoy > -20%"
       ]
@@ -235,8 +242,9 @@
     },
     "conditions": {
       "add_only_if": [],
-      "buy_only_if": [
-        "net_margin > 0%",
+      "buy_only_if": [],
+      "long_term_buy_only_if": [],
+      "monitor": [
         "debt_to_equity < 1.5x",
         "revenue_yoy > -20%"
       ]
@@ -355,8 +363,12 @@
     },
     "conditions": {
       "add_only_if": [],
-      "buy_only_if": [
-        "P/E < 25x (currently headwind)"
+      "buy_only_if": [],
+      "long_term_buy_only_if": [
+        "P/E <= 50x (currently headwind)"
+      ],
+      "monitor": [
+        "P/E <= 50x (currently headwind)"
       ]
     },
     "decision": {
@@ -458,9 +470,17 @@
       "whole_shares": 2
     },
     "conditions": {
-      "add_only_if": [],
+      "add_only_if": [
+        "no earnings date or window within 5 days"
+      ],
       "buy_only_if": [
-        "P/E < 25x (currently headwind)"
+        "no earnings date or window within 5 days"
+      ],
+      "long_term_buy_only_if": [
+        "P/E <= 50x (currently headwind)"
+      ],
+      "monitor": [
+        "P/E <= 50x (currently headwind)"
       ]
     },
     "decision": {
@@ -574,8 +594,10 @@
     },
     "conditions": {
       "add_only_if": [],
-      "buy_only_if": [
-        "P/E < 25x (currently headwind)"
+      "buy_only_if": [],
+      "long_term_buy_only_if": [],
+      "monitor": [
+        "P/E <= 50x (currently headwind)"
       ]
     },
     "decision": {
@@ -681,7 +703,11 @@
     },
     "conditions": {
       "add_only_if": [],
-      "buy_only_if": []
+      "buy_only_if": [],
+      "long_term_buy_only_if": [
+        "falling-knife rubric score below 4"
+      ],
+      "monitor": []
     },
     "decision": {
       "if_held": {
@@ -796,7 +822,11 @@
     },
     "conditions": {
       "add_only_if": [],
-      "buy_only_if": []
+      "buy_only_if": [],
+      "long_term_buy_only_if": [
+        "no earnings date or window within 5 days"
+      ],
+      "monitor": []
     },
     "decision": {
       "if_held": {
@@ -909,7 +939,9 @@
     },
     "conditions": {
       "add_only_if": [],
-      "buy_only_if": []
+      "buy_only_if": [],
+      "long_term_buy_only_if": [],
+      "monitor": []
     },
     "decision": {
       "if_held": {
@@ -1011,7 +1043,11 @@
     },
     "conditions": {
       "add_only_if": [],
-      "buy_only_if": []
+      "buy_only_if": [],
+      "long_term_buy_only_if": [],
+      "monitor": [
+        "free_cash_flow_ttm >= 0"
+      ]
     },
     "decision": {
       "if_held": {
@@ -1113,7 +1149,9 @@
     },
     "conditions": {
       "add_only_if": [],
-      "buy_only_if": []
+      "buy_only_if": [],
+      "long_term_buy_only_if": [],
+      "monitor": []
     },
     "decision": {
       "if_held": {
@@ -1223,7 +1261,9 @@
     },
     "conditions": {
       "add_only_if": [],
-      "buy_only_if": []
+      "buy_only_if": [],
+      "long_term_buy_only_if": [],
+      "monitor": []
     },
     "decision": {
       "if_held": {
@@ -1337,7 +1377,12 @@
     "conditions": {
       "add_only_if": [],
       "buy_only_if": [
-        "net_margin > 0%",
+        "business_status no longer broken (business_quality not poor; when unknown, growth and profitability not both failing)"
+      ],
+      "long_term_buy_only_if": [
+        "debt_to_equity < 1.5x"
+      ],
+      "monitor": [
         "debt_to_equity < 1.5x"
       ]
     },
@@ -1452,7 +1497,9 @@
     },
     "conditions": {
       "add_only_if": [],
-      "buy_only_if": []
+      "buy_only_if": [],
+      "long_term_buy_only_if": [],
+      "monitor": []
     },
     "decision": {
       "if_held": {
@@ -1554,7 +1601,9 @@
     },
     "conditions": {
       "add_only_if": [],
-      "buy_only_if": []
+      "buy_only_if": [],
+      "long_term_buy_only_if": [],
+      "monitor": []
     },
     "decision": {
       "if_held": {
@@ -1670,7 +1719,9 @@
     },
     "conditions": {
       "add_only_if": [],
-      "buy_only_if": []
+      "buy_only_if": [],
+      "long_term_buy_only_if": [],
+      "monitor": []
     },
     "decision": {
       "if_held": {
@@ -1788,11 +1839,18 @@
       "whole_shares": 2
     },
     "conditions": {
-      "add_only_if": [
-        "profitMargins > 0 for 2 consecutive quarters",
-        "freeCashflow > 0 for 2 consecutive quarters"
+      "add_only_if": [],
+      "buy_only_if": [
+        "cash runway no longer below 4 quarters"
       ],
-      "buy_only_if": []
+      "long_term_buy_only_if": [
+        "cash runway no longer below 4 quarters"
+      ],
+      "monitor": [
+        "profitMargins > 0 for 2 consecutive quarters",
+        "freeCashflow > 0 for 2 consecutive quarters",
+        "free_cash_flow_ttm >= 0"
+      ]
     },
     "decision": {
       "if_held": {
@@ -1908,7 +1966,9 @@
     },
     "conditions": {
       "add_only_if": [],
-      "buy_only_if": []
+      "buy_only_if": [],
+      "long_term_buy_only_if": [],
+      "monitor": []
     },
     "decision": {
       "if_held": {
@@ -2010,7 +2070,9 @@
     },
     "conditions": {
       "add_only_if": [],
-      "buy_only_if": []
+      "buy_only_if": [],
+      "long_term_buy_only_if": [],
+      "monitor": []
     },
     "decision": {
       "if_held": {
@@ -2114,7 +2176,9 @@
     },
     "conditions": {
       "add_only_if": [],
-      "buy_only_if": []
+      "buy_only_if": [],
+      "long_term_buy_only_if": [],
+      "monitor": []
     },
     "decision": {
       "if_held": {
@@ -2218,8 +2282,16 @@
       "whole_shares": 2
     },
     "conditions": {
-      "add_only_if": [],
-      "buy_only_if": []
+      "add_only_if": [
+        "no earnings date or window within 5 days"
+      ],
+      "buy_only_if": [
+        "no earnings date or window within 5 days"
+      ],
+      "long_term_buy_only_if": [
+        "no earnings date or window within 5 days"
+      ],
+      "monitor": []
     },
     "decision": {
       "if_held": {
@@ -2335,7 +2407,11 @@
     },
     "conditions": {
       "add_only_if": [],
-      "buy_only_if": []
+      "buy_only_if": [],
+      "long_term_buy_only_if": [
+        "no earnings date or window within 5 days"
+      ],
+      "monitor": []
     },
     "decision": {
       "if_held": {
@@ -2450,10 +2526,14 @@
       "whole_shares": 3
     },
     "conditions": {
-      "add_only_if": [
-        "risk_regime <= medium (volatility < 40%)"
+      "add_only_if": [],
+      "buy_only_if": [],
+      "long_term_buy_only_if": [
+        "falling-knife rubric score below 4"
       ],
-      "buy_only_if": []
+      "monitor": [
+        "risk_regime <= medium (max_drawdown_1y > -35%)"
+      ]
     },
     "decision": {
       "if_held": {
@@ -2568,7 +2648,9 @@
     },
     "conditions": {
       "add_only_if": [],
-      "buy_only_if": []
+      "buy_only_if": [],
+      "long_term_buy_only_if": [],
+      "monitor": []
     },
     "decision": {
       "if_held": {
@@ -2678,7 +2760,9 @@
     },
     "conditions": {
       "add_only_if": [],
-      "buy_only_if": [
+      "buy_only_if": [],
+      "long_term_buy_only_if": [],
+      "monitor": [
         "revenue data available for valuation"
       ]
     },
@@ -2795,8 +2879,16 @@
       "whole_shares": 2
     },
     "conditions": {
-      "add_only_if": [],
-      "buy_only_if": []
+      "add_only_if": [
+        "1-year average daily dollar volume >= $1M"
+      ],
+      "buy_only_if": [
+        "1-year average daily dollar volume >= $1M"
+      ],
+      "long_term_buy_only_if": [
+        "1-year average daily dollar volume >= $1M"
+      ],
+      "monitor": []
     },
     "decision": {
       "if_held": {
@@ -2911,10 +3003,14 @@
       "whole_shares": 0
     },
     "conditions": {
-      "add_only_if": [
+      "add_only_if": [],
+      "buy_only_if": [],
+      "long_term_buy_only_if": [
         "risk_regime <= high (volatility < 60%)"
       ],
-      "buy_only_if": []
+      "monitor": [
+        "risk_regime <= high (volatility < 60%)"
+      ]
     },
     "decision": {
       "if_held": {
@@ -3016,7 +3112,9 @@
     },
     "conditions": {
       "add_only_if": [],
-      "buy_only_if": []
+      "buy_only_if": [],
+      "long_term_buy_only_if": [],
+      "monitor": []
     },
     "decision": {
       "if_held": {
@@ -3118,7 +3216,9 @@
     },
     "conditions": {
       "add_only_if": [],
-      "buy_only_if": []
+      "buy_only_if": [],
+      "long_term_buy_only_if": [],
+      "monitor": []
     },
     "decision": {
       "if_held": {
@@ -3220,7 +3320,9 @@
     },
     "conditions": {
       "add_only_if": [],
-      "buy_only_if": []
+      "buy_only_if": [],
+      "long_term_buy_only_if": [],
+      "monitor": []
     },
     "decision": {
       "if_held": {

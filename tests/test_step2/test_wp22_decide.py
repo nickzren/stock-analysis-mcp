@@ -18,7 +18,13 @@ from stock_analysis.tools.analyze.decision import (
     map_candidate,
 )
 from stock_analysis.tools.analyze.executive_summary import build_policy_action
-from stock_analysis.tools.analyze.gates import ANALYZE_GATE_IDS, GATES, NOT_APPLICABLE, gate_rank
+from stock_analysis.tools.analyze.gates import (
+    ANALYZE_GATE_IDS,
+    GATES,
+    NOT_APPLICABLE,
+    THESIS_CLEARS_WHEN,
+    gate_rank,
+)
 from tests.support import decision_matrix as dm
 from tests.support import freshness_frames as fr
 from tests.support import swing_matrix as sm
@@ -458,7 +464,8 @@ NEW_MONEY_KEYS = ["action", "blocked_by", "decided_by", "unevaluated", "earliest
 @pytest.mark.parametrize("name", dm.SCENARIOS)
 async def test_the_card_carries_one_decision(name: str) -> None:
     """Card shape: the decision_card at every tier: horizon, new_money, if_held, long_term in plan §2's
-    vocabularies; action_now aliases new_money.action and the snapshot's decision_action_now follows it (D-13);
+    vocabularies (long_term.new_money also carries its conditions, WP2.3 §7e); action_now aliases
+    new_money.action and the snapshot's decision_action_now follows it (D-13);
     hard_gates lists every fired gate (blocking = new_money.blocked_by without class and effect; long term drops
     the not_applicable near_52w_high) and checks every analyze gate in disclosure order. RF (plan §2)."""
     result = await dm.run(name)
@@ -468,8 +475,8 @@ async def test_the_card_carries_one_decision(name: str) -> None:
     assert list(card)[:len(CARD_KEYS)] == CARD_KEYS
     assert (card["horizon"], list(card["long_term"]), card["long_term"]["horizon"]) == (
         "mid_term", ["horizon", "new_money"], "long_term")
+    assert (list(mid), list(long)) == (NEW_MONEY_KEYS, [*NEW_MONEY_KEYS, "conditions"])  # WP2.3: §2, §7e
     for decision in (mid, long):
-        assert list(decision) == NEW_MONEY_KEYS
         assert decision["action"] in ORDER
         assert decision["decided_by"] is None or decision["decided_by"] in ids(decision["blocked_by"])
     assert list(card["if_held"]) == ["action", "add_allowed", "basis"]
@@ -559,15 +566,22 @@ async def test_the_snapshot_keeps_the_knife_free_candidate_until_wp2_4() -> None
 
 async def test_a_thesis_capped_row_keeps_the_dislocation_starter() -> None:
     """IS-CH2: H (2-quarter burner) gives new_money avoid (thesis_broken) and if_held review_exit while
-    dislocation_framework.action keeps can_start_now true / buy_now small_starter and the card's
-    conditions.add_only_if keeps the framework's upgrade conditions.
-    CH: flipped by WP2.3 (derived surfaces follow new_money)."""
+    dislocation_framework.action keeps can_start_now true / buy_now small_starter. The conditions clauses are
+    flipped by WP2.3 (§7e): add_only_if empty on the card and the framework (if_held is not hold); buy_only_if
+    names only the binding thesis component (runway, plan §4) on the card, the framework,
+    long_term.new_money.conditions and core's required_before_full_size; the upgrade items that do not bind are
+    monitored (G from WP2.3). CH: flipped by WP2.3 (can_start_now follows new_money)."""
     result = await dm.run("H_burner_runway_2q")
     card = result["decision_card"]
     action = result["dislocation_framework"]["action"]
+    runway = [THESIS_CLEARS_WHEN["runway_critical"]]
 
     assert (card["new_money"]["action"], card["new_money"]["decided_by"], card["if_held"]["action"]) == (
         "avoid", "thesis_broken", "review_exit")
     assert (action["can_start_now"], action["buy_now"]) == (True, "small_starter")
-    assert card["conditions"]["add_only_if"] == action["add_only_if"] == [
-        "profitMargins > 0 for 2 consecutive quarters", "freeCashflow > 0 for 2 consecutive quarters"]
+    assert card["conditions"]["add_only_if"] == action["add_only_if"] == []
+    assert card["conditions"]["buy_only_if"] == action["buy_only_if"] == runway
+    assert card["long_term"]["new_money"]["conditions"] == {"buy_only_if": runway}
+    assert result["decision_modes"]["core"]["required_before_full_size"] == runway
+    assert card["conditions"]["monitor"] == ["profitMargins > 0 for 2 consecutive quarters",
+                                             "freeCashflow > 0 for 2 consecutive quarters", "free_cash_flow_ttm >= 0"]

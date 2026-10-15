@@ -768,5 +768,5 @@ def align_dip_assessment_with_action(
     assessment["rationale"] = (
         "Price looks more broken than the business, but the trend is still broken: wait for stabilization."
     )
-    assessment["add_only_if"] = list(add_only_if or [])[:4]
+    assessment["add_only_if"] = list(add_only_if or [])
     return dip_assessment

@@ -92,6 +92,9 @@ VOLATILITY_REGIME_THRESHOLDS = {
     "medium": 0.40,
     "high": 0.60,
 }
+# Drawdown (negative: a regime's upper bound is exclusive) and beta regime thresholds
+DRAWDOWN_REGIME_THRESHOLDS = {"low": -0.20, "medium": -0.35, "high": -0.50}
+BETA_REGIME_THRESHOLDS = {"low": 0.8, "medium": 1.2, "high": 1.8}
 
 
 def vol_threshold_for_improvement(
@@ -163,13 +166,13 @@ def classify_risk_regime(
 
     # Classify drawdown (note: drawdown is negative)
     if max_drawdown is not None:
-        if max_drawdown > -0.20:
+        if max_drawdown > DRAWDOWN_REGIME_THRESHOLDS["low"]:
             factors["drawdown"] = "low"
             scores.append(0)
-        elif max_drawdown > -0.35:
+        elif max_drawdown > DRAWDOWN_REGIME_THRESHOLDS["medium"]:
             factors["drawdown"] = "medium"
             scores.append(1)
-        elif max_drawdown > -0.50:
+        elif max_drawdown > DRAWDOWN_REGIME_THRESHOLDS["high"]:
             factors["drawdown"] = "high"
             scores.append(2)
         else:
@@ -180,13 +183,13 @@ def classify_risk_regime(
 
     # Classify beta
     if beta_val is not None:
-        if beta_val < 0.8:
+        if beta_val < BETA_REGIME_THRESHOLDS["low"]:
             factors["beta"] = "low"
             scores.append(0)
-        elif beta_val < 1.2:
+        elif beta_val < BETA_REGIME_THRESHOLDS["medium"]:
             factors["beta"] = "medium"
             scores.append(1)
-        elif beta_val < 1.8:
+        elif beta_val < BETA_REGIME_THRESHOLDS["high"]:
             factors["beta"] = "high"
             scores.append(2)
         else:

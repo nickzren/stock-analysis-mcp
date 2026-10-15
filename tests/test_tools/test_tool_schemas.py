@@ -1035,6 +1035,7 @@ class TestToolResponseSchemas:
             fundamentals_summary=fundamentals_summary,
             events_summary={"next_catalyst": {}},
             long_term_action="starter",  # small_position_with_stops, ungated
+            conditions={"mid_term": {"add_only_if": []}, "long_term": {"buy_only_if": []}},
         )
 
         assert policy_action["mid_term"] == "speculative_small_position"

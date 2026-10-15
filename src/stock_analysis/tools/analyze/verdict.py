@@ -331,29 +331,14 @@ def build_verdict(
         "risk": risk_label,
     }
 
-    # Get revenue_yoy and fcf for horizon fit assessment
-    growth_data = fundamentals_data.get("growth", {})
-    cf_data = fundamentals_data.get("cash_flow", {})
-    revenue_yoy_val = growth_data.get("revenue_yoy")
-    fcf_ttm_val = cf_data.get("free_cash_flow_ttm")
-
-    # Get burn_metrics for horizon fit
-    burn_metrics = fundamentals_summary.get("burn_metrics") or {}
-
     # Build horizon fit assessment
     # mid_term (3-12 months): setup and risk regime
     # long_term (1-5 years): requires business quality + not extreme risk + runway
-    horizon_fit = build_horizon_fit(
-        setup_label=setup_label,
-        business_quality_label=business_quality_label,
-        business_quality_status=business_quality_status,
-        risk_label=risk_label,
-        signals=signals,
-        revenue_yoy=revenue_yoy_val,
-        fcf_ttm=fcf_ttm_val,
-        burn_metrics_status=burn_metrics.get("status"),
-        runway_confidence=burn_metrics.get("runway_confidence"),
+    fit_inputs = horizon_fit_inputs(
+        decomposed=decomposed_scores, signals=signals, fundamentals_data=fundamentals_data,
+        fundamentals_summary=fundamentals_summary,
     )
+    horizon_fit = build_horizon_fit(**fit_inputs)
 
     # Check minimum coverage for scoring
     required_coverage = ["price", "fundamentals"]
@@ -531,7 +516,7 @@ def build_verdict(
         has_extreme_risk=has_extreme_risk,
         coverage_count=sum(1 for v in coverage.values() if v),
         risk_regime=risk_regime_class,
-        burn_metrics_status=burn_metrics.get("status"),
+        burn_metrics_status=fit_inputs["burn_metrics_status"],
         sma_200=sma_200_val,
         current_price=current_price_val,
         max_drawdown=max_dd_val,
@@ -892,6 +877,29 @@ def _build_confidence_path(
         "downgrade_if": downgrade_conditions[:3] if downgrade_conditions else None,
         "current_blockers": current_blockers if current_blockers else None,
         "note": note,
+    }
+
+
+def horizon_fit_inputs(
+    *,
+    decomposed: dict[str, Any],
+    signals: dict[str, list[str]],
+    fundamentals_data: dict[str, Any],
+    fundamentals_summary: dict[str, Any],
+) -> dict[str, Any]:
+    """The keyword arguments build_verdict passes to build_horizon_fit (the conditions' counterfactuals replay
+    them, plan §7e)."""
+    burn_metrics = fundamentals_summary.get("burn_metrics") or {}
+    return {
+        "setup_label": decomposed["setup"],
+        "business_quality_label": decomposed["business_quality"],
+        "business_quality_status": decomposed["business_quality_status"],
+        "risk_label": decomposed["risk"],
+        "signals": signals,
+        "revenue_yoy": fundamentals_data.get("growth", {}).get("revenue_yoy"),
+        "fcf_ttm": fundamentals_data.get("cash_flow", {}).get("free_cash_flow_ttm"),
+        "burn_metrics_status": burn_metrics.get("status"),
+        "runway_confidence": burn_metrics.get("runway_confidence"),
     }
 
 

@@ -59,7 +59,7 @@ class TestR91NetDebt:
     def test_the_framework_reads_net_debt_as_watch_not_broken(self) -> None:
         framework = build_dislocation_framework(
             VERDICT, ZONES, fundamentals(HEALTHY_NET_DEBT, NO_BURN), DEEP_DIP,
-            {"thesis_checkpoints": {}}, {}, {"mid_term": "hold", "long_term": "hold"},
+            {"thesis_checkpoints": {}}, {}, conditions={"buy_only_if": [], "add_only_if": []},
         )
         assert framework["balance_sheet_safety"]["status"] == "watch"
         assert framework["thesis_integrity"]["status"] == "watch"

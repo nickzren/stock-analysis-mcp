@@ -158,6 +158,11 @@ def _build_level_distance_views(
     return distance_to_levels, price_vs_levels, distance_labels, level_vs_current_labels
 
 
+# Valuation headwind thresholds: the gate fires strictly above each (the condition text quotes them, BL-E1).
+PE_HEADWIND_ABOVE = 50
+PEG_HEADWIND_ABOVE = 3.0
+SALES_MULTIPLE_HEADWIND_ABOVE = 10
+
 # The neutral, diagnostic name of each uncapped zone classification (plan §7b): never an entry code.
 PRICE_ZONES = {"strong_buy": "near_52w_low", "reduce": "near_52w_high", "accumulate": "below_sma200",
                "hold_bullish": "above_sma50", "hold_neutral": "at_or_below_sma50", "undetermined": "undetermined"}
@@ -315,7 +320,7 @@ def _build_valuation_assessment(
                 valuation_gate_reasons.append(
                     f"{metric_label} {sales_multiple:.1f} reasonable for growth"
                 )
-            elif sales_multiple > 10:
+            elif sales_multiple > SALES_MULTIPLE_HEADWIND_ABOVE:
                 valuation_gate = "headwind"
                 valuation_gate_reasons.append(
                     f"{metric_label} {sales_multiple:.1f} very elevated for unprofitable company"
@@ -347,12 +352,12 @@ def _build_valuation_assessment(
             valuation_basis = "peg_ratio"
             valuation_gate_reasons.append(f"PEG {peg:.2f} suggests undervaluation")
 
-        if pe is not None and pe > 50:
+        if pe is not None and pe > PE_HEADWIND_ABOVE:
             valuation_gate = "headwind"
             valuation_basis = "pe_trailing"
             valuation_gate_reasons.append(f"P/E {pe:.1f} very elevated")
             warnings.append("valuation_extended_high_pe")
-        if peg is not None and peg > 3.0:
+        if peg is not None and peg > PEG_HEADWIND_ABOVE:
             if valuation_gate != "headwind":
                 valuation_gate = "headwind"
             valuation_basis = "peg_ratio"
@@ -630,3 +635,17 @@ def apply_dip_gates_to_action_zones(
     action_zones["current_zone"] = current_zone
     action_zones["zone_warnings"] = zone_warnings
     return action_zones
+
+
+def zone_after_caps(uncapped: str | None, *, extreme: bool, valuation_gate: str | None, dip_type: str | None) -> str | None:
+    """The capped zone the pre-gate candidate reads, replayed from the uncapped label: the build-time extreme
+    cap, the valuation headwind downgrade, then apply_dip_gates_to_action_zones (BL-E1 counterfactuals)."""
+    zone = "accumulate" if extreme and uncapped == "strong_buy" else uncapped
+    zone, _ = _apply_valuation_gate_to_zone(zone, valuation_gate or "")
+    if dip_type == "falling_knife" and zone in ("strong_buy", "accumulate"):
+        zone = "hold_neutral"
+    elif dip_type == "extended_decline" and zone == "strong_buy":
+        zone = "accumulate"
+    if extreme and zone in ("strong_buy", "accumulate"):
+        zone = "hold_neutral"
+    return zone

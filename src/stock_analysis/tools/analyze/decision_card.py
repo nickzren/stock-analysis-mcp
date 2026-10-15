@@ -2,17 +2,31 @@
 
 evaluate_gates computes every analyze hard gate once (hard_gates) and the ids of the applicable
 gates it could not compute; decision.decide() resolves them against the uncapped candidate
-policy; build_decision_card assembles decide()'s output with hard_gates, sizing, entry, exit,
-conditions and next_review. build_diagnostics emits the pre-gate candidate (full tier only).
+policy; build_conditions lists the conditions that bind each horizon; build_decision_card
+assembles decide()'s output with hard_gates, sizing, entry, exit, conditions and next_review.
+build_diagnostics emits the pre-gate candidate (full tier only).
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime, timedelta
 from typing import Any
 
+from stock_analysis.tools.analyze.action_zones import zone_after_caps
+from stock_analysis.tools.analyze.conditions import CandidateInputs, Factor
+from stock_analysis.tools.analyze.decision import (
+    ENTRY_ACTIONS,
+    LONG_TERM,
+    MID_TERM,
+    entry_allowed,
+    map_candidate,
+    tighter,
+)
+from stock_analysis.tools.analyze.executive_summary import policy_codes
 from stock_analysis.tools.analyze.gates import (
     ANALYZE_GATE_IDS,
+    GATES,
     UNEVALUATED,
     check_data_quality,
     check_earnings_blackout,
@@ -20,12 +34,15 @@ from stock_analysis.tools.analyze.gates import (
     check_liquidity,
     check_near_52w_high,
     check_thesis_broken,
+    clears_when_for,
     earnings_window,
     events_tool_failed,
     format_day,
     is_falling_knife_technicals,
     merge_blockers,
 )
+from stock_analysis.tools.analyze.reassessment import permanent_support_gate
+from stock_analysis.tools.analyze.verdict import build_horizon_fit
 from stock_analysis.utils.valuation_basis import sizing_unavailable_reason, support_blockers
 
 PRE_GATE_ROLE = "pre_gate_input_not_advice"
@@ -177,40 +194,63 @@ def _build_exit(action_zones: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _build_conditions(
-    policy_action: dict[str, Any],
-    hard_gates: dict[str, Any],
-    dislocation_framework: dict[str, Any] | None,
+def candidate_codes(inputs: CandidateInputs, overrides: Mapping[str, Any]) -> tuple[str, str]:
+    """The pre-gate (mid_term, long_term) codes with ``overrides`` applied to what the candidate read."""
+    fit_inputs = {**inputs.fit, **{k: v for k, v in overrides.items() if k in inputs.fit}}
+    fit = build_horizon_fit(**fit_inputs)
+    valuation_gate = overrides.get("valuation_gate", inputs.valuation_gate)
+    zone = zone_after_caps(inputs.uncapped_zone, extreme=fit_inputs["risk_label"] == "extreme",
+                           valuation_gate=valuation_gate, dip_type=inputs.dip_type)
+    mid, long, _ = policy_codes(
+        mid_term_fit=fit["mid_term"], long_term_fit=fit["long_term"], long_term_gates=fit["long_term_gates"],
+        tilt=inputs.tilt, zone=zone, valuation_gate=valuation_gate,
+        is_unprofitable=overrides.get("is_unprofitable", inputs.is_unprofitable), dislocation=inputs.dislocation,
+    )
+    return mid, long
+
+
+def build_conditions(
+    *,
+    decision: dict[str, Any],
+    candidate: Mapping[str, Any],
+    factors: list[Factor],
+    inputs: CandidateInputs | None,
+    downgrade: list[str],
+    support: Mapping[str, Any] | None,
 ) -> dict[str, Any]:
-    """Compress conditions: buy_only_if, add_only_if, do_not_buy_if, reduce_if, monitor.
+    """Only binding conditions, per horizon (plan §7e [FIX BL-E1, BL-E2]).
 
-    `dislocation_framework.action` distinguishes between:
-      - `buy_only_if`: conditions to lift before any new buy (when can_start_now=False)
-      - `add_only_if`: conditions to lift before adding more (when can_start_now=True)
-    Both surface here so the user sees the right guidance without inspecting the framework.
+    A horizon lists the clears_when of each fired non-support gate tighter than map(candidate), then each factor
+    whose cleared state alone moves map(candidate) into the target: an entry action when the candidate does not
+    admit new money, buy under a starter (starter -> full). A permanent support gate empties the horizon.
+    ``candidate`` is the uncapped pre-gate policy decide() read; ``inputs`` may be None only without factors.
     """
-    do_not_buy_if = [g["reason"] for g in hard_gates["blocking"]]
-
-    add_only_if: list[str] = []
-    buy_only_if: list[str] = []
-    if dislocation_framework:
-        action_block = dislocation_framework.get("action") or {}
-        framework_add_only_if = action_block.get("add_only_if") or []
-        framework_buy_only_if = action_block.get("buy_only_if") or []
-        if isinstance(framework_add_only_if, list):
-            add_only_if = [str(x) for x in framework_add_only_if]
-        if isinstance(framework_buy_only_if, list):
-            buy_only_if = [str(x) for x in framework_buy_only_if]
-
-    reduce_if = list(policy_action.get("conditions_to_downgrade") or [])
-    monitor = list(policy_action.get("conditions_to_upgrade") or [])
-
+    replayed = [(factor, candidate_codes(inputs, factor.overrides)) for factor in factors] if inputs else []
+    binding: dict[str, list[str] | None] = {}
+    for index, horizon, new_money in ((0, MID_TERM, decision["new_money"]),
+                                      (1, LONG_TERM, decision[LONG_TERM]["new_money"])):
+        if any(permanent_support_gate(b["id"], support) for b in new_money["blocked_by"]):
+            binding[horizon] = None
+            continue
+        mapped = map_candidate(horizon, candidate[horizon])
+        gates = [clears_when_for(b) for b in new_money["blocked_by"]
+                 if b["class"] != "support" and tighter(GATES[b["id"]].outcome[horizon], mapped)]
+        target = (ENTRY_ACTIONS if not entry_allowed(mapped)
+                  else frozenset({"buy"}) if new_money["action"] == "starter" else frozenset())
+        cleared = [text for factor, codes in replayed if map_candidate(horizon, codes[index]) in target
+                   for text in factor.texts]
+        binding[horizon] = list(dict.fromkeys(gates + cleared))
+    mid = binding[MID_TERM] or []
+    upgrade = list(dict.fromkeys(text for factor in factors for text in factor.texts))
     return {
-        "buy_only_if": buy_only_if,
-        "add_only_if": add_only_if,
-        "do_not_buy_if": do_not_buy_if,
-        "reduce_if": reduce_if,
-        "monitor": monitor,
+        MID_TERM: {
+            "buy_only_if": mid,
+            "add_only_if": list(mid) if decision["if_held"]["action"] == "hold" else [],
+            "do_not_buy_if": [b["reason"] for b in decision["new_money"]["blocked_by"]],
+            "reduce_if": list(downgrade),
+            "monitor": [] if binding[MID_TERM] is None else [text for text in upgrade if text not in mid],
+        },
+        LONG_TERM: {"buy_only_if": binding[LONG_TERM] or []},
     }
 
 
@@ -254,35 +294,38 @@ def build_decision_card(
     summary: dict[str, Any],
     verdict: dict[str, Any],
     action_zones: dict[str, Any],
-    policy_action: dict[str, Any],
     events_data: dict[str, Any],
     dislocation_framework: dict[str, Any] | None,
     now: datetime,
     hard_gates: dict[str, Any],
     decision: dict[str, Any],
+    conditions: dict[str, Any],
 ) -> dict[str, Any]:
     """Build the compact small-account decision card around decide()'s decision.
 
     Schema:
-        horizon, new_money, if_held, long_term: the canonical decision (decision.decide)
+        horizon, new_money, if_held, long_term: the canonical decision (decision.decide); long_term.new_money
+            carries its own conditions (buy_only_if)
         hard_gates: every fired gate (blocking) and one boolean per gates.ANALYZE_GATE_IDS (checks)
         action_now: alias of new_money.action (decision.NEW_MONEY_ACTIONS), kept one release
         sizing: starter/full pct + dollars + whole/fractional shares
         entry: price, buy band
         exit: stop / invalidation level
-        conditions: buy_only_if / add_only_if / do_not_buy_if / reduce_if / monitor
+        conditions: mid-term buy_only_if / add_only_if / do_not_buy_if / reduce_if / monitor
         next_review: date + reason
         confidence: from verdict
     """
     new_money = decision["new_money"]
+    long_term = decision[LONG_TERM]
     return {
         **decision,
+        LONG_TERM: {**long_term, "new_money": {**long_term["new_money"], "conditions": conditions[LONG_TERM]}},
         "hard_gates": hard_gates,
         "action_now": new_money["action"],
         "sizing": _build_sizing(action_zones, summary),
         "entry": _build_entry(action_zones, summary),
         "exit": _build_exit(action_zones),
-        "conditions": _build_conditions(policy_action, hard_gates, dislocation_framework),
+        "conditions": conditions[MID_TERM],
         "next_review": _build_next_review(events_data, now),
         "confidence": verdict.get("confidence", "low"),
     }

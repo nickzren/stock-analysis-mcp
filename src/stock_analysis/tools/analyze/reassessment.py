@@ -16,7 +16,7 @@ _EVENT_IDS = frozenset(g for g, gate in GATES.items() if gate.gate_class == "eve
 _SUPPORT_SCOPE = {"unsupported_instrument": "instrument", "unsupported_currency": "currency"}
 
 
-def _permanent(gate_id: str, support: Mapping[str, Any] | None) -> bool:
+def permanent_support_gate(gate_id: str, support: Mapping[str, Any] | None) -> bool:
     scope = _SUPPORT_SCOPE.get(gate_id)
     block = (support or {}).get(scope) if scope else None
     return isinstance(block, Mapping) and block.get("status") == "unsupported"
@@ -30,7 +30,7 @@ def earliest_reassessment(
     new money). ``blocked_by`` is that horizon's disclosure, unique ids in rank order (decide())."""
     if not blocked_by or not admits:
         return None
-    permanent = [b["id"] for b in blocked_by if _permanent(b["id"], support)]
+    permanent = [b["id"] for b in blocked_by if permanent_support_gate(b["id"], support)]
     if permanent:
         return {"date": None, "basis": "unsupported", "earnings_risk_through": None, "session_method": None,
                 "outstanding": [{"id": g, "clears_when": PERMANENT_CLEARS_WHEN} for g in permanent]}

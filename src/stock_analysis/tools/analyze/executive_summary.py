@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from stock_analysis.tools.analyze.conditions import candidate_factors
 from stock_analysis.tools.analyze.dislocation_framework import (
     classify_dislocation_opportunity,
 )
@@ -364,52 +365,19 @@ def build_executive_summary(
     return " ".join(sentences)
 
 
-def build_policy_action(
-    verdict: dict[str, Any],
-    action_zones: dict[str, Any],
-    decomposed: dict[str, Any] | None = None,
-    risk_regime: dict[str, Any] | None = None,
-    dip_assessment: dict[str, Any] | None = None,
-    fundamentals_summary: dict[str, Any] | None = None,
-    investor_profile: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    """
-    Build the pre-gate policy: the candidate decide() reads, emitted only as diagnostics.pre_gate_policy.
-
-    Combines: tilt, horizon_fit, zone, valuation_gate. Includes the candidate's upgrade and downgrade
-    conditions and, under inputs, the zone and valuation it read.
-
-    Returns:
-        Dict with mid_term/long_term codes, rationale, conditions and inputs.
-    """
-    # WP9: an absent or null tilt is missing, not neutral and not bearish; the
-    # branches it would decide become insufficient_data.
-    tilt = verdict.get("tilt")
-    horizon_fit = verdict.get("horizon_fit", {})
-    mid_term_fit = horizon_fit.get("mid_term", "unknown")
-    long_term_fit = horizon_fit.get("long_term", "unknown")
-    long_term_gates = horizon_fit.get("long_term_gates") or []
-
-    zone = action_zones.get("current_zone")
-    valuation_assessment = action_zones.get("valuation_assessment", {})
-    valuation_gate = valuation_assessment.get("gate")
-    valuation_basis = valuation_assessment.get("basis")
-    is_unprofitable = valuation_assessment.get("is_unprofitable", False)
-    fundamentals_summary = fundamentals_summary or {}
-
-    # Get decomposed scores for conditions
-    business_quality = decomposed.get("business_quality") if decomposed else None
-    business_quality_status = decomposed.get("business_quality_status") if decomposed else None
-    risk_label = decomposed.get("risk") if decomposed else None
-    dislocation_signals = classify_dislocation_opportunity(
-        verdict=verdict,
-        action_zones=action_zones,
-        fundamentals_summary=fundamentals_summary,
-        dip_assessment=dip_assessment,
-    )
-    is_dislocation_candidate = dislocation_signals["is_dislocation_candidate"]
-
-    # Rationale accumulator - structured for auditability
+def policy_codes(
+    *,
+    mid_term_fit: str,
+    long_term_fit: str,
+    long_term_gates: list[str],
+    tilt: str | None,
+    zone: str | None,
+    valuation_gate: str | None,
+    is_unprofitable: bool,
+    dislocation: bool,
+) -> tuple[str, str, list[str]]:
+    """The pre-gate candidate codes (mid_term, long_term) and their rationale. Pure: the binding conditions
+    replay it with one input cleared (plan §7e)."""
     rationale: list[str] = []
 
     # === MID-TERM ACTION (3-12 months) ===
@@ -421,7 +389,7 @@ def build_policy_action(
         if tilt == "bullish":
             mid_term_action = "speculative_small_position"
             rationale.append("mid_term_fit=caution, tilt=bullish")
-        elif is_dislocation_candidate:
+        elif dislocation:
             mid_term_action = "speculative_small_position"
             rationale.append("mid_term_fit=caution, dislocation=price_broken_more_than_business")
         elif tilt is None:
@@ -464,9 +432,9 @@ def build_policy_action(
                 long_term_action = "speculative_only"
                 rationale.append("long_term=caution, unprofitable")
         else:
-            if tilt == "bullish" or is_dislocation_candidate:
+            if tilt == "bullish" or dislocation:
                 long_term_action = "small_position_with_stops"
-                if is_dislocation_candidate and tilt != "bullish":
+                if dislocation and tilt != "bullish":
                     rationale.append("long_term=caution, dislocation=price_broken_more_than_business")
                 else:
                     rationale.append("long_term=caution, tilt=bullish")
@@ -493,60 +461,72 @@ def build_policy_action(
         long_term_action = "insufficient_data"
         rationale.append("long_term_fit=unknown")
 
+    return mid_term_action, long_term_action, rationale
+
+
+def build_policy_action(
+    verdict: dict[str, Any],
+    action_zones: dict[str, Any],
+    decomposed: dict[str, Any] | None = None,
+    risk_regime: dict[str, Any] | None = None,
+    dip_assessment: dict[str, Any] | None = None,
+    fundamentals_summary: dict[str, Any] | None = None,
+    investor_profile: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """
+    Build the pre-gate policy: the candidate decide() reads, emitted only as diagnostics.pre_gate_policy.
+
+    Combines: tilt, horizon_fit, zone, valuation_gate. Includes the candidate's upgrade and downgrade
+    conditions and, under inputs, the zone and valuation it read.
+
+    Returns:
+        Dict with mid_term/long_term codes, rationale, conditions and inputs.
+    """
+    # WP9: an absent or null tilt is missing, not neutral and not bearish; the
+    # branches it would decide become insufficient_data.
+    tilt = verdict.get("tilt")
+    horizon_fit = verdict.get("horizon_fit", {})
+    long_term_gates = horizon_fit.get("long_term_gates") or []
+
+    zone = action_zones.get("current_zone")
+    valuation_assessment = action_zones.get("valuation_assessment", {})
+    valuation_gate = valuation_assessment.get("gate")
+    valuation_basis = valuation_assessment.get("basis")
+    is_unprofitable = valuation_assessment.get("is_unprofitable", False)
+    fundamentals_summary = fundamentals_summary or {}
+
+    risk_label = decomposed.get("risk") if decomposed else None
+    dislocation_signals = classify_dislocation_opportunity(
+        verdict=verdict,
+        action_zones=action_zones,
+        fundamentals_summary=fundamentals_summary,
+        dip_assessment=dip_assessment,
+    )
+    mid_term_action, long_term_action, rationale = policy_codes(
+        mid_term_fit=horizon_fit.get("mid_term", "unknown"),
+        long_term_fit=horizon_fit.get("long_term", "unknown"),
+        long_term_gates=long_term_gates,
+        tilt=tilt,
+        zone=zone,
+        valuation_gate=valuation_gate,
+        is_unprofitable=is_unprofitable,
+        dislocation=dislocation_signals["is_dislocation_candidate"],
+    )
+
     # === CONDITIONS TO UPGRADE ===
-    # What would need to change for a better assessment?
-    conditions_to_upgrade: list[str] = []
-
-    # Risk-based conditions (aligned with risk_regime boundaries)
-    # extreme: >60%, high: 40-60%, medium: 25-40%, low: <25%
-    if risk_label == "extreme":
-        conditions_to_upgrade.append(
-            f"risk_regime <= high (volatility < {VOLATILITY_REGIME_THRESHOLDS['high'] * 100:.0f}%)"
+    # Each input holding the candidate back (plan §7e: decide which bind per horizon).
+    conditions_to_upgrade = [
+        text
+        for factor in candidate_factors(
+            decomposed=decomposed,
+            valuation_assessment=valuation_assessment,
+            zone_warnings=action_zones.get("zone_warnings") or [],
+            risk_regime=risk_regime,
+            long_term_gates=long_term_gates,
+            leverage_status=(fundamentals_summary.get("health") or {}).get("leverage_status"),
         )
-    elif risk_label == "high":
-        conditions_to_upgrade.append(
-            f"risk_regime <= medium (volatility < {VOLATILITY_REGIME_THRESHOLDS['medium'] * 100:.0f}%)"
-        )
-
-    # Profitability conditions for unprofitable companies
-    if is_unprofitable or business_quality_status == "evaluated_unprofitable":
-        conditions_to_upgrade.append("profitMargins > 0 for 2 consecutive quarters")
-        conditions_to_upgrade.append("freeCashflow > 0 for 2 consecutive quarters")
-
-    # Valuation conditions
-    if valuation_gate == "headwind":
-        if valuation_basis == "ev_to_sales":
-            conditions_to_upgrade.append("EV/S < 6x (currently headwind)")
-        elif valuation_basis == "ps_trailing":
-            conditions_to_upgrade.append("P/S < 6x (currently headwind)")
-        elif valuation_basis == "pe_trailing":
-            conditions_to_upgrade.append("P/E < 25x (currently headwind)")
-    elif valuation_gate == "unknown":
-        gate_reasons = " ".join(valuation_assessment.get("reasons") or [])
-        if "unverified" in gate_reasons:
-            conditions_to_upgrade.append("valuation inputs on one verified currency basis")
-        elif "ev_nonpositive" in gate_reasons:
-            conditions_to_upgrade.append("positive enterprise value")
-        else:
-            conditions_to_upgrade.append("revenue data available for valuation")
-
-    # Business quality conditions
-    health = fundamentals_summary.get("health") or {}
-    if business_quality == "poor":
-        conditions_to_upgrade.append("net_margin > 0%")
-        conditions_to_upgrade.append(
-            "shareholder equity > 0" if health.get("leverage_status") == "negative_equity" else "debt_to_equity < 1.5x"
-        )
-    elif business_quality == "weak":
-        conditions_to_upgrade.append("net_margin > 5%")
-
-    # Horizon gate conditions
-    if "burn_metrics_missing" in long_term_gates:
-        conditions_to_upgrade.append("cash runway data available")
-    if "low_runway_confidence" in long_term_gates:
-        conditions_to_upgrade.append("cash runway > 8 quarters")
-    if "severe_revenue_decline" in long_term_gates:
-        conditions_to_upgrade.append("revenue_yoy > -20%")
+        for text in factor.texts
+    ]
 
     # === CONDITIONS TO DOWNGRADE ===
     # What would make this worse?

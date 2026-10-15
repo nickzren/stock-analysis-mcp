@@ -62,9 +62,11 @@ def build_dislocation_framework(
     dip_assessment: dict[str, Any] | None,
     decision_context: dict[str, Any],
     decision_modes: dict[str, Any],
-    policy_action: dict[str, Any],
+    *,
+    conditions: dict[str, Any],
 ) -> dict[str, Any]:
-    """Translate the full analysis into a dislocation-investing workflow."""
+    """Translate the full analysis into a dislocation-investing workflow. buy_only_if and add_only_if mirror the
+    card's mid-term conditions (plan §7e)."""
     dip_assessment = dip_assessment or {}
     dip_depth = dip_assessment.get("dip_depth") or {}
     valuation_assessment = action_zones.get("valuation_assessment") or {}
@@ -122,7 +124,6 @@ def build_dislocation_framework(
         (decision_modes.get(mode_name) or {}).get("action") in starter_actions
         for mode_name in ("balanced", "speculative")
     )
-    add_only_if = list(policy_action.get("conditions_to_upgrade") or [])[:3]
 
     action = {
         "core": (decision_modes.get("core") or {}).get("action"),
@@ -130,8 +131,8 @@ def build_dislocation_framework(
         "speculative": (decision_modes.get("speculative") or {}).get("action"),
         "can_start_now": can_start_now,
         "buy_now": "small_starter" if can_start_now else None,
-        "buy_only_if": [] if can_start_now else add_only_if,
-        "add_only_if": add_only_if if can_start_now else [],
+        "buy_only_if": list(conditions["buy_only_if"]),
+        "add_only_if": list(conditions["add_only_if"]),
         "sell_without_attachment_if": thesis_integrity.get("sell_without_attachment_if") or [],
     }
 

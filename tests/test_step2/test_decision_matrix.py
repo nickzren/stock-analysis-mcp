@@ -14,6 +14,7 @@ from typing import Any
 
 import pytest
 
+from stock_analysis.tools.analyze.gates import GATES, THESIS_CLEARS_WHEN
 from stock_analysis.tools.diff_analysis import validate_previous_snapshot
 from tests.support import decision_matrix as dm
 
@@ -68,11 +69,30 @@ WP22_CHANGES: dict[str, dict[str, Any]] = {
 
 # WP2.3: decide()'s decision does not move (no decision.*, action_now, hard_gates, policy.*, zone or snapshot.*
 # cell); the card's horizon_fit is removed (plan §7a), so B's WP2.2 horizon_fit.mid_term cell now ends at None.
+EARNINGS, LIQUIDITY = GATES["earnings_blackout"].clears_when, GATES["weak_liquidity"].clears_when
+PE_HEADWIND_OLD = ["P/E < 25x (currently headwind)"]
+CONDITION_CHANGES = {  # plan §7e [FIX BL-E1, BL-E2]: binding conditions only; add iff if_held hold
+    **dict.fromkeys(["S4_earnings_gate_on_hold_or_add"], {"buy_only_if": ([], [EARNINGS]),
+                                                          "add_only_if": ([], [EARNINGS])}),
+    "S9_weak_liquidity": {"buy_only_if": ([], [LIQUIDITY]), "add_only_if": ([], [LIQUIDITY])},
+    "C2_headwind_earnings_gate": {"buy_only_if": (PE_HEADWIND_OLD, [EARNINGS]), "add_only_if": ([], [EARNINGS])},
+    **dict.fromkeys(["C1_headwind_hold_or_add", "C3_headwind_plain_avoid"], {"buy_only_if": (PE_HEADWIND_OLD, [])}),
+    **dict.fromkeys(["A_broken_bearish", "B_broken_bearish_knife"],
+                    {"buy_only_if": (["net_margin > 0%", "debt_to_equity < 1.5x", "revenue_yoy > -20%"], [])}),
+    "E_poor_business_bullish_chart": {"buy_only_if": (["net_margin > 0%", "debt_to_equity < 1.5x"],
+                                                      [THESIS_CLEARS_WHEN["business_broken"]])},
+    "S8_fundamentals_failed": {"buy_only_if": (["revenue data available for valuation"], [])},
+    "S6_knife_dislocation": {"add_only_if": (["risk_regime <= medium (volatility < 40%)"], [])},
+    "T1_extreme_risk_bullish": {"add_only_if": (["risk_regime <= high (volatility < 60%)"], [])},
+}
 
 
 def _wp23_cells(name: str) -> dict[str, Any]:
     row = BEFORE[name]
-    return {f"horizon_fit.{h}": (row["horizon_fit"][h], None) for h in ("mid_term", "long_term")}
+    return {
+        **{f"horizon_fit.{h}": (row["horizon_fit"][h], None) for h in ("mid_term", "long_term")},  # §7a: removed
+        **{f"conditions.{k}": v for k, v in CONDITION_CHANGES.get(name, {}).items()},
+    }
 
 
 ROW_CHANGES: dict[str, dict[str, Any]] = {name: {**WP22_CHANGES.get(name, {}), **_wp23_cells(name)} for name in BEFORE}

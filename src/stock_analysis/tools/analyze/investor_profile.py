@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from stock_analysis.tools.analyze.action_zones import build_position_sizing_range
-from stock_analysis.tools.analyze.decision import core_action
+from stock_analysis.tools.analyze.decision import LONG_TERM, MID_TERM, core_action
 from stock_analysis.tools.analyze.dislocation_framework import (
     classify_dislocation_opportunity,
 )
@@ -115,9 +115,11 @@ def build_decision_modes(
     account_size: float | None = None,
     *,
     long_term_action: str,
+    conditions: dict[str, Any],
 ) -> dict[str, Any]:
     """Build default Core / Balanced / Speculative decision blocks. Core follows the canonical long-term
-    decision (``long_term.new_money.action``) under its own cap (plan §3 [D-3])."""
+    decision (``long_term.new_money.action``) under its own cap (plan §3 [D-3]). The conditionals mirror the
+    card's lists of their horizon (plan §7e): core long-term, balanced and speculative mid-term."""
     horizon_fit = verdict.get("horizon_fit", {})
     long_term_fit = horizon_fit.get("long_term")
     long_term_gates = horizon_fit.get("long_term_gates") or []
@@ -135,19 +137,6 @@ def build_decision_modes(
     dip_quality = dip_info.get("dip_quality")
     burn_metrics = fundamentals_summary.get("burn_metrics") or {}
     dilution_analysis = burn_metrics.get("dilution_analysis") or {}
-    shared_upgrade_conditions = list(policy_action.get("conditions_to_upgrade") or [])[:3]
-    follow_up_conditions = []
-    entry_timing = dip_assessment.get("entry_timing") or {}
-    for item in entry_timing.get("wait_for", []) or []:
-        if isinstance(item, dict):
-            rationale = item.get("rationale")
-            signal = item.get("signal")
-            if rationale and signal:
-                follow_up_conditions.append(f"{signal}: {rationale}")
-            elif signal:
-                follow_up_conditions.append(signal)
-    if not follow_up_conditions:
-        follow_up_conditions = shared_upgrade_conditions
 
     def _format_tag(tag: str) -> str:
         return tag.replace("_", " ")
@@ -284,7 +273,7 @@ def build_decision_modes(
             "why": core_why or None,
             "starter_position": _position_block(mode_sizing["core"], "starter_pct"),
             "max_position": _position_block(mode_sizing["core"], "max_pct"),
-            "required_before_full_size": shared_upgrade_conditions or [],
+            "required_before_full_size": list(conditions[LONG_TERM]["buy_only_if"]),
         },
         "balanced": {
             "label": "Balanced",
@@ -294,7 +283,7 @@ def build_decision_modes(
             "why": balanced_why or None,
             "starter_position": _position_block(mode_sizing["balanced"], "starter_pct"),
             "max_position": _position_block(mode_sizing["balanced"], "max_pct"),
-            "add_on_only_if": shared_upgrade_conditions or [],
+            "add_on_only_if": list(conditions[MID_TERM]["add_only_if"]),
             "long_term_view": policy_action.get("long_term"),
         },
         "speculative": {
@@ -304,7 +293,7 @@ def build_decision_modes(
             "action": speculative_action,
             "starter_position": _position_block(mode_sizing["speculative"], "starter_pct"),
             "max_position": _position_block(mode_sizing["speculative"], "max_pct"),
-            "add_on_only_if": follow_up_conditions or [],
+            "add_on_only_if": list(conditions[MID_TERM]["add_only_if"]),
             "upside_case": ", ".join(upside_case_parts) if upside_case_parts else None,
             "failure_case": ", ".join(failure_case_parts) if failure_case_parts else None,
             "next_90d_catalysts": [_format_tag(tag) for tag in bullish_catalysts[:3]],
@@ -329,6 +318,7 @@ def build_investor_views(
     investor_profile: dict[str, Any],
     *,
     long_term_action: str,
+    conditions: dict[str, Any],
 ) -> dict[str, Any]:
     """Backward-compatible wrapper for older internal callsites."""
     return build_decision_modes(
@@ -343,4 +333,5 @@ def build_investor_views(
         events_summary=events_summary,
         account_size=investor_profile.get("account_size"),
         long_term_action=long_term_action,
+        conditions=conditions,
     )
