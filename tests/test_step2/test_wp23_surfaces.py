@@ -16,6 +16,8 @@ from stock_analysis.tools.analyze.action_zones import (
 from tests.support import decision_matrix as dm
 
 ROWS = list(dm.SCENARIOS)
+PRICE_ZONE_NAMES = {"near_52w_low", "near_52w_high", "below_sma200", "above_sma50", "at_or_below_sma50",
+                    "undetermined"}
 
 
 # --- (e) price_zone --------------------------------------------------------------------------------------------
@@ -35,7 +37,7 @@ async def test_price_zone_is_the_uncapped_classification(name: str) -> None:
         price, zones["levels"], averages.get("sma_50"), averages.get("sma_200"))]
 
     assert zones["price_zone"] == expected
-    assert zones["price_zone"] in {*PRICE_ZONES.values(), None}
+    assert zones["price_zone"] in {*PRICE_ZONE_NAMES, None}
     for tier, payload in dm.tiers(result).items():
         assert "current_zone" not in (payload.get("action_zones") or {}), tier
         entry = payload["decision_card"]["entry"]
@@ -69,6 +71,30 @@ def test_the_five_zone_caps_leave_price_zone_uncapped(
     assert warning in zones["zone_warnings"]
     assert zones["current_zone"] != "strong_buy"
     assert zones["price_zone"] == "near_52w_low"
+
+
+RANGE_70_120 = {"week_52_low": 70.0, "week_52_high": 120.0}
+SMAS = {"sma_50": 100.0, "sma_200": 90.0}
+
+
+@pytest.mark.parametrize(("price", "averages", "uncapped", "price_zone"), [
+    (70.0, SMAS, "strong_buy", "near_52w_low"),
+    (119.0, SMAS, "reduce", "near_52w_high"),
+    (85.0, SMAS, "accumulate", "below_sma200"),
+    (105.0, SMAS, "hold_bullish", "above_sma50"),
+    (95.0, SMAS, "hold_neutral", "at_or_below_sma50"),
+    (95.0, {}, "undetermined", "undetermined"),
+])
+def test_each_uncapped_label_has_its_price_zone_name(
+        price: float, averages: dict[str, float], uncapped: str, price_zone: str) -> None:
+    """OC-RF6 (unit): each uncapped classification gets its plan §1.2 name, including hold_neutral (price between
+    SMA200 and SMA50) as at_or_below_sma50, which no matrix row reaches. PD D-9."""
+    zones = build_action_zones(current_price=price, tech_data={"moving_averages": averages,
+                                                               "price_position": RANGE_70_120},
+                               risk_data=CALM_VOL, fund_data={"valuation": {"pe_trailing": 9.0}})
+
+    assert _classify_current_zone(price, zones["levels"], averages.get("sma_50"), averages.get("sma_200")) == uncapped
+    assert zones["price_zone"] == price_zone
 
 
 @pytest.mark.parametrize("name", ROWS)
