@@ -3173,6 +3173,124 @@
     },
     "zone": "hold_bullish"
   },
+  "T1_crash_risk": {
+    "action_now": "starter",
+    "card_sizing": {
+      "full_dollars": null,
+      "full_pct_cap": null,
+      "starter_dollars": 200.0,
+      "starter_pct": 2.0,
+      "whole_shares": 2
+    },
+    "conditions": {
+      "add_only_if": [],
+      "buy_only_if": [],
+      "long_term_buy_only_if": [],
+      "monitor": [
+        "risk_regime <= medium (max_drawdown_1y > -35%)"
+      ]
+    },
+    "decision": {
+      "if_held": {
+        "action": "hold",
+        "add_allowed": true,
+        "basis": "candidate_admits_new_money"
+      },
+      "long_term": {
+        "action": "buy",
+        "blocked_by": [],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      },
+      "new_money": {
+        "action": "starter",
+        "blocked_by": [],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      }
+    },
+    "dip": {
+      "entry_actions": [],
+      "recommendation": "wait_for_better_setup",
+      "type": "healthy_pullback"
+    },
+    "dislocation": {
+      "buy_now": "starter",
+      "can_start_now": true,
+      "mismatch": "unclear",
+      "status": null,
+      "thesis": "intact"
+    },
+    "hard_gates": [],
+    "horizon_fit": null,
+    "mode_sizing": {
+      "balanced": [
+        "starter_position"
+      ],
+      "core": [
+        "starter_position"
+      ],
+      "speculative": []
+    },
+    "modes": {
+      "balanced": {
+        "action": "starter",
+        "long_term_view": "buy"
+      },
+      "core": {
+        "action": "buy",
+        "long_term_view": null
+      },
+      "speculative": {
+        "action": "wait",
+        "long_term_view": null
+      }
+    },
+    "policy": {
+      "long_term": "accumulate",
+      "mid_term": "hold_or_add"
+    },
+    "price_zone": "above_sma50",
+    "sizing_present": {
+      "decision": {
+        "card": true,
+        "range": false
+      },
+      "full": {
+        "card": true,
+        "range": false
+      },
+      "standard": {
+        "card": true,
+        "range": false
+      }
+    },
+    "snapshot": {
+      "action_long_term": "accumulate",
+      "action_mid_term": "hold_or_add",
+      "decision_action_now": "starter",
+      "hard_gate_ids": [],
+      "snapshot_hash": "08fe741d03ea452f",
+      "zone": "hold_bullish"
+    },
+    "source": "OC RF7 mid starter, long buy",
+    "summary_size": [
+      "size ~2.0%"
+    ],
+    "valuation_gate": "attractive",
+    "verdict": {
+      "business_quality": "strong",
+      "fit": {
+        "long_term": "ok",
+        "mid_term": "ok"
+      },
+      "score": 0.75,
+      "tilt": "bullish"
+    },
+    "zone": "hold_bullish"
+  },
   "T1_extreme_risk_bullish": {
     "action_now": "starter",
     "card_sizing": {
@@ -3290,6 +3408,133 @@
       "tilt": "bullish"
     },
     "zone": "hold_bullish"
+  },
+  "T1_near_52w_high": {
+    "action_now": "wait",
+    "card_sizing": {
+      "full_dollars": null,
+      "full_pct_cap": null,
+      "starter_dollars": null,
+      "starter_pct": null,
+      "whole_shares": null
+    },
+    "conditions": {
+      "add_only_if": [
+        "price leaves the near-52-week-high band"
+      ],
+      "buy_only_if": [
+        "price leaves the near-52-week-high band"
+      ],
+      "long_term_buy_only_if": [
+        "risk_regime <= high (volatility < 60%)"
+      ],
+      "monitor": [
+        "risk_regime <= high (volatility < 60%)"
+      ]
+    },
+    "decision": {
+      "if_held": {
+        "action": "hold",
+        "add_allowed": false,
+        "basis": "candidate_admits_new_money"
+      },
+      "long_term": {
+        "action": "starter",
+        "blocked_by": [],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      },
+      "new_money": {
+        "action": "wait",
+        "blocked_by": [
+          "near_52w_high"
+        ],
+        "decided_by": "near_52w_high",
+        "earliest_reassessment": {
+          "basis": "conditions_only",
+          "date": null
+        },
+        "unevaluated": []
+      }
+    },
+    "dip": {
+      "entry_actions": [],
+      "recommendation": "wait_for_better_setup",
+      "type": "healthy_pullback"
+    },
+    "dislocation": {
+      "buy_now": null,
+      "can_start_now": false,
+      "mismatch": "unclear",
+      "status": null,
+      "thesis": "watch"
+    },
+    "hard_gates": [
+      "near_52w_high"
+    ],
+    "horizon_fit": null,
+    "mode_sizing": {
+      "balanced": [],
+      "core": [],
+      "speculative": []
+    },
+    "modes": {
+      "balanced": {
+        "action": "wait",
+        "long_term_view": "starter"
+      },
+      "core": {
+        "action": "wait",
+        "long_term_view": null
+      },
+      "speculative": {
+        "action": "wait",
+        "long_term_view": null
+      }
+    },
+    "policy": {
+      "long_term": "small_position_with_stops",
+      "mid_term": "speculative_small_position"
+    },
+    "price_zone": "near_52w_high",
+    "sizing_present": {
+      "decision": {
+        "card": false,
+        "range": false
+      },
+      "full": {
+        "card": false,
+        "range": false
+      },
+      "standard": {
+        "card": false,
+        "range": false
+      }
+    },
+    "snapshot": {
+      "action_long_term": "small_position_with_stops",
+      "action_mid_term": "speculative_small_position",
+      "decision_action_now": "wait",
+      "hard_gate_ids": [
+        "near_52w_high"
+      ],
+      "snapshot_hash": "bf9f3f519cacd9f2",
+      "zone": "reduce"
+    },
+    "source": "OC RF7 mid wait, long starter",
+    "summary_size": [],
+    "valuation_gate": "attractive",
+    "verdict": {
+      "business_quality": "strong",
+      "fit": {
+        "long_term": "caution",
+        "mid_term": "caution"
+      },
+      "score": 0.5,
+      "tilt": "bullish"
+    },
+    "zone": "reduce"
   },
   "T2_starter_weak_setup_quality": {
     "action_now": "starter",
@@ -3635,6 +3880,370 @@
       "tilt": "bullish"
     },
     "zone": "accumulate"
+  },
+  "T5_dislocation_starter": {
+    "action_now": "starter",
+    "card_sizing": {
+      "full_dollars": null,
+      "full_pct_cap": null,
+      "starter_dollars": 50.0,
+      "starter_pct": 0.5,
+      "whole_shares": 0
+    },
+    "conditions": {
+      "add_only_if": [],
+      "buy_only_if": [],
+      "long_term_buy_only_if": [
+        "risk_regime <= high (volatility < 60%)"
+      ],
+      "monitor": [
+        "risk_regime <= high (volatility < 60%)"
+      ]
+    },
+    "decision": {
+      "if_held": {
+        "action": "hold",
+        "add_allowed": true,
+        "basis": "candidate_admits_new_money"
+      },
+      "long_term": {
+        "action": "starter",
+        "blocked_by": [],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      },
+      "new_money": {
+        "action": "starter",
+        "blocked_by": [],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      }
+    },
+    "dip": {
+      "entry_actions": [],
+      "recommendation": "starter_only_wait_for_stabilization",
+      "type": "healthy_pullback"
+    },
+    "dislocation": {
+      "buy_now": "starter",
+      "can_start_now": true,
+      "mismatch": "price_broken_more_than_business",
+      "status": null,
+      "thesis": "watch"
+    },
+    "hard_gates": [],
+    "horizon_fit": null,
+    "mode_sizing": {
+      "balanced": [
+        "starter_position"
+      ],
+      "core": [],
+      "speculative": [
+        "starter_position"
+      ]
+    },
+    "modes": {
+      "balanced": {
+        "action": "starter",
+        "long_term_view": "starter"
+      },
+      "core": {
+        "action": "wait",
+        "long_term_view": null
+      },
+      "speculative": {
+        "action": "starter",
+        "long_term_view": null
+      }
+    },
+    "policy": {
+      "long_term": "small_position_with_stops",
+      "mid_term": "speculative_small_position"
+    },
+    "price_zone": "above_sma50",
+    "sizing_present": {
+      "decision": {
+        "card": true,
+        "range": false
+      },
+      "full": {
+        "card": true,
+        "range": false
+      },
+      "standard": {
+        "card": true,
+        "range": false
+      }
+    },
+    "snapshot": {
+      "action_long_term": "small_position_with_stops",
+      "action_mid_term": "speculative_small_position",
+      "decision_action_now": "starter",
+      "hard_gate_ids": [],
+      "snapshot_hash": "96a3f248c27e7902",
+      "zone": "hold_bullish"
+    },
+    "source": "OC M9 dislocation starter (D-9)",
+    "summary_size": [
+      "size ~0.5%"
+    ],
+    "valuation_gate": "attractive",
+    "verdict": {
+      "business_quality": "strong",
+      "fit": {
+        "long_term": "caution",
+        "mid_term": "caution"
+      },
+      "score": 0.2,
+      "tilt": "neutral"
+    },
+    "zone": "hold_bullish"
+  },
+  "T6_dislocation_buy": {
+    "action_now": "buy",
+    "card_sizing": {
+      "full_dollars": 800.0,
+      "full_pct_cap": 8.0,
+      "starter_dollars": 250.0,
+      "starter_pct": 2.5,
+      "whole_shares": 4
+    },
+    "conditions": {
+      "add_only_if": [],
+      "buy_only_if": [],
+      "long_term_buy_only_if": [],
+      "monitor": []
+    },
+    "decision": {
+      "if_held": {
+        "action": "hold",
+        "add_allowed": true,
+        "basis": "candidate_admits_new_money"
+      },
+      "long_term": {
+        "action": "buy",
+        "blocked_by": [],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      },
+      "new_money": {
+        "action": "buy",
+        "blocked_by": [],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      }
+    },
+    "dip": {
+      "entry_actions": [
+        "accumulate"
+      ],
+      "recommendation": "buy_the_dip",
+      "type": "healthy_pullback"
+    },
+    "dislocation": {
+      "buy_now": "buy",
+      "can_start_now": true,
+      "mismatch": "price_broken_more_than_business",
+      "status": null,
+      "thesis": "intact"
+    },
+    "hard_gates": [],
+    "horizon_fit": null,
+    "mode_sizing": {
+      "balanced": [
+        "starter_position",
+        "max_position"
+      ],
+      "core": [
+        "starter_position",
+        "max_position"
+      ],
+      "speculative": [
+        "starter_position"
+      ]
+    },
+    "modes": {
+      "balanced": {
+        "action": "buy",
+        "long_term_view": "buy"
+      },
+      "core": {
+        "action": "buy",
+        "long_term_view": null
+      },
+      "speculative": {
+        "action": "starter",
+        "long_term_view": null
+      }
+    },
+    "policy": {
+      "long_term": "accumulate",
+      "mid_term": "buy"
+    },
+    "price_zone": "below_sma200",
+    "sizing_present": {
+      "decision": {
+        "card": true,
+        "range": false
+      },
+      "full": {
+        "card": true,
+        "range": true
+      },
+      "standard": {
+        "card": true,
+        "range": true
+      }
+    },
+    "snapshot": {
+      "action_long_term": "accumulate",
+      "action_mid_term": "buy",
+      "decision_action_now": "buy",
+      "hard_gate_ids": [],
+      "snapshot_hash": "d87e0ae4001becb4",
+      "zone": "accumulate"
+    },
+    "source": "OC M9 dislocation buy (D-9)",
+    "summary_size": [
+      "size ~2.5-8.0%"
+    ],
+    "valuation_gate": "attractive",
+    "verdict": {
+      "business_quality": "strong",
+      "fit": {
+        "long_term": "ok",
+        "mid_term": "ok"
+      },
+      "score": 0.55,
+      "tilt": "bullish"
+    },
+    "zone": "accumulate"
+  },
+  "T6_dislocation_starter_extreme": {
+    "action_now": "starter",
+    "card_sizing": {
+      "full_dollars": null,
+      "full_pct_cap": null,
+      "starter_dollars": 50.0,
+      "starter_pct": 0.5,
+      "whole_shares": 0
+    },
+    "conditions": {
+      "add_only_if": [
+        "risk_regime <= high (volatility < 60%)"
+      ],
+      "buy_only_if": [
+        "risk_regime <= high (volatility < 60%)"
+      ],
+      "long_term_buy_only_if": [
+        "risk_regime <= high (volatility < 60%)"
+      ],
+      "monitor": []
+    },
+    "decision": {
+      "if_held": {
+        "action": "hold",
+        "add_allowed": true,
+        "basis": "candidate_admits_new_money"
+      },
+      "long_term": {
+        "action": "starter",
+        "blocked_by": [],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      },
+      "new_money": {
+        "action": "starter",
+        "blocked_by": [],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      }
+    },
+    "dip": {
+      "entry_actions": [],
+      "recommendation": "starter_only_wait_for_stabilization",
+      "type": "healthy_pullback"
+    },
+    "dislocation": {
+      "buy_now": "starter",
+      "can_start_now": true,
+      "mismatch": "price_broken_more_than_business",
+      "status": null,
+      "thesis": "watch"
+    },
+    "hard_gates": [],
+    "horizon_fit": null,
+    "mode_sizing": {
+      "balanced": [
+        "starter_position"
+      ],
+      "core": [],
+      "speculative": [
+        "starter_position"
+      ]
+    },
+    "modes": {
+      "balanced": {
+        "action": "starter",
+        "long_term_view": "starter"
+      },
+      "core": {
+        "action": "wait",
+        "long_term_view": null
+      },
+      "speculative": {
+        "action": "starter",
+        "long_term_view": null
+      }
+    },
+    "policy": {
+      "long_term": "small_position_with_stops",
+      "mid_term": "speculative_small_position"
+    },
+    "price_zone": "below_sma200",
+    "sizing_present": {
+      "decision": {
+        "card": true,
+        "range": false
+      },
+      "full": {
+        "card": true,
+        "range": false
+      },
+      "standard": {
+        "card": true,
+        "range": false
+      }
+    },
+    "snapshot": {
+      "action_long_term": "small_position_with_stops",
+      "action_mid_term": "speculative_small_position",
+      "decision_action_now": "starter",
+      "hard_gate_ids": [],
+      "snapshot_hash": "98104ca80419891c",
+      "zone": "hold_neutral"
+    },
+    "source": "OC M9 dislocation starter, mid condition (D-9)",
+    "summary_size": [
+      "size ~0.5%"
+    ],
+    "valuation_gate": "attractive",
+    "verdict": {
+      "business_quality": "strong",
+      "fit": {
+        "long_term": "caution",
+        "mid_term": "caution"
+      },
+      "score": 0.30000000000000004,
+      "tilt": "bullish"
+    },
+    "zone": "hold_neutral"
   },
   "V1_vendor_rich_plain_avoid": {
     "action_now": "avoid",

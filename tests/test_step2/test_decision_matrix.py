@@ -21,7 +21,10 @@ from tests.support import decision_matrix as dm
 BEFORE = json.loads((dm.FIXTURE_DIR / "before.json").read_text())
 AFTER = json.loads((dm.FIXTURE_DIR / "after.json").read_text())
 AFTER_ONLY = {"A7_near_52w_high_bullish", "H_burner_runway_2q",  # WP2.2: D-4 and D-1c's runway clause
-              "T4_starter_buy_the_dip"}  # WP2.3: the plan §7 starter scenario (OC-RF3, extended)
+              "T4_starter_buy_the_dip",  # WP2.3: the plan §7 starter scenario (OC-RF3, extended)
+              # WP2.3 review: the dislocation starter and its buy control (OC-M9), per-horizon targets (OC-RF7)
+              "T5_dislocation_starter", "T6_dislocation_buy", "T6_dislocation_starter_extreme",
+              "T1_near_52w_high", "T1_crash_risk"}
 
 # The cells each WP changes (before -> after), over before.json's paths; snapshot_hash follows the
 # snapshot fields (DM-CH2). WP2.2: D-2 mapping, D-5/D-5a combination and outcomes, D-1c thesis cap, D-3 core

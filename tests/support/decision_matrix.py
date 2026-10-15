@@ -123,6 +123,20 @@ def at_price(tech: dict[str, Any], price: float, **rules: bool) -> dict[str, Any
     return out
 
 
+# WEAK 45% off its 52-week high, recovering above its SMAs (not a knife, not oversold): on QUALITY's attractive
+# valuation a price_broken_more_than_business dislocation whose dip is wait_for_better_setup (D-9).
+DISLOCATED = at_price(WEAK, 60.0)
+DISLOCATED["moving_averages"].update(sma_20=58.0, sma_50=57.0, sma_200=54.0)
+DISLOCATED["returns"]["return_3m"] = 0.10
+DISLOCATED["price_position"] = {"position_in_range": 0.23, "week_52_low": 45.0, "week_52_high": 109.0,
+                                "from_52w_high": -0.45, "days_since_52w_high": 150}
+# The same drawdown on STRONG's rules, back under its SMA50 and SMA200 in an intact uptrend (bullish, below_sma200).
+DISLOCATED_UPTREND = at_price({**STRONG, "returns": DISLOCATED["returns"],
+                               "price_position": DISLOCATED["price_position"]}, 60.0, above_sma50=False,
+                              above_sma200=False)
+DISLOCATED_UPTREND["moving_averages"].update(sma_20=59.0, sma_50=68.0, sma_200=66.0)
+
+
 # --- fundamentals ------------------------------------------------------------------------
 
 PROFITABLE = {"valuation": {"pe_trailing": 9.0, "trailing_eps": 11.0}, "profitability": {"net_margin": 0.2},
@@ -397,6 +411,14 @@ SCENARIOS: dict[str, Scenario] = {
     # After-only row (WP2.3): the plan §7 starter scenario (OC-RF3, extended); no baseline starter row has
     # full-entry dip codes.
     "T4_starter_buy_the_dip": Scenario("OC RF3 starter (D-9)", STARTER_DIP, QUALITY, CALM),
+    # After-only rows (WP2.3 review): no baseline row is a dislocation starter (the dip override, OC-M9) or has
+    # its horizons' actions differ while a factor binds (each horizon's own target, OC-RF7).
+    "T5_dislocation_starter": Scenario("OC M9 dislocation starter (D-9)", DISLOCATED, QUALITY, EXTREME),
+    "T6_dislocation_buy": Scenario("OC M9 dislocation buy (D-9)", DISLOCATED_UPTREND, QUALITY, CALM),
+    "T6_dislocation_starter_extreme": Scenario("OC M9 dislocation starter, mid condition (D-9)", DISLOCATED_UPTREND,
+                                               QUALITY, EXTREME),
+    "T1_near_52w_high": Scenario("OC RF7 mid wait, long starter", at_price(STRONG, 118.0), QUALITY, EXTREME),
+    "T1_crash_risk": Scenario("OC RF7 mid starter, long buy", STRONG, QUALITY, CRASH_RISK),
 }
 
 

@@ -36,3 +36,8 @@ on. Do not edit by hand. Full rows: `after.json`.
 | A7_near_52w_high_bullish | PH A7 (D-4) | wait | near_52w_high | hold_or_add / accumulate | buy / wait / wait | wait (near_52w_high) | hold (candidate_admits_new_money) | buy (—) |
 | H_burner_runway_2q | PH CH7 burner (D-1c) | avoid | thesis_broken | speculative_small_position / speculative_only | avoid / avoid / avoid | avoid (thesis_broken) | review_exit (runway_critical) | avoid (thesis_broken) |
 | T4_starter_buy_the_dip | OC RF3 starter (D-9) | starter | — | speculative_small_position / accumulate | buy / starter / wait | starter (—) | hold (candidate_admits_new_money) | buy (—) |
+| T5_dislocation_starter | OC M9 dislocation starter (D-9) | starter | — | speculative_small_position / small_position_with_stops | wait / starter / starter | starter (—) | hold (candidate_admits_new_money) | starter (—) |
+| T6_dislocation_buy | OC M9 dislocation buy (D-9) | buy | — | buy / accumulate | buy / buy / starter | buy (—) | hold (candidate_admits_new_money) | buy (—) |
+| T6_dislocation_starter_extreme | OC M9 dislocation starter, mid condition (D-9) | starter | — | speculative_small_position / small_position_with_stops | wait / starter / starter | starter (—) | hold (candidate_admits_new_money) | starter (—) |
+| T1_near_52w_high | OC RF7 mid wait, long starter | wait | near_52w_high | speculative_small_position / small_position_with_stops | wait / wait / wait | wait (near_52w_high) | hold (candidate_admits_new_money) | starter (—) |
+| T1_crash_risk | OC RF7 mid starter, long buy | starter | — | hold_or_add / accumulate | buy / starter / wait | starter (—) | hold (candidate_admits_new_money) | buy (—) |

@@ -220,8 +220,24 @@ def classify_risk_regime(
                 ),
                 "extreme": f">{VOLATILITY_REGIME_THRESHOLDS['high'] * 100:.0f}%",
             },
-            "drawdown": {"low": ">-20%", "medium": "-20% to -35%", "high": "-35% to -50%", "extreme": "<-50%"},
-            "beta": {"low": "<0.8", "medium": "0.8-1.2", "high": "1.2-1.8", "extreme": ">1.8"},
+            "drawdown": {
+                "low": f">{DRAWDOWN_REGIME_THRESHOLDS['low'] * 100:.0f}%",
+                "medium": (
+                    f"{DRAWDOWN_REGIME_THRESHOLDS['low'] * 100:.0f}% to "
+                    f"{DRAWDOWN_REGIME_THRESHOLDS['medium'] * 100:.0f}%"
+                ),
+                "high": (
+                    f"{DRAWDOWN_REGIME_THRESHOLDS['medium'] * 100:.0f}% to "
+                    f"{DRAWDOWN_REGIME_THRESHOLDS['high'] * 100:.0f}%"
+                ),
+                "extreme": f"<{DRAWDOWN_REGIME_THRESHOLDS['high'] * 100:.0f}%",
+            },
+            "beta": {
+                "low": f"<{BETA_REGIME_THRESHOLDS['low']}",
+                "medium": f"{BETA_REGIME_THRESHOLDS['low']}-{BETA_REGIME_THRESHOLDS['medium']}",
+                "high": f"{BETA_REGIME_THRESHOLDS['medium']}-{BETA_REGIME_THRESHOLDS['high']}",
+                "extreme": f">{BETA_REGIME_THRESHOLDS['high']}",
+            },
         },
     }
 

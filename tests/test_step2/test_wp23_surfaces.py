@@ -271,7 +271,7 @@ async def test_balanced_follows_new_money_in_direction_2(name: str, long_term: s
 async def test_the_dislocation_action_follows_new_money(name: str) -> None:
     """OC-RF4/P6: dislocation can_start_now == entry_allowed(new_money), buy_now is new_money's action under buy
     or starter and null otherwise, the mode copies equal the capped modes with their capped_by, and its buy and
-    add conditions mirror the card's. PD D-9."""
+    add conditions mirror the card's. RF."""
     result = await dm.run(name)
     card = result["decision_card"]
     action = result["dislocation_framework"]["action"]
@@ -290,7 +290,7 @@ async def test_the_dislocation_action_follows_new_money(name: str) -> None:
 
 def test_can_start_now_reads_new_money_not_the_modes() -> None:
     """OC-RF4/P6 (unit): a buy whose speculative mode stays at wait still can start (buy_now buy); a starter
-    offers starter; a wait offers nothing, whatever the modes say. PD D-9."""
+    offers starter; a wait offers nothing, whatever the modes say. RF."""
     def framework(action: str, modes: dict[str, str]) -> dict[str, Any]:
         built: dict[str, Any] = build_dislocation_framework(
             verdict={}, action_zones={}, fundamentals_summary={}, dip_assessment=None, decision_context={},
@@ -335,11 +335,12 @@ def _dip(recommendation: str) -> dict[str, Any]:
 def test_the_dip_caps(action: str, recommendation: str) -> None:
     """Dip caps (plan §7 dip row): buy leaves the dip alone; starter caps the full-entry recommendations to
     starter_only and accumulate/add_position to starter_position; a non-entry action caps every entry code to
-    watch; each capped field carries capped_by new_money_<action>, a capped recommendation states the cap, and a
-    support gate in blocked_by is named in support_gates. PD D-9 (starter) / RF (non-entry)."""
+    watch; each capped field carries capped_by new_money_<action>, a capped recommendation states the cap, and
+    support_gates names the support gates in blocked_by, never another gate. PD D-9 (starter) / RF (non-entry)."""
     support = [{"id": "unsupported_currency", "class": "support"}] if action == "watch" else []
+    event = [{"id": "earnings_blackout", "class": "event"}] if action not in ENTRY_ACTIONS else []
     capped = _dip(recommendation)
-    cap_dip_assessment(capped, {"action": action, "blocked_by": support})
+    cap_dip_assessment(capped, {"action": action, "blocked_by": [*support, *event]})
     assessment, signals = capped["assessment"], capped["entry_timing"]["signals"]
     by = f"new_money_{action}"
 
@@ -369,7 +370,7 @@ def test_the_dip_caps(action: str, recommendation: str) -> None:
 @pytest.mark.parametrize("name", ROWS)
 async def test_no_dip_entry_code_outside_its_predicate(name: str) -> None:
     """OC-RF4 (dip clause): a dip recommendation or signal in ENTRY_CODES needs entry_allowed, a full-entry one
-    needs new_money buy. PD D-9."""
+    needs new_money buy. RF."""
     result = await dm.run(name)
     new_money = result["decision_card"]["new_money"]["action"]
     dip = result["dip_assessment"] or {}
@@ -383,14 +384,47 @@ async def test_no_dip_entry_code_outside_its_predicate(name: str) -> None:
 @pytest.mark.parametrize("name", ROWS)
 async def test_the_dip_override_follows_a_dislocation_starter(name: str) -> None:
     """OC-M9 (call site, annex §7): analyze reframes the dip as entry-timing only exactly when the mismatch is
-    price_broken_more_than_business and new_money is starter; S6 and C (knife, avoid) keep
-    do_not_catch_falling_knife. PD D-9."""
+    price_broken_more_than_business and new_money is starter (T5, T6 extreme); T6 (the same dislocation under buy)
+    is left alone, and S6 and C (knife, avoid) keep do_not_catch_falling_knife. PD D-9."""
     result = await dm.run(name)
     assessment = (result["dip_assessment"] or {}).get("assessment") or {}
     mismatch = (result["dislocation_framework"].get("mismatch_verdict") or {}).get("status")
     starter = result["decision_card"]["new_money"]["action"] == "starter"
 
     assert ("timing_only" in assessment) is (mismatch == "price_broken_more_than_business" and starter)
+
+
+VOL60 = "risk_regime <= high (volatility < 60%)"
+DISLOCATION_ROWS = {  # name -> the reframed dip's add_only_if (None: under buy, no override)
+    "T5_dislocation_starter": [], "T6_dislocation_starter_extreme": [VOL60], "T6_dislocation_buy": None}
+
+
+@pytest.mark.parametrize("name", DISLOCATION_ROWS)
+async def test_a_dislocation_starter_reframes_the_dip(name: str) -> None:
+    """OC-M9 (call site, override side) and balanced suitability (spec-surfaces §3.4): on a price-vs-business
+    dislocation under new_money starter the wait_for_better_setup dip becomes starter_only_wait_for_stabilization
+    with dip_quality starter_only, entry-timing scope, and add_only_if the card's mid-term add_only_if (T5: [], never
+    its long-term [VOL60]; T6 extreme: [VOL60]); balanced suitability is starter_only. The same dislocation under
+    buy (T6) keeps its own dip and is favorable. RF."""
+    result = await dm.run(name)
+    card = result["decision_card"]
+    assessment = result["dip_assessment"]["assessment"]
+    add_only_if = DISLOCATION_ROWS[name]
+
+    assert result["dislocation_framework"]["mismatch_verdict"]["status"] == "price_broken_more_than_business"
+    assert card["new_money"]["action"] == ("buy" if add_only_if is None else "starter")
+    if add_only_if is None:
+        assert (assessment["recommendation"], assessment["dip_quality"]) == ("buy_the_dip", "good")
+        assert not {"scope", "timing_only", "add_only_if"} & assessment.keys()
+    else:
+        assert {k: assessment[k] for k in ("recommendation", "dip_quality", "scope", "timing_only", "add_only_if")} \
+            == {"recommendation": "starter_only_wait_for_stabilization", "dip_quality": "starter_only",
+                "scope": "entry_timing_only", "timing_only": True, "add_only_if": add_only_if}
+        assert add_only_if == card["conditions"]["add_only_if"]
+    assert result["decision_modes"]["balanced"]["suitability"] == ("favorable" if add_only_if is None
+                                                                   else "starter_only")
+    if name == "T5_dislocation_starter":
+        assert card["long_term"]["new_money"]["conditions"]["buy_only_if"] == [VOL60]
 
 
 def test_the_starter_override_needs_a_starter() -> None:
@@ -498,22 +532,18 @@ async def test_near_52w_high_reads_the_same_on_price_zone(name: str) -> None:
 
 # --- (f) OC-RF9 code hygiene ----------------------------------------------------------------------------------
 
-A_PATHS = re.compile(
-    r"^(decision_card\.(action_now|new_money\.action|if_held\.(action|basis)|long_term\.new_money\.action)"
-    r"|decision_modes\.\w+\.(action|long_term_view)|dislocation_framework\.action\.(core|balanced|speculative|buy_now)"
-    r"|dip_assessment\.assessment\.recommendation|dip_assessment\.entry_timing\.signals\[\*\]\.action"
-    r"|dislocation_check\.decision\.new_money)$")
+CODE = re.compile(r"[a-z][a-z0-9_]*")
 
 
 @pytest.mark.parametrize("name", ROWS)
 async def test_no_actionable_field_carries_a_sizing_word(name: str) -> None:
-    """OC-RF9 (amended by plan §0 #8): no A code at any tier contains size or sizing (gate reasons are blocker
-    text, not codes); C1-C3 show the long-term wait, never hold_size_conservatively, which survives only under
-    diagnostics. PD D-9."""
+    """OC-RF9 (amended by plan §0 #8): no A code (a snake_case value of a registry A field) at any tier contains
+    size or sizing (gate reasons are blocker text, not codes); C1-C3 show the long-term wait, never
+    hold_size_conservatively, which survives only under diagnostics. PD D-9."""
     result = await dm.run(name)
     for tier, payload in dm.tiers(result).items():
-        for path, value in oc.leaves(payload):
-            if A_PATHS.match(path) and isinstance(value, str):
+        for path, value, field in oc.classified(payload):
+            if field.cls == oc.A and isinstance(value, str) and CODE.fullmatch(value):
                 assert not re.search(r"(?i)siz(e|ing)", value), (tier, path, value)
         assert "horizon_fit" not in payload["decision_card"], tier
     if name[:2] in {"C1", "C2", "C3"}:

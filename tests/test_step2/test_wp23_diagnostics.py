@@ -50,8 +50,7 @@ async def test_the_pre_gate_policy_is_a_full_tier_diagnostic(name: str) -> None:
         assert ("diagnostics" in payload) is (tier == "full"), tier
         assert not {"rationale", "horizon_fit"} & payload["decision_card"].keys(), tier
     assert list(result["diagnostics"]) == ["pre_gate_policy", "decision_trace"]
-    support_capped = "support_gates" in pre_gate
-    assert list(pre_gate) == [*PRE_GATE_KEYS, *(["support_gates"] if support_capped else []), "role",
+    assert list(pre_gate) == [*PRE_GATE_KEYS, *(["support_gates"] if name in UNSUPPORTED else []), "role",
                               "superseded_by"]
     assert list(pre_gate["inputs"]) == ["zone", "valuation_gate", "valuation_basis", "is_unprofitable"]
     assert pre_gate["role"] == "pre_gate_input_not_advice"

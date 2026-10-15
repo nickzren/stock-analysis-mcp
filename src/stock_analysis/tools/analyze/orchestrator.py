@@ -98,8 +98,9 @@ _ET = pytz.timezone("America/New_York")
 
 
 def _cap_policy_at_watch(policy_action: dict[str, Any], support: dict[str, Any]) -> None:
-    """WP4 (D5): an unsupported or unverified instrument/currency produces no
-    new-money action; hold/reduce/avoid codes pass through."""
+    """WP4 (D5): cap the emitted pre-gate copy at watch for an unsupported or unverified
+    instrument/currency (plan §0 #6); hold/reduce/avoid codes pass through. decide()'s support
+    gates cap new_money."""
     for horizon in ("mid_term", "long_term"):
         if policy_action.get(horizon) in ENTRY_CANDIDATE_CODES:
             policy_action[horizon] = "watch"
@@ -1159,7 +1160,8 @@ async def analyze_stock(
         data_quality=data_quality,
         why=why,
     )
-    # The buy band is shown only under buy; a starter shows only the card's starter size (plan §7, §0 #23).
+    # The zone band (position_sizing_range) is shown only under buy; a starter shows only the card's starter size
+    # (plan §7, §0 #23).
     if new_money_action != "buy":
         action_zones["position_sizing_range"] = None
     executive_summary = build_executive_summary(

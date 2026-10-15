@@ -122,7 +122,7 @@ class TestSwingVsMidTerm:
             assert (card["horizon"], card["long_term"]["horizon"]) == ("mid_term", "long_term"), tier
 
 
-class TestStandardTierHasNoAction:
+class TestStandardTierCarriesTheDecision:
     async def test_dislocation_check_carries_the_decision(self) -> None:
         """SC-CH10 (flipped by WP2.3): at the standard tier (analyze's default), S6's dislocation_check is the
         five-question read plus decision = {new_money, blocked_by ids} (avoid, [falling_knife]); the full tier's

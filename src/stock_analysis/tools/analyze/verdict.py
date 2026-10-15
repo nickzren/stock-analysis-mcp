@@ -944,7 +944,7 @@ def build_horizon_fit(
         data_gaps.append("burn_metrics_unavailable")
 
     # Mid-term assessment (3-12 months)
-    # Can work with setup alone, but risk regime matters for sizing
+    # Can work with setup alone; an extreme risk regime caps it at caution
     if setup_label is None:
         mid_term_fit = "unknown"
         reasons.append("mid_term: insufficient technical data")

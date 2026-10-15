@@ -121,10 +121,7 @@ FIELD_REGISTRY: tuple[Field, ...] = (
     R("governance.**", T, tiers=FULL), R("ownership_flow.**", T, tiers=FULL), R("options_signals.**", T, tiers=FULL),
 )
 INTERIM_EXCLUDED_ROOTS = ("watchlist_snapshot",)
-UNEXERCISED_ROWS = {  # rows no matrix run reaches, with the reason (OC-RF1b asserts the set)
-    "dip_assessment.assessment.add_only_if.**":
-        "the dip starter override needs a price-vs-business dislocation under new_money starter; no matrix row is both",
-}
+UNEXERCISED_ROWS: dict[str, str] = {}  # rows no matrix run reaches, with the reason (OC-RF1b asserts the set)
 
 
 def _pattern(glob: str) -> re.Pattern[str]:

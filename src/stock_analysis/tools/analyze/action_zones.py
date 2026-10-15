@@ -608,7 +608,8 @@ def apply_dip_gates_to_action_zones(
     risk_regime: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
-    Apply dip-aware guards to action zones to avoid conflicting guidance.
+    Cap the pre-gate candidate's zone input (current_zone) for a falling knife, an extended decline or an
+    extreme risk regime, recording each cap in zone_warnings.
     """
     current_zone = action_zones.get("current_zone")
     zone_warnings = list(action_zones.get("zone_warnings") or [])

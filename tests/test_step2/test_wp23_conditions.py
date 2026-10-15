@@ -19,6 +19,8 @@ from stock_analysis.tools.analyze.action_zones import (
     zone_after_caps,
 )
 from stock_analysis.tools.analyze.conditions import (
+    CandidateInputs,
+    Factor,
     candidate_factors,
     risk_text,
     valuation_headwind_texts,
@@ -225,16 +227,21 @@ TRUTH_TABLE = {  # (mid buy_only_if, mid add_only_if, monitor, long buy_only_if)
     "A7_near_52w_high_bullish": ([NEAR], [NEAR], [], []),
     "H_burner_runway_2q": ([RC], [], [PM, FC, FCF], [RC]),
     "S2_headwind": ([PE], [PE], [], [PE]),
+    "T5_dislocation_starter": ([], [], [VOL60], [VOL60]),
+    "T6_dislocation_starter_extreme": ([VOL60], [VOL60], [], [VOL60]),
+    "T1_near_52w_high": ([NEAR], [NEAR], [VOL60], [VOL60]),
+    "T1_crash_risk": ([], [], [DD35], []),
 }
 
 
 @pytest.mark.parametrize("name", [*dm.SCENARIOS, "S2_headwind"])
 async def test_conditions_truth_table(name: str) -> None:
     """OC-RF7 (plan §7e, §0 #15, #25): each row's mid-term buy/add, monitor and long-term lists (every other matrix
-    row lists nothing); do_not_buy_if is new_money's blocker reasons; reduce_if the candidate's downgrade
-    conditions; add_only_if equals buy_only_if iff if_held is hold; monitor never repeats a listed condition; a
-    buy lists nothing; every value is a predicate (R-LEX-3) at every tier; core mirrors long-term, balanced,
-    speculative, dislocation and dip mirror the card's mid-term lists. RF."""
+    row lists nothing); each horizon's target follows its own action (T1 near its high: mid wait, long starter; T1
+    crash risk: mid starter, long buy); do_not_buy_if is new_money's blocker reasons; reduce_if the candidate's
+    downgrade conditions; add_only_if equals buy_only_if iff if_held is hold; monitor never repeats a listed
+    condition; a buy lists nothing at either horizon; every value is a predicate (R-LEX-3) at every tier; core
+    mirrors long-term, balanced, speculative, dislocation and dip mirror the card's mid-term lists. RF."""
     result = await run(name)
     card = result["decision_card"]
     new_money, held, conditions = card["new_money"], card["if_held"], card["conditions"]
@@ -249,6 +256,8 @@ async def test_conditions_truth_table(name: str) -> None:
     assert set(conditions["monitor"]) <= set(pre_gate["conditions_to_upgrade"])
     if new_money["action"] == "buy":
         assert conditions["buy_only_if"] == conditions["add_only_if"] == conditions["do_not_buy_if"] == []
+    if card["long_term"]["new_money"]["action"] == "buy":
+        assert lists(result)[3] == modes["core"]["required_before_full_size"] == []
     for tier, shown in dm.tiers(result).items():
         assert oc.conditional_violations(shown) == [], tier
     assert modes["core"]["required_before_full_size"] == card["long_term"]["new_money"]["conditions"]["buy_only_if"]
@@ -261,22 +270,33 @@ async def test_conditions_truth_table(name: str) -> None:
         assert dip["add_only_if"] == conditions["add_only_if"]
 
 
+def _inputs(fit: dict[str, Any], *, tilt: str = "bullish", valuation_gate: str = "attractive",
+            is_unprofitable: bool = False) -> CandidateInputs:
+    """A synthetic candidate's inputs (an accumulate zone, no dislocation, no dip type)."""
+    fit = {"business_quality_status": "evaluated", "signals": {"bullish": [], "bearish": []}, **fit}
+    return CandidateInputs(fit=fit, tilt=tilt, valuation_gate=valuation_gate, is_unprofitable=is_unprofitable,
+                           dislocation=False, uncapped_zone="accumulate", dip_type=None)
+
+
 def _units(policy: dict[str, str], blocking: list[dict[str, Any]], support: dict[str, Any] | None = None,
-           **kwargs: Any) -> tuple[list[str], list[str], list[str]]:
+           factors: tuple[Factor, ...] = (), **kwargs: Any) -> tuple[list[str], list[str], list[str]]:
     decision = dm.decide_on(policy, blocking, support=support, **kwargs)
-    built = build_conditions(decision=decision, candidate={"long_term": "insufficient_data", **policy}, factors=[],
-                             inputs=None, downgrade=[], support=support)
+    built = build_conditions(decision=decision, candidate={"long_term": "insufficient_data", **policy},
+                             factors=list(factors), inputs=_inputs({"setup_label": "strong", "risk_label": "high",
+                                                                    "business_quality_label": "strong"}),
+                             downgrade=[], support=support)
     return built["mid_term"]["buy_only_if"], built["long_term"]["buy_only_if"], built["mid_term"]["monitor"]
 
 
 BLACKOUT = {"id": "earnings_blackout", "reason": "earnings in 2 days"}
+RISK_HIGH = Factor("risk_high", (DD35,), {"risk_label": "medium"})
 
 
 def test_only_a_tighter_gate_binds() -> None:
     """OC-RF7 (units): a blackout binds a starter or buy candidate (wait is tighter) at both horizons, not a wait
     one; a thesis gate binds a wait (avoid is tighter); the two freshness gates share one clears_when, listed
-    once; support gates are never listed, and a permanent one empties the horizon (monitor too) while an
-    unverified one keeps the other binding gates. RF."""
+    once; support gates are never listed, and a permanent one empties the horizon (monitor too: a monitored
+    risk factor goes) while an unverified one keeps the other binding gates and the monitored factor. RF."""
     assert _units({"mid_term": "hold_or_add", "long_term": "accumulate"}, [BLACKOUT])[:2] == ([EARN], [EARN])
     assert _units({"mid_term": "hold", "long_term": "hold"}, [BLACKOUT])[:2] == ([], [])
     thesis = {"id": "thesis_broken", "reason": "r", "codes": ["business_broken"]}
@@ -289,8 +309,8 @@ def test_only_a_tighter_gate_binds() -> None:
     unverified = {"instrument": {"status": "unverified"}, "currency": {"status": "supported"}}
     unsupported = {"instrument": {"status": "unsupported"}, "currency": {"status": "supported"}}
     buy = {"mid_term": "buy", "long_term": "accumulate"}
-    assert _units(buy, [support, BLACKOUT], unverified)[:2] == ([EARN], [EARN])
-    assert _units(buy, [support, BLACKOUT], unsupported) == ([], [], [])
+    assert _units(buy, [support, BLACKOUT], unverified, (RISK_HIGH,)) == ([EARN], [EARN], [DD35])
+    assert _units(buy, [support, BLACKOUT], unsupported, (RISK_HIGH,)) == ([], [], [])
 
 
 # --- G: invariants of the conditions engine -------------------------------------------------------------------
@@ -341,6 +361,41 @@ async def test_the_engine_replays_what_the_candidate_read(name: str, monkeypatch
     candidate = captured["candidate"]
     assert candidate_codes(inputs, {}) == (candidate["mid_term"], candidate["long_term"])
     assert [t for f in captured["factors"] for t in f.texts] == pre_gate["conditions_to_upgrade"]
+
+
+def _cleared(factor_id: str, fit: dict[str, Any], positives: tuple[str, ...] = (), **kwargs: Any) -> tuple[Any, ...]:
+    """(candidate codes, the codes with factor_id's own cleared state) over a synthetic candidate."""
+    inputs = _inputs(fit, **kwargs)
+    factors = candidate_factors(
+        decomposed={"risk": fit["risk_label"], "business_quality": fit["business_quality_label"],
+                    "business_quality_status": inputs.fit["business_quality_status"],
+                    "business_quality_evidence": {"positives": list(positives)}},
+        valuation_assessment={"gate": inputs.valuation_gate, "is_unprofitable": inputs.is_unprofitable},
+        zone_warnings=[], risk_regime=None, long_term_gates=build_horizon_fit(**inputs.fit)["long_term_gates"],
+        leverage_status=None)
+    factor = next(f for f in factors if f.id == factor_id)
+    return candidate_codes(inputs, {}), candidate_codes(inputs, factor.overrides)
+
+
+def test_each_factor_replays_its_own_cleared_state() -> None:
+    """G-C2 (cleared states, spec-conditions §6 #4-5): clearing unprofitability alone (label mixed, profitable)
+    leaves an unprofitable, collapsing, neutral-tilt long term at wait_or_avoid, not a speculative entry; clearing
+    negative FCF alone lifts the extreme-risk, declining, cash-burning avoid to caution; business_poor clears to
+    moderate when the rubric found a positive (long-term ok) and to mixed when it found none. G."""
+    collapsing = {"setup_label": "weak", "business_quality_label": "unprofitable",
+                  "business_quality_status": "evaluated_unprofitable", "risk_label": "medium", "revenue_yoy": -0.35,
+                  "fcf_ttm": -2e8, "burn_metrics_status": "available"}
+    assert _cleared("unprofitable", collapsing, tilt="neutral", valuation_gate="neutral", is_unprofitable=True) == (
+        ("wait_for_entry", "avoid_core_position"), ("wait_for_entry", "wait_or_avoid"))
+    triple = {"setup_label": "strong", "business_quality_label": "moderate", "risk_label": "extreme",
+              "revenue_yoy": -0.25, "fcf_ttm": -1e8}
+    assert _cleared("negative_fcf", triple) == (("speculative_small_position", "avoid_core_position"),
+                                                ("speculative_small_position", "small_position_with_stops"))
+    poor = {"setup_label": "strong", "business_quality_label": "poor", "risk_label": "medium", "revenue_yoy": 0.05,
+            "fcf_ttm": 0.0}
+    assert _cleared("business_poor", poor, ("net_margin=15.0%",)) == (("buy", "avoid_core_position"),
+                                                                     ("buy", "accumulate"))
+    assert _cleared("business_poor", poor) == (("buy", "avoid_core_position"), ("buy", "small_position_with_stops"))
 
 
 @pytest.mark.parametrize(("uncapped", "gate", "dip_type", "extreme"), list(itertools.product(

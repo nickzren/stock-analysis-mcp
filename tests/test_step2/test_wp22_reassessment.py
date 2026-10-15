@@ -283,7 +283,7 @@ PRESENT = {  # (scenario, horizon) with an object; every other matrix row is nul
             ("S9_weak_liquidity", "long_term"), ("S6_knife_dislocation", "long_term"),
             ("C_quality_knife_dislocation", "long_term"), ("E_poor_business_bullish_chart", "mid_term"),
             ("G_unsupported_currency_knife", "long_term"), ("ETF_strong", "mid_term"), ("GBp_strong", "mid_term"),
-            ("GBp_strong", "long_term"), ("A7_near_52w_high_bullish", "mid_term"),
+            ("GBp_strong", "long_term"), ("A7_near_52w_high_bullish", "mid_term"), ("T1_near_52w_high", "mid_term"),
             ("H_burner_runway_2q", "mid_term"), ("H_burner_runway_2q", "long_term")},
 }
 

@@ -75,9 +75,27 @@ def test_leaves_and_globs() -> None:
         oc.classify("policy_action.mid_term")
 
 
+ANNEX_ENTRY_CODES = {  # annex output_contract §0, 22 codes
+    "buy", "starter", "hold_or_add", "accumulate",
+    "speculative_small_position", "speculative_with_thesis", "speculative_only", "small_position_with_stops",
+    "build_position", "starter_position_only", "starter_then_add",
+    "strong_buy_the_dip", "buy_the_dip", "cautious_accumulation", "small_speculative_position",
+    "starter_only_wait_for_stabilization",
+    "consider_small_position", "starter_position", "add_position",
+    "strong_buy", "small_starter", "starter_only",
+}
+ANNEX_STARTER_ONLY_CODES = {  # annex output_contract §0, 10 codes
+    "starter", "speculative_small_position", "small_position_with_stops", "starter_position_only",
+    "small_speculative_position", "starter_only_wait_for_stabilization", "consider_small_position",
+    "starter_position", "small_starter", "starter_only",
+}
+
+
 def test_the_code_sets() -> None:
-    """G-REG3: ENTRY_CODES is the disjoint union of the starter-only and full-entry codes and holds every
-    new-money entry action and entry candidate code (annex output_contract §0). G."""
+    """G-REG3: ENTRY_CODES and STARTER_ONLY_CODES are the annex output_contract §0 literals; ENTRY_CODES is the
+    disjoint union of the starter-only and full-entry codes and holds every new-money entry action and entry
+    candidate code. G."""
+    assert (ENTRY_CODES, STARTER_ONLY_CODES) == (ANNEX_ENTRY_CODES, ANNEX_STARTER_ONLY_CODES)
     assert ENTRY_CODES == STARTER_ONLY_CODES | FULL_ENTRY_CODES and not STARTER_ONLY_CODES & FULL_ENTRY_CODES
     assert ENTRY_ACTIONS | ENTRY_CANDIDATE_CODES <= ENTRY_CODES
 
@@ -269,6 +287,19 @@ async def test_the_card_explains_itself(name: str) -> None:
         assert not [line for line in card["why"] if oc.advice(line)], tier
         assert not [t for t in card["exit_triggers"] if oc.PREDICATE_TOKEN.search(t) or oc.IMPERATIVE.match(t)], tier
         assert not [flag for flag in card["data_flags"] if oc.advice(flag)], tier
+
+
+async def test_a_missing_price_has_no_zone() -> None:
+    """OC-RF6 and BL-E3 (missing price, plan §1.2): with stock_summary and technicals failing, action_zones.price_zone
+    is null (not undetermined) and why carries no price-zone part, at every tier that shows them. RF."""
+    result = await error_result()
+    assert result["summary"]["current_price"] is None
+    for tier, shown in dm.tiers(result).items():
+        if tier != "decision":
+            assert shown["action_zones"]["price_zone"] is None, tier
+        assert shown["decision_card"]["why"] == [
+            "decided by unsupported_instrument", "mid-term fit unknown, tilt missing",
+            "other gates fired: freshness_unverifiable, data_quality_critical, unsupported_currency"], tier
 
 
 STALE = {"R3": {}, "R3_fundamentals_failed": {"fundamentals": None}}  # the R3 freshness run, with overrides
