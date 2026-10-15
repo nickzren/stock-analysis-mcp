@@ -313,7 +313,8 @@ def _card(fixture: dict) -> dict:
     decision = decide_on(policy_action, hard_gates["blocking"])
     conditions = build_conditions(decision=decision, candidate=policy_action, factors=[], inputs=None, downgrade=[],
                                   support=None)
-    return build_decision_card(**fixture, hard_gates=hard_gates, decision=decision, conditions=conditions)
+    return build_decision_card(**fixture, hard_gates=hard_gates, decision=decision, conditions=conditions,
+                               data_quality={"fundamentals_status": "available", "staleness_warnings": []}, why=[])
 
 
 class TestDecisionCardSchema:
@@ -340,6 +341,9 @@ class TestDecisionCardSchema:
             "long_term",
             "action_now",
             "hard_gates",
+            "why",
+            "exit_triggers",
+            "data_flags",
             "sizing",
             "entry",
             "exit",

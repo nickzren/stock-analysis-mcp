@@ -1030,6 +1030,7 @@ class TestToolResponseSchemas:
             events_summary={"next_catalyst": {}},
             decision=decision,
             conditions={"mid_term": {"add_only_if": []}, "long_term": {"buy_only_if": []}},
+            why=[],
         )
 
         assert policy_action["mid_term"] == "speculative_small_position"

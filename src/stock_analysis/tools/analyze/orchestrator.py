@@ -21,6 +21,7 @@ from stock_analysis.tools.analyze.decision_card import (
     build_conditions,
     build_decision_card,
     build_diagnostics,
+    build_why,
     evaluate_gates,
 )
 from stock_analysis.tools.analyze.decision_context import (
@@ -1103,6 +1104,7 @@ async def analyze_stock(
         _cap_policy_at_watch(policy_action, support)
     del action_zones["current_zone"]  # the capped label is a pre-gate input only (pre_gate_policy.inputs.zone)
     new_money_action = decision["new_money"]["action"]
+    why = build_why(decision, verdict, action_zones["price_zone"])
 
     decision_modes = build_decision_modes(
         summary=summary,
@@ -1116,6 +1118,7 @@ async def analyze_stock(
         account_size=investor_profile.get("account_size"),
         decision=decision,
         conditions=conditions,
+        why=why,
     )
     dislocation_framework = build_dislocation_framework(
         verdict=verdict,
@@ -1153,6 +1156,8 @@ async def analyze_stock(
         hard_gates=hard_gates,
         decision=decision,
         conditions=conditions,
+        data_quality=data_quality,
+        why=why,
     )
     # The buy band is shown only under buy; a starter shows only the card's starter size (plan §7, §0 #23).
     if new_money_action != "buy":

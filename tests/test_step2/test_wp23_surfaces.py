@@ -243,7 +243,7 @@ def test_speculative_maps_its_own_code_then_caps_it(own: str, new_money: str) ->
         action_zones={}, dip_assessment={"assessment": {"recommendation": recommendation}}, decision_context={},
         news_summary={}, fundamentals_summary={}, events_summary={},
         decision={"new_money": {"action": new_money}, "long_term": {"new_money": {"action": "buy"}}},
-        conditions={"mid_term": {"add_only_if": []}, "long_term": {"buy_only_if": []}},
+        conditions={"mid_term": {"add_only_if": []}, "long_term": {"buy_only_if": []}}, why=[],
     )["speculative"]
     mapped = investor_profile._SPECULATIVE_ACTIONS[own]
     action = most_restrictive((mapped, new_money))

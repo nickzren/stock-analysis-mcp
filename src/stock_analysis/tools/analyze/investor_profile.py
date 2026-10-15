@@ -132,6 +132,7 @@ def build_decision_modes(
     *,
     decision: dict[str, Any],
     conditions: dict[str, Any],
+    why: list[str],
 ) -> dict[str, Any]:
     """Build default Core / Balanced / Speculative decision blocks in the new-money vocabulary (plan §3 [D-3]):
     balanced is new_money; speculative its own code capped by new_money; core CORE[long_term_fit] capped by
@@ -234,7 +235,7 @@ def build_decision_modes(
 
     new_money_action = decision["new_money"]["action"]
     long_term_action = decision[LONG_TERM]["new_money"]["action"]
-    balanced_why: list[str] = []
+    balanced_why = list(why)
     if business_quality:
         balanced_why.append(f"business_quality={business_quality}")
     if risk_label:
@@ -341,6 +342,7 @@ def build_investor_views(
     *,
     decision: dict[str, Any],
     conditions: dict[str, Any],
+    why: list[str],
 ) -> dict[str, Any]:
     """Backward-compatible wrapper for older internal callsites."""
     return build_decision_modes(
@@ -355,4 +357,5 @@ def build_investor_views(
         account_size=investor_profile.get("account_size"),
         decision=decision,
         conditions=conditions,
+        why=why,
     )

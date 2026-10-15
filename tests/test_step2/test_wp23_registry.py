@@ -8,6 +8,7 @@ lints live in tests/support/output_contract.py.
 
 import importlib
 import re
+from typing import Any
 
 import pytest
 
@@ -28,9 +29,23 @@ from tests.support import freshness_frames as fr
 from tests.support import output_contract as oc
 
 server = importlib.import_module("stock_analysis.server")
+orchestrator = importlib.import_module("stock_analysis.tools.analyze.orchestrator")
 FRESHNESS_IDS = ("stale_data", "freshness_unverifiable")
 BLOCKING_ROWS = [name for name, row in fr.TRUTH_TABLE.items() if row.codes]
 REENTRY = re.compile(r"(?i)re-?entr|re-?enter|resum")
+
+
+async def error_result() -> dict[str, Any]:
+    """S2 with stock_summary and technicals failing: the top-level error keys and the missing-price zones."""
+    scenario = dm.SCENARIOS["S2_buy_clean"]
+    with dm.stubbed(scenario):
+        async def fail(symbol: str, **kwargs: Any) -> dict[str, Any]:
+            raise TimeoutError("stubbed tool failure")
+        orchestrator.stock_summary, orchestrator.technicals = fail, fail
+        return await orchestrator.analyze_stock("ACME", account_size=10_000.0, _now=scenario.now)
+
+
+EXTRA = {"error": error_result, "R13": lambda: dm.run(fr.scenario(fr.TRUTH_TABLE["R13"], "R13"))}
 
 # --- G: the registry itself ----------------------------------------------------------------------------------
 
@@ -65,6 +80,27 @@ def test_the_code_sets() -> None:
     new-money entry action and entry candidate code (annex output_contract §0). G."""
     assert ENTRY_CODES == STARTER_ONLY_CODES | FULL_ENTRY_CODES and not STARTER_ONLY_CODES & FULL_ENTRY_CODES
     assert ENTRY_ACTIONS | ENTRY_CANDIDATE_CODES <= ENTRY_CODES
+
+
+# --- OC-RF1 ------------------------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("name", [*dm.SCENARIOS, *EXTRA])
+async def test_every_leaf_matches_exactly_one_row(name: str) -> None:
+    """OC-RF1 (non-snapshot paths, plan §0 #22): every leaf of every matrix scenario (V1's vendor subtrees
+    included), an error result and a failed-technicals run (R13) matches exactly one registry row, at a tier the
+    row allows. RF."""
+    result = await (EXTRA[name]() if name in EXTRA else dm.run(name))
+    for tier, shown in dm.tiers(result).items():
+        assert oc.registry_violations(shown, tier) == [], tier
+
+
+async def test_every_row_is_exercised() -> None:
+    """OC-RF1b: every registry row matches some leaf over the matrix and the extra results, except the listed
+    UNEXERCISED_ROWS. RF."""
+    results = [*[await dm.run(name) for name in dm.SCENARIOS], *[await make() for make in EXTRA.values()]]
+    used = {oc.classify(path).glob for result in results for shown in dm.tiers(result).values()
+            for path, _ in oc.contract_leaves(shown)}
+    assert {f.glob for f in oc.FIELD_REGISTRY} - used == set(oc.UNEXERCISED_ROWS)
 
 
 # --- OC-RF4 ------------------------------------------------------------------------------------------------
@@ -157,6 +193,35 @@ async def test_no_entry_wording_under_a_freshness_gate(name: str) -> None:
         assert oc.freshness_violations(shown) == [], tier
 
 
+# --- FR-R-F12 ----------------------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("name", ["R3", "R6", "O2", "R13", "R14", "O8"])
+async def test_freshness_blockers_reach_every_tier(name: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    """FR-R-F12 (plan §0 #4): the freshness ids and their codes reach new_money and long_term at every tier, with
+    data_quality.freshness; if_held's action and basis equal the same run without the gate. RF (red on 0609fde,
+    which has no freshness id and no freshness decision key; WP2.1/WP2.2 already satisfy it)."""
+    row = fr.TRUTH_TABLE[name]
+    scenario = fr.scenario(row, name)
+    gated = await dm.run(scenario)
+    real = orchestrator.check_price_freshness
+    monkeypatch.setattr(orchestrator, "check_price_freshness", lambda **kw: ([], real(**kw)[1]))
+    ungated = await dm.run(scenario)
+
+    def fresh(blocked: list[dict[str, Any]]) -> list[tuple[str, list[str]]]:
+        return [(b["id"], b["codes"]) for b in blocked if b["id"] in FRESHNESS_IDS]
+
+    expected = fresh(gated["decision_card"]["new_money"]["blocked_by"])
+    assert sorted(c for _, codes in expected for c in codes) == sorted(row.codes)
+    for tier, shown in dm.tiers(gated).items():
+        card = shown["decision_card"]
+        assert fresh(card["new_money"]["blocked_by"]) == fresh(card["long_term"]["new_money"]["blocked_by"]) == (
+            expected), tier
+        assert shown["data_quality"]["freshness"]["codes"] == list(row.codes), tier
+    held, unheld = gated["decision_card"]["if_held"], ungated["decision_card"]["if_held"]
+    assert (held["action"], held["basis"]) == (unheld["action"], unheld["basis"])
+    assert held["add_allowed"] is False
+
+
 # --- RA.11 -------------------------------------------------------------------------------------------------
 
 def test_guide_prompts_and_tool_description_have_no_reentry_wording() -> None:
@@ -167,3 +232,65 @@ def test_guide_prompts_and_tool_description_have_no_reentry_wording() -> None:
     texts = [ANALYZE_RENDERING_GUIDE, *(repr(get_prompt(n, args)) for n in PROMPTS),
              server.analyze.__doc__ or ""]
     assert [t[:40] for t in texts if REENTRY.search(t)] == []
+
+
+# --- BL-E3: why, exit_triggers, data_flags (plan §2; WP2.2 deferral) -----------------------------------------
+
+def _flags(result: dict[str, Any]) -> list[str]:
+    data_quality, zones = result["data_quality"], result["action_zones"]
+    status = data_quality["fundamentals_status"]
+    return list(dict.fromkeys([*([] if status in (None, "available") else [f"fundamentals_{status}"]),
+                               *data_quality["staleness_warnings"], *zones["zone_warnings"]]))
+
+
+@pytest.mark.parametrize("name", dm.SCENARIOS)
+async def test_the_card_explains_itself(name: str) -> None:
+    """BL-E3: at every tier the card's why is the deciding gate, the mid-term evidence (fit, tilt, price zone) and
+    the other fired gates; exit_triggers are the thesis stop triggers (none while fundamentals are missing);
+    data_flags are the fundamentals status, staleness and zone warnings; balanced.why opens with the card's why.
+    why carries no gate reason or pre-gate code (R-LEX-2 strength), exit_triggers are predicates (R-LEX-3),
+    data_flags are diagnostic. RF."""
+    result = await dm.run(name)
+    new_money, verdict = result["decision_card"]["new_money"], result["verdict"]
+    others = [b["id"] for b in new_money["blocked_by"] if b["id"] != new_money["decided_by"]]
+    zone = result["action_zones"].get("price_zone")
+    evidence = (f"mid-term fit {verdict['horizon_fit']['mid_term']}, tilt {verdict['tilt'] or 'missing'}"
+                + (f", price zone {zone}" if zone else ""))
+    why = [*([f"decided by {new_money['decided_by']}"] if new_money["decided_by"] else []), evidence,
+           *([f"other gates fired: {', '.join(others)}"] if others else [])]
+    assert result["decision_modes"]["balanced"]["why"][:len(why)] == why
+    thesis = result["dislocation_framework"].get("thesis_integrity") or {}
+    missing = result["data_quality"]["fundamentals_status"] == "missing"
+    for tier, shown in dm.tiers(result).items():
+        card = shown["decision_card"]
+        assert card["why"] == why, tier
+        assert card["exit_triggers"] == ([] if missing else thesis.get("sell_without_attachment_if", [])), tier
+        assert card["data_flags"] == _flags(result), tier
+        assert not [line for line in card["why"] if oc.advice(line)], tier
+        assert not [t for t in card["exit_triggers"] if oc.PREDICATE_TOKEN.search(t) or oc.IMPERATIVE.match(t)], tier
+        assert not [flag for flag in card["data_flags"] if oc.advice(flag)], tier
+
+
+@pytest.mark.parametrize(("name", "field", "expected"), [
+    ("S4_earnings_gate_on_hold_or_add", "why",
+     ["decided by earnings_blackout", "mid-term fit ok, tilt bullish, price zone above_sma50"]),
+    ("S5_earnings_gate_on_avoid", "why",
+     ["mid-term fit avoid, tilt bearish, price zone below_sma200", "other gates fired: earnings_blackout"]),
+    ("A7_near_52w_high_bullish", "why",
+     ["decided by near_52w_high", "mid-term fit ok, tilt bullish, price zone near_52w_high"]),
+    ("H_burner_runway_2q", "exit_triggers",
+     ["cash_runway < 4 quarters (dilutive raise imminent)",
+      "net margin worsens 3 consecutive quarters (path to profitability not progressing)",
+      "revenue_yoy < -30% for 2 quarters (growth thesis invalidated)"]),
+    ("S7_etf_below_sma200", "exit_triggers", []),
+    ("S8_fundamentals_failed", "exit_triggers", []),
+    ("T1_extreme_risk_bullish", "data_flags", ["extreme_risk_regime", "zone_capped_extreme_risk"]),
+    ("S8_fundamentals_failed", "data_flags", ["fundamentals_missing", "valuation_gate_unknown_no_metrics"]),
+    ("H_burner_runway_2q", "data_flags", ["fundamentals_not_meaningful"]),
+    ("S1_hold_or_add_clean", "data_flags", []),
+])
+async def test_pinned_explanations(name: str, field: str, expected: list[str]) -> None:
+    """BL-E3 (pinned values): S4 decided by the blackout; S5's blackout fired but did not decide; A7's price
+    zone; H's three runway triggers; none on an ETF or with fundamentals missing; T1's regime flags; S8's
+    missing fundamentals; H's not-meaningful fundamentals; none on a clean row. RF."""
+    assert (await dm.run(name))["decision_card"][field] == expected

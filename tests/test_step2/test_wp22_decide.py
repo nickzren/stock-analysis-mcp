@@ -457,7 +457,8 @@ async def test_freshness_never_moves_scores_or_the_candidate(row: str, monkeypat
 
 # --- The card carries one decision (plan §2; D-13 alias) ----------------------------------------------------
 
-CARD_KEYS = ["horizon", "new_money", "if_held", "long_term", "hard_gates", "action_now"]
+CARD_KEYS = ["horizon", "new_money", "if_held", "long_term", "hard_gates", "action_now", "why", "exit_triggers",
+             "data_flags"]
 NEW_MONEY_KEYS = ["action", "blocked_by", "decided_by", "unevaluated", "earliest_reassessment"]
 
 

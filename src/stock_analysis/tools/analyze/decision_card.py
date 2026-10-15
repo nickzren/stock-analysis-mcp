@@ -3,8 +3,8 @@
 evaluate_gates computes every analyze hard gate once (hard_gates) and the ids of the applicable
 gates it could not compute; decision.decide() resolves them against the uncapped candidate
 policy; build_conditions lists the conditions that bind each horizon; build_decision_card
-assembles decide()'s output with hard_gates, sizing, entry, exit, conditions and next_review.
-build_diagnostics emits the pre-gate candidate (full tier only).
+assembles decide()'s output with hard_gates, why, sizing, entry, exit, conditions and
+next_review. build_diagnostics emits the pre-gate candidate (full tier only).
 """
 
 from __future__ import annotations
@@ -272,6 +272,36 @@ def build_conditions(
     }
 
 
+def build_why(decision: dict[str, Any], verdict: dict[str, Any], price_zone: str | None) -> list[str]:
+    """decision_card.why (BL-E3): the deciding gate, the mid-term evidence, the other fired gates. A-class text
+    (mid-term): never a gate reason or a pre-gate code."""
+    new_money = decision["new_money"]
+    why = [f"decided by {new_money['decided_by']}"] if new_money["decided_by"] else []
+    evidence = (f"mid-term fit {(verdict.get('horizon_fit') or {}).get('mid_term') or 'unknown'}, "
+                f"tilt {verdict.get('tilt') or 'missing'}")
+    why.append(evidence + (f", price zone {price_zone}" if price_zone else ""))
+    others = [b["id"] for b in new_money["blocked_by"] if b["id"] != new_money["decided_by"]]
+    if others:
+        why.append("other gates fired: " + ", ".join(others))
+    return why
+
+
+def _exit_triggers(dislocation_framework: dict[str, Any] | None, data_quality: dict[str, Any]) -> list[str]:
+    """decision_card.exit_triggers (BL-E3): the thesis stop triggers, none while fundamentals are missing."""
+    if data_quality.get("fundamentals_status") == "missing":
+        return []
+    thesis = (dislocation_framework or {}).get("thesis_integrity") or {}
+    return list(thesis.get("sell_without_attachment_if") or [])
+
+
+def _data_flags(data_quality: dict[str, Any], action_zones: dict[str, Any]) -> list[str]:
+    """decision_card.data_flags (BL-E3): fundamentals status, staleness and zone warnings, in that order."""
+    status = data_quality.get("fundamentals_status")
+    flags = [f"fundamentals_{status}"] if status not in (None, "available") else []
+    flags += [*(data_quality.get("staleness_warnings") or []), *(action_zones.get("zone_warnings") or [])]
+    return list(dict.fromkeys(flags))
+
+
 def _build_next_review(events_data: dict[str, Any], now: datetime) -> dict[str, Any]:
     """Pick the next review date: inside an active earnings interval, the first session after it, or the
     default when that interval is undatable (never on or before today, RA.17); else next earnings if within
@@ -318,6 +348,8 @@ def build_decision_card(
     hard_gates: dict[str, Any],
     decision: dict[str, Any],
     conditions: dict[str, Any],
+    data_quality: dict[str, Any],
+    why: list[str],
 ) -> dict[str, Any]:
     """Build the compact small-account decision card around decide()'s decision.
 
@@ -326,6 +358,7 @@ def build_decision_card(
             carries its own conditions (buy_only_if)
         hard_gates: every fired gate (blocking) and one boolean per gates.ANALYZE_GATE_IDS (checks)
         action_now: alias of new_money.action (decision.NEW_MONEY_ACTIONS), kept one release
+        why, exit_triggers, data_flags: the deciding evidence, the thesis stop triggers, the data caveats
         sizing: starter/full pct + dollars + whole/fractional shares, iff new_money is buy or starter
             (a starter hides the full size)
         entry: price and buy band, iff new_money is buy or starter
@@ -341,6 +374,9 @@ def build_decision_card(
         LONG_TERM: {**long_term, "new_money": {**long_term["new_money"], "conditions": conditions[LONG_TERM]}},
         "hard_gates": hard_gates,
         "action_now": new_money["action"],
+        "why": why,
+        "exit_triggers": _exit_triggers(dislocation_framework, data_quality),
+        "data_flags": _data_flags(data_quality, action_zones),
         "sizing": build_entry_sizing(action_zones, summary, new_money["action"]),
         "entry": _build_entry(action_zones, summary, new_money["action"]),
         "exit": _build_exit(action_zones),
