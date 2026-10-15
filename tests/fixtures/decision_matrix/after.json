@@ -2,11 +2,11 @@
   "A7_near_52w_high_bullish": {
     "action_now": "wait",
     "card_sizing": {
-      "full_dollars": 800.0,
-      "full_pct_cap": 8.0,
-      "starter_dollars": 250.0,
-      "starter_pct": 2.5,
-      "whole_shares": 2
+      "full_dollars": null,
+      "full_pct_cap": null,
+      "starter_dollars": null,
+      "starter_pct": null,
+      "whole_shares": null
     },
     "conditions": {
       "add_only_if": [
@@ -86,16 +86,16 @@
     "price_zone": "near_52w_high",
     "sizing_present": {
       "decision": {
-        "card": true,
+        "card": false,
         "range": false
       },
       "full": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       },
       "standard": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       }
     },
     "snapshot": {
@@ -109,6 +109,7 @@
       "zone": "reduce"
     },
     "source": "PH A7 (D-4)",
+    "summary_size": [],
     "valuation_gate": "attractive",
     "verdict": {
       "business_quality": "moderate",
@@ -124,11 +125,11 @@
   "A_broken_bearish": {
     "action_now": "avoid",
     "card_sizing": {
-      "full_dollars": 800.0,
-      "full_pct_cap": 8.0,
-      "starter_dollars": 250.0,
-      "starter_pct": 2.5,
-      "whole_shares": 2
+      "full_dollars": null,
+      "full_pct_cap": null,
+      "starter_dollars": null,
+      "starter_pct": null,
+      "whole_shares": null
     },
     "conditions": {
       "add_only_if": [],
@@ -206,16 +207,16 @@
     "price_zone": "below_sma200",
     "sizing_present": {
       "decision": {
-        "card": true,
+        "card": false,
         "range": false
       },
       "full": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       },
       "standard": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       }
     },
     "snapshot": {
@@ -229,6 +230,7 @@
       "zone": "accumulate"
     },
     "source": "PH A",
+    "summary_size": [],
     "valuation_gate": "neutral",
     "verdict": {
       "business_quality": "poor",
@@ -244,11 +246,11 @@
   "B_broken_bearish_knife": {
     "action_now": "avoid",
     "card_sizing": {
-      "full_dollars": 800.0,
-      "full_pct_cap": 8.0,
-      "starter_dollars": 250.0,
-      "starter_pct": 2.5,
-      "whole_shares": 4
+      "full_dollars": null,
+      "full_pct_cap": null,
+      "starter_dollars": null,
+      "starter_pct": null,
+      "whole_shares": null
     },
     "conditions": {
       "add_only_if": [],
@@ -331,16 +333,16 @@
     "price_zone": "below_sma200",
     "sizing_present": {
       "decision": {
-        "card": true,
+        "card": false,
         "range": false
       },
       "full": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       },
       "standard": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       }
     },
     "snapshot": {
@@ -355,6 +357,7 @@
       "zone": "hold_neutral"
     },
     "source": "PH B",
+    "summary_size": [],
     "valuation_gate": "neutral",
     "verdict": {
       "business_quality": "poor",
@@ -370,8 +373,8 @@
   "C1_headwind_hold_or_add": {
     "action_now": "starter",
     "card_sizing": {
-      "full_dollars": 800.0,
-      "full_pct_cap": 8.0,
+      "full_dollars": null,
+      "full_pct_cap": null,
       "starter_dollars": 250.0,
       "starter_pct": 2.5,
       "whole_shares": 2
@@ -454,11 +457,11 @@
       },
       "full": {
         "card": true,
-        "range": true
+        "range": false
       },
       "standard": {
         "card": true,
-        "range": true
+        "range": false
       }
     },
     "snapshot": {
@@ -470,6 +473,9 @@
       "zone": "hold_bullish"
     },
     "source": "OC C1",
+    "summary_size": [
+      "size ~2.5%"
+    ],
     "valuation_gate": "headwind",
     "verdict": {
       "business_quality": "moderate",
@@ -485,11 +491,11 @@
   "C2_headwind_earnings_gate": {
     "action_now": "wait",
     "card_sizing": {
-      "full_dollars": 800.0,
-      "full_pct_cap": 8.0,
-      "starter_dollars": 250.0,
-      "starter_pct": 2.5,
-      "whole_shares": 2
+      "full_dollars": null,
+      "full_pct_cap": null,
+      "starter_dollars": null,
+      "starter_pct": null,
+      "whole_shares": null
     },
     "conditions": {
       "add_only_if": [
@@ -575,16 +581,16 @@
     "price_zone": "above_sma50",
     "sizing_present": {
       "decision": {
-        "card": true,
+        "card": false,
         "range": false
       },
       "full": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       },
       "standard": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       }
     },
     "snapshot": {
@@ -598,6 +604,7 @@
       "zone": "hold_bullish"
     },
     "source": "OC C2",
+    "summary_size": [],
     "valuation_gate": "headwind",
     "verdict": {
       "business_quality": "moderate",
@@ -613,11 +620,11 @@
   "C3_headwind_plain_avoid": {
     "action_now": "avoid",
     "card_sizing": {
-      "full_dollars": 800.0,
-      "full_pct_cap": 8.0,
-      "starter_dollars": 250.0,
-      "starter_pct": 2.5,
-      "whole_shares": 2
+      "full_dollars": null,
+      "full_pct_cap": null,
+      "starter_dollars": null,
+      "starter_pct": null,
+      "whole_shares": null
     },
     "conditions": {
       "add_only_if": [],
@@ -691,16 +698,16 @@
     "price_zone": "below_sma200",
     "sizing_present": {
       "decision": {
-        "card": true,
+        "card": false,
         "range": false
       },
       "full": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       },
       "standard": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       }
     },
     "snapshot": {
@@ -712,6 +719,7 @@
       "zone": "hold_neutral"
     },
     "source": "OC C3",
+    "summary_size": [],
     "valuation_gate": "headwind",
     "verdict": {
       "business_quality": "moderate",
@@ -727,11 +735,11 @@
   "C_quality_knife_dislocation": {
     "action_now": "avoid",
     "card_sizing": {
-      "full_dollars": 800.0,
-      "full_pct_cap": 8.0,
-      "starter_dollars": 250.0,
-      "starter_pct": 2.5,
-      "whole_shares": 4
+      "full_dollars": null,
+      "full_pct_cap": null,
+      "starter_dollars": null,
+      "starter_pct": null,
+      "whole_shares": null
     },
     "conditions": {
       "add_only_if": [],
@@ -813,16 +821,16 @@
     "price_zone": "below_sma200",
     "sizing_present": {
       "decision": {
-        "card": true,
+        "card": false,
         "range": false
       },
       "full": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       },
       "standard": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       }
     },
     "snapshot": {
@@ -836,6 +844,7 @@
       "zone": "hold_neutral"
     },
     "source": "PH C",
+    "summary_size": [],
     "valuation_gate": "attractive",
     "verdict": {
       "business_quality": "strong",
@@ -851,11 +860,11 @@
   "D2_quality_poor_chart_earnings_3d": {
     "action_now": "avoid",
     "card_sizing": {
-      "full_dollars": 800.0,
-      "full_pct_cap": 8.0,
-      "starter_dollars": 250.0,
-      "starter_pct": 2.5,
-      "whole_shares": 2
+      "full_dollars": null,
+      "full_pct_cap": null,
+      "starter_dollars": null,
+      "starter_pct": null,
+      "whole_shares": null
     },
     "conditions": {
       "add_only_if": [],
@@ -935,16 +944,16 @@
     "price_zone": "below_sma200",
     "sizing_present": {
       "decision": {
-        "card": true,
+        "card": false,
         "range": false
       },
       "full": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       },
       "standard": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       }
     },
     "snapshot": {
@@ -958,6 +967,7 @@
       "zone": "accumulate"
     },
     "source": "PH D2",
+    "summary_size": [],
     "valuation_gate": "attractive",
     "verdict": {
       "business_quality": "strong",
@@ -973,11 +983,11 @@
   "D_quality_attractive_poor_chart": {
     "action_now": "avoid",
     "card_sizing": {
-      "full_dollars": 800.0,
-      "full_pct_cap": 8.0,
-      "starter_dollars": 250.0,
-      "starter_pct": 2.5,
-      "whole_shares": 2
+      "full_dollars": null,
+      "full_pct_cap": null,
+      "starter_dollars": null,
+      "starter_pct": null,
+      "whole_shares": null
     },
     "conditions": {
       "add_only_if": [],
@@ -1046,16 +1056,16 @@
     "price_zone": "below_sma200",
     "sizing_present": {
       "decision": {
-        "card": true,
+        "card": false,
         "range": false
       },
       "full": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       },
       "standard": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       }
     },
     "snapshot": {
@@ -1067,6 +1077,7 @@
       "zone": "accumulate"
     },
     "source": "PH D",
+    "summary_size": [],
     "valuation_gate": "attractive",
     "verdict": {
       "business_quality": "strong",
@@ -1082,8 +1093,8 @@
   "E2_mixed_fcf_bullish_chart": {
     "action_now": "starter",
     "card_sizing": {
-      "full_dollars": 800.0,
-      "full_pct_cap": 8.0,
+      "full_dollars": null,
+      "full_pct_cap": null,
       "starter_dollars": 250.0,
       "starter_pct": 2.5,
       "whole_shares": 2
@@ -1164,11 +1175,11 @@
       },
       "full": {
         "card": true,
-        "range": true
+        "range": false
       },
       "standard": {
         "card": true,
-        "range": true
+        "range": false
       }
     },
     "snapshot": {
@@ -1180,6 +1191,9 @@
       "zone": "hold_bullish"
     },
     "source": "PH E2",
+    "summary_size": [
+      "size ~2.5%"
+    ],
     "valuation_gate": "neutral",
     "verdict": {
       "business_quality": "mixed",
@@ -1196,9 +1210,9 @@
     "action_now": "avoid",
     "card_sizing": {
       "full_dollars": null,
-      "full_pct_cap": 8.0,
+      "full_pct_cap": null,
       "starter_dollars": null,
-      "starter_pct": 2.5,
+      "starter_pct": null,
       "whole_shares": null
     },
     "conditions": {
@@ -1274,16 +1288,16 @@
     "price_zone": "below_sma200",
     "sizing_present": {
       "decision": {
-        "card": true,
+        "card": false,
         "range": false
       },
       "full": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       },
       "standard": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       }
     },
     "snapshot": {
@@ -1297,6 +1311,7 @@
       "zone": "accumulate"
     },
     "source": "PH ETF bearish",
+    "summary_size": [],
     "valuation_gate": "not_applicable",
     "verdict": {
       "business_quality": null,
@@ -1313,9 +1328,9 @@
     "action_now": "watch",
     "card_sizing": {
       "full_dollars": null,
-      "full_pct_cap": 8.0,
+      "full_pct_cap": null,
       "starter_dollars": null,
-      "starter_pct": 2.5,
+      "starter_pct": null,
       "whole_shares": null
     },
     "conditions": {
@@ -1394,16 +1409,16 @@
     "price_zone": "above_sma50",
     "sizing_present": {
       "decision": {
-        "card": true,
+        "card": false,
         "range": false
       },
       "full": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       },
       "standard": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       }
     },
     "snapshot": {
@@ -1417,6 +1432,7 @@
       "zone": "hold_bullish"
     },
     "source": "PH ETF bullish",
+    "summary_size": [],
     "valuation_gate": "not_applicable",
     "verdict": {
       "business_quality": null,
@@ -1432,11 +1448,11 @@
   "E_poor_business_bullish_chart": {
     "action_now": "avoid",
     "card_sizing": {
-      "full_dollars": 800.0,
-      "full_pct_cap": 8.0,
-      "starter_dollars": 250.0,
-      "starter_pct": 2.5,
-      "whole_shares": 2
+      "full_dollars": null,
+      "full_pct_cap": null,
+      "starter_dollars": null,
+      "starter_pct": null,
+      "whole_shares": null
     },
     "conditions": {
       "add_only_if": [],
@@ -1520,16 +1536,16 @@
     "price_zone": "above_sma50",
     "sizing_present": {
       "decision": {
-        "card": true,
+        "card": false,
         "range": false
       },
       "full": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       },
       "standard": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       }
     },
     "snapshot": {
@@ -1543,6 +1559,7 @@
       "zone": "hold_bullish"
     },
     "source": "PH E",
+    "summary_size": [],
     "valuation_gate": "neutral",
     "verdict": {
       "business_quality": "poor",
@@ -1558,11 +1575,11 @@
   "F3_quality_neutral_valuation_poor_chart": {
     "action_now": "avoid",
     "card_sizing": {
-      "full_dollars": 800.0,
-      "full_pct_cap": 8.0,
-      "starter_dollars": 250.0,
-      "starter_pct": 2.5,
-      "whole_shares": 2
+      "full_dollars": null,
+      "full_pct_cap": null,
+      "starter_dollars": null,
+      "starter_pct": null,
+      "whole_shares": null
     },
     "conditions": {
       "add_only_if": [],
@@ -1631,16 +1648,16 @@
     "price_zone": "below_sma200",
     "sizing_present": {
       "decision": {
-        "card": true,
+        "card": false,
         "range": false
       },
       "full": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       },
       "standard": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       }
     },
     "snapshot": {
@@ -1652,6 +1669,7 @@
       "zone": "accumulate"
     },
     "source": "PH F3",
+    "summary_size": [],
     "valuation_gate": "neutral",
     "verdict": {
       "business_quality": "strong",
@@ -1668,9 +1686,9 @@
     "action_now": "watch",
     "card_sizing": {
       "full_dollars": null,
-      "full_pct_cap": 8.0,
+      "full_pct_cap": null,
       "starter_dollars": null,
-      "starter_pct": 2.5,
+      "starter_pct": null,
       "whole_shares": null
     },
     "conditions": {
@@ -1752,16 +1770,16 @@
     "price_zone": "above_sma50",
     "sizing_present": {
       "decision": {
-        "card": true,
+        "card": false,
         "range": false
       },
       "full": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       },
       "standard": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       }
     },
     "snapshot": {
@@ -1775,6 +1793,7 @@
       "zone": "hold_bullish"
     },
     "source": "WP4 GBp",
+    "summary_size": [],
     "valuation_gate": "attractive",
     "verdict": {
       "business_quality": "moderate",
@@ -1791,9 +1810,9 @@
     "action_now": "avoid",
     "card_sizing": {
       "full_dollars": null,
-      "full_pct_cap": 8.0,
+      "full_pct_cap": null,
       "starter_dollars": null,
-      "starter_pct": 2.5,
+      "starter_pct": null,
       "whole_shares": null
     },
     "conditions": {
@@ -1877,16 +1896,16 @@
     "price_zone": "below_sma200",
     "sizing_present": {
       "decision": {
-        "card": true,
+        "card": false,
         "range": false
       },
       "full": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       },
       "standard": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       }
     },
     "snapshot": {
@@ -1901,6 +1920,7 @@
       "zone": "hold_neutral"
     },
     "source": "PH G",
+    "summary_size": [],
     "valuation_gate": "attractive",
     "verdict": {
       "business_quality": "strong",
@@ -1916,11 +1936,11 @@
   "H_burner_runway_2q": {
     "action_now": "avoid",
     "card_sizing": {
-      "full_dollars": 800.0,
-      "full_pct_cap": 8.0,
-      "starter_dollars": 250.0,
-      "starter_pct": 2.5,
-      "whole_shares": 2
+      "full_dollars": null,
+      "full_pct_cap": null,
+      "starter_dollars": null,
+      "starter_pct": null,
+      "whole_shares": null
     },
     "conditions": {
       "add_only_if": [],
@@ -2009,16 +2029,16 @@
     "price_zone": "above_sma50",
     "sizing_present": {
       "decision": {
-        "card": true,
+        "card": false,
         "range": false
       },
       "full": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       },
       "standard": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       }
     },
     "snapshot": {
@@ -2032,6 +2052,7 @@
       "zone": "hold_bullish"
     },
     "source": "PH CH7 burner (D-1c)",
+    "summary_size": [],
     "valuation_gate": "neutral",
     "verdict": {
       "business_quality": "unprofitable",
@@ -2047,8 +2068,8 @@
   "S1_hold_or_add_clean": {
     "action_now": "starter",
     "card_sizing": {
-      "full_dollars": 800.0,
-      "full_pct_cap": 8.0,
+      "full_dollars": null,
+      "full_pct_cap": null,
       "starter_dollars": 250.0,
       "starter_pct": 2.5,
       "whole_shares": 2
@@ -2129,11 +2150,11 @@
       },
       "full": {
         "card": true,
-        "range": true
+        "range": false
       },
       "standard": {
         "card": true,
-        "range": true
+        "range": false
       }
     },
     "snapshot": {
@@ -2145,6 +2166,9 @@
       "zone": "hold_bullish"
     },
     "source": "OC S1",
+    "summary_size": [
+      "size ~2.5%"
+    ],
     "valuation_gate": "attractive",
     "verdict": {
       "business_quality": "moderate",
@@ -2264,6 +2288,9 @@
       "zone": "accumulate"
     },
     "source": "OC S2",
+    "summary_size": [
+      "size ~2.5-8.0%"
+    ],
     "valuation_gate": "attractive",
     "verdict": {
       "business_quality": "moderate",
@@ -2279,11 +2306,11 @@
   "S3_plain_avoid": {
     "action_now": "avoid",
     "card_sizing": {
-      "full_dollars": 800.0,
-      "full_pct_cap": 8.0,
-      "starter_dollars": 250.0,
-      "starter_pct": 2.5,
-      "whole_shares": 2
+      "full_dollars": null,
+      "full_pct_cap": null,
+      "starter_dollars": null,
+      "starter_pct": null,
+      "whole_shares": null
     },
     "conditions": {
       "add_only_if": [],
@@ -2355,16 +2382,16 @@
     "price_zone": "below_sma200",
     "sizing_present": {
       "decision": {
-        "card": true,
+        "card": false,
         "range": false
       },
       "full": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       },
       "standard": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       }
     },
     "snapshot": {
@@ -2376,6 +2403,7 @@
       "zone": "accumulate"
     },
     "source": "OC S3",
+    "summary_size": [],
     "valuation_gate": "attractive",
     "verdict": {
       "business_quality": "moderate",
@@ -2391,11 +2419,11 @@
   "S4_earnings_gate_on_hold_or_add": {
     "action_now": "wait",
     "card_sizing": {
-      "full_dollars": 800.0,
-      "full_pct_cap": 8.0,
-      "starter_dollars": 250.0,
-      "starter_pct": 2.5,
-      "whole_shares": 2
+      "full_dollars": null,
+      "full_pct_cap": null,
+      "starter_dollars": null,
+      "starter_pct": null,
+      "whole_shares": null
     },
     "conditions": {
       "add_only_if": [
@@ -2482,16 +2510,16 @@
     "price_zone": "above_sma50",
     "sizing_present": {
       "decision": {
-        "card": true,
+        "card": false,
         "range": false
       },
       "full": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       },
       "standard": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       }
     },
     "snapshot": {
@@ -2505,6 +2533,7 @@
       "zone": "hold_bullish"
     },
     "source": "OC S4",
+    "summary_size": [],
     "valuation_gate": "attractive",
     "verdict": {
       "business_quality": "moderate",
@@ -2520,11 +2549,11 @@
   "S5_earnings_gate_on_avoid": {
     "action_now": "avoid",
     "card_sizing": {
-      "full_dollars": 800.0,
-      "full_pct_cap": 8.0,
-      "starter_dollars": 250.0,
-      "starter_pct": 2.5,
-      "whole_shares": 2
+      "full_dollars": null,
+      "full_pct_cap": null,
+      "starter_dollars": null,
+      "starter_pct": null,
+      "whole_shares": null
     },
     "conditions": {
       "add_only_if": [],
@@ -2607,16 +2636,16 @@
     "price_zone": "below_sma200",
     "sizing_present": {
       "decision": {
-        "card": true,
+        "card": false,
         "range": false
       },
       "full": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       },
       "standard": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       }
     },
     "snapshot": {
@@ -2630,6 +2659,7 @@
       "zone": "accumulate"
     },
     "source": "OC S5",
+    "summary_size": [],
     "valuation_gate": "attractive",
     "verdict": {
       "business_quality": "moderate",
@@ -2645,11 +2675,11 @@
   "S6_knife_dislocation": {
     "action_now": "avoid",
     "card_sizing": {
-      "full_dollars": 600.0,
-      "full_pct_cap": 6.0,
-      "starter_dollars": 200.0,
-      "starter_pct": 2.0,
-      "whole_shares": 3
+      "full_dollars": null,
+      "full_pct_cap": null,
+      "starter_dollars": null,
+      "starter_pct": null,
+      "whole_shares": null
     },
     "conditions": {
       "add_only_if": [],
@@ -2733,16 +2763,16 @@
     "price_zone": "below_sma200",
     "sizing_present": {
       "decision": {
-        "card": true,
+        "card": false,
         "range": false
       },
       "full": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       },
       "standard": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       }
     },
     "snapshot": {
@@ -2756,6 +2786,7 @@
       "zone": "hold_neutral"
     },
     "source": "OC S6",
+    "summary_size": [],
     "valuation_gate": "attractive",
     "verdict": {
       "business_quality": "strong",
@@ -2772,9 +2803,9 @@
     "action_now": "watch",
     "card_sizing": {
       "full_dollars": null,
-      "full_pct_cap": 8.0,
+      "full_pct_cap": null,
       "starter_dollars": null,
-      "starter_pct": 2.5,
+      "starter_pct": null,
       "whole_shares": null
     },
     "conditions": {
@@ -2850,16 +2881,16 @@
     "price_zone": "below_sma200",
     "sizing_present": {
       "decision": {
-        "card": true,
+        "card": false,
         "range": false
       },
       "full": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       },
       "standard": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       }
     },
     "snapshot": {
@@ -2873,6 +2904,7 @@
       "zone": "accumulate"
     },
     "source": "OC S7",
+    "summary_size": [],
     "valuation_gate": "not_applicable",
     "verdict": {
       "business_quality": null,
@@ -2888,11 +2920,11 @@
   "S8_fundamentals_failed": {
     "action_now": "insufficient_data",
     "card_sizing": {
-      "full_dollars": 800.0,
-      "full_pct_cap": 8.0,
-      "starter_dollars": 250.0,
-      "starter_pct": 2.5,
-      "whole_shares": 2
+      "full_dollars": null,
+      "full_pct_cap": null,
+      "starter_dollars": null,
+      "starter_pct": null,
+      "whole_shares": null
     },
     "conditions": {
       "add_only_if": [],
@@ -2975,16 +3007,16 @@
     "price_zone": "above_sma50",
     "sizing_present": {
       "decision": {
-        "card": true,
+        "card": false,
         "range": false
       },
       "full": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       },
       "standard": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       }
     },
     "snapshot": {
@@ -2998,6 +3030,7 @@
       "zone": "hold_bullish"
     },
     "source": "OC S8",
+    "summary_size": [],
     "valuation_gate": "unknown",
     "verdict": {
       "business_quality": null,
@@ -3013,11 +3046,11 @@
   "S9_weak_liquidity": {
     "action_now": "avoid",
     "card_sizing": {
-      "full_dollars": 800.0,
-      "full_pct_cap": 8.0,
-      "starter_dollars": 250.0,
-      "starter_pct": 2.5,
-      "whole_shares": 2
+      "full_dollars": null,
+      "full_pct_cap": null,
+      "starter_dollars": null,
+      "starter_pct": null,
+      "whole_shares": null
     },
     "conditions": {
       "add_only_if": [
@@ -3104,16 +3137,16 @@
     "price_zone": "above_sma50",
     "sizing_present": {
       "decision": {
-        "card": true,
+        "card": false,
         "range": false
       },
       "full": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       },
       "standard": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       }
     },
     "snapshot": {
@@ -3127,6 +3160,7 @@
       "zone": "hold_bullish"
     },
     "source": "OC S9",
+    "summary_size": [],
     "valuation_gate": "attractive",
     "verdict": {
       "business_quality": "moderate",
@@ -3142,8 +3176,8 @@
   "T1_extreme_risk_bullish": {
     "action_now": "starter",
     "card_sizing": {
-      "full_dollars": 300.0,
-      "full_pct_cap": 3.0,
+      "full_dollars": null,
+      "full_pct_cap": null,
       "starter_dollars": 50.0,
       "starter_pct": 0.5,
       "whole_shares": 0
@@ -3226,11 +3260,11 @@
       },
       "full": {
         "card": true,
-        "range": true
+        "range": false
       },
       "standard": {
         "card": true,
-        "range": true
+        "range": false
       }
     },
     "snapshot": {
@@ -3242,6 +3276,9 @@
       "zone": "hold_bullish"
     },
     "source": "OC T1",
+    "summary_size": [
+      "size ~0.5%"
+    ],
     "valuation_gate": "attractive",
     "verdict": {
       "business_quality": "strong",
@@ -3257,8 +3294,8 @@
   "T2_starter_weak_setup_quality": {
     "action_now": "starter",
     "card_sizing": {
-      "full_dollars": 800.0,
-      "full_pct_cap": 8.0,
+      "full_dollars": null,
+      "full_pct_cap": null,
       "starter_dollars": 250.0,
       "starter_pct": 2.5,
       "whole_shares": 2
@@ -3339,11 +3376,11 @@
       },
       "full": {
         "card": true,
-        "range": true
+        "range": false
       },
       "standard": {
         "card": true,
-        "range": true
+        "range": false
       }
     },
     "snapshot": {
@@ -3355,6 +3392,9 @@
       "zone": "hold_bullish"
     },
     "source": "OC T2",
+    "summary_size": [
+      "size ~2.5%"
+    ],
     "valuation_gate": "attractive",
     "verdict": {
       "business_quality": "strong",
@@ -3370,11 +3410,11 @@
   "T3_plain_wait_weak_setup": {
     "action_now": "wait",
     "card_sizing": {
-      "full_dollars": 800.0,
-      "full_pct_cap": 8.0,
-      "starter_dollars": 250.0,
-      "starter_pct": 2.5,
-      "whole_shares": 2
+      "full_dollars": null,
+      "full_pct_cap": null,
+      "starter_dollars": null,
+      "starter_pct": null,
+      "whole_shares": null
     },
     "conditions": {
       "add_only_if": [],
@@ -3443,16 +3483,16 @@
     "price_zone": "above_sma50",
     "sizing_present": {
       "decision": {
-        "card": true,
+        "card": false,
         "range": false
       },
       "full": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       },
       "standard": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       }
     },
     "snapshot": {
@@ -3464,6 +3504,7 @@
       "zone": "hold_bullish"
     },
     "source": "OC T3",
+    "summary_size": [],
     "valuation_gate": "attractive",
     "verdict": {
       "business_quality": "moderate",
@@ -3479,8 +3520,8 @@
   "T4_starter_buy_the_dip": {
     "action_now": "starter",
     "card_sizing": {
-      "full_dollars": 800.0,
-      "full_pct_cap": 8.0,
+      "full_dollars": null,
+      "full_pct_cap": null,
       "starter_dollars": 250.0,
       "starter_pct": 2.5,
       "whole_shares": 2
@@ -3564,11 +3605,11 @@
       },
       "full": {
         "card": true,
-        "range": true
+        "range": false
       },
       "standard": {
         "card": true,
-        "range": true
+        "range": false
       }
     },
     "snapshot": {
@@ -3580,6 +3621,9 @@
       "zone": "accumulate"
     },
     "source": "OC RF3 starter (D-9)",
+    "summary_size": [
+      "size ~2.5%"
+    ],
     "valuation_gate": "attractive",
     "verdict": {
       "business_quality": "strong",
@@ -3595,11 +3639,11 @@
   "V1_vendor_rich_plain_avoid": {
     "action_now": "avoid",
     "card_sizing": {
-      "full_dollars": 800.0,
-      "full_pct_cap": 8.0,
-      "starter_dollars": 250.0,
-      "starter_pct": 2.5,
-      "whole_shares": 2
+      "full_dollars": null,
+      "full_pct_cap": null,
+      "starter_dollars": null,
+      "starter_pct": null,
+      "whole_shares": null
     },
     "conditions": {
       "add_only_if": [],
@@ -3671,16 +3715,16 @@
     "price_zone": "below_sma200",
     "sizing_present": {
       "decision": {
-        "card": true,
+        "card": false,
         "range": false
       },
       "full": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       },
       "standard": {
-        "card": true,
-        "range": true
+        "card": false,
+        "range": false
       }
     },
     "snapshot": {
@@ -3692,6 +3736,7 @@
       "zone": "accumulate"
     },
     "source": "OC V1",
+    "summary_size": [],
     "valuation_gate": "attractive",
     "verdict": {
       "business_quality": "moderate",

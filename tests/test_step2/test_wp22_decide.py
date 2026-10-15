@@ -396,8 +396,8 @@ async def test_case_g_is_avoid_at_both_horizons() -> None:
 
 
 async def test_r3_waits_for_data_at_both_horizons() -> None:
-    """FR-R-F2 (action clause; sizing is WP2.3): R3 (fresh 5m, technicals 2 sessions behind) gives
-    wait_for_data at both horizons, decided by stale_data [daily_history_stale]. PD D-7."""
+    """FR-R-F2 (action clause; the sizing clause is test_wp23_sizing's): R3 (fresh 5m, technicals 2 sessions
+    behind) gives wait_for_data at both horizons, decided by stale_data [daily_history_stale]. PD D-7."""
     result = await dm.run(fr.scenario(fr.TRUTH_TABLE["R3"], "R3"))
 
     for decision in horizons(result).values():
@@ -504,9 +504,9 @@ async def test_the_decision_trace_names_the_emitted_code_and_the_deciding_gate(n
     assert result["diagnostics"]["decision_trace"] == trace
 
 
-# --- Interim 2.2 surfaces (CH for WP2.3) --------------------------------------------------------------------
-# Until WP2.3 the derived surfaces read the emitted, knife-free policy (integrated plan §5), so they can contradict
-# new_money. These tests pin the contradictions the plan accepts; WP2.3 flips them.
+# --- Interim 2.2 surfaces (flipped by WP2.3) -----------------------------------------------------------------
+# Until WP2.3 the derived surfaces read the emitted, knife-free policy (WP2.2 integrated plan §5); WP2.3 derives
+# them from new_money. The snapshot keeps reading the pre-gate candidate until WP2.4 (plan §0 #22).
 
 KNIFE_BOUNCE = {  # still a falling knife (below a falling SMA200, -25% over 3m, 52w high 200 days ago), bouncing
     "current_price": 80.0,
@@ -528,20 +528,21 @@ KNIFE_NOT_DISLOCATION = dm.Scenario(  # the whole-WP review's knife_evidence.py 
     dm.CALM, news=dm.NEWS_VENDOR_RICH, ownership=dm.INSIDER_BUYING)
 
 
-async def test_a_non_dislocation_knife_keeps_the_admitting_surfaces() -> None:
-    """IS-CH1: a falling knife that is not a dislocation candidate (mismatch unclear) and whose knife-free candidate
-    admits new money (bullish tilt, caution fit) gives new_money avoid [falling_knife]; speculative_small_position
-    is only the full tier's diagnostics.pre_gate_policy.mid_term, superseded by new_money avoid, and the card has
-    no horizon_fit; the modes follow new_money (balanced avoid, speculative and core avoid with capped_by) and so
-    does the dislocation (can_start_now false / buy_now null) (G from WP2.3, PD D-9, D-3), while the executive
-    summary, derived from the emitted policy, still shows "Policy: mid-term small starter position" (v0.2.0:
-    wait_for_entry). CH: flipped by WP2.3 (the summary follows new_money); the snapshot clause is
-    test_the_snapshot_keeps_the_knife_free_candidate_until_wp2_4."""
+async def test_a_non_dislocation_knife_shows_no_admitting_surface() -> None:
+    """IS-CH1 (flipped by WP2.3): a falling knife that is not a dislocation candidate (mismatch unclear) and whose
+    knife-free candidate admits new money (bullish tilt, caution fit) gives new_money avoid [falling_knife], and
+    every derived surface follows it: no top-level policy_action or card.horizon_fit; balanced avoid, speculative
+    and core avoid with capped_by; the summary's new-money segment "avoid; blocked by falling_knife" with no size
+    and no "small starter position"; dislocation can_start_now false / buy_now null; no card sizing, buy band or
+    zone band; the knife's clears_when binds at both horizons (plan §7e). speculative_small_position survives only
+    as the full tier's diagnostics.pre_gate_policy.mid_term, superseded by new_money. G from WP2.3 (PD D-9, D-3);
+    the snapshot clause is test_the_snapshot_keeps_the_knife_free_candidate_until_wp2_4."""
     result = await dm.run(KNIFE_NOT_DISLOCATION)
     card = result["decision_card"]
     dislocation = result["dislocation_framework"]
     policy = result["diagnostics"]["pre_gate_policy"]
     modes = result["decision_modes"]
+    knife = GATES["falling_knife"].clears_when
 
     assert (result["dip_assessment"]["dip_classification"]["type"], dislocation["mismatch_verdict"]["status"]) == (
         "falling_knife", "unclear")
@@ -552,8 +553,14 @@ async def test_a_non_dislocation_knife_keeps_the_admitting_surfaces() -> None:
     assert (policy["mid_term"], policy["superseded_by"]["new_money"]) == ("speculative_small_position", "avoid")
     assert {m: (mode["action"], mode.get("capped_by")) for m, mode in modes.items()} == {
         "core": ("avoid", "long_term_avoid"), "balanced": ("avoid", None), "speculative": ("avoid", "new_money_avoid")}
-    assert result["executive_summary"].endswith("Policy: mid-term small starter position; size ~2.5-8.0%.")
+    assert result["executive_summary"].startswith(
+        f"Decision (mid-term, new money): avoid; blocked by falling_knife; no reassessment date: re-run analyze "
+        f"after {knife}. If held: hold. Long-term (1-5y): avoid; blocked by falling_knife;")
+    assert "size ~" not in result["executive_summary"] and "small starter" not in result["executive_summary"]
     assert (dislocation["action"]["can_start_now"], dislocation["action"]["buy_now"]) == (False, None)
+    assert (card["sizing"], card["entry"], result["action_zones"]["position_sizing_range"]) == (None, None, None)
+    assert (card["conditions"]["buy_only_if"], card["conditions"]["add_only_if"],
+            card["long_term"]["new_money"]["conditions"]["buy_only_if"]) == ([knife], [knife], [knife])
 
 
 async def test_the_snapshot_keeps_the_knife_free_candidate_until_wp2_4() -> None:

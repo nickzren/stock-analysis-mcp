@@ -3,6 +3,8 @@ modes, the dislocation action and check, the dip caps and price_zone, all derive
 never feeding it. Annex: output_contract.md §4, §6, §7 and policy_holder.md §8, §10, "Corrected proposal", as
 amended by plan §0 (#8, #9, #10, #11, #21, #23)."""
 
+import re
+from datetime import date
 from itertools import product
 from typing import Any
 
@@ -17,9 +19,13 @@ from stock_analysis.tools.analyze.action_zones import (
 )
 from stock_analysis.tools.analyze.decision import (
     CORE,
+    ENTRY_ACTIONS,
     ENTRY_CODES,
+    EVIDENCE_BASES,
     FULL_ENTRY_CODES,
+    IF_HELD_ACTIONS,
     NEW_MONEY_ACTIONS,
+    NON_EVIDENCE_BASES,
     entry_allowed,
     most_restrictive,
 )
@@ -28,11 +34,21 @@ from stock_analysis.tools.analyze.dip_assessment import (
     cap_dip_assessment,
 )
 from stock_analysis.tools.analyze.dislocation_framework import build_dislocation_framework
+from stock_analysis.tools.analyze.executive_summary import horizon_segments
+from stock_analysis.tools.analyze.gates import GATES, THESIS_CLEARS_WHEN
+from stock_analysis.tools.analyze.reassessment import PERMANENT_CLEARS_WHEN
 from tests.support import decision_matrix as dm
+from tests.support import output_contract as oc
 
 ROWS = list(dm.SCENARIOS)
+PREFIXES = ("Decision (mid-term, new money): ", "If held: ", "Long-term (1-5y): ")
+BUY_WORD = re.compile(r"(?i)\b(buy|add|accumulate|starter)\b")
 PRICE_ZONE_NAMES = {"near_52w_low", "near_52w_high", "below_sma200", "above_sma50", "at_or_below_sma50",
                     "undetermined"}
+
+
+def words(code: str) -> str:
+    return code.replace("_", " ")
 
 
 def ids(blockers: list[dict[str, Any]]) -> list[str]:
@@ -41,6 +57,138 @@ def ids(blockers: list[dict[str, Any]]) -> list[str]:
 
 def tight(action: str) -> int:
     return NEW_MONEY_ACTIONS.index(action)
+
+
+# --- (a) executive summary: three horizon segments (OC-RF8, PH-RF20, RA.15) -----------------------------------
+
+
+@pytest.mark.parametrize("name", ROWS)
+async def test_the_summary_opens_with_three_linted_horizon_segments(name: str) -> None:
+    """OC-RF8: the summary's first three sentences are the new-money, if-held and long-term segments, in order.
+    Segment 1 names new_money's action and gates and carries "size ~" iff entry_allowed (a starter shows its
+    starter pct alone); each segment passes R-LEX-1 against its own horizon; every later sentence passes R-LEX-2.
+    PD D-9."""
+    result = await dm.run(name)
+    card = result["decision_card"]
+    new_money, held, long = card["new_money"], card["if_held"], card["long_term"]["new_money"]
+    for tier in ("standard", "full"):
+        assert dm.tiers(result)[tier]["executive_summary"] == result["executive_summary"], tier
+    sentences = oc.segments(result["executive_summary"])
+    first, second, third, body = *sentences[:3], sentences[3:]
+
+    assert [s[:len(p)] for s, p in zip(sentences, PREFIXES, strict=False)] == list(PREFIXES)
+    assert first.startswith(PREFIXES[0] + words(new_money["action"]))
+    assert (("blocked by " + ", ".join(ids(new_money["blocked_by"]))) in first) is bool(new_money["blocked_by"])
+    sizing = card["sizing"] or {}
+    size = (f"size ~{sizing['starter_pct']:.1f}-{sizing['full_pct_cap']:.1f}%" if new_money["action"] == "buy"
+            else f"size ~{sizing.get('starter_pct') or 0:.1f}%")
+    assert ("size ~" in first) is entry_allowed(new_money["action"])
+    if entry_allowed(new_money["action"]):
+        assert f"; {size}" in first and first.count("size ~") == 1
+    assert second == f"If held: {words(held['action'])}."
+    assert third.startswith(PREFIXES[2] + words(long["action"]))
+    assert result["executive_summary"].count("size ~") == first.count("size ~")
+    assert not oc.advice(first) or entry_allowed(new_money["action"]), first
+    assert not oc.advice(third) or long["action"] in ENTRY_ACTIONS, third
+    assert "size ~" not in third
+    assert not re.search(r"(?i)\badd\b|hold or add", second) or held["add_allowed"]
+    for sentence in body:
+        assert not oc.advice(sentence), sentence
+
+
+@pytest.mark.parametrize(("name", "segments"), [
+    ("S2_buy_clean", ("Decision (mid-term, new money): buy; size ~2.5-8.0%.", "If held: hold.",
+                      "Long-term (1-5y): buy.")),
+    ("S1_hold_or_add_clean", ("Decision (mid-term, new money): starter; size ~2.5%.", "If held: hold.",
+                              "Long-term (1-5y): buy.")),
+    ("S3_plain_avoid", ("Decision (mid-term, new money): avoid.", "If held: reduce.", "Long-term (1-5y): buy.")),
+    ("S4_earnings_gate_on_hold_or_add", (
+        "Decision (mid-term, new money): wait; blocked by earnings_blackout; reassess on or after Tue Oct 13 "
+        "(not a buy date).", "If held: hold.",
+        "Long-term (1-5y): wait; blocked by earnings_blackout; reassess on or after Tue Oct 13 (not a buy date).")),
+    ("A7_near_52w_high_bullish", (
+        "Decision (mid-term, new money): wait; blocked by near_52w_high; no reassessment date: re-run analyze "
+        "after price leaves the near-52-week-high band.", "If held: hold.", "Long-term (1-5y): buy.")),
+    ("GBp_strong", (
+        "Decision (mid-term, new money): watch; blocked by unsupported_currency; outside supported scope: no "
+        "reassessment date.", "If held: hold.",
+        "Long-term (1-5y): watch; blocked by unsupported_currency; outside supported scope: no reassessment "
+        "date.")),
+    ("A_broken_bearish", ("Decision (mid-term, new money): avoid; blocked by thesis_broken.",
+                          "If held: review exit.", "Long-term (1-5y): avoid; blocked by thesis_broken.")),
+])
+async def test_named_segments(name: str, segments: tuple[str, str, str]) -> None:
+    """OC-RF8 / RA.15 (summary clauses): the three segments word for word on the named rows (buy with its band,
+    a starter with its starter pct only, a plain avoid, dated, conditions-only and unsupported reassessment).
+    PD D-9."""
+    assert oc.segments((await dm.run(name))["executive_summary"])[:3] == list(segments)
+
+
+@pytest.mark.parametrize(("name", "mid", "long"), [
+    ("D_quality_attractive_poor_chart", "avoid", "buy"),
+    ("E2_mixed_fcf_bullish_chart", "starter; size ~2.5%", "starter"),
+    ("C1_headwind_hold_or_add", "starter; size ~2.5%", "wait")])
+async def test_the_summary_names_both_horizons(name: str, mid: str, long: str) -> None:
+    """PH-RF20: the summary names the mid-term and the long-term decision, each labelled, so a disagreement reads
+    as two horizons (D: avoid vs buy; C1: starter vs wait). PD D-3."""
+    summary = (await dm.run(name))["executive_summary"]
+
+    assert summary.startswith(f"Decision (mid-term, new money): {mid}. If held: hold. Long-term (1-5y): {long}.")
+
+
+def _card(earliest: dict[str, Any] | None, action: str = "wait") -> dict[str, Any]:
+    new_money = {"action": action, "blocked_by": [{"id": "earnings_blackout"}], "earliest_reassessment": earliest}
+    return {"new_money": new_money, "if_held": {"action": "hold"},
+            "long_term": {"new_money": {"action": "buy", "blocked_by": [], "earliest_reassessment": None}}}
+
+
+def test_the_reassessment_wordings() -> None:
+    """RA.15 (summary clauses): plan §6's worked example renders "reassess on or after Fri Oct 16 (not a buy
+    date)"; a null date renders "no reassessment date: re-run analyze after <clears_when ...>" with the
+    outstanding conditions in order; a permanent support gate says so; never "now". RF."""
+    dated = {"date": "2026-10-16", "basis": "earnings_clear", "earnings_risk_through": "2026-10-15",
+             "session_method": "calendar_static", "outstanding": [{"id": "earnings_reverify", "clears_when": "x"}]}
+    undated = {"date": None, "basis": "conditions_only", "earnings_risk_through": None, "session_method": None,
+               "outstanding": [{"id": "falling_knife", "clears_when": "a"}, {"id": "earnings_reverify",
+                                                                           "clears_when": "b"}]}
+    unsupported = {**undated, "basis": "unsupported"}
+
+    assert horizon_segments(_card(dated))[0] == (
+        "Decision (mid-term, new money): wait; blocked by earnings_blackout; reassess on or after Fri Oct 16 "
+        "(not a buy date).")
+    assert horizon_segments(_card(undated))[0].endswith("; no reassessment date: re-run analyze after a and b.")
+    assert horizon_segments(_card(unsupported))[0].endswith("; outside supported scope: no reassessment date.")
+    assert horizon_segments(_card(None))[0] == "Decision (mid-term, new money): wait; blocked by earnings_blackout."
+
+
+@pytest.mark.parametrize("name", ROWS)
+async def test_a_reassessment_date_never_sits_next_to_a_buy_word(name: str) -> None:
+    """RA.15 (summary clauses) and RA.11: in every horizon segment carrying earliest_reassessment, the only buy
+    word is "not a buy date" and nothing says "now"; segments without it say nothing about reassessment; no
+    re-entry wording anywhere in the summary. RF."""
+    result = await dm.run(name)
+    card = result["decision_card"]
+    summary = result["executive_summary"]
+    first, _, third = oc.segments(summary)[:3]
+
+    assert not re.search(r"(?i)re-?entr|re-?enter|resum", summary)
+    for segment, new_money in ((first, card["new_money"]), (third, card["long_term"]["new_money"])):
+        earliest = new_money["earliest_reassessment"]
+        assert ("reassess" in segment) is (earliest is not None), segment
+        if earliest is not None:
+            assert not BUY_WORD.search(segment.replace("not a buy date", "")), segment
+            assert not re.search(r"(?i)\bnow\b", segment), segment
+        if earliest is not None and earliest["date"]:
+            day = date.fromisoformat(earliest["date"])
+            assert f"reassess on or after {day:%a} {day:%b} {day.day} (not a buy date)" in segment
+
+
+def test_no_clears_when_text_ends_a_sentence() -> None:
+    """Segmentation: no clears_when the summary can quote contains ". " or ends with ".", so the segments split
+    on sentence ends. G."""
+    texts = [gate.clears_when for gate in GATES.values()] + list(THESIS_CLEARS_WHEN.values()) + [
+        PERMANENT_CLEARS_WHEN]
+    assert not [t for t in texts if ". " in t or t.endswith(".")]
 
 
 # --- (b) decision modes (PH-RF17 balanced, PH-RF19, SC-CH8, SC-CH12) ------------------------------------------
@@ -346,3 +494,36 @@ async def test_near_52w_high_reads_the_same_on_price_zone(name: str) -> None:
 
     assert (legacy == "reduce") is (price_zone == "near_52w_high")
     assert (legacy in (None, "undetermined")) is (price_zone in (None, "undetermined"))
+
+
+# --- (f) OC-RF9 code hygiene ----------------------------------------------------------------------------------
+
+A_PATHS = re.compile(
+    r"^(decision_card\.(action_now|new_money\.action|if_held\.(action|basis)|long_term\.new_money\.action)"
+    r"|decision_modes\.\w+\.(action|long_term_view)|dislocation_framework\.action\.(core|balanced|speculative|buy_now)"
+    r"|dip_assessment\.assessment\.recommendation|dip_assessment\.entry_timing\.signals\[\*\]\.action"
+    r"|dislocation_check\.decision\.new_money)$")
+
+
+@pytest.mark.parametrize("name", ROWS)
+async def test_no_actionable_field_carries_a_sizing_word(name: str) -> None:
+    """OC-RF9 (amended by plan §0 #8): no A code at any tier contains size or sizing (gate reasons are blocker
+    text, not codes); C1-C3 show the long-term wait, never hold_size_conservatively, which survives only under
+    diagnostics. PD D-9."""
+    result = await dm.run(name)
+    for tier, payload in dm.tiers(result).items():
+        for path, value in oc.leaves(payload):
+            if A_PATHS.match(path) and isinstance(value, str):
+                assert not re.search(r"(?i)siz(e|ing)", value), (tier, path, value)
+        assert "horizon_fit" not in payload["decision_card"], tier
+    if name[:2] in {"C1", "C2", "C3"}:
+        assert (result["decision_card"]["long_term"]["new_money"]["action"],
+                result["decision_modes"]["balanced"]["long_term_view"]) == ("wait", "wait")
+
+
+def test_no_canonical_code_carries_a_sizing_word() -> None:
+    """OC-RF9 (unit): no new-money, holder, basis, speculative-mode, price-zone or dip-cap code says size or
+    sizing. PD D-9."""
+    codes = {*NEW_MONEY_ACTIONS, *IF_HELD_ACTIONS, *EVIDENCE_BASES, *NON_EVIDENCE_BASES, *PRICE_ZONES.values(),
+             *investor_profile._SPECULATIVE_ACTIONS.values(), "starter_only", "starter_position", "watch"}
+    assert not [c for c in codes if re.search(r"(?i)siz(e|ing)", c)]

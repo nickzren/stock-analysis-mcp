@@ -1,29 +1,18 @@
 """Executive summary and policy action builders."""
 
+from datetime import date
 from typing import Any
 
 from stock_analysis.tools.analyze.conditions import candidate_factors
+from stock_analysis.tools.analyze.decision import entry_allowed
 from stock_analysis.tools.analyze.dislocation_framework import (
     classify_dislocation_opportunity,
 )
+from stock_analysis.tools.analyze.gates import format_day
 from stock_analysis.tools.analyze.signals import VOLATILITY_REGIME_THRESHOLDS
 from stock_analysis.utils.helpers import fcf_label_from_cashflow
 
-_ACTION_HUMANIZE: dict[str, str] = {
-    # Long-term actions
-    "avoid_core_position": "avoid as a core holding",
-    "hold_watch": "hold and watch",
-    "accumulate": "accumulate",
-    "strong_buy": "strong buy",
-    # Mid-term actions
-    "wait_for_entry": "wait for a better entry",
-    "speculative_small_position": "small starter position",
-    "consider_entry": "consider entry",
-    "hold": "hold",
-    "reduce": "reduce",
-    "exit": "exit",
-    "small_position_with_stops": "small starter position",
-}
+_WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
 # Gate ordering (fixed order for diff stability)
 _GATE_ORDER: list[str] = [
@@ -37,9 +26,43 @@ _GATE_ORDER: list[str] = [
 ]
 
 
-def _humanize_action(action: str) -> str:
-    """Convert internal action enum to investor-friendly wording."""
-    return _ACTION_HUMANIZE.get(action, action.replace("_", " "))
+def _words(code: str) -> str:
+    return code.replace("_", " ")
+
+
+def _reassessment_part(earliest: dict[str, Any] | None) -> str | None:
+    """earliest_reassessment in words (plan §6): never a buy date, never "now"."""
+    if earliest is None:
+        return None
+    if earliest["basis"] == "earnings_clear":
+        day = date.fromisoformat(earliest["date"])
+        return f"reassess on or after {_WEEKDAYS[day.weekday()]} {format_day(day)} (not a buy date)"
+    if earliest["basis"] == "unsupported":
+        return "outside supported scope: no reassessment date"
+    return "no reassessment date: re-run analyze after " + " and ".join(
+        item["clears_when"] for item in earliest["outstanding"])
+
+
+def _horizon_segment(label: str, new_money: dict[str, Any], size: str | None = None) -> str:
+    parts = [_words(new_money["action"])]
+    if new_money["blocked_by"]:
+        parts.append("blocked by " + ", ".join(blocker["id"] for blocker in new_money["blocked_by"]))
+    if size:
+        parts.append(size)
+    reassessment = _reassessment_part(new_money["earliest_reassessment"])
+    if reassessment:
+        parts.append(reassessment)
+    return f"{label}: " + "; ".join(parts) + "."
+
+
+def size_text(new_money_action: str, sizing: dict[str, Any] | None) -> str | None:
+    """The new-money segment's size phrase (plan §7): the starter-to-full band under buy, the starter pct alone
+    under starter, none otherwise. Read from decision_card.sizing only."""
+    if not entry_allowed(new_money_action) or not sizing or sizing.get("starter_pct") is None:
+        return None
+    if sizing.get("full_pct_cap") is None:
+        return f"size ~{sizing['starter_pct']:.1f}%"
+    return f"size ~{sizing['starter_pct']:.1f}-{sizing['full_pct_cap']:.1f}%"
 
 
 def _humanize_gates_with_numbers(
@@ -115,6 +138,17 @@ def _humanize_gates_with_numbers(
     return "; ".join(humanized) if humanized else "multiple concerns"
 
 
+def horizon_segments(decision_card: dict[str, Any]) -> tuple[str, str, str]:
+    """The summary's three opening sentences (plan §7 class N): mid-term new money, if held, long term."""
+    new_money = decision_card["new_money"]
+    return (
+        _horizon_segment("Decision (mid-term, new money)", new_money,
+                         size_text(new_money["action"], decision_card.get("sizing"))),
+        f"If held: {_words(decision_card['if_held']['action'])}.",
+        _horizon_segment("Long-term (1-5y)", decision_card["long_term"]["new_money"]),
+    )
+
+
 def build_executive_summary(
     summary: dict[str, Any],
     technicals_summary: dict[str, Any],
@@ -122,20 +156,19 @@ def build_executive_summary(
     risk_summary: dict[str, Any],
     signals: dict[str, list[str]],
     verdict: dict[str, Any],
-    action_zones: dict[str, Any],
-    policy_action: dict[str, Any],
+    decision_card: dict[str, Any],
     news_summary: dict[str, Any] | None = None,
 ) -> str:
     """
     Build a MATERIALITY-FIRST deterministic executive summary from structured fields.
 
     DETERMINISM CONTRACT:
-    - Lead sentence determined by materiality priority (policy gates > risk > fundamentals > technicals)
+    - Opens with the decision card's three horizon segments (new money, if held, long term)
+    - Then the lead sentence, by materiality priority (policy gates > risk > fundamentals > technicals)
     - Fixed gate ordering for diff stability
     - Fixed rounding: percents 0-1dp, money in $M, runway 1dp
-    - Humanized action names (avoid_core_position → "avoid as a core holding")
     - Numeric anchors embedded in gates (unprofitable → "unprofitable (margin -140%)")
-    - Always includes: lead topic, counterbalancing factor, risk (if elevated), policy
+    - Always includes: lead topic, counterbalancing factor, risk (if elevated)
 
     MATERIALITY PRIORITY (lead sentence topic):
     1. If long_term == "avoid" → lead with WHY (policy gates with numbers)
@@ -146,7 +179,7 @@ def build_executive_summary(
     This ensures the summary highlights what actually matters for investment decisions.
 
     Returns:
-        A 3-4 sentence narrative summary string.
+        The narrative summary string.
     """
     name = summary.get("name", "This stock")
     # Use short name (first word or ticker-like)
@@ -173,12 +206,6 @@ def build_executive_summary(
     risk_regime = decomposed.get("risk", "unknown")  # extreme/high/medium/low
     vol = risk_summary.get("annualized_volatility")
     dd = risk_summary.get("max_drawdown_1y")
-
-    # Policy (from policy_action - the source of truth)
-    mid_term_action = policy_action.get("mid_term", "unknown")
-    long_term_action = policy_action.get("long_term", "unknown")
-    position_sizing = action_zones.get("position_sizing_range", {})
-    suggested_pct = position_sizing.get("suggested_pct_range", [])
 
     # Horizon fit for materiality determination
     horizon_fit = verdict.get("horizon_fit", {})
@@ -245,14 +272,6 @@ def build_executive_summary(
         risk_details.append(f"dd {dd * 100:.1f}%")
     risk_str = ", ".join(risk_details) if risk_details else ""
 
-    # Policy clause (humanized actions)
-    mid_term_human = _humanize_action(mid_term_action)
-    long_term_human = _humanize_action(long_term_action)
-    policy_parts: list[str] = [f"mid-term {mid_term_human}"]
-    if len(suggested_pct) >= 2:
-        policy_parts.append(f"size ~{suggested_pct[0]:.1f}-{suggested_pct[1]:.1f}%")
-    policy_clause = "Policy: " + "; ".join(policy_parts) + "."
-
     # === DETERMINE LEAD TOPIC (MATERIALITY-FIRST) ===
     def _determine_lead_topic() -> str:
         # Priority 1: If long-term is "avoid", lead with policy gates
@@ -269,8 +288,8 @@ def build_executive_summary(
 
     lead_topic = _determine_lead_topic()
 
-    # === BUILD SENTENCES BASED ON LEAD TOPIC ===
-    sentences: list[str] = []
+    # === BUILD SENTENCES: the three horizon segments, then the lead topic ===
+    sentences: list[str] = list(horizon_segments(decision_card))
 
     if lead_topic == "policy":
         # Lead: Why it's avoid (use humanized gates with numeric anchors)
@@ -283,7 +302,7 @@ def build_executive_summary(
             vol=vol,
             dd=dd,
         )
-        sentences.append(f"{short_name} is {long_term_human} long-term ({gates_str}).")
+        sentences.append(f"{short_name}: long-term fit avoid ({gates_str}).")
 
         # Counterbalance: mention technicals if strong
         if setup == "strong" and tech_str:
@@ -358,9 +377,6 @@ def build_executive_summary(
         # Risk if elevated
         if risk_regime in ("extreme", "high") and risk_str:
             sentences.append(f"Risk is {risk_regime} ({risk_str}).")
-
-    # Always end with policy clause
-    sentences.append(policy_clause)
 
     return " ".join(sentences)
 

@@ -76,11 +76,6 @@ def leaves(node: Any, path: str = "") -> list[tuple[str, Any]]:
     return [(path, node)]
 
 
-def card_size(payload: dict[str, Any]) -> tuple[Any, ...]:
-    sizing = payload["decision_card"]["sizing"]
-    return sizing["starter_dollars"], sizing["full_dollars"], sizing["whole_shares"]
-
-
 async def analyze(name: str, **kwargs: Any) -> dict[str, Any]:
     """A matrix scenario run with analyze's own profile and cap arguments (dm.run takes neither cap)."""
     scenario = dm.SCENARIOS[name]
@@ -118,13 +113,12 @@ def pre_gate_policy(result: dict[str, Any]) -> dict[str, Any]:
 
 
 class TestEntrySizingUnderNonEntryActions:
-    async def test_plain_avoid_carries_entry_sizing_on_every_path(self) -> None:
-        """OC-CH1: S3, a plain avoid with no gate, carries entry sizing (card, buy band, zone band, summary);
-        core is buy (long_term.new_money, WP2.2 D-3). The guidance, zone, mode and dip clauses are flipped by
-        WP2.3 (no sizing_guidance: policy_action moved to diagnostics; no current_zone on any surface,
-        price_zone below_sma200; no mode size and no capital_at_risk; the dip's buy_the_dip and entry signals
-        capped to watch by new_money avoid; D-9). Flipped by WP2.3 (card sizing, the buy band, the zone band and
-        the summary size keyed on entry_allowed)."""
+    async def test_plain_avoid_carries_no_entry_sizing(self) -> None:
+        """OC-CH1 (flipped by WP2.3): S3, a plain avoid with no gate, carries no entry sizing on any path: card
+        sizing and buy band null at every tier, position_sizing_range null (key kept) and no "size ~" text at
+        standard and full, no sizing_guidance (policy_action moved to diagnostics), no mode size and no
+        capital_at_risk; no current_zone (price_zone below_sma200); the dip's buy_the_dip and entry codes are watch,
+        capped by new_money; core stays buy (long_term.new_money, D-3). G from WP2.3 (PD D-9; plan §7)."""
         result = await dm.run("S3_plain_avoid")
         shown = dm.tiers(result)
         card = result["decision_card"]
@@ -133,19 +127,18 @@ class TestEntrySizingUnderNonEntryActions:
 
         assert (card["action_now"], dm.gate_ids(result)) == ("avoid", [])
         for tier, payload in shown.items():
-            assert card_size(payload) == (250.0, 800.0, 2), tier
-            entry = payload["decision_card"]["entry"]
-            assert (entry["buy_zone_low"], entry["buy_zone_high"]) == (71.4, 90.0), tier
+            assert (payload["decision_card"]["sizing"], payload["decision_card"]["entry"]) == (None, None), tier
         for tier in ("standard", "full"):
-            assert shown[tier]["action_zones"]["position_sizing_range"]["suggested_pct_range"] == [2.5, 8.0], tier
-            assert "size ~2.5-8.0%" in shown[tier]["executive_summary"], tier
+            assert "position_sizing_range" in shown[tier]["action_zones"], tier
+            assert shown[tier]["action_zones"]["position_sizing_range"] is None, tier
+            assert not SIZE_TEXT.search(shown[tier]["executive_summary"]), tier
         assert "policy_action" not in result
         assert "sizing_guidance" not in pre_gate_policy(result)
         assert {name: (mode["starter_position"], mode["max_position"]) for name, mode in modes.items()} == dict.fromkeys(
             ("core", "balanced", "speculative"), (None, None))
         assert modes["speculative"]["capital_at_risk"] is None
-        assert ("current_zone" in result["action_zones"], "current_zone" in card["entry"],
-                result["action_zones"]["price_zone"]) == (False, False, "below_sma200")
+        assert ("current_zone" in result["action_zones"], result["action_zones"]["price_zone"]) == (
+            False, "below_sma200")
         assert (dip["assessment"]["recommendation"], dip["assessment"]["capped_by"]) == ("watch", "new_money_avoid")
         assert [(s["action"], s["capped_by"]) for s in dip["entry_timing"]["signals"]] == [
             ("watch", "new_money_avoid")] * 2
@@ -153,25 +146,31 @@ class TestEntrySizingUnderNonEntryActions:
 
     @pytest.mark.parametrize(("name", "action"), [("T3_plain_wait_weak_setup", "wait"),
                                                   ("C3_headwind_plain_avoid", "avoid")])
-    async def test_plain_wait_and_headwind_avoid_carry_card_sizing(self, name: str, action: str) -> None:
-        """OC-CH2: T3 (plain wait) and C3 (headwind avoid), neither gated, carry card sizing at every tier.
-        Flipped by WP2.3 (card sizing is null unless new_money is buy or starter)."""
+    async def test_plain_wait_and_headwind_avoid_carry_no_card_sizing(self, name: str, action: str) -> None:
+        """OC-CH2 (flipped by WP2.3): T3 (plain wait) and C3 (headwind avoid), neither gated, carry no card sizing
+        and no buy band at any tier: sizing is keyed on entry_allowed. G from WP2.3 (PD D-9; plan §7)."""
         result = await dm.run(name)
 
         assert (result["decision_card"]["action_now"], dm.gate_ids(result)) == (action, [])
         for tier, payload in dm.tiers(result).items():
-            assert card_size(payload) == (250.0, 800.0, 2), tier
+            assert (payload["decision_card"]["sizing"], payload["decision_card"]["entry"]) == (None, None), tier
 
-    async def test_starter_shows_the_full_size_next_to_the_starter_size(self) -> None:
-        """OC-CH2: T2 (starter) shows full_pct_cap and full_dollars next to the starter size at every tier.
-        Flipped by WP2.3 (D-9: a starter hides the full size)."""
+    async def test_starter_hides_the_full_size(self) -> None:
+        """OC-CH2 (flipped by WP2.3): T2 (starter) shows only the starter size: card full_pct_cap and full_dollars
+        null at every tier, no position_sizing_range, "size ~2.5%" with no full figure, and no mode max_position.
+        G from WP2.3 (PD D-9: a starter hides the full size; plan §0 #21, #23)."""
         result = await dm.run("T2_starter_weak_setup_quality")
+        shown = dm.tiers(result)
 
         assert result["decision_card"]["action_now"] == "starter"
-        for tier, payload in dm.tiers(result).items():
+        for tier, payload in shown.items():
             sizing = payload["decision_card"]["sizing"]
             assert (sizing["starter_pct"], sizing["starter_dollars"], sizing["full_pct_cap"],
-                    sizing["full_dollars"]) == (2.5, 250.0, 8.0, 800.0), tier
+                    sizing["full_dollars"]) == (2.5, 250.0, None, None), tier
+        for tier in ("standard", "full"):
+            assert shown[tier]["action_zones"]["position_sizing_range"] is None, tier
+            assert SIZE_TEXT.findall(shown[tier]["executive_summary"]) == [("2.5", "")], tier
+        assert [name for name, mode in result["decision_modes"].items() if mode["max_position"] is not None] == []
 
     async def test_knife_avoid_offers_no_starter(self) -> None:
         """OC-CH3 (flipped by WP2.3): S6 (avoid + falling_knife) has dislocation can_start_now false and buy_now
@@ -188,20 +187,19 @@ class TestEntrySizingUnderNonEntryActions:
             "falling_knife", "do_not_catch_falling_knife")
         assert [(s["action"], s["capped_by"]) for s in dip["entry_timing"]["signals"]] == [("watch", "new_money_avoid")]
 
-    async def test_unsupported_etf_holds_with_percent_sizing_and_an_accumulate_zone(self) -> None:
-        """OC-CH4: S7 (ETF, unsupported_instrument) has action_now=watch (the support gate tightens wait, WP2.2
-        D-5), percent sizing and "size ~2.5-8.0%". The zone clause is flipped by WP2.3 (no zone on the card;
-        action_zones.price_zone below_sma200, no current_zone; D-9). Flipped by WP2.3 (no sizing for unsupported
-        instruments)."""
+    async def test_unsupported_etf_gets_no_sizing_and_no_zone_on_the_card(self) -> None:
+        """OC-CH4 (flipped by WP2.3): S7 (ETF, unsupported_instrument, new_money watch: the support gate tightens
+        wait, WP2.2 D-5) carries no card sizing and no buy band at any tier, no position_sizing_range and no
+        "size ~" text; action_zones has price_zone below_sma200 and no current_zone. G from WP2.3 (PD D-9; plan
+        §7: unsupported instruments get no sizing at all)."""
         result = await dm.run("S7_etf_below_sma200")
 
         assert (result["decision_card"]["action_now"], dm.gate_ids(result)) == ("watch", ["unsupported_instrument"])
         for tier, payload in dm.tiers(result).items():
             card = payload["decision_card"]
-            assert (card["sizing"]["starter_pct"], card["sizing"]["full_pct_cap"]) == (2.5, 8.0), tier
-            assert (card["sizing"]["starter_dollars"], card["sizing"]["full_dollars"]) == (None, None), tier
-            assert "current_zone" not in card["entry"], tier
-        assert "size ~2.5-8.0%" in result["executive_summary"]
+            assert (card["sizing"], card["entry"]) == (None, None), tier
+        assert result["action_zones"]["position_sizing_range"] is None
+        assert not SIZE_TEXT.search(result["executive_summary"])
         assert ("current_zone" in result["action_zones"], result["action_zones"]["price_zone"]) == (
             False, "below_sma200")
 
@@ -288,7 +286,7 @@ class TestZoneCapsLeavePriceZoneUncapped:
 
     async def test_extended_decline_label_stays_out_of_the_actionable_fields(self) -> None:
         """OC-CH7 (flipped by WP2.3): end to end, an S3 variant at its 52-week low (extended decline, calm risk)
-        is a plain avoid with no zone on the card or in action_zones.current_zone at any tier;
+        is a plain avoid with no zone on the card (entry null) or in action_zones.current_zone at any tier;
         action_zones.price_zone is near_52w_low and the capped accumulate label is only the full tier's
         diagnostics.pre_gate_policy.inputs.zone. G from WP2.3 (PD D-9; plan §7b, §0 #22)."""
         result = await dm.run("S3_plain_avoid", technicals=EXTENDED_DECLINE)
@@ -299,7 +297,7 @@ class TestZoneCapsLeavePriceZoneUncapped:
         assert (zones["price_zone"], zones["zone_warnings"]) == ("near_52w_low", ["zone_capped_extended_decline"])
         assert result["diagnostics"]["pre_gate_policy"]["inputs"]["zone"] == "accumulate"
         for tier, payload in dm.tiers(result).items():
-            assert "current_zone" not in payload["decision_card"]["entry"], tier
+            assert payload["decision_card"]["entry"] is None, tier
             if "action_zones" in payload:
                 assert "current_zone" not in payload["action_zones"], tier
                 assert payload["action_zones"]["price_zone"] == "near_52w_low", tier

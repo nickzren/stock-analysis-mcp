@@ -6,8 +6,13 @@ Annex: docs/plans/step2-v2-research/output_contract.md §1-§2, §10 "Corrected 
 lints live in tests/support/output_contract.py.
 """
 
+import importlib
+import re
+
 import pytest
 
+from stock_analysis.prompts.templates import PROMPTS, get_prompt
+from stock_analysis.resources.analyze_guide import ANALYZE_RENDERING_GUIDE
 from stock_analysis.tools.analyze import action_zones as az
 from stock_analysis.tools.analyze import dip_assessment as dip
 from stock_analysis.tools.analyze.decision import (
@@ -19,7 +24,13 @@ from stock_analysis.tools.analyze.decision import (
 )
 from stock_analysis.tools.analyze.verdict import build_horizon_fit
 from tests.support import decision_matrix as dm
+from tests.support import freshness_frames as fr
 from tests.support import output_contract as oc
+
+server = importlib.import_module("stock_analysis.server")
+FRESHNESS_IDS = ("stale_data", "freshness_unverifiable")
+BLOCKING_ROWS = [name for name, row in fr.TRUTH_TABLE.items() if row.codes]
+REENTRY = re.compile(r"(?i)re-?entr|re-?enter|resum")
 
 # --- G: the registry itself ----------------------------------------------------------------------------------
 
@@ -132,3 +143,27 @@ def test_dip_text_is_diagnostic() -> None:
     assert overridden["assessment"]["rationale"] == (
         "Price looks more broken than the business, but the trend is still broken: wait for stabilization.")
     assert [t for t in [*texts, overridden["assessment"]["rationale"]] if oc.advice(t)] == []
+
+
+# --- The freshness invariant, restated (plan §10 WP2.3) ------------------------------------------------------
+
+@pytest.mark.parametrize("name", BLOCKING_ROWS)
+async def test_no_entry_wording_under_a_freshness_gate(name: str) -> None:
+    """FI (plan §10, non-snapshot paths): when stale_data or freshness_unverifiable fires, no A, S, N or C field at
+    any tier carries an entry code or advice phrase (S: no value at all); P and T are exempt. RF."""
+    result = await dm.run(fr.scenario(fr.TRUTH_TABLE[name], name))
+    assert {b["id"] for b in result["decision_card"]["new_money"]["blocked_by"]} & set(FRESHNESS_IDS)
+    for tier, shown in dm.tiers(result).items():
+        assert oc.freshness_violations(shown) == [], tier
+
+
+# --- RA.11 -------------------------------------------------------------------------------------------------
+
+def test_guide_prompts_and_tool_description_have_no_reentry_wording() -> None:
+    """RA.11 (plan §0 #11: the trade-card cases are dropped): no re-entry or resume wording in the rendering
+    guide, any prompt or the analyze tool description; the analyze tiers are test_wp22_reassessment's RA.11 pin.
+    G (no such wording on 0609fde either; mutation: a "resume" in the guide)."""
+    args = {"symbol": "ACME", "cost_basis": "80", "purchase_date": "2025-01-02"}
+    texts = [ANALYZE_RENDERING_GUIDE, *(repr(get_prompt(n, args)) for n in PROMPTS),
+             server.analyze.__doc__ or ""]
+    assert [t[:40] for t in texts if REENTRY.search(t)] == []

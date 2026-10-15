@@ -126,8 +126,9 @@ def test_knife_never_loosens_new_money() -> None:
 
 
 async def test_codex_probe_a_and_b() -> None:
-    """PH-RF2 and PH-RF3 (mid decision clauses; the candidate clause is WP2.3): A and B both give new_money avoid
-    and if_held review_exit (business_broken); B's blocked_by == [falling_knife, thesis_broken]. PD D-1c."""
+    """PH-RF2 and PH-RF3 (mid decision clauses; the candidate clause is test_wp23_diagnostics'): A and B both give
+    new_money avoid and if_held review_exit (business_broken); B's blocked_by == [falling_knife, thesis_broken].
+    PD D-1c."""
     a, b = await dm.run("A_broken_bearish"), await dm.run("B_broken_bearish_knife")
 
     for result in (a, b):
@@ -568,8 +569,8 @@ async def test_core_follows_the_gated_long_term(name: str, long_term: str, gates
 @pytest.mark.parametrize(("name", "new_money", "long_term"), [("E2_mixed_fcf_bullish_chart", "starter", "starter"),
                                                               ("C1_headwind_hold_or_add", "starter", "wait")])
 async def test_core_direction_2(name: str, new_money: str, long_term: str) -> None:
-    """PH-RF17 (core clauses; balanced is WP2.3): E2 (caution fit) and C1 (headwind) keep mid new money starter
-    and core wait; C1's long term is wait (neither horizon caps the other). PD D-3."""
+    """PH-RF17 (core clauses; the balanced clause is test_wp23_surfaces'): E2 (caution fit) and C1 (headwind)
+    keep mid new money starter and core wait; C1's long term is wait (neither horizon caps the other). PD D-3."""
     result = await dm.run(name)
     card = result["decision_card"]
 

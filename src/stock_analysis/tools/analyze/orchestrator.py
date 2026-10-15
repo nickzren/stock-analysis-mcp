@@ -1097,24 +1097,12 @@ async def analyze_stock(
         downgrade=policy_action["conditions_to_downgrade"],
         support=support,
     )
-    # WP4 (D5): the emitted pre-gate copy (diagnostics.pre_gate_policy) is support-capped (plan §0 #6),
-    # as is the executive summary that still copies it.
+    # WP4 (D5): the emitted pre-gate copy (diagnostics.pre_gate_policy) is support-capped (plan §0 #6).
     supported = instrument_ok and currency_supported(support)
     if not supported:
         _cap_policy_at_watch(policy_action, support)
     del action_zones["current_zone"]  # the capped label is a pre-gate input only (pre_gate_policy.inputs.zone)
-
-    executive_summary = build_executive_summary(
-        summary=summary,
-        technicals_summary=technicals_summary,
-        fundamentals_summary=fundamentals_summary,
-        risk_summary=risk_summary,
-        signals=signals,
-        verdict=verdict,
-        action_zones=action_zones,
-        policy_action=policy_action,
-        news_summary=news_summary,
-    )
+    new_money_action = decision["new_money"]["action"]
 
     decision_modes = build_decision_modes(
         summary=summary,
@@ -1142,7 +1130,7 @@ async def analyze_stock(
     dip_assessment = align_dip_assessment_with_action(
         dip_assessment=dip_assessment,
         mismatch_status=(dislocation_framework.get("mismatch_verdict") or {}).get("status"),
-        starter_only=starter_only(decision["new_money"]["action"]),
+        starter_only=starter_only(new_money_action),
         add_only_if=conditions["mid_term"]["add_only_if"],
     )
     cap_dip_assessment(dip_assessment, decision["new_money"])
@@ -1165,6 +1153,19 @@ async def analyze_stock(
         hard_gates=hard_gates,
         decision=decision,
         conditions=conditions,
+    )
+    # The buy band is shown only under buy; a starter shows only the card's starter size (plan §7, §0 #23).
+    if new_money_action != "buy":
+        action_zones["position_sizing_range"] = None
+    executive_summary = build_executive_summary(
+        summary=summary,
+        technicals_summary=technicals_summary,
+        fundamentals_summary=fundamentals_summary,
+        risk_summary=risk_summary,
+        signals=signals,
+        verdict=verdict,
+        decision_card=decision_card,
+        news_summary=news_summary,
     )
 
     # Top-level error signaling for invalid/unanalyzable symbols.

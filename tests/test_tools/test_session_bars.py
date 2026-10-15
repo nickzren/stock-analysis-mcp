@@ -570,8 +570,7 @@ class TestR51AnalyzePrice:
         prov = result["summary"]["price_provenance"]
         assert (prov["price_source"], prov["price_as_of"], prov["as_of_kind"]) == (
             "daily_close", "2026-10-08", "session_close")
-        assert result["action_zones"]["position_sizing_range"]["shares_range"]["at_price"] == 80.0
-        assert result["action_zones"]["stop_calculation"]["stop_price"] < 80.0
+        assert result["action_zones"]["stop_calculation"]["stop_price"] == 76.0  # 80 - 2 x ATR 2.0, not 100 - 4
         assert result["analyst_coverage"]["upside_to_mean_target"] == 0.25
         assert result["analyst_coverage"]["upside_to_median_target"] == 0.2
         assert result["watchlist_snapshot"]["price"] == 80.0

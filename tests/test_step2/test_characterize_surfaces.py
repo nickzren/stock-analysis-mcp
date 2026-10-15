@@ -68,18 +68,28 @@ def pullback_card() -> dict[str, Any]:
 
 class TestGatedSummary:
     @pytest.mark.parametrize("name", ["S4_earnings_gate_on_hold_or_add", "S9_weak_liquidity"])
-    async def test_a_gated_hold_or_add_keeps_the_ungated_summary(self, name: str) -> None:
-        """SC-CH1: with new_money wait (S4, event) or avoid (S9, weak liquidity), the executive summary is word
-        for word S1's (starter, no gate): "Policy: mid-term hold or add; size ~2.5-8.0%." The action clause
-        flipped in WP2.2 (D-2, D-5a); CH: flipped by WP2.3 (executive-summary segments for new money, if held and
-        long term, plan §7)."""
+    async def test_a_gated_hold_or_add_leads_with_its_gated_decision(self, name: str) -> None:
+        """SC-CH1 (flipped by WP2.3): with new_money wait (S4, event) or avoid (S9, weak liquidity), the executive
+        summary no longer copies S1's (starter, no gate): its new-money segment names the gated action, the gate
+        and its reassessment and carries no size, while S1's names the starter size only; no "Policy:" clause
+        remains, and the descriptive sentences after the three segments are unchanged. The action clause flipped
+        in WP2.2 (D-2, D-5a). G from WP2.3 (PD D-9: executive-summary segments, plan §7)."""
         gated = await dm.run(name)
         clean = await dm.run("S1_hold_or_add_clean")
+        gated_sentences = gated["executive_summary"].split(". ")
+        clean_sentences = clean["executive_summary"].split(". ")
 
         assert (gated["decision_card"]["action_now"], clean["decision_card"]["action_now"]) == (
             {"S4_earnings_gate_on_hold_or_add": "wait", "S9_weak_liquidity": "avoid"}[name], "starter")
-        assert gated["executive_summary"] == clean["executive_summary"]
-        assert gated["executive_summary"].endswith("Policy: mid-term hold or add; size ~2.5-8.0%.")
+        assert gated_sentences[0] == {
+            "S4_earnings_gate_on_hold_or_add": "Decision (mid-term, new money): wait; blocked by earnings_blackout; "
+                                               "reassess on or after Tue Oct 13 (not a buy date)",
+            "S9_weak_liquidity": "Decision (mid-term, new money): avoid; blocked by weak_liquidity; no reassessment "
+                                 "date: re-run analyze after 1-year average daily dollar volume >= $1M"}[name]
+        assert clean_sentences[0] == "Decision (mid-term, new money): starter; size ~2.5%"
+        assert "size ~" not in gated["executive_summary"]
+        assert "Policy:" not in gated["executive_summary"] + clean["executive_summary"]
+        assert gated_sentences[3:] == clean_sentences[3:]
 
 
 class TestSwingVsMidTerm:

@@ -473,8 +473,9 @@ async def test_the_reassessment_never_changes_an_output(name: str, events: str,
 
 @pytest.mark.parametrize("name", dm.SCENARIOS)
 async def test_no_reentry_wording_at_any_tier(name: str) -> None:
-    """RA.11 (2.2 pin on the analyze surface; the full sweep over the card, guide and prompts is WP2.3): no key
-    or string at any analyze tier matches re-entry or resume wording. G."""
+    """RA.11 (the analyze surface, since WP2.3 including the summary's reassessment clauses and diagnostics; the
+    guide, prompts and tool description are test_wp23_registry's): no key or string at any analyze tier matches
+    re-entry or resume wording. G."""
     for tier, shown in dm.tiers(await dm.run(name, events=dm.NEAR)).items():
         assert not re.search(r"(?i)re-?entr|re-?enter|resum", repr(shown)), tier
 

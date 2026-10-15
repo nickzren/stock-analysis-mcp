@@ -602,8 +602,10 @@ class TestToolResponseSchemas:
 
         assert result["symbol"] == "TEST"
         assert "investor_profile" not in result
-        assert result["action_zones"]["position_sizing_range"]["dollars_for_account"]["min"] == 30.0
-        # No daily history: freshness_unverifiable makes new money wait_for_data, so no mode size (plan §7)
+        # No daily history: freshness_unverifiable makes new money wait_for_data, so no entry sizing (plan §7)
+        assert (result["decision_card"]["new_money"]["action"], result["decision_card"]["new_money"]["decided_by"]) == (
+            "wait_for_data", "freshness_unverifiable")
+        assert result["action_zones"]["position_sizing_range"] is None
         for mode in ("core", "balanced", "speculative"):
             assert result["decision_modes"][mode]["action"] in NEW_MONEY_ACTIONS, mode
             assert result["decision_modes"][mode]["starter_position"] is None, mode
@@ -622,9 +624,7 @@ class TestToolResponseSchemas:
         for gate_id in ("earnings_blackout", "data_quality_critical", "falling_knife",
                         "missing_runway", "weak_liquidity", "liquidity_missing"):
             assert gate_id in decision_card["hard_gates"]["checks"]
-        assert "sizing" in decision_card
-        assert "fractional_shares" in decision_card["sizing"]
-        assert "whole_shares" in decision_card["sizing"]
+        assert decision_card["sizing"] is None
         for conditions_key in ("buy_only_if", "add_only_if", "do_not_buy_if", "reduce_if", "monitor"):
             assert conditions_key in decision_card["conditions"]
         assert "next_review" in decision_card

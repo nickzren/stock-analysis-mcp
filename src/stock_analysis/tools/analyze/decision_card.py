@@ -21,6 +21,7 @@ from stock_analysis.tools.analyze.decision import (
     MID_TERM,
     entry_allowed,
     map_candidate,
+    starter_only,
     tighter,
 )
 from stock_analysis.tools.analyze.executive_summary import policy_codes
@@ -171,11 +172,28 @@ def _build_sizing(
     }
 
 
+def build_entry_sizing(
+    action_zones: dict[str, Any],
+    summary: dict[str, Any],
+    new_money_action: str,
+) -> dict[str, Any] | None:
+    """decision_card.sizing (plan §7 [D-9]): present iff new_money admits an entry; a starter hides the full size."""
+    if not entry_allowed(new_money_action):
+        return None
+    sizing = _build_sizing(action_zones, summary)
+    if starter_only(new_money_action):
+        sizing["full_pct_cap"] = sizing["full_dollars"] = None
+    return sizing
+
+
 def _build_entry(
     action_zones: dict[str, Any],
     summary: dict[str, Any],
-) -> dict[str, Any]:
-    """Build the entry block (price, buy band)."""
+    new_money_action: str,
+) -> dict[str, Any] | None:
+    """The buy band (price, band edges) iff new_money admits an entry (plan §7)."""
+    if not entry_allowed(new_money_action):
+        return None
     levels = action_zones.get("levels") or {}
     return {
         "current_price": summary.get("current_price"),
@@ -308,8 +326,9 @@ def build_decision_card(
             carries its own conditions (buy_only_if)
         hard_gates: every fired gate (blocking) and one boolean per gates.ANALYZE_GATE_IDS (checks)
         action_now: alias of new_money.action (decision.NEW_MONEY_ACTIONS), kept one release
-        sizing: starter/full pct + dollars + whole/fractional shares
-        entry: price, buy band
+        sizing: starter/full pct + dollars + whole/fractional shares, iff new_money is buy or starter
+            (a starter hides the full size)
+        entry: price and buy band, iff new_money is buy or starter
         exit: stop / invalidation level
         conditions: mid-term buy_only_if / add_only_if / do_not_buy_if / reduce_if / monitor
         next_review: date + reason
@@ -322,8 +341,8 @@ def build_decision_card(
         LONG_TERM: {**long_term, "new_money": {**long_term["new_money"], "conditions": conditions[LONG_TERM]}},
         "hard_gates": hard_gates,
         "action_now": new_money["action"],
-        "sizing": _build_sizing(action_zones, summary),
-        "entry": _build_entry(action_zones, summary),
+        "sizing": build_entry_sizing(action_zones, summary, new_money["action"]),
+        "entry": _build_entry(action_zones, summary, new_money["action"]),
         "exit": _build_exit(action_zones),
         "conditions": conditions[MID_TERM],
         "next_review": _build_next_review(events_data, now),

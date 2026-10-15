@@ -70,7 +70,11 @@ WP22_CHANGES: dict[str, dict[str, Any]] = {
 
 # WP2.3: every surface derives from decide()'s decision, which does not move (no decision.*, action_now,
 # hard_gates, policy.*, zone or snapshot.* cell); the card's horizon_fit is removed (plan §7a), so B's WP2.2
-# horizon_fit.mid_term cell now ends at None.
+# horizon_fit.mid_term cell now ends at None. Entry rows (new_money) keep their sizing; the rest lose it.
+ENTRY_ROWS = {"S2_buy_clean": "buy", **dict.fromkeys(["S1_hold_or_add_clean", "T1_extreme_risk_bullish",
+              "T2_starter_weak_setup_quality", "C1_headwind_hold_or_add", "E2_mixed_fcf_bullish_chart"], "starter")}
+SIZING_KEYS = ("starter_pct", "full_pct_cap", "starter_dollars", "full_dollars", "whole_shares")
+STARTER_HIDES = ("full_pct_cap", "full_dollars")  # plan §7 [D-9], §0 #23
 BALANCED_CHANGES = {  # D-3: balanced = new_money (B keeps its WP2.2 knife-override cell, now wait_for_entry -> avoid)
     **dict.fromkeys(["S1_hold_or_add_clean", "C1_headwind_hold_or_add", "E2_mixed_fcf_bullish_chart"],
                     ("hold_or_add", "starter")),
@@ -141,9 +145,13 @@ CONDITION_CHANGES = {  # plan §7e [FIX BL-E1, BL-E2]: binding conditions only; 
 
 
 def _wp23_cells(name: str) -> dict[str, Any]:
-    row = BEFORE[name]
+    row, entry = BEFORE[name], ENTRY_ROWS.get(name)
+    hidden = () if entry == "buy" else STARTER_HIDES if entry == "starter" else SIZING_KEYS
     return {
         **{f"horizon_fit.{h}": (row["horizon_fit"][h], None) for h in ("mid_term", "long_term")},  # §7a: removed
+        **{f"card_sizing.{k}": (row["card_sizing"][k], None) for k in hidden if row["card_sizing"][k] is not None},
+        **({f"sizing_present.{t}.card": (True, False) for t in dm.TIERS} if entry is None else {}),
+        **({f"sizing_present.{t}.range": (True, False) for t in ("standard", "full")} if entry != "buy" else {}),
         **({"modes.balanced.action": BALANCED_CHANGES[name]} if name in BALANCED_CHANGES else {}),
         **({"modes.balanced.long_term_view": LONG_VIEW_CHANGES[name]} if name in LONG_VIEW_CHANGES else {}),
         **({"modes.speculative.action": SPECULATIVE_CHANGES[name]} if name in SPECULATIVE_CHANGES else {}),

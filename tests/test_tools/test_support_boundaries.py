@@ -208,18 +208,17 @@ class TestAnalyzeCaps:
     ) -> None:
         result = await analyze(summary, account_size=5000.0)
 
-        sizing = result["action_zones"]["position_sizing_range"]
-        assert (sizing["dollars_for_account"], sizing["shares_range"], sizing["unavailable_reason"]) == (
-            None, None, reason
-        )
-        card_sizing = result["decision_card"]["sizing"]
-        assert (card_sizing["starter_dollars"], card_sizing["whole_shares"]) == (None, None)
+        assert reason in dm.gate_ids(result)
+        assert (result["action_zones"]["position_sizing_range"], result["decision_card"]["sizing"],
+                result["decision_card"]["entry"]) == (None, None, None)
         for mode in ("core", "balanced", "speculative"):
             assert result["decision_modes"][mode]["starter_position"] is None, mode
 
-    async def test_r4_6_a_usd_adr_keeps_its_sizing(self, analyze: Any) -> None:
-        result = await analyze({**US_SUMMARY, "financial_currency": "TWD"}, account_size=5000.0)
+    async def test_r4_6_a_usd_adr_keeps_its_sizing(self) -> None:
+        result = await dm.run("S2_buy_clean", summary={**dm.EQUITY, "financial_currency": "TWD"}, account_size=5000.0)
 
+        assert (result["summary"]["support"]["currency"]["status"], result["decision_card"]["new_money"]["action"]) == (
+            "supported", "buy")
         assert result["action_zones"]["position_sizing_range"]["dollars_for_account"] is not None
         assert result["decision_card"]["sizing"]["starter_dollars"] is not None
 

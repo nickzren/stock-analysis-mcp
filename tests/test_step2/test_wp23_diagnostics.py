@@ -1,20 +1,32 @@
 """WP2.3: the pre-gate candidate moves to diagnostics (plan §2, §7a [D-9], §0 #6, #22).
 
 Top-level policy_action becomes the full-tier diagnostics.pre_gate_policy (support-capped, with role and
-superseded_by; no alias), decision_card.rationale becomes diagnostics.decision_trace and card.horizon_fit goes.
-The 2.0.0 snapshot keeps its fields, read from the new places, until WP2.4 (§0 #22). Annex: output_contract.md
-§8, §10 RF11 and policy_holder.md §10 RF3, RF9, "Corrected proposal", as amended by plan §0.
+superseded_by; no alias), decision_card.rationale becomes diagnostics.decision_trace, card.horizon_fit and
+entry.current_zone go, and nothing copies a pre-gate value into an A, N or C field. The 2.0.0 snapshot keeps its
+fields, read from the new places, until WP2.4 (§0 #22). Annex: output_contract.md §8, §10 RF11 and
+policy_holder.md §10 RF3, RF9, "Corrected proposal", as amended by plan §0.
 """
 
+import re
 from typing import Any
 
 import pytest
 
-from stock_analysis.tools.analyze.decision import ENTRY_ACTIONS, ENTRY_CANDIDATE_CODES
+from stock_analysis.tools.analyze.decision import (
+    ENTRY_ACTIONS,
+    ENTRY_CANDIDATE_CODES,
+    ENTRY_CODES,
+    FULL_ENTRY_CODES,
+)
 from tests.support import decision_matrix as dm
+from tests.support import output_contract as oc
 
 UNSUPPORTED = ["S7_etf_below_sma200", "ETF_strong", "ETF_bearish", "GBp_strong", "G_unsupported_currency_knife"]
 PRE_GATE_KEYS = ["mid_term", "long_term", "rationale", "conditions_to_upgrade", "conditions_to_downgrade", "inputs"]
+PRE_GATE_WORDS = ("hold or add", "hold or reduce", "wait for entry", "wait for a better entry",
+                  "speculative small position", "small starter position", "avoid core position",
+                  "avoid as a core holding", "hold size conservatively", "wait or avoid", "small position with stops",
+                  "speculative with thesis", "speculative only", "accumulate", "Policy:")
 
 
 def ids(blockers: list[dict[str, Any]]) -> list[str]:
@@ -95,3 +107,25 @@ async def test_an_unsupported_instrument_emits_no_new_money_candidate(name: str)
     assert not {pre_gate["mid_term"], pre_gate["long_term"]} & ENTRY_CANDIDATE_CODES
     assert pre_gate["support_gates"] == [g for g in ids(new_money["blocked_by"]) if g.startswith("unsupported_")]
     assert new_money["action"] not in ENTRY_ACTIONS
+
+
+@pytest.mark.parametrize("name", list(dm.SCENARIOS))
+async def test_no_pre_gate_value_is_copied(name: str) -> None:
+    """OC-RF11 (no-copy clause, non-snapshot paths): nothing copies a pre-gate value into an A, N or C field:
+    balanced.why holds no pre-gate rationale line (no "zone=" / "tilt=" trace); the summary humanizes no pre-gate
+    code and has no "Policy:" clause; at the decision and standard tiers an entry code appears only in a T path
+    or in an A or S field whose horizon admits entry (a mid-term full-entry code only under buy). PD D-9."""
+    result = await dm.run(name)
+    card = result["decision_card"]
+    pre_gate = result["diagnostics"]["pre_gate_policy"]
+    balanced_why = result["decision_modes"]["balanced"]["why"] or []
+
+    assert not set(balanced_why) & set(pre_gate["rationale"])
+    assert not [line for line in balanced_why if re.search(r"(zone|tilt|mid_term|long_term)=", line)]
+    assert not [w for w in PRE_GATE_WORDS if w in result["executive_summary"]], result["executive_summary"]
+    for tier in ("decision", "standard"):
+        for path, value, field in oc.classified(dm.tiers(result)[tier]):
+            if not isinstance(value, str) or value not in ENTRY_CODES or field.cls == oc.T:
+                continue
+            assert field.cls in (oc.A, oc.S) and oc.holds(field.horizon or "", card), (tier, path, value)
+            assert value not in FULL_ENTRY_CODES or field.horizon != oc.MID or card["new_money"]["action"] == "buy"

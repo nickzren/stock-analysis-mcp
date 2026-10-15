@@ -22,6 +22,7 @@ import contextlib
 import copy
 import importlib
 import json
+import re
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime
@@ -502,6 +503,7 @@ def digest(result: dict[str, Any]) -> dict[str, Any]:
                                                   .get("conditions") or {}).get("buy_only_if"))},
         "mode_sizing": {m: [k for k in ("starter_position", "max_position") if (modes.get(m) or {}).get(k)]
                         for m in ("core", "balanced", "speculative")},
+        "summary_size": re.findall(r"size ~[\d.]+(?:-[\d.]+)?%", result.get("executive_summary") or ""),
         "snapshot": {k: snapshot.get(k) for k in ("action_mid_term", "action_long_term", "decision_action_now",
                                                   "hard_gate_ids", "zone", "snapshot_hash")},
         "decision": {"new_money": _horizon(card.get("new_money")),
