@@ -213,8 +213,8 @@ class TestThesisSurfaces:
         """PH-CH8: case E (poor business, bullish chart): thesis broken, core avoid; the pre-gate codes
         (hold_or_add, avoid_core_position) live only in the full tier's diagnostics.pre_gate_policy, superseded by
         new_money avoid [thesis_broken] and if_held review_exit, and no derived surface shows hold_or_add
-        (balanced avoid). Action clause flipped by WP2.2 (PD D-1c, PH-RF12); flipped by WP2.3 (D-9, §0 #6; the
-        balanced clause PD D-3). G from WP2.3."""
+        (balanced avoid). Action clause flipped by WP2.2 (PD D-1c, PH-RF12); flipped by WP2.3 (PD D-9, §0 #6;
+        the balanced clause PD D-3). G from WP2.3."""
         result = await dm.run("E_poor_business_bullish_chart")
         dislocation = result["dislocation_framework"]
         policy = result["diagnostics"]["pre_gate_policy"]
@@ -237,8 +237,8 @@ class TestGateCombination:
         """PH-CH11: case G (EUR quality crash + knife): action_now avoid, gates [falling_knife,
         unsupported_currency]; the emitted long-term policy is watch (the support cap on accumulate) while
         long_term.new_money and core are avoid (gates reach the long term). Core clause flipped by WP2.2
-        (PD D-5, D-5b; PH-RF21); the emitted policy is read from diagnostics.pre_gate_policy (WP2.3, D-9, §0 #6).
-        G from WP2.3."""
+        (PD D-5, D-5b; PH-RF21); the emitted policy is read from diagnostics.pre_gate_policy (WP2.3, PD D-9,
+        §0 #6). G from WP2.3."""
         result = await dm.run("G_unsupported_currency_knife")
         policy_action = result["diagnostics"]["pre_gate_policy"]
 

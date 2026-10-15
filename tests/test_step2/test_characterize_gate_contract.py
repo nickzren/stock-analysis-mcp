@@ -275,8 +275,8 @@ class TestAnalyzeGateBefore:
     async def test_pipeline_rows(self, name: str) -> None:
         """GC-C3: full analyze on crashed, strong and unsupported charts (the dip is skipped for an ETF).
         The action column is new_money (WP2.2: D-2, D-5a); the policy column is the full tier's
-        diagnostics.pre_gate_policy, support-capped, and no top-level policy_action remains (WP2.3, D-9, plan §0 #6).
-        G from WP2.3."""
+        diagnostics.pre_gate_policy, support-capped, and no top-level policy_action remains (WP2.3, plan §0 #6).
+        PD D-9 (G from WP2.3)."""
         scenario, action_now, expected_ids, (mid, long, support_gates), dip = ANALYZE_PIPELINE_ROWS[name]
         result = await dm.run(scenario)
         policy = result["diagnostics"]["pre_gate_policy"]
@@ -293,7 +293,7 @@ class TestAnalyzeGateBefore:
         """GC-R8 (amended by plan §0 #6): decide() reads the uncapped candidate, so the support gate decides
         (starter -> watch; map_candidate("watch") would raise) while the emitted candidate is support-capped: the
         full tier's diagnostics.pre_gate_policy.mid_term is watch with support_gates, no top-level policy_action
-        remains, and the card's rationale is diagnostics.decision_trace (D-9, plan §2). G from WP2.3."""
+        remains, and the card's rationale is diagnostics.decision_trace (plan §2). PD D-9 (G from WP2.3)."""
         result = await dm.run(scenario)
 
         assert result["decision_card"]["new_money"]["decided_by"] == gate
