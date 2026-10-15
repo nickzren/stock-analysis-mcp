@@ -51,9 +51,13 @@ def test_leaves_and_globs() -> None:
 
 def test_the_code_sets() -> None:
     """G-REG3: ENTRY_CODES is the disjoint union of the starter-only and full-entry codes and holds every
-    new-money entry action and entry candidate code (annex output_contract §0). G."""
+    new-money entry action and entry candidate code (annex output_contract §0), plus the orchestrator's interim
+    mode and dip sets while they exist (WP2.3 step 4 deletes them and this clause). G."""
     assert ENTRY_CODES == STARTER_ONLY_CODES | FULL_ENTRY_CODES and not STARTER_ONLY_CODES & FULL_ENTRY_CODES
     assert ENTRY_ACTIONS | ENTRY_CANDIDATE_CODES <= ENTRY_CODES
+    interim = (dm.orchestrator._NEW_MONEY_MODE_CODES | dm.orchestrator._DIP_NEW_MONEY_RECOMMENDATIONS
+               | dm.orchestrator._DIP_NEW_MONEY_ENTRY_ACTIONS)
+    assert interim <= ENTRY_CODES
 
 
 # --- OC-RF10: the D lexicon (plan §7c) ---------------------------------------------------------------------

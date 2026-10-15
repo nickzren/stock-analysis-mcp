@@ -268,7 +268,7 @@ def build_decision_card(
         hard_gates: every fired gate (blocking) and one boolean per gates.ANALYZE_GATE_IDS (checks)
         action_now: alias of new_money.action (decision.NEW_MONEY_ACTIONS), kept one release
         sizing: starter/full pct + dollars + whole/fractional shares
-        entry: current zone, price, buy band
+        entry: price, buy band
         exit: stop / invalidation level
         conditions: buy_only_if / add_only_if / do_not_buy_if / reduce_if / monitor
         next_review: date + reason
