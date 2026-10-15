@@ -271,6 +271,9 @@ async def test_the_card_explains_itself(name: str) -> None:
         assert not [flag for flag in card["data_flags"] if oc.advice(flag)], tier
 
 
+STALE = {"R3": {}, "R3_fundamentals_failed": {"fundamentals": None}}  # the R3 freshness run, with overrides
+
+
 @pytest.mark.parametrize(("name", "field", "expected"), [
     ("S4_earnings_gate_on_hold_or_add", "why",
      ["decided by earnings_blackout", "mid-term fit ok, tilt bullish, price zone above_sma50"]),
@@ -288,9 +291,14 @@ async def test_the_card_explains_itself(name: str) -> None:
     ("S8_fundamentals_failed", "data_flags", ["fundamentals_missing", "valuation_gate_unknown_no_metrics"]),
     ("H_burner_runway_2q", "data_flags", ["fundamentals_not_meaningful"]),
     ("S1_hold_or_add_clean", "data_flags", []),
+    ("R3", "data_flags", ["price_stale_2_sessions"]),
+    ("R3_fundamentals_failed", "data_flags",
+     ["fundamentals_missing", "price_stale_2_sessions", "valuation_gate_unknown_no_metrics"]),
 ])
 async def test_pinned_explanations(name: str, field: str, expected: list[str]) -> None:
     """BL-E3 (pinned values): S4 decided by the blackout; S5's blackout fired but did not decide; A7's price
     zone; H's three runway triggers; none on an ETF or with fundamentals missing; T1's regime flags; S8's
-    missing fundamentals; H's not-meaningful fundamentals; none on a clean row. RF."""
-    assert (await dm.run(name))["decision_card"][field] == expected
+    missing fundamentals; H's not-meaningful fundamentals; none on a clean row; R3's stale price; R3 with
+    fundamentals failing lists the fundamentals status, then staleness, then zone warnings (plan §1.5). RF."""
+    run = dm.run(fr.scenario(fr.TRUTH_TABLE["R3"], "R3"), **STALE[name]) if name in STALE else dm.run(name)
+    assert (await run)["decision_card"][field] == expected
