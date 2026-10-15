@@ -73,15 +73,35 @@ async def test_modes_are_capped_at_their_horizon(name: str) -> None:
         assert core["capped_by"] == f"long_term_{long}"
 
 
-def test_speculative_maps_its_own_code_then_caps_it() -> None:
+_SPECULATIVE_OWN_INPUTS = {  # own code -> (horizon_fit.mid_term, tilt, dip recommendation)
+    "starter_then_add": ("ok", "bullish", None),
+    "starter_position_only": ("caution", "bearish", "small_speculative_position"),
+    "wait": ("caution", "bearish", "wait_for_better_setup"),
+    "watch": ("caution", "bearish", None),
+}
+
+
+@pytest.mark.parametrize(("own", "new_money"), list(product(_SPECULATIVE_OWN_INPUTS, NEW_MONEY_ACTIONS)))
+def test_speculative_maps_its_own_code_then_caps_it(own: str, new_money: str) -> None:
     """PH-RF19 (unit): speculative's own codes map starter_then_add/starter_position_only -> starter and
-    wait/watch -> wait (a strict lookup); a mode names its cap in capped_by only when the cap tightened its own
-    code. PD D-3."""
+    wait/watch -> wait (a strict lookup); over 4 own codes x 7 new-money actions build_decision_modes gives
+    most_restrictive(map(own), new_money), with capped_by iff that differs from map(own). PD D-3."""
     assert investor_profile._SPECULATIVE_ACTIONS == {
         "starter_then_add": "starter", "starter_position_only": "starter", "wait": "wait", "watch": "wait"}
-    assert investor_profile._capped("starter", "avoid", "new_money") == {"action": "avoid",
-                                                                         "capped_by": "new_money_avoid"}
-    assert investor_profile._capped("wait", "wait", "long_term") == {"action": "wait"}
+    mid_term_fit, tilt, recommendation = _SPECULATIVE_OWN_INPUTS[own]
+    speculative = investor_profile.build_decision_modes(
+        summary={"current_price": 10.0},
+        verdict={"tilt": tilt, "horizon_fit": {"mid_term": mid_term_fit, "long_term": "ok"}},
+        action_zones={}, dip_assessment={"assessment": {"recommendation": recommendation}}, decision_context={},
+        news_summary={}, fundamentals_summary={}, events_summary={},
+        decision={"new_money": {"action": new_money}, "long_term": {"new_money": {"action": "buy"}}},
+        conditions={"mid_term": {"add_only_if": []}, "long_term": {"buy_only_if": []}},
+    )["speculative"]
+    mapped = investor_profile._SPECULATIVE_ACTIONS[own]
+    action = most_restrictive((mapped, new_money))
+
+    assert speculative["action"] == action
+    assert speculative.get("capped_by") == (None if action == mapped else f"new_money_{action}")
 
 
 @pytest.mark.parametrize(("name", "long_term"), [("E2_mixed_fcf_bullish_chart", "starter"),
