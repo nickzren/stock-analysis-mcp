@@ -429,15 +429,17 @@ async def test_a_dislocation_starter_reframes_the_dip(name: str) -> None:
 
 def test_the_starter_override_needs_a_starter() -> None:
     """OC-M9: align_dip_assessment_with_action takes starter_only (new_money == starter), not can_start_now: a
-    dislocation starter reframes the falling-knife dip; anything else leaves it alone. RF."""
+    dislocation starter reframes the falling-knife dip and mirrors the whole mid-term add_only_if (no truncation);
+    anything else leaves it alone. RF."""
     def dip() -> dict[str, Any]:
         return {"assessment": {"dip_quality": "avoid", "recommendation": "do_not_catch_falling_knife",
                                "rationale": "Trend is broken - wait for stabilization"}}
 
+    conditions = ["a", "b", "c", "d", "e"]
     started = align_dip_assessment_with_action(dip(), "price_broken_more_than_business", starter_only=True,
-                                               add_only_if=["x"])
+                                               add_only_if=conditions)
     assert started is not None and started["assessment"]["recommendation"] == "starter_only_wait_for_stabilization"
-    assert started["assessment"]["add_only_if"] == ["x"]
+    assert started["assessment"]["add_only_if"] == conditions
     assert align_dip_assessment_with_action(dip(), "price_broken_more_than_business", starter_only=False) == dip()
 
 
