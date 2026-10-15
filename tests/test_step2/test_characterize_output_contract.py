@@ -119,15 +119,17 @@ def pre_gate_policy(result: dict[str, Any]) -> dict[str, Any]:
 
 class TestEntrySizingUnderNonEntryActions:
     async def test_plain_avoid_carries_entry_sizing_on_every_path(self) -> None:
-        """OC-CH1: S3, a plain avoid with no gate, carries entry sizing (card, buy band, zone band, summary,
-        modes) and entry codes; core is buy (long_term.new_money, WP2.2 D-3). The guidance and zone clauses are
-        flipped by WP2.3 (no sizing_guidance: policy_action moved to diagnostics; no current_zone on any surface,
-        price_zone below_sma200; D-9). Flipped by WP2.3 (sizing and the buy band keyed on entry_allowed, dip caps,
-        new-money mode vocabulary)."""
+        """OC-CH1: S3, a plain avoid with no gate, carries entry sizing (card, buy band, zone band, summary);
+        core is buy (long_term.new_money, WP2.2 D-3). The guidance, zone, mode and dip clauses are flipped by
+        WP2.3 (no sizing_guidance: policy_action moved to diagnostics; no current_zone on any surface,
+        price_zone below_sma200; no mode size and no capital_at_risk; the dip's buy_the_dip and entry signals
+        capped to watch by new_money avoid; D-9). Flipped by WP2.3 (card sizing, the buy band, the zone band and
+        the summary size keyed on entry_allowed)."""
         result = await dm.run("S3_plain_avoid")
         shown = dm.tiers(result)
         card = result["decision_card"]
         modes = result["decision_modes"]
+        dip = result["dip_assessment"]
 
         assert (card["action_now"], dm.gate_ids(result)) == ("avoid", [])
         for tier, payload in shown.items():
@@ -139,12 +141,14 @@ class TestEntrySizingUnderNonEntryActions:
             assert "size ~2.5-8.0%" in shown[tier]["executive_summary"], tier
         assert "policy_action" not in result
         assert "sizing_guidance" not in pre_gate_policy(result)
-        assert {name: (mode["starter_position"]["dollars"], mode["max_position"]["dollars"])
-                for name, mode in modes.items()} == {
-            "core": (200.0, 800.0), "balanced": (250.0, 800.0), "speculative": (100.0, 600.0)}
+        assert {name: (mode["starter_position"], mode["max_position"]) for name, mode in modes.items()} == dict.fromkeys(
+            ("core", "balanced", "speculative"), (None, None))
+        assert modes["speculative"]["capital_at_risk"] is None
         assert ("current_zone" in result["action_zones"], "current_zone" in card["entry"],
                 result["action_zones"]["price_zone"]) == (False, False, "below_sma200")
-        assert result["dip_assessment"]["assessment"]["recommendation"] == "buy_the_dip"
+        assert (dip["assessment"]["recommendation"], dip["assessment"]["capped_by"]) == ("watch", "new_money_avoid")
+        assert [(s["action"], s["capped_by"]) for s in dip["entry_timing"]["signals"]] == [
+            ("watch", "new_money_avoid")] * 2
         assert modes["core"]["action"] == "buy"
 
     @pytest.mark.parametrize(("name", "action"), [("T3_plain_wait_weak_setup", "wait"),
@@ -169,19 +173,20 @@ class TestEntrySizingUnderNonEntryActions:
             assert (sizing["starter_pct"], sizing["starter_dollars"], sizing["full_pct_cap"],
                     sizing["full_dollars"]) == (2.5, 250.0, 8.0, 800.0), tier
 
-    async def test_knife_avoid_still_offers_a_starter(self) -> None:
-        """OC-CH3: S6 (avoid + falling_knife) has dislocation can_start_now=true and buy_now=small_starter,
-        speculative starter_position_only and a starter_position entry signal.
-        Flipped by WP2.3 (dislocation, mode and dip codes capped by new_money)."""
+    async def test_knife_avoid_offers_no_starter(self) -> None:
+        """OC-CH3 (flipped by WP2.3): S6 (avoid + falling_knife) has dislocation can_start_now false and buy_now
+        null, speculative avoid (capped by new_money), no dislocation starter override on the dip and its
+        starter_position entry signal capped to watch. G from WP2.3 (PD D-9, D-3; plan §7)."""
         result = await dm.run("S6_knife_dislocation")
         dislocation = result["dislocation_framework"]["action"]
         dip = result["dip_assessment"]
 
         assert (result["decision_card"]["action_now"], dm.gate_ids(result)) == ("avoid", ["falling_knife"])
-        assert (dislocation["can_start_now"], dislocation["buy_now"]) == (True, "small_starter")
-        assert result["decision_modes"]["speculative"]["action"] == "starter_position_only"
-        assert dip["dip_classification"]["type"] == "falling_knife"
-        assert [s["action"] for s in dip["entry_timing"]["signals"]] == ["starter_position"]
+        assert (dislocation["can_start_now"], dislocation["buy_now"]) == (False, None)
+        assert result["decision_modes"]["speculative"]["action"] == "avoid"
+        assert (dip["dip_classification"]["type"], dip["assessment"]["recommendation"]) == (
+            "falling_knife", "do_not_catch_falling_knife")
+        assert [(s["action"], s["capped_by"]) for s in dip["entry_timing"]["signals"]] == [("watch", "new_money_avoid")]
 
     async def test_unsupported_etf_holds_with_percent_sizing_and_an_accumulate_zone(self) -> None:
         """OC-CH4: S7 (ETF, unsupported_instrument) has action_now=watch (the support gate tightens wait, WP2.2

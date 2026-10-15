@@ -393,6 +393,9 @@ SCENARIOS: dict[str, Scenario] = {
     # After-only rows (WP2.2; not in before.json): no baseline row reaches D-4 or D-1c's runway clause.
     "A7_near_52w_high_bullish": Scenario("PH A7 (D-4)", at_price(STRONG, 118.0), PROFITABLE, CALM),
     "H_burner_runway_2q": Scenario("PH CH7 burner (D-1c)", WEAK, BURNER, MODERATE),
+    # After-only row (WP2.3): the plan §7 starter scenario (OC-RF3, extended); no baseline starter row has
+    # full-entry dip codes.
+    "T4_starter_buy_the_dip": Scenario("OC RF3 starter (D-9)", STARTER_DIP, QUALITY, CALM),
 }
 
 
@@ -497,6 +500,8 @@ def digest(result: dict[str, Any]) -> dict[str, Any]:
         "conditions": {**{k: (card.get("conditions") or {}).get(k) for k in ("buy_only_if", "add_only_if", "monitor")},
                        "long_term_buy_only_if": ((((card.get("long_term") or {}).get("new_money") or {})
                                                   .get("conditions") or {}).get("buy_only_if"))},
+        "mode_sizing": {m: [k for k in ("starter_position", "max_position") if (modes.get(m) or {}).get(k)]
+                        for m in ("core", "balanced", "speculative")},
         "snapshot": {k: snapshot.get(k) for k in ("action_mid_term", "action_long_term", "decision_action_now",
                                                   "hard_gate_ids", "zone", "snapshot_hash")},
         "decision": {"new_money": _horizon(card.get("new_money")),

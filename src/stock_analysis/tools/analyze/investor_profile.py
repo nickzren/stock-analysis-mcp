@@ -5,7 +5,14 @@ from __future__ import annotations
 from typing import Any
 
 from stock_analysis.tools.analyze.action_zones import build_position_sizing_range
-from stock_analysis.tools.analyze.decision import LONG_TERM, MID_TERM, core_action
+from stock_analysis.tools.analyze.decision import (
+    CORE,
+    LONG_TERM,
+    MID_TERM,
+    core_action,
+    entry_allowed,
+    most_restrictive,
+)
 from stock_analysis.tools.analyze.dislocation_framework import (
     classify_dislocation_opportunity,
 )
@@ -102,10 +109,19 @@ def resolve_investor_profile(
     }
 
 
+# The speculative mode's own codes in the new-money vocabulary (plan §3 [D-3]); new_money caps them after.
+_SPECULATIVE_ACTIONS = {"starter_then_add": "starter", "starter_position_only": "starter", "wait": "wait",
+                        "watch": "wait"}
+
+
+def _capped(own: str, action: str, cap: str) -> dict[str, str]:
+    """A mode's action; capped_by names the canonical decision that tightened its own code (plan §7)."""
+    return {"action": action, **({"capped_by": f"{cap}_{action}"} if action != own else {})}
+
+
 def build_decision_modes(
     summary: dict[str, Any],
     verdict: dict[str, Any],
-    policy_action: dict[str, Any],
     action_zones: dict[str, Any],
     dip_assessment: dict[str, Any] | None,
     decision_context: dict[str, Any],
@@ -114,12 +130,13 @@ def build_decision_modes(
     events_summary: dict[str, Any],
     account_size: float | None = None,
     *,
-    long_term_action: str,
+    decision: dict[str, Any],
     conditions: dict[str, Any],
 ) -> dict[str, Any]:
-    """Build default Core / Balanced / Speculative decision blocks. Core follows the canonical long-term
-    decision (``long_term.new_money.action``) under its own cap (plan §3 [D-3]). The conditionals mirror the
-    card's lists of their horizon (plan §7e): core long-term, balanced and speculative mid-term."""
+    """Build default Core / Balanced / Speculative decision blocks in the new-money vocabulary (plan §3 [D-3]):
+    balanced is new_money; speculative its own code capped by new_money; core CORE[long_term_fit] capped by
+    long_term.new_money. Sizing only under an entry (plan §7 [D-9]); the conditionals mirror the card's lists
+    of their horizon (plan §7e): core long-term, balanced and speculative mid-term."""
     horizon_fit = verdict.get("horizon_fit", {})
     long_term_fit = horizon_fit.get("long_term")
     long_term_gates = horizon_fit.get("long_term_gates") or []
@@ -215,22 +232,17 @@ def build_decision_modes(
     else:
         balanced_suitability = "avoid"
 
-    balanced_why = list(policy_action.get("rationale") or [])[:2]
-    if business_quality and f"business_quality={business_quality}" not in balanced_why:
+    new_money_action = decision["new_money"]["action"]
+    long_term_action = decision[LONG_TERM]["new_money"]["action"]
+    balanced_why: list[str] = []
+    if business_quality:
         balanced_why.append(f"business_quality={business_quality}")
-    if risk_label and f"risk_regime={risk_label}" not in balanced_why:
+    if risk_label:
         balanced_why.append(f"risk_regime={risk_label}")
     if is_dislocation_candidate:
-        balanced_suitability = "starter_only"
-        if "price_broken_more_than_business" not in balanced_why:
-            balanced_why.append("price_broken_more_than_business")
-
-    balanced_action = policy_action.get("mid_term")
-    if is_dislocation_candidate and balanced_action in {
-        "wait_for_entry",
-        "speculative_small_position",
-    }:
-        balanced_action = "starter_position_only"
+        if new_money_action == "starter":
+            balanced_suitability = "starter_only"
+        balanced_why.append("price_broken_more_than_business")
 
     speculative_action = "watch"
     if dip_recommendation in {"do_not_catch_falling_knife", "wait_for_better_setup"}:
@@ -243,6 +255,19 @@ def build_decision_modes(
         speculative_action = "starter_position_only"
     if is_dislocation_candidate and speculative_action in {"wait", "watch"}:
         speculative_action = "starter_position_only"
+    speculative_own = _SPECULATIVE_ACTIONS[speculative_action]
+    speculative = _capped(speculative_own, most_restrictive((speculative_own, new_money_action)), "new_money")
+    core = _capped(CORE[long_term_fit], core_action(long_term_fit, long_term_action), "long_term")
+    entry = entry_allowed(new_money_action)
+
+    def _sizes(mode: str, action: str) -> dict[str, Any]:
+        """starter_position iff entry and the mode's action admits it; max_position only under buy (§0 #21)."""
+        starter = entry and action in ("buy", "starter")
+        full = starter and action == "buy" and new_money_action == "buy"
+        return {"starter_position": _position_block(mode_sizing[mode], "starter_pct") if starter else None,
+                "max_position": _position_block(mode_sizing[mode], "max_pct") if full else None}
+
+    speculative_sizes = _sizes("speculative", speculative["action"])
 
     upside_case_parts: list[str] = []
     if bullish_catalysts:
@@ -269,37 +294,35 @@ def build_decision_modes(
             "label": "Core",
             "description": _PROFILE_PRESETS["core"]["description"],
             "suitability": core_suitability,
-            "action": core_action(long_term_fit, long_term_action),
+            **core,
             "why": core_why or None,
-            "starter_position": _position_block(mode_sizing["core"], "starter_pct"),
-            "max_position": _position_block(mode_sizing["core"], "max_pct"),
+            **_sizes("core", core["action"]),
             "required_before_full_size": list(conditions[LONG_TERM]["buy_only_if"]),
         },
         "balanced": {
             "label": "Balanced",
             "description": _PROFILE_PRESETS["balanced"]["description"],
             "suitability": balanced_suitability,
-            "action": balanced_action,
+            "action": new_money_action,
             "why": balanced_why or None,
-            "starter_position": _position_block(mode_sizing["balanced"], "starter_pct"),
-            "max_position": _position_block(mode_sizing["balanced"], "max_pct"),
+            **_sizes("balanced", new_money_action),
             "add_on_only_if": list(conditions[MID_TERM]["add_only_if"]),
-            "long_term_view": policy_action.get("long_term"),
+            "long_term_view": long_term_action,
         },
         "speculative": {
             "label": "Speculative",
             "description": _PROFILE_PRESETS["speculative"]["description"],
             "suitability": dip_quality or ("event_driven" if bullish_catalysts else "unclear"),
-            "action": speculative_action,
-            "starter_position": _position_block(mode_sizing["speculative"], "starter_pct"),
-            "max_position": _position_block(mode_sizing["speculative"], "max_pct"),
+            **speculative,
+            **speculative_sizes,
             "add_on_only_if": list(conditions[MID_TERM]["add_only_if"]),
             "upside_case": ", ".join(upside_case_parts) if upside_case_parts else None,
             "failure_case": ", ".join(failure_case_parts) if failure_case_parts else None,
             "next_90d_catalysts": [_format_tag(tag) for tag in bullish_catalysts[:3]],
             "risk_flags": [_format_tag(tag) for tag in bearish_catalysts[:3]] or None,
             "capital_at_risk": (
-                format_compact_number(account_size) if account_size is not None else "account_size_not_provided"
+                None if speculative_sizes["starter_position"] is None
+                else format_compact_number(account_size) if account_size is not None else "account_size_not_provided"
             ),
         },
     }
@@ -308,7 +331,6 @@ def build_decision_modes(
 def build_investor_views(
     summary: dict[str, Any],
     verdict: dict[str, Any],
-    policy_action: dict[str, Any],
     action_zones: dict[str, Any],
     dip_assessment: dict[str, Any] | None,
     decision_context: dict[str, Any],
@@ -317,14 +339,13 @@ def build_investor_views(
     events_summary: dict[str, Any],
     investor_profile: dict[str, Any],
     *,
-    long_term_action: str,
+    decision: dict[str, Any],
     conditions: dict[str, Any],
 ) -> dict[str, Any]:
     """Backward-compatible wrapper for older internal callsites."""
     return build_decision_modes(
         summary=summary,
         verdict=verdict,
-        policy_action=policy_action,
         action_zones=action_zones,
         dip_assessment=dip_assessment,
         decision_context=decision_context,
@@ -332,6 +353,6 @@ def build_investor_views(
         fundamentals_summary=fundamentals_summary,
         events_summary=events_summary,
         account_size=investor_profile.get("account_size"),
-        long_term_action=long_term_action,
+        decision=decision,
         conditions=conditions,
     )

@@ -532,15 +532,16 @@ async def test_a_non_dislocation_knife_keeps_the_admitting_surfaces() -> None:
     """IS-CH1: a falling knife that is not a dislocation candidate (mismatch unclear) and whose knife-free candidate
     admits new money (bullish tilt, caution fit) gives new_money avoid [falling_knife]; speculative_small_position
     is only the full tier's diagnostics.pre_gate_policy.mid_term, superseded by new_money avoid, and the card has
-    no horizon_fit (G from WP2.3, PD D-9), while the surfaces derived from the emitted policy still show it: the
-    executive summary's "Policy: mid-term small starter position", modes.balanced.action and dislocation
-    can_start_now true / buy_now small_starter (v0.2.0: wait_for_entry, can_start_now false). CH: flipped by
-    WP2.3 (derived surfaces follow new_money); the snapshot clause is
+    no horizon_fit; the modes follow new_money (balanced avoid, speculative and core avoid with capped_by) and so
+    does the dislocation (can_start_now false / buy_now null) (G from WP2.3, PD D-9, D-3), while the executive
+    summary, derived from the emitted policy, still shows "Policy: mid-term small starter position" (v0.2.0:
+    wait_for_entry). CH: flipped by WP2.3 (the summary follows new_money); the snapshot clause is
     test_the_snapshot_keeps_the_knife_free_candidate_until_wp2_4."""
     result = await dm.run(KNIFE_NOT_DISLOCATION)
     card = result["decision_card"]
     dislocation = result["dislocation_framework"]
     policy = result["diagnostics"]["pre_gate_policy"]
+    modes = result["decision_modes"]
 
     assert (result["dip_assessment"]["dip_classification"]["type"], dislocation["mismatch_verdict"]["status"]) == (
         "falling_knife", "unclear")
@@ -549,9 +550,10 @@ async def test_a_non_dislocation_knife_keeps_the_admitting_surfaces() -> None:
         "avoid", ["falling_knife"], "falling_knife")
     assert ("policy_action" in result, "horizon_fit" in card) == (False, False)
     assert (policy["mid_term"], policy["superseded_by"]["new_money"]) == ("speculative_small_position", "avoid")
-    assert result["decision_modes"]["balanced"]["action"] == "speculative_small_position"
+    assert {m: (mode["action"], mode.get("capped_by")) for m, mode in modes.items()} == {
+        "core": ("avoid", "long_term_avoid"), "balanced": ("avoid", None), "speculative": ("avoid", "new_money_avoid")}
     assert result["executive_summary"].endswith("Policy: mid-term small starter position; size ~2.5-8.0%.")
-    assert (dislocation["action"]["can_start_now"], dislocation["action"]["buy_now"]) == (True, "small_starter")
+    assert (dislocation["action"]["can_start_now"], dislocation["action"]["buy_now"]) == (False, None)
 
 
 async def test_the_snapshot_keeps_the_knife_free_candidate_until_wp2_4() -> None:
@@ -564,13 +566,12 @@ async def test_the_snapshot_keeps_the_knife_free_candidate_until_wp2_4() -> None
     assert result["watchlist_snapshot"]["action_mid_term"] == "speculative_small_position"
 
 
-async def test_a_thesis_capped_row_keeps_the_dislocation_starter() -> None:
-    """IS-CH2: H (2-quarter burner) gives new_money avoid (thesis_broken) and if_held review_exit while
-    dislocation_framework.action keeps can_start_now true / buy_now small_starter. The conditions clauses are
-    flipped by WP2.3 (§7e): add_only_if empty on the card and the framework (if_held is not hold); buy_only_if
-    names only the binding thesis component (runway, plan §4) on the card, the framework,
-    long_term.new_money.conditions and core's required_before_full_size; the upgrade items that do not bind are
-    monitored (G from WP2.3). CH: flipped by WP2.3 (can_start_now follows new_money)."""
+async def test_a_thesis_capped_row_offers_no_starter_and_no_add() -> None:
+    """IS-CH2 (flipped by WP2.3): H (2-quarter burner) gives new_money avoid (thesis_broken) and if_held
+    review_exit, and the derived surfaces follow: dislocation can_start_now false / buy_now null; add_only_if
+    empty on the card and the framework (if_held is not hold, §7e); buy_only_if names only the binding thesis
+    component (runway, plan §4) on the card, the framework, long_term.new_money.conditions and core's
+    required_before_full_size; the upgrade items that do not bind are monitored. G from WP2.3 (PD D-9, §7e)."""
     result = await dm.run("H_burner_runway_2q")
     card = result["decision_card"]
     action = result["dislocation_framework"]["action"]
@@ -578,7 +579,7 @@ async def test_a_thesis_capped_row_keeps_the_dislocation_starter() -> None:
 
     assert (card["new_money"]["action"], card["new_money"]["decided_by"], card["if_held"]["action"]) == (
         "avoid", "thesis_broken", "review_exit")
-    assert (action["can_start_now"], action["buy_now"]) == (True, "small_starter")
+    assert (action["can_start_now"], action["buy_now"]) == (False, None)
     assert card["conditions"]["add_only_if"] == action["add_only_if"] == []
     assert card["conditions"]["buy_only_if"] == action["buy_only_if"] == runway
     assert card["long_term"]["new_money"]["conditions"] == {"buy_only_if": runway}

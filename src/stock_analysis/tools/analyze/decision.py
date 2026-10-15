@@ -83,6 +83,10 @@ def entry_allowed(action: str) -> bool:
     return action in ENTRY_ACTIONS
 
 
+def starter_only(action: str) -> bool:
+    return action == "starter"
+
+
 def if_held(*, thesis: tuple[str, ...], candidate_action: str, dislocation: bool, tilt: str | None) -> dict[str, str]:
     """Mid-term holder guidance, first match (plan §3). Reads evidence only: never gates, zone, dip or support."""
     rules = (

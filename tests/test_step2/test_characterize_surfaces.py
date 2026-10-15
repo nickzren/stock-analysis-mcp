@@ -85,10 +85,10 @@ class TestGatedSummary:
 class TestSwingVsMidTerm:
     async def test_analyze_avoids_where_the_card_trades_now(self) -> None:
         """SC-CH8: on one uptrend pullback with a poor business, analyze's mid-term new_money is avoid
-        [thesis_broken] with if_held review_exit (speculative wait, core avoid) while the trade card, which reads
-        no fundamentals, says trade_now (swing, WP2.1). The action clause flipped in WP2.2 (PD D-1c: the poor
-        business breaks the thesis, so not D-2's wait). CH: flipped by WP2.3 (speculative is capped by new_money,
-        PH-RF19)."""
+        [thesis_broken] with if_held review_exit (speculative avoid: its own wait capped by new_money; core avoid)
+        while the trade card, which reads no fundamentals, says trade_now (swing, WP2.1). The action clause flipped
+        in WP2.2 (PD D-1c: the poor business breaks the thesis, so not D-2's wait); the speculative clause in WP2.3
+        (PD D-3, PH-RF19). G from WP2.3: the swing/mid-term disagreement is horizons, labelled (S-C8)."""
         result = await dm.run(PULLBACK_POOR_BUSINESS)
         modes = result["decision_modes"]
         fit = result["verdict"]["horizon_fit"]
@@ -96,7 +96,8 @@ class TestSwingVsMidTerm:
 
         assert (result["decision_card"]["action_now"], dm.gate_ids(result)) == ("avoid", ["thesis_broken"])
         assert result["decision_card"]["if_held"]["action"] == "review_exit"
-        assert (modes["speculative"]["action"], modes["core"]["action"]) == ("wait", "avoid")
+        assert (modes["speculative"]["action"], modes["speculative"]["capped_by"], modes["core"]["action"]) == (
+            "avoid", "new_money_avoid", "avoid")
         assert (fit["mid_term"], fit["long_term"]) == ("ok", "avoid")
         assert (card["action"], card["setup"]["type"], card["blockers"]) == ("trade_now", "pullback_in_uptrend", [])
 
@@ -112,22 +113,23 @@ class TestSwingVsMidTerm:
 
 
 class TestStandardTierHasNoAction:
-    async def test_dislocation_check_has_no_action(self) -> None:
-        """SC-CH10: at the standard tier (analyze's default), S6's dislocation_check is the five-question
-        read with no action; the action the full tier carries (can_start_now, buy_now) is absent.
-        CH: flipped by WP2.3 (dislocation_check.decision = {new_money, blocked_by}, S-C10)."""
+    async def test_dislocation_check_carries_the_decision(self) -> None:
+        """SC-CH10 (flipped by WP2.3): at the standard tier (analyze's default), S6's dislocation_check is the
+        five-question read plus decision = {new_money, blocked_by ids} (avoid, [falling_knife]); the full tier's
+        dislocation action follows new_money (can_start_now false, buy_now null). G from WP2.3 (S-C10, PD D-9)."""
         result = await dm.run("S6_knife_dislocation")
         standard = dm.tiers(result)["standard"]
         check = standard["dislocation_check"]
 
-        assert set(check) == {"overall_status", "overall_read", "questions"}
+        assert set(check) == {"overall_status", "overall_read", "questions", "decision"}
+        assert check["decision"] == {"new_money": "avoid", "blocked_by": ["falling_knife"]}
         assert check["overall_status"] == "price_broken_more_than_business"
         assert [q["id"] for q in check["questions"]] == [
             "down_enough", "business_still_good", "balance_sheet_safe", "long_term_thesis_intact",
             "price_broken_more_than_business"]
         assert "dislocation_framework" not in standard
         action = result["dislocation_framework"]["action"]
-        assert (action["can_start_now"], action["buy_now"]) == (True, "small_starter")
+        assert (action["can_start_now"], action["buy_now"]) == (False, None)
 
     async def test_the_guide_answers_what_to_do_from_the_full_tier_action(self) -> None:
         """SC-CH10: the rendering guide answers "What should I do now?" from dislocation `action` and
@@ -143,21 +145,22 @@ class TestStandardTierHasNoAction:
 
 
 class TestSpeculativeMode:
-    async def test_a_neutral_tilt_offers_a_starter_under_avoid(self) -> None:
-        """SC-CH12: S3's chart with QUALITY fundamentals is a plain avoid (mid fit avoid, no gate, not a
-        dislocation candidate) with a neutral tilt and a buy_the_dip dip, and speculative says
-        starter_position_only; S3 itself (bearish tilt) says watch. CH: flipped by WP2.3 (PD D-3,
-        PH-RF19: speculative is mapped, then capped by new_money, so it gives avoid)."""
+    async def test_a_neutral_tilt_no_longer_offers_a_starter_under_avoid(self) -> None:
+        """SC-CH12 (flipped by WP2.3): S3's chart with QUALITY fundamentals is a plain avoid (mid fit avoid, no
+        gate, not a dislocation candidate) with a neutral tilt and a buy_the_dip dip (now capped to watch), and
+        speculative's own starter_position_only is mapped to starter, then capped by new_money: avoid; S3 itself
+        (bearish tilt, own watch) gives avoid too. G from WP2.3 (PD D-3, PH-RF19)."""
         neutral = await dm.run("S3_plain_avoid", fundamentals=dm.QUALITY)
         bearish = await dm.run("S3_plain_avoid")
 
         assert (neutral["decision_card"]["action_now"], dm.gate_ids(neutral)) == ("avoid", [])
         assert (neutral["verdict"]["tilt"], neutral["verdict"]["horizon_fit"]["mid_term"]) == ("neutral", "avoid")
-        assert neutral["dip_assessment"]["assessment"]["recommendation"] == "buy_the_dip"
-        assert neutral["decision_modes"]["balanced"]["suitability"] == "avoid"  # starter_only if a dislocation
-        assert neutral["decision_modes"]["speculative"]["action"] == "starter_position_only"
+        assert neutral["dip_assessment"]["assessment"]["dip_quality"] == "good"  # buy_the_dip before the cap
+        assert neutral["dip_assessment"]["assessment"]["recommendation"] == "watch"
+        assert neutral["decision_modes"]["balanced"]["suitability"] == "avoid"  # starter_only only under starter
+        assert neutral["decision_modes"]["speculative"]["action"] == "avoid"
         assert bearish["verdict"]["tilt"] == "bearish"
-        assert bearish["decision_modes"]["speculative"]["action"] == "watch"
+        assert bearish["decision_modes"]["speculative"]["action"] == "avoid"
 
 
 # QUALITY's shape with every value compare ranks worse, and no metric QUALITY lacks.

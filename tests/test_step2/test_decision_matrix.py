@@ -20,7 +20,8 @@ from tests.support import decision_matrix as dm
 
 BEFORE = json.loads((dm.FIXTURE_DIR / "before.json").read_text())
 AFTER = json.loads((dm.FIXTURE_DIR / "after.json").read_text())
-AFTER_ONLY = {"A7_near_52w_high_bullish", "H_burner_runway_2q"}  # WP2.2: D-4 and D-1c's runway clause
+AFTER_ONLY = {"A7_near_52w_high_bullish", "H_burner_runway_2q",  # WP2.2: D-4 and D-1c's runway clause
+              "T4_starter_buy_the_dip"}  # WP2.3: the plan §7 starter scenario (OC-RF3, extended)
 
 # The cells each WP changes (before -> after), over before.json's paths; snapshot_hash follows the
 # snapshot fields (DM-CH2). WP2.2: D-2 mapping, D-5/D-5a combination and outcomes, D-1c thesis cap, D-3 core
@@ -67,8 +68,60 @@ WP22_CHANGES: dict[str, dict[str, Any]] = {
     for name in {*CORE_CHANGES, *SNAPSHOT_CHANGES}
 }
 
-# WP2.3: decide()'s decision does not move (no decision.*, action_now, hard_gates, policy.*, zone or snapshot.*
-# cell); the card's horizon_fit is removed (plan §7a), so B's WP2.2 horizon_fit.mid_term cell now ends at None.
+# WP2.3: every surface derives from decide()'s decision, which does not move (no decision.*, action_now,
+# hard_gates, policy.*, zone or snapshot.* cell); the card's horizon_fit is removed (plan §7a), so B's WP2.2
+# horizon_fit.mid_term cell now ends at None.
+BALANCED_CHANGES = {  # D-3: balanced = new_money (B keeps its WP2.2 knife-override cell, now wait_for_entry -> avoid)
+    **dict.fromkeys(["S1_hold_or_add_clean", "C1_headwind_hold_or_add", "E2_mixed_fcf_bullish_chart"],
+                    ("hold_or_add", "starter")),
+    **dict.fromkeys(["T1_extreme_risk_bullish", "T2_starter_weak_setup_quality"], ("speculative_small_position", "starter")),
+    **dict.fromkeys(["S4_earnings_gate_on_hold_or_add", "C2_headwind_earnings_gate"], ("hold_or_add", "wait")),
+    **dict.fromkeys(["S9_weak_liquidity", "E_poor_business_bullish_chart"], ("hold_or_add", "avoid")),
+    "S7_etf_below_sma200": ("hold", "watch"), "T3_plain_wait_weak_setup": ("wait_for_entry", "wait"),
+}
+LONG_VIEW_CHANGES = {  # D-3, PH-RF19: balanced.long_term_view = long_term.new_money.action (plan §0 #8)
+    **dict.fromkeys(["S1_hold_or_add_clean", "S2_buy_clean", "S3_plain_avoid", "T2_starter_weak_setup_quality",
+                     "T3_plain_wait_weak_setup", "V1_vendor_rich_plain_avoid", "D_quality_attractive_poor_chart"],
+                    ("accumulate", "buy")),
+    **dict.fromkeys(["S4_earnings_gate_on_hold_or_add", "S5_earnings_gate_on_avoid",
+                     "D2_quality_poor_chart_earnings_3d"], ("accumulate", "wait")),
+    **dict.fromkeys(["S6_knife_dislocation", "S9_weak_liquidity", "C_quality_knife_dislocation"], ("accumulate", "avoid")),
+    **dict.fromkeys(["C1_headwind_hold_or_add", "C2_headwind_earnings_gate", "C3_headwind_plain_avoid"],
+                    ("hold_size_conservatively", "wait")),
+    **dict.fromkeys(["A_broken_bearish", "B_broken_bearish_knife", "E_poor_business_bullish_chart"],
+                    ("avoid_core_position", "avoid")),
+    **dict.fromkeys(["T1_extreme_risk_bullish", "E2_mixed_fcf_bullish_chart"], ("small_position_with_stops", "starter")),
+    **dict.fromkeys(["S7_etf_below_sma200", "ETF_strong", "ETF_bearish"], ("insufficient_data", "watch")),
+    "F3_quality_neutral_valuation_poor_chart": ("hold", "wait"), "G_unsupported_currency_knife": ("watch", "avoid"),
+}
+SPECULATIVE_CHANGES = {  # D-3: its own code mapped, then capped by new_money (S-C12)
+    **dict.fromkeys(["S9_weak_liquidity", "A_broken_bearish", "B_broken_bearish_knife", "D_quality_attractive_poor_chart",
+                     "D2_quality_poor_chart_earnings_3d", "E_poor_business_bullish_chart",
+                     "F3_quality_neutral_valuation_poor_chart"], ("wait", "avoid")),
+    **dict.fromkeys(["S3_plain_avoid", "S5_earnings_gate_on_avoid", "C3_headwind_plain_avoid",
+                     "V1_vendor_rich_plain_avoid", "G_unsupported_currency_knife", "ETF_bearish"], ("watch", "avoid")),
+    **dict.fromkeys(["S6_knife_dislocation", "C_quality_knife_dislocation"], ("starter_position_only", "avoid")),
+    "S2_buy_clean": ("starter_then_add", "starter"), "S8_fundamentals_failed": ("wait", "insufficient_data"),
+    "GBp_strong": ("wait", "watch"),
+}
+DISLOCATION_CHANGES = {  # D-9 (plan §7): can_start_now == entry_allowed; buy_now = new_money.action iff entry
+    "S2_buy_clean": {"can_start_now": (False, True), "buy_now": (None, "buy")},
+    **dict.fromkeys(["S1_hold_or_add_clean", "C1_headwind_hold_or_add", "E2_mixed_fcf_bullish_chart"],
+                    {"can_start_now": (False, True), "buy_now": (None, "starter")}),
+    **dict.fromkeys(["T1_extreme_risk_bullish", "T2_starter_weak_setup_quality"], {"buy_now": ("small_starter", "starter")}),
+    **dict.fromkeys(["S6_knife_dislocation", "C_quality_knife_dislocation"],
+                    {"can_start_now": (True, False), "buy_now": ("small_starter", None)}),
+}
+DIP_CHANGES = {  # D-9 (plan §7): non-entry caps entry codes to watch; the dislocation override needs a starter
+    **dict.fromkeys(["S3_plain_avoid", "S5_earnings_gate_on_avoid", "C3_headwind_plain_avoid",
+                     "V1_vendor_rich_plain_avoid"],
+                    {"recommendation": ("buy_the_dip", "watch"),
+                     "entry_actions": (["accumulate", "starter_position"], ["watch", "watch"])}),
+    **dict.fromkeys(["S6_knife_dislocation", "C_quality_knife_dislocation"],
+                    {"recommendation": ("starter_only_wait_for_stabilization", "do_not_catch_falling_knife"),
+                     "entry_actions": (["starter_position"], ["watch"])}),
+    "B_broken_bearish_knife": {"entry_actions": (["starter_position"], ["watch"])},
+}
 EARNINGS, LIQUIDITY = GATES["earnings_blackout"].clears_when, GATES["weak_liquidity"].clears_when
 PE_HEADWIND_OLD = ["P/E < 25x (currently headwind)"]
 CONDITION_CHANGES = {  # plan §7e [FIX BL-E1, BL-E2]: binding conditions only; add iff if_held hold
@@ -91,6 +144,11 @@ def _wp23_cells(name: str) -> dict[str, Any]:
     row = BEFORE[name]
     return {
         **{f"horizon_fit.{h}": (row["horizon_fit"][h], None) for h in ("mid_term", "long_term")},  # §7a: removed
+        **({"modes.balanced.action": BALANCED_CHANGES[name]} if name in BALANCED_CHANGES else {}),
+        **({"modes.balanced.long_term_view": LONG_VIEW_CHANGES[name]} if name in LONG_VIEW_CHANGES else {}),
+        **({"modes.speculative.action": SPECULATIVE_CHANGES[name]} if name in SPECULATIVE_CHANGES else {}),
+        **{f"dislocation.{k}": v for k, v in DISLOCATION_CHANGES.get(name, {}).items()},
+        **{f"dip.{k}": v for k, v in DIP_CHANGES.get(name, {}).items()},
         **{f"conditions.{k}": v for k, v in CONDITION_CHANGES.get(name, {}).items()},
     }
 

@@ -26,6 +26,7 @@ from stock_analysis.tools.price_history import price_history
 from stock_analysis.tools.risk_metrics import risk_metrics
 from stock_analysis.tools.technicals import technicals
 from stock_analysis.utils.provenance import build_error_response
+from tests.support.decision_matrix import decide_on
 from tests.support.fake_source import FakeSource
 
 orchestrator_module = importlib.import_module("stock_analysis.tools.analyze.orchestrator")
@@ -602,17 +603,10 @@ class TestToolResponseSchemas:
         assert result["symbol"] == "TEST"
         assert "investor_profile" not in result
         assert result["action_zones"]["position_sizing_range"]["dollars_for_account"]["min"] == 30.0
-        assert result["decision_modes"]["core"]["action"] is not None
-        assert result["decision_modes"]["balanced"]["action"] is not None
-        assert result["decision_modes"]["speculative"]["action"] in {
-            "starter_position_only",
-            "starter_then_add",
-            "watch",
-            "wait",
-        }
-        assert result["decision_modes"]["core"]["starter_position"]["dollars"] == 60.0
-        assert result["decision_modes"]["balanced"]["starter_position"]["dollars"] == 75.0
-        assert result["decision_modes"]["speculative"]["starter_position"]["dollars"] == 30.0
+        # No daily history: freshness_unverifiable makes new money wait_for_data, so no mode size (plan §7)
+        for mode in ("core", "balanced", "speculative"):
+            assert result["decision_modes"][mode]["action"] in NEW_MONEY_ACTIONS, mode
+            assert result["decision_modes"][mode]["starter_position"] is None, mode
         assert result["news_summary"]["catalyst_intelligence"]["bullish"][0]["tag"] == "guidance_raise"
         assert result["dislocation_framework"]["setup"]["status"] == "absent"
         assert result["dislocation_framework"]["action"]["core"] == result["decision_modes"]["core"]["action"]
@@ -969,7 +963,7 @@ class TestToolResponseSchemas:
             if trigger["direction"] == "bearish":
                 assert trigger["score_delta"] is None or trigger["score_delta"] <= 0
 
-    def test_dislocation_candidate_overrides_wait_actions_to_small_starter(self) -> None:
+    def test_a_dislocation_with_a_falling_knife_gives_avoid_modes(self) -> None:
         verdict = {
             "tilt": "neutral",
             "horizon_fit": {
@@ -1024,25 +1018,25 @@ class TestToolResponseSchemas:
             dip_assessment=dip_assessment,
             fundamentals_summary=fundamentals_summary,
         )
+        decision = decide_on(policy_action, [{"id": "falling_knife", "reason": "r"}], dislocation=True)
         decision_modes = build_decision_modes(
             summary={"current_price": 10.0},
             verdict=verdict,
-            policy_action=policy_action,
             action_zones=action_zones,
             dip_assessment=dip_assessment,
             decision_context={"thesis_checkpoints": {}},
             news_summary={"catalyst_intelligence": {"bullish": [], "bearish": [], "neutral": []}},
             fundamentals_summary=fundamentals_summary,
             events_summary={"next_catalyst": {}},
-            long_term_action="starter",  # small_position_with_stops, ungated
+            decision=decision,
             conditions={"mid_term": {"add_only_if": []}, "long_term": {"buy_only_if": []}},
         )
 
         assert policy_action["mid_term"] == "speculative_small_position"
         assert policy_action["long_term"] == "small_position_with_stops"
-        assert decision_modes["core"]["action"] == "wait"  # CORE[caution] (WP2.2, D-3)
-        assert decision_modes["balanced"]["action"] == "starter_position_only"
-        assert decision_modes["speculative"]["action"] == "starter_position_only"
+        assert (decision["new_money"]["action"], decision["long_term"]["new_money"]["action"]) == ("avoid", "avoid")
+        assert {name: mode["action"] for name, mode in decision_modes.items()} == dict.fromkeys(
+            ("core", "balanced", "speculative"), "avoid")  # PH annex: dislocation + knife, all three avoid (D-3)
         assert "price_broken_more_than_business" in (decision_modes["balanced"]["why"] or [])
 
     def test_dip_assessment_is_reframed_when_starter_is_allowed(self) -> None:
@@ -1057,7 +1051,7 @@ class TestToolResponseSchemas:
         result = align_dip_assessment_with_action(
             dip_assessment=dip_assessment,
             mismatch_status="price_broken_more_than_business",
-            can_start_now=True,
+            starter_only=True,
             add_only_if=["risk_regime <= high (volatility < 60%)"],
         )
 

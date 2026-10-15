@@ -51,13 +51,31 @@ def test_leaves_and_globs() -> None:
 
 def test_the_code_sets() -> None:
     """G-REG3: ENTRY_CODES is the disjoint union of the starter-only and full-entry codes and holds every
-    new-money entry action and entry candidate code (annex output_contract §0), plus the orchestrator's interim
-    mode and dip sets while they exist (WP2.3 step 4 deletes them and this clause). G."""
+    new-money entry action and entry candidate code (annex output_contract §0). G."""
     assert ENTRY_CODES == STARTER_ONLY_CODES | FULL_ENTRY_CODES and not STARTER_ONLY_CODES & FULL_ENTRY_CODES
     assert ENTRY_ACTIONS | ENTRY_CANDIDATE_CODES <= ENTRY_CODES
-    interim = (dm.orchestrator._NEW_MONEY_MODE_CODES | dm.orchestrator._DIP_NEW_MONEY_RECOMMENDATIONS
-               | dm.orchestrator._DIP_NEW_MONEY_ENTRY_ACTIONS)
-    assert interim <= ENTRY_CODES
+
+
+# --- OC-RF4 ------------------------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("name", dm.SCENARIOS)
+async def test_actionable_codes_follow_their_horizon(name: str) -> None:
+    """OC-RF4 (plan §0 #8, #21, #23): an A value with an entry code or advice phrase needs its horizon's
+    predicate; a full-entry code in a mid-term field needs new_money buy; a starter_only label needs a starter;
+    every capped_by names the current action of its horizon. RF."""
+    result = await dm.run(name)
+    for tier, shown in dm.tiers(result).items():
+        assert oc.actionable_violations(shown, result["decision_card"]) == [], tier
+
+
+async def test_a_capped_dip_names_its_cap() -> None:
+    """OC-RF4 (capped_by is not vacuous): S3's dip recommendation and both entry signals are capped to watch by
+    new_money avoid. RF."""
+    dip_assessment = (await dm.run("S3_plain_avoid"))["dip_assessment"]
+    assert (dip_assessment["assessment"]["recommendation"], dip_assessment["assessment"]["capped_by"]) == (
+        "watch", "new_money_avoid")
+    assert {(s["action"], s["capped_by"]) for s in dip_assessment["entry_timing"]["signals"]} == {
+        ("watch", "new_money_avoid")}
 
 
 # --- OC-RF10: the D lexicon (plan §7c) ---------------------------------------------------------------------
@@ -104,7 +122,13 @@ def test_band_rationales_and_regime_warnings_name_the_regime() -> None:
 
 
 def test_dip_text_is_diagnostic() -> None:
-    """OC-RF10 (unit): every dip explanation and recommendation rationale carries no entry code or advice phrase.
-    PD D-9."""
+    """OC-RF10 (unit): every dip explanation and recommendation rationale, and the dislocation starter override's
+    rationale (plan §7c), carry no entry code or advice phrase. PD D-9."""
     texts = [*dip._DIP_TYPE_EXPLANATIONS.values(), *dip._BUY_RECOMMENDATION_RATIONALES.values()]
-    assert [t for t in texts if oc.advice(t)] == []
+    overridden = dip.align_dip_assessment_with_action(
+        {"assessment": {"recommendation": "do_not_catch_falling_knife"}}, "price_broken_more_than_business",
+        starter_only=True)
+    assert overridden is not None
+    assert overridden["assessment"]["rationale"] == (
+        "Price looks more broken than the business, but the trend is still broken: wait for stabilization.")
+    assert [t for t in [*texts, overridden["assessment"]["rationale"]] if oc.advice(t)] == []

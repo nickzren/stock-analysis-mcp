@@ -16,7 +16,7 @@ from stock_analysis.tools.analyze.action_zones import (
 )
 from stock_analysis.tools.analyze.conditions import CandidateInputs, candidate_factors
 from stock_analysis.tools.analyze.constants import CRITICAL_ANALYZE_TOOLS
-from stock_analysis.tools.analyze.decision import ENTRY_CANDIDATE_CODES, decide
+from stock_analysis.tools.analyze.decision import ENTRY_CANDIDATE_CODES, decide, starter_only
 from stock_analysis.tools.analyze.decision_card import (
     build_conditions,
     build_decision_card,
@@ -30,6 +30,7 @@ from stock_analysis.tools.analyze.decision_context import (
 from stock_analysis.tools.analyze.dip_assessment import (
     align_dip_assessment_with_action,
     build_dip_assessment,
+    cap_dip_assessment,
 )
 from stock_analysis.tools.analyze.dislocation_framework import (
     build_dislocation_framework,
@@ -95,16 +96,6 @@ _READ_SHARE_OF_TOOL_DEADLINE = 0.9
 _ET = pytz.timezone("America/New_York")
 
 
-# New-money codes: policy_action horizons use the entry candidate codes; the balanced and speculative
-# modes add their starter codes. Core needs none: decide()'s support gate already caps it at watch.
-_NEW_MONEY_MODE_CODES = ENTRY_CANDIDATE_CODES | {"starter_position_only", "starter_then_add"}
-_DIP_NEW_MONEY_RECOMMENDATIONS = frozenset({
-    "strong_buy_the_dip", "buy_the_dip", "cautious_accumulation", "small_speculative_position",
-    "starter_only_wait_for_stabilization",
-})
-_DIP_NEW_MONEY_ENTRY_ACTIONS = frozenset({"consider_small_position", "starter_position", "accumulate", "add_position"})
-
-
 def _cap_policy_at_watch(policy_action: dict[str, Any], support: dict[str, Any]) -> None:
     """WP4 (D5): an unsupported or unverified instrument/currency produces no
     new-money action; hold/reduce/avoid codes pass through."""
@@ -112,27 +103,6 @@ def _cap_policy_at_watch(policy_action: dict[str, Any], support: dict[str, Any])
         if policy_action.get(horizon) in ENTRY_CANDIDATE_CODES:
             policy_action[horizon] = "watch"
     policy_action["support_gates"] = [gate["id"] for gate in support_blockers(support)]
-
-
-def _cap_modes_at_watch(decision_modes: dict[str, Any]) -> None:
-    for mode in decision_modes.values():
-        if not isinstance(mode, dict):
-            continue
-        if mode.get("action") in _NEW_MONEY_MODE_CODES:
-            mode["action"] = "watch"
-        if mode.get("long_term_view") in ENTRY_CANDIDATE_CODES:
-            mode["long_term_view"] = "watch"
-
-
-def _cap_dip_at_watch(dip_assessment: dict[str, Any] | None, support: dict[str, Any]) -> None:
-    for signal in ((dip_assessment or {}).get("entry_timing") or {}).get("signals") or []:
-        if isinstance(signal, dict) and signal.get("action") in _DIP_NEW_MONEY_ENTRY_ACTIONS:
-            signal["action"] = "watch"
-    assessment = (dip_assessment or {}).get("assessment")
-    if isinstance(assessment, dict) and assessment.get("recommendation") in _DIP_NEW_MONEY_RECOMMENDATIONS:
-        assessment["recommendation"] = "watch"
-        assessment["rationale"] = "Unsupported or unverified instrument or currency: no new-money entry."
-        assessment["support_gates"] = [gate["id"] for gate in support_blockers(support)]
 
 
 def _fundamentals_cash_flow_summary(cf: dict[str, Any]) -> dict[str, Any]:
@@ -1128,7 +1098,7 @@ async def analyze_stock(
         support=support,
     )
     # WP4 (D5): the emitted pre-gate copy (diagnostics.pre_gate_policy) is support-capped (plan §0 #6),
-    # as are the surfaces that still copy it (executive summary, decision modes, dislocation).
+    # as is the executive summary that still copies it.
     supported = instrument_ok and currency_supported(support)
     if not supported:
         _cap_policy_at_watch(policy_action, support)
@@ -1149,7 +1119,6 @@ async def analyze_stock(
     decision_modes = build_decision_modes(
         summary=summary,
         verdict=verdict,
-        policy_action=policy_action,
         action_zones=action_zones,
         dip_assessment=dip_assessment,
         decision_context=decision_context,
@@ -1157,11 +1126,9 @@ async def analyze_stock(
         fundamentals_summary=fundamentals_summary,
         events_summary=events_summary,
         account_size=investor_profile.get("account_size"),
-        long_term_action=decision["long_term"]["new_money"]["action"],
+        decision=decision,
         conditions=conditions,
     )
-    if not supported:
-        _cap_modes_at_watch(decision_modes)
     dislocation_framework = build_dislocation_framework(
         verdict=verdict,
         action_zones=action_zones,
@@ -1169,16 +1136,16 @@ async def analyze_stock(
         dip_assessment=dip_assessment,
         decision_context=decision_context,
         decision_modes=decision_modes,
+        decision=decision,
         conditions=conditions["mid_term"],
     )
     dip_assessment = align_dip_assessment_with_action(
         dip_assessment=dip_assessment,
         mismatch_status=(dislocation_framework.get("mismatch_verdict") or {}).get("status"),
-        can_start_now=bool((dislocation_framework.get("action") or {}).get("can_start_now")),
+        starter_only=starter_only(decision["new_money"]["action"]),
         add_only_if=conditions["mid_term"]["add_only_if"],
     )
-    if not supported:
-        _cap_dip_at_watch(dip_assessment, support)
+    cap_dip_assessment(dip_assessment, decision["new_money"])
     if not instrument_ok:
         dislocation_framework = {
             "status": "not_applicable",

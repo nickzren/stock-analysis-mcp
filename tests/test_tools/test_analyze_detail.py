@@ -24,7 +24,8 @@ def _full_result() -> dict:
             "currency": "USD",
             "extra_summary_field": "full-only",
         },
-        "decision_card": {"action_now": "buy", "hard_gates": {"blocking": []}},
+        "decision_card": {"action_now": "buy", "new_money": {"action": "buy", "blocked_by": []},
+                          "hard_gates": {"blocking": []}},
         "verdict": {
             "score": 0.42,
             "tilt": "bullish",
@@ -220,6 +221,7 @@ def test_standard_projection_includes_compact_dislocation_check() -> None:
     assert dislocation_check == {
         "overall_status": "price_broken_more_than_business",
         "overall_read": "Price looks more broken than the business.",
+        "decision": {"new_money": "buy", "blocked_by": []},
         "questions": [
             {
                 "id": "down_enough",

@@ -17,6 +17,7 @@ from stock_analysis.tools.analyze.projection import project_analyze_result
 from stock_analysis.utils.scan_screen import screen_symbol
 from stock_analysis.utils.validators import FetchParams
 from stock_analysis.utils.valuation_basis import classify_support, sizing_unavailable_reason
+from tests.support import decision_matrix as dm
 from tests.support.decision_matrix import decide_on
 from tests.test_scan_screen import FRESH, make_df, uptrend_breakout_df
 from tests.test_tools.test_trade_card import blocker_ids, build_card
@@ -165,7 +166,7 @@ class TestAnalyzeCaps:
 
     @pytest.mark.parametrize("summary", [GBP_SUMMARY, UNKNOWN_CURRENCY_SUMMARY], ids=["gbp", "unknown_currency"])
     async def test_the_dip_recommendation_and_entry_actions_are_capped_too(
-        self, analyze: Any, monkeypatch: pytest.MonkeyPatch, summary: dict[str, Any]
+        self, monkeypatch: pytest.MonkeyPatch, summary: dict[str, Any]
     ) -> None:
         entry = ["consider_small_position", "starter_position", "accumulate", "add_position", "watch_for_reversal"]
 
@@ -175,13 +176,20 @@ class TestAnalyzeCaps:
                                                  for i, action in enumerate(entry)], "wait_for": []}}
 
         monkeypatch.setattr(orchestrator, "build_dip_assessment", buy_the_dip)
-        capped, control = await analyze(summary), await analyze(US_SUMMARY)
+        capped, control = await dm.run("S2_buy_clean", summary=summary), await dm.run("S2_buy_clean")
 
         assessment = capped["dip_assessment"]["assessment"]
-        assert (assessment["recommendation"], assessment["support_gates"]) == ("watch", ["unsupported_currency"])
+        assert capped["decision_card"]["new_money"]["action"] == "watch"
+        assert "unsupported_currency" in dm.gate_ids(capped)
+        assert (assessment["recommendation"], assessment["capped_by"], assessment["support_gates"]) == (
+            "watch", "new_money_watch", ["unsupported_currency"])
+        assert {s.get("capped_by") for s in capped["dip_assessment"]["entry_timing"]["signals"][:4]} == {
+            "new_money_watch"}
         actions = [signal["action"] for signal in capped["dip_assessment"]["entry_timing"]["signals"]]
         assert actions == ["watch"] * 4 + ["watch_for_reversal"]
+        assert control["decision_card"]["new_money"]["action"] == "buy"  # the control admits: nothing is capped
         assert control["dip_assessment"]["assessment"]["recommendation"] == "buy_the_dip"
+        assert "capped_by" not in control["dip_assessment"]["assessment"]
         assert [signal["action"] for signal in control["dip_assessment"]["entry_timing"]["signals"]] == entry
 
     async def test_control_a_supported_stock_keeps_its_policy(self, analyze: Any) -> None:
@@ -207,7 +215,7 @@ class TestAnalyzeCaps:
         card_sizing = result["decision_card"]["sizing"]
         assert (card_sizing["starter_dollars"], card_sizing["whole_shares"]) == (None, None)
         for mode in ("core", "balanced", "speculative"):
-            assert "dollars" not in result["decision_modes"][mode]["starter_position"], mode
+            assert result["decision_modes"][mode]["starter_position"] is None, mode
 
     async def test_r4_6_a_usd_adr_keeps_its_sizing(self, analyze: Any) -> None:
         result = await analyze({**US_SUMMARY, "financial_currency": "TWD"}, account_size=5000.0)

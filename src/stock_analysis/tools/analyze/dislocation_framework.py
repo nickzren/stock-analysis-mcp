@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from stock_analysis.tools.analyze.decision import entry_allowed
 from stock_analysis.utils.helpers import format_compact_number, format_pct
 
 
@@ -63,10 +64,12 @@ def build_dislocation_framework(
     decision_context: dict[str, Any],
     decision_modes: dict[str, Any],
     *,
+    decision: dict[str, Any],
     conditions: dict[str, Any],
 ) -> dict[str, Any]:
-    """Translate the full analysis into a dislocation-investing workflow. buy_only_if and add_only_if mirror the
-    card's mid-term conditions (plan §7e)."""
+    """Translate the full analysis into a dislocation-investing workflow. The action follows the canonical
+    mid-term decision (plan §7): can_start_now == entry_allowed, buy_now the new-money action under an entry,
+    the mode copies with their capped_by, and buy_only_if / add_only_if mirror the card's mid-term conditions."""
     dip_assessment = dip_assessment or {}
     dip_depth = dip_assessment.get("dip_depth") or {}
     valuation_assessment = action_zones.get("valuation_assessment") or {}
@@ -119,18 +122,15 @@ def build_dislocation_framework(
         valuation_gate=valuation_assessment.get("gate"),
     )
 
-    starter_actions = {"starter_position_only", "speculative_small_position"}
-    can_start_now = any(
-        (decision_modes.get(mode_name) or {}).get("action") in starter_actions
-        for mode_name in ("balanced", "speculative")
-    )
+    new_money_action = decision["new_money"]["action"]
+    can_start_now = entry_allowed(new_money_action)
+    modes = {name: decision_modes.get(name) or {} for name in ("core", "balanced", "speculative")}
 
     action = {
-        "core": (decision_modes.get("core") or {}).get("action"),
-        "balanced": (decision_modes.get("balanced") or {}).get("action"),
-        "speculative": (decision_modes.get("speculative") or {}).get("action"),
+        **{name: mode.get("action") for name, mode in modes.items()},
+        "capped_by": {name: mode["capped_by"] for name, mode in modes.items() if "capped_by" in mode},
         "can_start_now": can_start_now,
-        "buy_now": "small_starter" if can_start_now else None,
+        "buy_now": new_money_action if can_start_now else None,
         "buy_only_if": list(conditions["buy_only_if"]),
         "add_only_if": list(conditions["add_only_if"]),
         "sell_without_attachment_if": thesis_integrity.get("sell_without_attachment_if") or [],

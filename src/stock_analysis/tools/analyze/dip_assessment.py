@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from stock_analysis.tools.analyze.decision import ENTRY_CODES, FULL_ENTRY_CODES
 from stock_analysis.tools.analyze.gates import (
     FALLING_KNIFE_SCORE_THRESHOLD,
     falling_knife_assessment,
@@ -734,18 +735,17 @@ def build_dip_assessment(
 def align_dip_assessment_with_action(
     dip_assessment: dict[str, Any] | None,
     mismatch_status: str | None,
-    can_start_now: bool,
+    starter_only: bool,
     add_only_if: list[str] | None = None,
 ) -> dict[str, Any] | None:
-    """Reframe dip guidance when a dislocation starter is acceptable now.
+    """Reframe dip guidance when the new-money decision is a starter on a price-vs-business dislocation.
 
-    The dip block is an entry-timing lens, not the master action decision.
-    If the broader analysis says a small starter is acceptable now, avoid
-    rendering a flat contradiction like "do not catch falling knife".
+    The dip block is an entry-timing lens, not the master action decision: it never contradicts a
+    starter with a flat "do not catch falling knife".
     """
     if not dip_assessment:
         return dip_assessment
-    if mismatch_status != "price_broken_more_than_business" or not can_start_now:
+    if mismatch_status != "price_broken_more_than_business" or not starter_only:
         return dip_assessment
 
     assessment = dip_assessment.get("assessment")
@@ -770,3 +770,27 @@ def align_dip_assessment_with_action(
     )
     assessment["add_only_if"] = list(add_only_if or [])
     return dip_assessment
+
+
+def cap_dip_assessment(dip_assessment: dict[str, Any] | None, new_money: dict[str, Any]) -> None:
+    """Cap the dip recommendation and entry signals at the new-money decision, in place (plan §7): under a
+    starter a full-entry code becomes its starter code, under a non-entry action every entry code becomes watch;
+    each capped field carries capped_by."""
+    action = new_money["action"]
+    if not dip_assessment or action == "buy":
+        return
+    starter = action == "starter"
+    capped_codes = FULL_ENTRY_CODES if starter else ENTRY_CODES
+    capped_by = f"new_money_{action}"
+    for signal in (dip_assessment.get("entry_timing") or {}).get("signals") or []:
+        if signal.get("action") in capped_codes:
+            signal.update(action="starter_position" if starter else "watch", capped_by=capped_by)
+    assessment = dip_assessment.get("assessment")
+    if isinstance(assessment, dict) and assessment.get("recommendation") in capped_codes:
+        assessment.update(
+            recommendation="starter_only" if starter else "watch", capped_by=capped_by,
+            rationale="No full-size entry under the new-money decision." if starter
+            else f"No new-money entry: new_money is {action}.")
+        support_gates = [b["id"] for b in new_money["blocked_by"] if b["class"] == "support"]
+        if support_gates:
+            assessment["support_gates"] = support_gates

@@ -127,14 +127,20 @@ def _project_data_quality(result: dict[str, Any]) -> dict[str, Any]:
     return projected
 
 
+def _dislocation_decision(result: dict[str, Any]) -> dict[str, Any]:
+    """The mid-term new-money decision the dislocation read sits under (S-C10): action and blocking ids."""
+    new_money = (result.get("decision_card") or {}).get("new_money") or {}
+    return {"new_money": new_money.get("action"), "blocked_by": [b["id"] for b in new_money.get("blocked_by") or []]}
+
+
 def _build_dislocation_check(result: dict[str, Any]) -> dict[str, Any] | None:
-    """Return the compact five-question dislocation read for standard output."""
+    """Return the compact five-question dislocation read for standard output, with the decision it sits under."""
     framework = result.get("dislocation_framework")
     if not isinstance(framework, dict):
         return None
     if framework.get("status") == "not_applicable":
         return {"overall_status": "not_applicable", "overall_read": None,
-                "reason": framework.get("reason"), "questions": []}
+                "reason": framework.get("reason"), "questions": [], "decision": _dislocation_decision(result)}
 
     questions: list[dict[str, Any]] = []
     for question_id, question, section_key, answers in DISLOCATION_QUESTIONS:
@@ -157,6 +163,7 @@ def _build_dislocation_check(result: dict[str, Any]) -> dict[str, Any] | None:
         "overall_status": mismatch.get("status"),
         "overall_read": mismatch.get("summary"),
         "questions": questions,
+        "decision": _dislocation_decision(result),
     }
 
 

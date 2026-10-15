@@ -212,8 +212,9 @@ class TestThesisSurfaces:
     async def test_case_e_keeps_hold_or_add_only_as_a_superseded_pre_gate_code(self) -> None:
         """PH-CH8: case E (poor business, bullish chart): thesis broken, core avoid; the pre-gate codes
         (hold_or_add, avoid_core_position) live only in the full tier's diagnostics.pre_gate_policy, superseded by
-        new_money avoid [thesis_broken] and if_held review_exit. Action clause flipped by WP2.2 (PD D-1c,
-        PH-RF12); flipped by WP2.3 (D-9, §0 #6). G from WP2.3."""
+        new_money avoid [thesis_broken] and if_held review_exit, and no derived surface shows hold_or_add
+        (balanced avoid). Action clause flipped by WP2.2 (PD D-1c, PH-RF12); flipped by WP2.3 (D-9, §0 #6; the
+        balanced clause PD D-3). G from WP2.3."""
         result = await dm.run("E_poor_business_bullish_chart")
         dislocation = result["dislocation_framework"]
         policy = result["diagnostics"]["pre_gate_policy"]
@@ -225,7 +226,8 @@ class TestThesisSurfaces:
         assert (policy["mid_term"], policy["long_term"]) == ("hold_or_add", "avoid_core_position")
         assert policy["superseded_by"] == {"new_money": "avoid", "if_held": "review_exit", "long_term": "avoid",
                                            "blocked_by": ["thesis_broken"]}
-        assert result["decision_modes"]["core"]["action"] == "avoid"
+        assert (result["decision_modes"]["core"]["action"], result["decision_modes"]["balanced"]["action"]) == (
+            "avoid", "avoid")
         assert result["decision_card"]["action_now"] == "avoid"
         assert dm.gate_ids(result) == ["thesis_broken"]
 

@@ -60,10 +60,15 @@
       "near_52w_high"
     ],
     "horizon_fit": null,
+    "mode_sizing": {
+      "balanced": [],
+      "core": [],
+      "speculative": []
+    },
     "modes": {
       "balanced": {
-        "action": "hold_or_add",
-        "long_term_view": "accumulate"
+        "action": "wait",
+        "long_term_view": "buy"
       },
       "core": {
         "action": "buy",
@@ -175,17 +180,22 @@
       "thesis_broken"
     ],
     "horizon_fit": null,
+    "mode_sizing": {
+      "balanced": [],
+      "core": [],
+      "speculative": []
+    },
     "modes": {
       "balanced": {
         "action": "avoid",
-        "long_term_view": "avoid_core_position"
+        "long_term_view": "avoid"
       },
       "core": {
         "action": "avoid",
         "long_term_view": null
       },
       "speculative": {
-        "action": "wait",
+        "action": "avoid",
         "long_term_view": null
       }
     },
@@ -278,7 +288,7 @@
     },
     "dip": {
       "entry_actions": [
-        "starter_position"
+        "watch"
       ],
       "recommendation": "do_not_catch_falling_knife",
       "type": "falling_knife"
@@ -295,17 +305,22 @@
       "thesis_broken"
     ],
     "horizon_fit": null,
+    "mode_sizing": {
+      "balanced": [],
+      "core": [],
+      "speculative": []
+    },
     "modes": {
       "balanced": {
         "action": "avoid",
-        "long_term_view": "avoid_core_position"
+        "long_term_view": "avoid"
       },
       "core": {
         "action": "avoid",
         "long_term_view": null
       },
       "speculative": {
-        "action": "wait",
+        "action": "avoid",
         "long_term_view": null
       }
     },
@@ -398,18 +413,25 @@
       "type": "healthy_pullback"
     },
     "dislocation": {
-      "buy_now": null,
-      "can_start_now": false,
+      "buy_now": "starter",
+      "can_start_now": true,
       "mismatch": "business_intact_but_not_cheap",
       "status": null,
       "thesis": "watch"
     },
     "hard_gates": [],
     "horizon_fit": null,
+    "mode_sizing": {
+      "balanced": [
+        "starter_position"
+      ],
+      "core": [],
+      "speculative": []
+    },
     "modes": {
       "balanced": {
-        "action": "hold_or_add",
-        "long_term_view": "hold_size_conservatively"
+        "action": "starter",
+        "long_term_view": "wait"
       },
       "core": {
         "action": "wait",
@@ -527,10 +549,15 @@
       "earnings_blackout"
     ],
     "horizon_fit": null,
+    "mode_sizing": {
+      "balanced": [],
+      "core": [],
+      "speculative": []
+    },
     "modes": {
       "balanced": {
-        "action": "hold_or_add",
-        "long_term_view": "hold_size_conservatively"
+        "action": "wait",
+        "long_term_view": "wait"
       },
       "core": {
         "action": "wait",
@@ -623,10 +650,10 @@
     },
     "dip": {
       "entry_actions": [
-        "accumulate",
-        "starter_position"
+        "watch",
+        "watch"
       ],
-      "recommendation": "buy_the_dip",
+      "recommendation": "watch",
       "type": "healthy_pullback"
     },
     "dislocation": {
@@ -638,17 +665,22 @@
     },
     "hard_gates": [],
     "horizon_fit": null,
+    "mode_sizing": {
+      "balanced": [],
+      "core": [],
+      "speculative": []
+    },
     "modes": {
       "balanced": {
         "action": "avoid",
-        "long_term_view": "hold_size_conservatively"
+        "long_term_view": "wait"
       },
       "core": {
         "action": "wait",
         "long_term_view": null
       },
       "speculative": {
-        "action": "watch",
+        "action": "avoid",
         "long_term_view": null
       }
     },
@@ -739,14 +771,14 @@
     },
     "dip": {
       "entry_actions": [
-        "starter_position"
+        "watch"
       ],
-      "recommendation": "starter_only_wait_for_stabilization",
+      "recommendation": "do_not_catch_falling_knife",
       "type": "falling_knife"
     },
     "dislocation": {
-      "buy_now": "small_starter",
-      "can_start_now": true,
+      "buy_now": null,
+      "can_start_now": false,
       "mismatch": "price_broken_more_than_business",
       "status": null,
       "thesis": "intact"
@@ -755,17 +787,22 @@
       "falling_knife"
     ],
     "horizon_fit": null,
+    "mode_sizing": {
+      "balanced": [],
+      "core": [],
+      "speculative": []
+    },
     "modes": {
       "balanced": {
         "action": "avoid",
-        "long_term_view": "accumulate"
+        "long_term_view": "avoid"
       },
       "core": {
         "action": "avoid",
         "long_term_view": null
       },
       "speculative": {
-        "action": "starter_position_only",
+        "action": "avoid",
         "long_term_view": null
       }
     },
@@ -872,17 +909,22 @@
       "earnings_blackout"
     ],
     "horizon_fit": null,
+    "mode_sizing": {
+      "balanced": [],
+      "core": [],
+      "speculative": []
+    },
     "modes": {
       "balanced": {
         "action": "avoid",
-        "long_term_view": "accumulate"
+        "long_term_view": "wait"
       },
       "core": {
         "action": "wait",
         "long_term_view": null
       },
       "speculative": {
-        "action": "wait",
+        "action": "avoid",
         "long_term_view": null
       }
     },
@@ -978,17 +1020,22 @@
     },
     "hard_gates": [],
     "horizon_fit": null,
+    "mode_sizing": {
+      "balanced": [],
+      "core": [],
+      "speculative": []
+    },
     "modes": {
       "balanced": {
         "action": "avoid",
-        "long_term_view": "accumulate"
+        "long_term_view": "buy"
       },
       "core": {
         "action": "buy",
         "long_term_view": null
       },
       "speculative": {
-        "action": "wait",
+        "action": "avoid",
         "long_term_view": null
       }
     },
@@ -1076,18 +1123,25 @@
       "type": "healthy_pullback"
     },
     "dislocation": {
-      "buy_now": null,
-      "can_start_now": false,
+      "buy_now": "starter",
+      "can_start_now": true,
       "mismatch": "unclear",
       "status": null,
       "thesis": "watch"
     },
     "hard_gates": [],
     "horizon_fit": null,
+    "mode_sizing": {
+      "balanced": [
+        "starter_position"
+      ],
+      "core": [],
+      "speculative": []
+    },
     "modes": {
       "balanced": {
-        "action": "hold_or_add",
-        "long_term_view": "small_position_with_stops"
+        "action": "starter",
+        "long_term_view": "starter"
       },
       "core": {
         "action": "wait",
@@ -1194,17 +1248,22 @@
       "unsupported_instrument"
     ],
     "horizon_fit": null,
+    "mode_sizing": {
+      "balanced": [],
+      "core": [],
+      "speculative": []
+    },
     "modes": {
       "balanced": {
         "action": "avoid",
-        "long_term_view": "insufficient_data"
+        "long_term_view": "watch"
       },
       "core": {
         "action": "watch",
         "long_term_view": null
       },
       "speculative": {
-        "action": "watch",
+        "action": "avoid",
         "long_term_view": null
       }
     },
@@ -1309,10 +1368,15 @@
       "unsupported_instrument"
     ],
     "horizon_fit": null,
+    "mode_sizing": {
+      "balanced": [],
+      "core": [],
+      "speculative": []
+    },
     "modes": {
       "balanced": {
         "action": "watch",
-        "long_term_view": "insufficient_data"
+        "long_term_view": "watch"
       },
       "core": {
         "action": "watch",
@@ -1430,17 +1494,22 @@
       "thesis_broken"
     ],
     "horizon_fit": null,
+    "mode_sizing": {
+      "balanced": [],
+      "core": [],
+      "speculative": []
+    },
     "modes": {
       "balanced": {
-        "action": "hold_or_add",
-        "long_term_view": "avoid_core_position"
+        "action": "avoid",
+        "long_term_view": "avoid"
       },
       "core": {
         "action": "avoid",
         "long_term_view": null
       },
       "speculative": {
-        "action": "wait",
+        "action": "avoid",
         "long_term_view": null
       }
     },
@@ -1536,17 +1605,22 @@
     },
     "hard_gates": [],
     "horizon_fit": null,
+    "mode_sizing": {
+      "balanced": [],
+      "core": [],
+      "speculative": []
+    },
     "modes": {
       "balanced": {
         "action": "avoid",
-        "long_term_view": "hold"
+        "long_term_view": "wait"
       },
       "core": {
         "action": "wait",
         "long_term_view": null
       },
       "speculative": {
-        "action": "wait",
+        "action": "avoid",
         "long_term_view": null
       }
     },
@@ -1652,6 +1726,11 @@
       "unsupported_currency"
     ],
     "horizon_fit": null,
+    "mode_sizing": {
+      "balanced": [],
+      "core": [],
+      "speculative": []
+    },
     "modes": {
       "balanced": {
         "action": "watch",
@@ -1662,7 +1741,7 @@
         "long_term_view": null
       },
       "speculative": {
-        "action": "wait",
+        "action": "watch",
         "long_term_view": null
       }
     },
@@ -1772,17 +1851,22 @@
       "unsupported_currency"
     ],
     "horizon_fit": null,
+    "mode_sizing": {
+      "balanced": [],
+      "core": [],
+      "speculative": []
+    },
     "modes": {
       "balanced": {
         "action": "avoid",
-        "long_term_view": "watch"
+        "long_term_view": "avoid"
       },
       "core": {
         "action": "avoid",
         "long_term_view": null
       },
       "speculative": {
-        "action": "watch",
+        "action": "avoid",
         "long_term_view": null
       }
     },
@@ -1889,8 +1973,8 @@
       "type": "healthy_pullback"
     },
     "dislocation": {
-      "buy_now": "small_starter",
-      "can_start_now": true,
+      "buy_now": null,
+      "can_start_now": false,
       "mismatch": "business_broken_more_than_price",
       "status": null,
       "thesis": "broken"
@@ -1899,17 +1983,22 @@
       "thesis_broken"
     ],
     "horizon_fit": null,
+    "mode_sizing": {
+      "balanced": [],
+      "core": [],
+      "speculative": []
+    },
     "modes": {
       "balanced": {
-        "action": "speculative_small_position",
-        "long_term_view": "speculative_only"
+        "action": "avoid",
+        "long_term_view": "avoid"
       },
       "core": {
         "action": "avoid",
         "long_term_view": null
       },
       "speculative": {
-        "action": "wait",
+        "action": "avoid",
         "long_term_view": null
       }
     },
@@ -1997,18 +2086,27 @@
       "type": "healthy_pullback"
     },
     "dislocation": {
-      "buy_now": null,
-      "can_start_now": false,
+      "buy_now": "starter",
+      "can_start_now": true,
       "mismatch": "unclear",
       "status": null,
       "thesis": "watch"
     },
     "hard_gates": [],
     "horizon_fit": null,
+    "mode_sizing": {
+      "balanced": [
+        "starter_position"
+      ],
+      "core": [
+        "starter_position"
+      ],
+      "speculative": []
+    },
     "modes": {
       "balanced": {
-        "action": "hold_or_add",
-        "long_term_view": "accumulate"
+        "action": "starter",
+        "long_term_view": "buy"
       },
       "core": {
         "action": "buy",
@@ -2103,25 +2201,38 @@
       "type": "healthy_pullback"
     },
     "dislocation": {
-      "buy_now": null,
-      "can_start_now": false,
+      "buy_now": "buy",
+      "can_start_now": true,
       "mismatch": "unclear",
       "status": null,
       "thesis": "watch"
     },
     "hard_gates": [],
     "horizon_fit": null,
+    "mode_sizing": {
+      "balanced": [
+        "starter_position",
+        "max_position"
+      ],
+      "core": [
+        "starter_position",
+        "max_position"
+      ],
+      "speculative": [
+        "starter_position"
+      ]
+    },
     "modes": {
       "balanced": {
         "action": "buy",
-        "long_term_view": "accumulate"
+        "long_term_view": "buy"
       },
       "core": {
         "action": "buy",
         "long_term_view": null
       },
       "speculative": {
-        "action": "starter_then_add",
+        "action": "starter",
         "long_term_view": null
       }
     },
@@ -2203,10 +2314,10 @@
     },
     "dip": {
       "entry_actions": [
-        "accumulate",
-        "starter_position"
+        "watch",
+        "watch"
       ],
-      "recommendation": "buy_the_dip",
+      "recommendation": "watch",
       "type": "healthy_pullback"
     },
     "dislocation": {
@@ -2218,17 +2329,22 @@
     },
     "hard_gates": [],
     "horizon_fit": null,
+    "mode_sizing": {
+      "balanced": [],
+      "core": [],
+      "speculative": []
+    },
     "modes": {
       "balanced": {
         "action": "avoid",
-        "long_term_view": "accumulate"
+        "long_term_view": "buy"
       },
       "core": {
         "action": "buy",
         "long_term_view": null
       },
       "speculative": {
-        "action": "watch",
+        "action": "avoid",
         "long_term_view": null
       }
     },
@@ -2340,10 +2456,15 @@
       "earnings_blackout"
     ],
     "horizon_fit": null,
+    "mode_sizing": {
+      "balanced": [],
+      "core": [],
+      "speculative": []
+    },
     "modes": {
       "balanced": {
-        "action": "hold_or_add",
-        "long_term_view": "accumulate"
+        "action": "wait",
+        "long_term_view": "wait"
       },
       "core": {
         "action": "wait",
@@ -2443,10 +2564,10 @@
     },
     "dip": {
       "entry_actions": [
-        "accumulate",
-        "starter_position"
+        "watch",
+        "watch"
       ],
-      "recommendation": "buy_the_dip",
+      "recommendation": "watch",
       "type": "healthy_pullback"
     },
     "dislocation": {
@@ -2460,17 +2581,22 @@
       "earnings_blackout"
     ],
     "horizon_fit": null,
+    "mode_sizing": {
+      "balanced": [],
+      "core": [],
+      "speculative": []
+    },
     "modes": {
       "balanced": {
         "action": "avoid",
-        "long_term_view": "accumulate"
+        "long_term_view": "wait"
       },
       "core": {
         "action": "wait",
         "long_term_view": null
       },
       "speculative": {
-        "action": "watch",
+        "action": "avoid",
         "long_term_view": null
       }
     },
@@ -2565,14 +2691,14 @@
     },
     "dip": {
       "entry_actions": [
-        "starter_position"
+        "watch"
       ],
-      "recommendation": "starter_only_wait_for_stabilization",
+      "recommendation": "do_not_catch_falling_knife",
       "type": "falling_knife"
     },
     "dislocation": {
-      "buy_now": "small_starter",
-      "can_start_now": true,
+      "buy_now": null,
+      "can_start_now": false,
       "mismatch": "price_broken_more_than_business",
       "status": null,
       "thesis": "intact"
@@ -2581,17 +2707,22 @@
       "falling_knife"
     ],
     "horizon_fit": null,
+    "mode_sizing": {
+      "balanced": [],
+      "core": [],
+      "speculative": []
+    },
     "modes": {
       "balanced": {
         "action": "avoid",
-        "long_term_view": "accumulate"
+        "long_term_view": "avoid"
       },
       "core": {
         "action": "avoid",
         "long_term_view": null
       },
       "speculative": {
-        "action": "starter_position_only",
+        "action": "avoid",
         "long_term_view": null
       }
     },
@@ -2693,10 +2824,15 @@
       "unsupported_instrument"
     ],
     "horizon_fit": null,
+    "mode_sizing": {
+      "balanced": [],
+      "core": [],
+      "speculative": []
+    },
     "modes": {
       "balanced": {
-        "action": "hold",
-        "long_term_view": "insufficient_data"
+        "action": "watch",
+        "long_term_view": "watch"
       },
       "core": {
         "action": "watch",
@@ -2813,6 +2949,11 @@
       "data_quality_critical"
     ],
     "horizon_fit": null,
+    "mode_sizing": {
+      "balanced": [],
+      "core": [],
+      "speculative": []
+    },
     "modes": {
       "balanced": {
         "action": "insufficient_data",
@@ -2823,7 +2964,7 @@
         "long_term_view": null
       },
       "speculative": {
-        "action": "wait",
+        "action": "insufficient_data",
         "long_term_view": null
       }
     },
@@ -2937,17 +3078,22 @@
       "weak_liquidity"
     ],
     "horizon_fit": null,
+    "mode_sizing": {
+      "balanced": [],
+      "core": [],
+      "speculative": []
+    },
     "modes": {
       "balanced": {
-        "action": "hold_or_add",
-        "long_term_view": "accumulate"
+        "action": "avoid",
+        "long_term_view": "avoid"
       },
       "core": {
         "action": "avoid",
         "long_term_view": null
       },
       "speculative": {
-        "action": "wait",
+        "action": "avoid",
         "long_term_view": null
       }
     },
@@ -3039,7 +3185,7 @@
       "type": "healthy_pullback"
     },
     "dislocation": {
-      "buy_now": "small_starter",
+      "buy_now": "starter",
       "can_start_now": true,
       "mismatch": "unclear",
       "status": null,
@@ -3047,10 +3193,17 @@
     },
     "hard_gates": [],
     "horizon_fit": null,
+    "mode_sizing": {
+      "balanced": [
+        "starter_position"
+      ],
+      "core": [],
+      "speculative": []
+    },
     "modes": {
       "balanced": {
-        "action": "speculative_small_position",
-        "long_term_view": "small_position_with_stops"
+        "action": "starter",
+        "long_term_view": "starter"
       },
       "core": {
         "action": "wait",
@@ -3143,7 +3296,7 @@
       "type": "healthy_pullback"
     },
     "dislocation": {
-      "buy_now": "small_starter",
+      "buy_now": "starter",
       "can_start_now": true,
       "mismatch": "unclear",
       "status": null,
@@ -3151,10 +3304,19 @@
     },
     "hard_gates": [],
     "horizon_fit": null,
+    "mode_sizing": {
+      "balanced": [
+        "starter_position"
+      ],
+      "core": [
+        "starter_position"
+      ],
+      "speculative": []
+    },
     "modes": {
       "balanced": {
-        "action": "speculative_small_position",
-        "long_term_view": "accumulate"
+        "action": "starter",
+        "long_term_view": "buy"
       },
       "core": {
         "action": "buy",
@@ -3255,10 +3417,15 @@
     },
     "hard_gates": [],
     "horizon_fit": null,
+    "mode_sizing": {
+      "balanced": [],
+      "core": [],
+      "speculative": []
+    },
     "modes": {
       "balanced": {
-        "action": "wait_for_entry",
-        "long_term_view": "accumulate"
+        "action": "wait",
+        "long_term_view": "buy"
       },
       "core": {
         "action": "buy",
@@ -3309,6 +3476,122 @@
     },
     "zone": "hold_bullish"
   },
+  "T4_starter_buy_the_dip": {
+    "action_now": "starter",
+    "card_sizing": {
+      "full_dollars": 800.0,
+      "full_pct_cap": 8.0,
+      "starter_dollars": 250.0,
+      "starter_pct": 2.5,
+      "whole_shares": 2
+    },
+    "conditions": {
+      "add_only_if": [],
+      "buy_only_if": [],
+      "long_term_buy_only_if": [],
+      "monitor": []
+    },
+    "decision": {
+      "if_held": {
+        "action": "hold",
+        "add_allowed": true,
+        "basis": "candidate_admits_new_money"
+      },
+      "long_term": {
+        "action": "buy",
+        "blocked_by": [],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      },
+      "new_money": {
+        "action": "starter",
+        "blocked_by": [],
+        "decided_by": null,
+        "earliest_reassessment": null,
+        "unevaluated": []
+      }
+    },
+    "dip": {
+      "entry_actions": [
+        "starter_position",
+        "starter_position"
+      ],
+      "recommendation": "starter_only",
+      "type": "healthy_pullback"
+    },
+    "dislocation": {
+      "buy_now": "starter",
+      "can_start_now": true,
+      "mismatch": "unclear",
+      "status": null,
+      "thesis": "intact"
+    },
+    "hard_gates": [],
+    "horizon_fit": null,
+    "mode_sizing": {
+      "balanced": [
+        "starter_position"
+      ],
+      "core": [
+        "starter_position"
+      ],
+      "speculative": []
+    },
+    "modes": {
+      "balanced": {
+        "action": "starter",
+        "long_term_view": "buy"
+      },
+      "core": {
+        "action": "buy",
+        "long_term_view": null
+      },
+      "speculative": {
+        "action": "wait",
+        "long_term_view": null
+      }
+    },
+    "policy": {
+      "long_term": "accumulate",
+      "mid_term": "speculative_small_position"
+    },
+    "price_zone": "below_sma200",
+    "sizing_present": {
+      "decision": {
+        "card": true,
+        "range": false
+      },
+      "full": {
+        "card": true,
+        "range": true
+      },
+      "standard": {
+        "card": true,
+        "range": true
+      }
+    },
+    "snapshot": {
+      "action_long_term": "accumulate",
+      "action_mid_term": "speculative_small_position",
+      "decision_action_now": "starter",
+      "hard_gate_ids": [],
+      "snapshot_hash": "a2e4d55bdf4c2513",
+      "zone": "accumulate"
+    },
+    "source": "OC RF3 starter (D-9)",
+    "valuation_gate": "attractive",
+    "verdict": {
+      "business_quality": "strong",
+      "fit": {
+        "long_term": "ok",
+        "mid_term": "caution"
+      },
+      "score": 0.44999999999999996,
+      "tilt": "bullish"
+    },
+    "zone": "accumulate"
+  },
   "V1_vendor_rich_plain_avoid": {
     "action_now": "avoid",
     "card_sizing": {
@@ -3347,10 +3630,10 @@
     },
     "dip": {
       "entry_actions": [
-        "accumulate",
-        "starter_position"
+        "watch",
+        "watch"
       ],
-      "recommendation": "buy_the_dip",
+      "recommendation": "watch",
       "type": "healthy_pullback"
     },
     "dislocation": {
@@ -3362,17 +3645,22 @@
     },
     "hard_gates": [],
     "horizon_fit": null,
+    "mode_sizing": {
+      "balanced": [],
+      "core": [],
+      "speculative": []
+    },
     "modes": {
       "balanced": {
         "action": "avoid",
-        "long_term_view": "accumulate"
+        "long_term_view": "buy"
       },
       "core": {
         "action": "buy",
         "long_term_view": null
       },
       "speculative": {
-        "action": "watch",
+        "action": "avoid",
         "long_term_view": null
       }
     },
