@@ -109,8 +109,8 @@ For a holding, the decision is `analyze`'s `if_held`; `analyze_my_position` adds
 holding period and tax status.
 
 `blocked_by` lists the gates that fired and `decided_by` the one that set the action;
-never upgrade past them. Read sizing only from `decision_card.sizing`; it is null
-unless new money is `buy` or `starter`. `policy_action` moved to
+never upgrade past them. Read sizing only from `decision_card.sizing`: mid-term new
+money only (no long-term or holder size), null unless new money is `buy` or `starter`. `policy_action` moved to
 `diagnostics.pre_gate_policy` (`detail="full"`): pre-gate input, not advice.
 
 | `new_money.action` | Meaning |
@@ -133,7 +133,7 @@ Gates, by rank: `stale_data`, `freshness_unverifiable`, `data_quality_critical`,
 | Class | Fields | Read as |
 |---|---|---|
 | A | `decision_card` actions, modes, dislocation and dip actions | The decision, per horizon. |
-| S | `decision_card.sizing`, `entry`, sizing ranges | Size, only for an entry. |
+| S | `decision_card.sizing`, `entry`, sizing ranges | Mid-term new-money size, only for an entry. |
 | C | `conditions`, `earliest_reassessment`, `next_review` | Necessary, not sufficient; re-run `analyze`. |
 | D | `price_zone`, levels, verdict, data quality | Context, not advice. |
 | N | `executive_summary` | Our summary: new money, if held, long term. |

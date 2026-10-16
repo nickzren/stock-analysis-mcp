@@ -54,7 +54,7 @@
   hard_gates: {any_blocking, blocking: [every fired gate], checks: {id: bool}}
   action_now                                               # = new_money.action, one release
   why, exit_triggers, data_flags
-  sizing | null       # new_money buy or starter; a starter nulls full_pct_cap and full_dollars
+  sizing | null       # mid-term new money only: buy or starter; a starter nulls full_pct_cap and full_dollars
   entry | null        # {current_price, buy_zone_low, buy_zone_high}, same predicate
   exit, conditions (mid-term), next_review, confidence
   ```
