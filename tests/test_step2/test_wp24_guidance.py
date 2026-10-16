@@ -222,17 +222,16 @@ def test_the_server_instructions_state_the_horizon_rule() -> None:
     assert "Report each action verbatim with its `blocked_by`" not in text
 
     for needle in ("Informational only, not financial advice", 'A bare ticker ("Analyze HOOD") never triggers a question',
-                   "lead with the mid-term decision (3-12 months), labelled as mid-term",
-                   "Ask which horizon to use only when the request names two horizons, or a holding period that "
-                   "fits none",
-                   'a period that maps to one ("hold for five years" is long term), gets that horizon without a question',
-                   "swing trade, days to weeks: `analyze_trade_setup`",
-                   "new money, mid-term (the default): `decision_card.new_money`",
-                   "an existing holding (mid-term): `decision_card.if_held`",
-                   "long term, 1-5 years: `decision_card.long_term.new_money`",
-                   "never upgrade past `blocked_by`", "no narrative, zone, dip, rating or news turns it into a buy",
+                   "lead with mid-term (3-12 months)",
+                   "Ask only for two horizons or a period fitting none",
+                   'one matching period ("hold for five years": long term) needs no question',
+                   "swing, days to weeks: `analyze_trade_setup`",
+                   "mid-term new money (default): `decision_card.new_money`",
+                   "mid-term holding: `decision_card.if_held`",
+                   "long-term new money, 1-5 years: `decision_card.long_term.new_money`",
+                   "Never upgrade past `blocked_by`", "no narrative, zone, dip, rating or news turns it into a buy",
                    "Size only from `decision_card.sizing`", "not a buy date",
-                   "`diagnostics`, `action_zones.price_zone`, the dip assessment and third-party data (analysts, "
+                   "`diagnostics`, `action_zones.price_zone`, dip and third-party data (analysts, "
                    "news, ownership, options) are context, not advice.",
                    "stock-analysis://guides/analyze-rendering"):
         assert needle in text, needle

@@ -187,7 +187,7 @@ class TestThesisSurfaces:
 
     @pytest.mark.parametrize(("snapshot", "runway", "balance", "thesis_status", "gates", "now"), [
         (BURNER_SNAPSHOT, 2.0, "unsafe", "broken", ["thesis_broken"], "avoid"),
-        (UNKNOWN_RUNWAY_SNAPSHOT, None, "safe", "watch", ["missing_runway"], "wait_for_data"),
+        (UNKNOWN_RUNWAY_SNAPSHOT, None, "unknown", "unknown", ["missing_runway"], "wait_for_data"),
     ], ids=["runway_2q", "runway_unknown"])
     async def test_a_known_short_runway_is_blocked_like_an_unknown_one(
         self, snapshot: dict[str, Any], runway: float | None, balance: str, thesis_status: str,

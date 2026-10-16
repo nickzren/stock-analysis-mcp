@@ -175,8 +175,25 @@ def _wp24_cells(name: str) -> dict[str, Any]:
     return {f"snapshot.{k}": (snapshot[k], None) for k in RETIRED_SNAPSHOT_FIELDS if snapshot[k] is not None}
 
 
+# Missing business contributors cannot establish a live thesis (WP2.5).
+WP25_UNKNOWN_THESIS = (
+    "S1_hold_or_add_clean", "S2_buy_clean", "S3_plain_avoid", "S4_earnings_gate_on_hold_or_add",
+    "S5_earnings_gate_on_avoid", "S8_fundamentals_failed", "S9_weak_liquidity",
+    "T3_plain_wait_weak_setup", "C1_headwind_hold_or_add", "C2_headwind_earnings_gate",
+    "C3_headwind_plain_avoid", "V1_vendor_rich_plain_avoid", "GBp_strong",
+)
+WP25_CHANGES = {name: {
+    "dislocation.thesis": ("watch", "unknown"),
+    **({"dislocation.mismatch": ("business_intact_but_not_cheap", "unclear")}
+       if name in {"C1_headwind_hold_or_add", "C2_headwind_earnings_gate", "C3_headwind_plain_avoid"} else {}),
+} for name in WP25_UNKNOWN_THESIS}
+
 ROW_CHANGES: dict[str, dict[str, Any]] = {
-    name: {**WP22_CHANGES.get(name, {}), **_wp23_cells(name), **_wp24_cells(name)} for name in BEFORE}
+    name: {**WP22_CHANGES.get(name, {}), **_wp23_cells(name), **_wp24_cells(name),
+           **WP25_CHANGES.get(name, {})} for name in BEFORE}
+# Unknown holders have no add conditions, matching these original empty lists.
+for name in ("S4_earnings_gate_on_hold_or_add", "S9_weak_liquidity", "C2_headwind_earnings_gate"):
+    ROW_CHANGES[name].pop("conditions.add_only_if")
 BASELINE_SHA256 = "167642b05e592bf77317f45025fc563c3ed203e5a86dedc8b5e8df4a569f7e4d"
 
 

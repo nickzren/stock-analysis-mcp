@@ -97,21 +97,21 @@ async def test_the_summary_opens_with_three_linted_horizon_segments(name: str) -
 
 
 @pytest.mark.parametrize(("name", "segments"), [
-    ("S2_buy_clean", ("Decision (mid-term, new money): buy; size ~2.5-8.0%.", "If held: hold.",
+    ("S2_buy_clean", ("Decision (mid-term, new money): buy; size ~2.5-8.0%.", "If held: insufficient data.",
                       "Long-term (1-5y): buy.")),
-    ("S1_hold_or_add_clean", ("Decision (mid-term, new money): starter; size ~2.5%.", "If held: hold.",
+    ("S1_hold_or_add_clean", ("Decision (mid-term, new money): starter; size ~2.5%.", "If held: insufficient data.",
                               "Long-term (1-5y): buy.")),
-    ("S3_plain_avoid", ("Decision (mid-term, new money): avoid.", "If held: reduce.", "Long-term (1-5y): buy.")),
+    ("S3_plain_avoid", ("Decision (mid-term, new money): avoid.", "If held: insufficient data.", "Long-term (1-5y): buy.")),
     ("S4_earnings_gate_on_hold_or_add", (
         "Decision (mid-term, new money): wait; blocked by earnings_blackout; reassess on or after Tue Oct 13 "
-        "(not a buy date).", "If held: hold.",
+        "(not a buy date).", "If held: insufficient data.",
         "Long-term (1-5y): wait; blocked by earnings_blackout; reassess on or after Tue Oct 13 (not a buy date).")),
     ("A7_near_52w_high_bullish", (
         "Decision (mid-term, new money): wait; blocked by near_52w_high; no reassessment date: re-run analyze "
-        "after price leaves the near-52-week-high band.", "If held: hold.", "Long-term (1-5y): buy.")),
+        "after price leaves the near-52-week-high band.", "If held: insufficient data.", "Long-term (1-5y): buy.")),
     ("GBp_strong", (
         "Decision (mid-term, new money): watch; blocked by unsupported_currency; outside supported scope: no "
-        "reassessment date.", "If held: hold.",
+        "reassessment date.", "If held: insufficient data.",
         "Long-term (1-5y): watch; blocked by unsupported_currency; outside supported scope: no reassessment "
         "date.")),
     ("A_broken_bearish", ("Decision (mid-term, new money): avoid; blocked by thesis_broken.",
@@ -120,20 +120,20 @@ async def test_the_summary_opens_with_three_linted_horizon_segments(name: str) -
 async def test_named_segments(name: str, segments: tuple[str, str, str]) -> None:
     """OC-RF8 / RA.15 (summary clauses): the three segments word for word on the named rows (buy with its band,
     a starter with its starter pct only, a plain avoid, dated, conditions-only and unsupported reassessment).
-    PD D-9."""
+    PD D-9. Sparse business inputs now give holder uncertainty (WP2.5 C2), without changing new-money segments."""
     assert oc.segments((await dm.run(name))["executive_summary"])[:3] == list(segments)
 
 
-@pytest.mark.parametrize(("name", "mid", "long"), [
-    ("D_quality_attractive_poor_chart", "avoid", "buy"),
-    ("E2_mixed_fcf_bullish_chart", "starter; size ~2.5%", "starter"),
-    ("C1_headwind_hold_or_add", "starter; size ~2.5%", "wait")])
-async def test_the_summary_names_both_horizons(name: str, mid: str, long: str) -> None:
+@pytest.mark.parametrize(("name", "mid", "held", "long"), [
+    ("D_quality_attractive_poor_chart", "avoid", "hold", "buy"),
+    ("E2_mixed_fcf_bullish_chart", "starter; size ~2.5%", "hold", "starter"),
+    ("C1_headwind_hold_or_add", "starter; size ~2.5%", "insufficient data", "wait")])
+async def test_the_summary_names_both_horizons(name: str, mid: str, held: str, long: str) -> None:
     """PH-RF20: the summary names the mid-term and the long-term decision, each labelled, so a disagreement reads
     as two horizons (D: avoid vs buy; C1: starter vs wait). PD D-3."""
     summary = (await dm.run(name))["executive_summary"]
 
-    assert summary.startswith(f"Decision (mid-term, new money): {mid}. If held: hold. Long-term (1-5y): {long}.")
+    assert summary.startswith(f"Decision (mid-term, new money): {mid}. If held: {held}. Long-term (1-5y): {long}.")
 
 
 def _card(earliest: dict[str, Any] | None, action: str = "wait") -> dict[str, Any]:

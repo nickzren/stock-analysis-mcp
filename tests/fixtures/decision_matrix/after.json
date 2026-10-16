@@ -9,9 +9,7 @@
       "whole_shares": null
     },
     "conditions": {
-      "add_only_if": [
-        "price leaves the near-52-week-high band"
-      ],
+      "add_only_if": [],
       "buy_only_if": [
         "price leaves the near-52-week-high band"
       ],
@@ -20,16 +18,18 @@
     },
     "decision": {
       "if_held": {
-        "action": "hold",
+        "action": "insufficient_data",
         "add_allowed": false,
-        "basis": "candidate_admits_new_money"
+        "basis": "thesis_unknown"
       },
       "long_term": {
         "action": "buy",
         "blocked_by": [],
         "decided_by": null,
         "earliest_reassessment": null,
-        "unevaluated": []
+        "unevaluated": [
+          "thesis_broken"
+        ]
       },
       "new_money": {
         "action": "wait",
@@ -41,7 +41,9 @@
           "basis": "conditions_only",
           "date": null
         },
-        "unevaluated": []
+        "unevaluated": [
+          "thesis_broken"
+        ]
       }
     },
     "dip": {
@@ -54,7 +56,7 @@
       "can_start_now": false,
       "mismatch": "unclear",
       "status": null,
-      "thesis": "watch"
+      "thesis": "unknown"
     },
     "hard_gates": [
       "near_52w_high"
@@ -102,12 +104,14 @@
       "hard_gate_ids": [
         "near_52w_high"
       ],
-      "if_held_action": "hold",
+      "if_held_action": "insufficient_data",
       "long_term_action": "buy",
       "new_money_action": "wait",
       "price_zone": "near_52w_high",
-      "snapshot_hash": "04ecfdc27cdcc882",
-      "unevaluated_gate_ids": []
+      "snapshot_hash": "d1ccddff225d52d0",
+      "unevaluated_gate_ids": [
+        "thesis_broken"
+      ]
     },
     "source": "PH A7 (D-4)",
     "summary_size": [],
@@ -394,23 +398,27 @@
     },
     "decision": {
       "if_held": {
-        "action": "hold",
+        "action": "insufficient_data",
         "add_allowed": true,
-        "basis": "candidate_admits_new_money"
+        "basis": "thesis_unknown"
       },
       "long_term": {
         "action": "wait",
         "blocked_by": [],
         "decided_by": null,
         "earliest_reassessment": null,
-        "unevaluated": []
+        "unevaluated": [
+          "thesis_broken"
+        ]
       },
       "new_money": {
         "action": "starter",
         "blocked_by": [],
         "decided_by": null,
         "earliest_reassessment": null,
-        "unevaluated": []
+        "unevaluated": [
+          "thesis_broken"
+        ]
       }
     },
     "dip": {
@@ -421,9 +429,9 @@
     "dislocation": {
       "buy_now": "starter",
       "can_start_now": true,
-      "mismatch": "business_intact_but_not_cheap",
+      "mismatch": "unclear",
       "status": null,
-      "thesis": "watch"
+      "thesis": "unknown"
     },
     "hard_gates": [],
     "horizon_fit": null,
@@ -469,12 +477,14 @@
     },
     "snapshot": {
       "hard_gate_ids": [],
-      "if_held_action": "hold",
+      "if_held_action": "insufficient_data",
       "long_term_action": "wait",
       "new_money_action": "starter",
       "price_zone": "above_sma50",
-      "snapshot_hash": "feb8d6d06ec83eb7",
-      "unevaluated_gate_ids": []
+      "snapshot_hash": "32d1fddfc8e013e0",
+      "unevaluated_gate_ids": [
+        "thesis_broken"
+      ]
     },
     "source": "OC C1",
     "summary_size": [
@@ -502,9 +512,7 @@
       "whole_shares": null
     },
     "conditions": {
-      "add_only_if": [
-        "no earnings date or window within 5 days"
-      ],
+      "add_only_if": [],
       "buy_only_if": [
         "no earnings date or window within 5 days"
       ],
@@ -517,9 +525,9 @@
     },
     "decision": {
       "if_held": {
-        "action": "hold",
+        "action": "insufficient_data",
         "add_allowed": false,
-        "basis": "candidate_admits_new_money"
+        "basis": "thesis_unknown"
       },
       "long_term": {
         "action": "wait",
@@ -528,7 +536,9 @@
         ],
         "decided_by": null,
         "earliest_reassessment": null,
-        "unevaluated": []
+        "unevaluated": [
+          "thesis_broken"
+        ]
       },
       "new_money": {
         "action": "wait",
@@ -540,7 +550,9 @@
           "basis": "earnings_clear",
           "date": "2026-10-13"
         },
-        "unevaluated": []
+        "unevaluated": [
+          "thesis_broken"
+        ]
       }
     },
     "dip": {
@@ -551,9 +563,9 @@
     "dislocation": {
       "buy_now": null,
       "can_start_now": false,
-      "mismatch": "business_intact_but_not_cheap",
+      "mismatch": "unclear",
       "status": null,
-      "thesis": "watch"
+      "thesis": "unknown"
     },
     "hard_gates": [
       "earnings_blackout"
@@ -601,12 +613,14 @@
       "hard_gate_ids": [
         "earnings_blackout"
       ],
-      "if_held_action": "hold",
+      "if_held_action": "insufficient_data",
       "long_term_action": "wait",
       "new_money_action": "wait",
       "price_zone": "above_sma50",
-      "snapshot_hash": "6bb97c025872ab1a",
-      "unevaluated_gate_ids": []
+      "snapshot_hash": "dee2be99f77f9018",
+      "unevaluated_gate_ids": [
+        "thesis_broken"
+      ]
     },
     "source": "OC C2",
     "summary_size": [],
@@ -641,23 +655,27 @@
     },
     "decision": {
       "if_held": {
-        "action": "reduce",
+        "action": "insufficient_data",
         "add_allowed": false,
-        "basis": "tilt_bearish"
+        "basis": "thesis_unknown"
       },
       "long_term": {
         "action": "wait",
         "blocked_by": [],
         "decided_by": null,
         "earliest_reassessment": null,
-        "unevaluated": []
+        "unevaluated": [
+          "thesis_broken"
+        ]
       },
       "new_money": {
         "action": "avoid",
         "blocked_by": [],
         "decided_by": null,
         "earliest_reassessment": null,
-        "unevaluated": []
+        "unevaluated": [
+          "thesis_broken"
+        ]
       }
     },
     "dip": {
@@ -671,9 +689,9 @@
     "dislocation": {
       "buy_now": null,
       "can_start_now": false,
-      "mismatch": "business_intact_but_not_cheap",
+      "mismatch": "unclear",
       "status": null,
-      "thesis": "watch"
+      "thesis": "unknown"
     },
     "hard_gates": [],
     "horizon_fit": null,
@@ -717,12 +735,14 @@
     },
     "snapshot": {
       "hard_gate_ids": [],
-      "if_held_action": "reduce",
+      "if_held_action": "insufficient_data",
       "long_term_action": "wait",
       "new_money_action": "avoid",
       "price_zone": "below_sma200",
-      "snapshot_hash": "fe70406f548f9430",
-      "unevaluated_gate_ids": []
+      "snapshot_hash": "c05d1a916f160bb1",
+      "unevaluated_gate_ids": [
+        "thesis_broken"
+      ]
     },
     "source": "OC C3",
     "summary_size": [],
@@ -1713,9 +1733,9 @@
     },
     "decision": {
       "if_held": {
-        "action": "hold",
+        "action": "insufficient_data",
         "add_allowed": false,
-        "basis": "candidate_admits_new_money"
+        "basis": "thesis_unknown"
       },
       "long_term": {
         "action": "watch",
@@ -1727,7 +1747,9 @@
           "basis": "unsupported",
           "date": null
         },
-        "unevaluated": []
+        "unevaluated": [
+          "thesis_broken"
+        ]
       },
       "new_money": {
         "action": "watch",
@@ -1739,7 +1761,9 @@
           "basis": "unsupported",
           "date": null
         },
-        "unevaluated": []
+        "unevaluated": [
+          "thesis_broken"
+        ]
       }
     },
     "dip": {
@@ -1752,7 +1776,7 @@
       "can_start_now": false,
       "mismatch": "unclear",
       "status": null,
-      "thesis": "watch"
+      "thesis": "unknown"
     },
     "hard_gates": [
       "unsupported_currency"
@@ -1800,12 +1824,14 @@
       "hard_gate_ids": [
         "unsupported_currency"
       ],
-      "if_held_action": "hold",
+      "if_held_action": "insufficient_data",
       "long_term_action": "watch",
       "new_money_action": "watch",
       "price_zone": "above_sma50",
-      "snapshot_hash": "54d25ff8c49c09ab",
-      "unevaluated_gate_ids": []
+      "snapshot_hash": "e1a98fdc3875add6",
+      "unevaluated_gate_ids": [
+        "thesis_broken"
+      ]
     },
     "source": "WP4 GBp",
     "summary_size": [],
@@ -2099,23 +2125,27 @@
     },
     "decision": {
       "if_held": {
-        "action": "hold",
+        "action": "insufficient_data",
         "add_allowed": true,
-        "basis": "candidate_admits_new_money"
+        "basis": "thesis_unknown"
       },
       "long_term": {
         "action": "buy",
         "blocked_by": [],
         "decided_by": null,
         "earliest_reassessment": null,
-        "unevaluated": []
+        "unevaluated": [
+          "thesis_broken"
+        ]
       },
       "new_money": {
         "action": "starter",
         "blocked_by": [],
         "decided_by": null,
         "earliest_reassessment": null,
-        "unevaluated": []
+        "unevaluated": [
+          "thesis_broken"
+        ]
       }
     },
     "dip": {
@@ -2128,7 +2158,7 @@
       "can_start_now": true,
       "mismatch": "unclear",
       "status": null,
-      "thesis": "watch"
+      "thesis": "unknown"
     },
     "hard_gates": [],
     "horizon_fit": null,
@@ -2176,12 +2206,14 @@
     },
     "snapshot": {
       "hard_gate_ids": [],
-      "if_held_action": "hold",
+      "if_held_action": "insufficient_data",
       "long_term_action": "buy",
       "new_money_action": "starter",
       "price_zone": "above_sma50",
-      "snapshot_hash": "90188928a25cf796",
-      "unevaluated_gate_ids": []
+      "snapshot_hash": "667259b260cacf9e",
+      "unevaluated_gate_ids": [
+        "thesis_broken"
+      ]
     },
     "source": "OC S1",
     "summary_size": [
@@ -2216,23 +2248,27 @@
     },
     "decision": {
       "if_held": {
-        "action": "hold",
+        "action": "insufficient_data",
         "add_allowed": true,
-        "basis": "candidate_admits_new_money"
+        "basis": "thesis_unknown"
       },
       "long_term": {
         "action": "buy",
         "blocked_by": [],
         "decided_by": null,
         "earliest_reassessment": null,
-        "unevaluated": []
+        "unevaluated": [
+          "thesis_broken"
+        ]
       },
       "new_money": {
         "action": "buy",
         "blocked_by": [],
         "decided_by": null,
         "earliest_reassessment": null,
-        "unevaluated": []
+        "unevaluated": [
+          "thesis_broken"
+        ]
       }
     },
     "dip": {
@@ -2247,7 +2283,7 @@
       "can_start_now": true,
       "mismatch": "unclear",
       "status": null,
-      "thesis": "watch"
+      "thesis": "unknown"
     },
     "hard_gates": [],
     "horizon_fit": null,
@@ -2299,12 +2335,14 @@
     },
     "snapshot": {
       "hard_gate_ids": [],
-      "if_held_action": "hold",
+      "if_held_action": "insufficient_data",
       "long_term_action": "buy",
       "new_money_action": "buy",
       "price_zone": "below_sma200",
-      "snapshot_hash": "f7b8e9bb535137d8",
-      "unevaluated_gate_ids": []
+      "snapshot_hash": "e949519cac1aa6ca",
+      "unevaluated_gate_ids": [
+        "thesis_broken"
+      ]
     },
     "source": "OC S2",
     "summary_size": [
@@ -2339,23 +2377,27 @@
     },
     "decision": {
       "if_held": {
-        "action": "reduce",
+        "action": "insufficient_data",
         "add_allowed": false,
-        "basis": "tilt_bearish"
+        "basis": "thesis_unknown"
       },
       "long_term": {
         "action": "buy",
         "blocked_by": [],
         "decided_by": null,
         "earliest_reassessment": null,
-        "unevaluated": []
+        "unevaluated": [
+          "thesis_broken"
+        ]
       },
       "new_money": {
         "action": "avoid",
         "blocked_by": [],
         "decided_by": null,
         "earliest_reassessment": null,
-        "unevaluated": []
+        "unevaluated": [
+          "thesis_broken"
+        ]
       }
     },
     "dip": {
@@ -2371,7 +2413,7 @@
       "can_start_now": false,
       "mismatch": "unclear",
       "status": null,
-      "thesis": "watch"
+      "thesis": "unknown"
     },
     "hard_gates": [],
     "horizon_fit": null,
@@ -2415,12 +2457,14 @@
     },
     "snapshot": {
       "hard_gate_ids": [],
-      "if_held_action": "reduce",
+      "if_held_action": "insufficient_data",
       "long_term_action": "buy",
       "new_money_action": "avoid",
       "price_zone": "below_sma200",
-      "snapshot_hash": "23924386c2c25bc0",
-      "unevaluated_gate_ids": []
+      "snapshot_hash": "1d1b9cf4c1c6f98d",
+      "unevaluated_gate_ids": [
+        "thesis_broken"
+      ]
     },
     "source": "OC S3",
     "summary_size": [],
@@ -2446,9 +2490,7 @@
       "whole_shares": null
     },
     "conditions": {
-      "add_only_if": [
-        "no earnings date or window within 5 days"
-      ],
+      "add_only_if": [],
       "buy_only_if": [
         "no earnings date or window within 5 days"
       ],
@@ -2459,9 +2501,9 @@
     },
     "decision": {
       "if_held": {
-        "action": "hold",
+        "action": "insufficient_data",
         "add_allowed": false,
-        "basis": "candidate_admits_new_money"
+        "basis": "thesis_unknown"
       },
       "long_term": {
         "action": "wait",
@@ -2473,7 +2515,9 @@
           "basis": "earnings_clear",
           "date": "2026-10-13"
         },
-        "unevaluated": []
+        "unevaluated": [
+          "thesis_broken"
+        ]
       },
       "new_money": {
         "action": "wait",
@@ -2485,7 +2529,9 @@
           "basis": "earnings_clear",
           "date": "2026-10-13"
         },
-        "unevaluated": []
+        "unevaluated": [
+          "thesis_broken"
+        ]
       }
     },
     "dip": {
@@ -2498,7 +2544,7 @@
       "can_start_now": false,
       "mismatch": "unclear",
       "status": null,
-      "thesis": "watch"
+      "thesis": "unknown"
     },
     "hard_gates": [
       "earnings_blackout"
@@ -2546,12 +2592,14 @@
       "hard_gate_ids": [
         "earnings_blackout"
       ],
-      "if_held_action": "hold",
+      "if_held_action": "insufficient_data",
       "long_term_action": "wait",
       "new_money_action": "wait",
       "price_zone": "above_sma50",
-      "snapshot_hash": "ff36435fde403ed1",
-      "unevaluated_gate_ids": []
+      "snapshot_hash": "7f017cc634014934",
+      "unevaluated_gate_ids": [
+        "thesis_broken"
+      ]
     },
     "source": "OC S4",
     "summary_size": [],
@@ -2586,9 +2634,9 @@
     },
     "decision": {
       "if_held": {
-        "action": "reduce",
+        "action": "insufficient_data",
         "add_allowed": false,
-        "basis": "tilt_bearish"
+        "basis": "thesis_unknown"
       },
       "long_term": {
         "action": "wait",
@@ -2600,7 +2648,9 @@
           "basis": "earnings_clear",
           "date": "2026-10-13"
         },
-        "unevaluated": []
+        "unevaluated": [
+          "thesis_broken"
+        ]
       },
       "new_money": {
         "action": "avoid",
@@ -2609,7 +2659,9 @@
         ],
         "decided_by": null,
         "earliest_reassessment": null,
-        "unevaluated": []
+        "unevaluated": [
+          "thesis_broken"
+        ]
       }
     },
     "dip": {
@@ -2625,7 +2677,7 @@
       "can_start_now": false,
       "mismatch": "unclear",
       "status": null,
-      "thesis": "watch"
+      "thesis": "unknown"
     },
     "hard_gates": [
       "earnings_blackout"
@@ -2673,12 +2725,14 @@
       "hard_gate_ids": [
         "earnings_blackout"
       ],
-      "if_held_action": "reduce",
+      "if_held_action": "insufficient_data",
       "long_term_action": "wait",
       "new_money_action": "avoid",
       "price_zone": "below_sma200",
-      "snapshot_hash": "0aae64764bd1de6e",
-      "unevaluated_gate_ids": []
+      "snapshot_hash": "91cea379b026c3bf",
+      "unevaluated_gate_ids": [
+        "thesis_broken"
+      ]
     },
     "source": "OC S5",
     "summary_size": [],
@@ -2850,7 +2904,9 @@
         ],
         "decided_by": "unsupported_instrument",
         "earliest_reassessment": null,
-        "unevaluated": []
+        "unevaluated": [
+          "falling_knife"
+        ]
       },
       "new_money": {
         "action": "watch",
@@ -2859,7 +2915,9 @@
         ],
         "decided_by": "unsupported_instrument",
         "earliest_reassessment": null,
-        "unevaluated": []
+        "unevaluated": [
+          "falling_knife"
+        ]
       }
     },
     "dip": {
@@ -2924,8 +2982,10 @@
       "long_term_action": "watch",
       "new_money_action": "watch",
       "price_zone": "below_sma200",
-      "snapshot_hash": "f17c7116b52d7cb3",
-      "unevaluated_gate_ids": []
+      "snapshot_hash": "f39dbcaf2021580f",
+      "unevaluated_gate_ids": [
+        "falling_knife"
+      ]
     },
     "source": "OC S7",
     "summary_size": [],
@@ -2962,7 +3022,7 @@
       "if_held": {
         "action": "insufficient_data",
         "add_allowed": false,
-        "basis": "tilt_missing"
+        "basis": "thesis_unknown"
       },
       "long_term": {
         "action": "insufficient_data",
@@ -2999,7 +3059,7 @@
       "can_start_now": false,
       "mismatch": "unclear",
       "status": null,
-      "thesis": "watch"
+      "thesis": "unknown"
     },
     "hard_gates": [
       "data_quality_critical"
@@ -3081,9 +3141,7 @@
       "whole_shares": null
     },
     "conditions": {
-      "add_only_if": [
-        "1-year average daily dollar volume >= $1M"
-      ],
+      "add_only_if": [],
       "buy_only_if": [
         "1-year average daily dollar volume >= $1M"
       ],
@@ -3094,9 +3152,9 @@
     },
     "decision": {
       "if_held": {
-        "action": "hold",
+        "action": "insufficient_data",
         "add_allowed": false,
-        "basis": "candidate_admits_new_money"
+        "basis": "thesis_unknown"
       },
       "long_term": {
         "action": "avoid",
@@ -3108,7 +3166,9 @@
           "basis": "conditions_only",
           "date": null
         },
-        "unevaluated": []
+        "unevaluated": [
+          "thesis_broken"
+        ]
       },
       "new_money": {
         "action": "avoid",
@@ -3120,7 +3180,9 @@
           "basis": "conditions_only",
           "date": null
         },
-        "unevaluated": []
+        "unevaluated": [
+          "thesis_broken"
+        ]
       }
     },
     "dip": {
@@ -3133,7 +3195,7 @@
       "can_start_now": false,
       "mismatch": "unclear",
       "status": null,
-      "thesis": "watch"
+      "thesis": "unknown"
     },
     "hard_gates": [
       "weak_liquidity"
@@ -3181,12 +3243,14 @@
       "hard_gate_ids": [
         "weak_liquidity"
       ],
-      "if_held_action": "hold",
+      "if_held_action": "insufficient_data",
       "long_term_action": "avoid",
       "new_money_action": "avoid",
       "price_zone": "above_sma50",
-      "snapshot_hash": "4ef61ba40c3254bd",
-      "unevaluated_gate_ids": []
+      "snapshot_hash": "ac01cb5211e53e8d",
+      "unevaluated_gate_ids": [
+        "thesis_broken"
+      ]
     },
     "source": "OC S9",
     "summary_size": [],
@@ -3702,23 +3766,27 @@
     },
     "decision": {
       "if_held": {
-        "action": "hold",
+        "action": "insufficient_data",
         "add_allowed": false,
-        "basis": "no_reduction_evidence"
+        "basis": "thesis_unknown"
       },
       "long_term": {
         "action": "buy",
         "blocked_by": [],
         "decided_by": null,
         "earliest_reassessment": null,
-        "unevaluated": []
+        "unevaluated": [
+          "thesis_broken"
+        ]
       },
       "new_money": {
         "action": "wait",
         "blocked_by": [],
         "decided_by": null,
         "earliest_reassessment": null,
-        "unevaluated": []
+        "unevaluated": [
+          "thesis_broken"
+        ]
       }
     },
     "dip": {
@@ -3731,7 +3799,7 @@
       "can_start_now": false,
       "mismatch": "unclear",
       "status": null,
-      "thesis": "watch"
+      "thesis": "unknown"
     },
     "hard_gates": [],
     "horizon_fit": null,
@@ -3775,12 +3843,14 @@
     },
     "snapshot": {
       "hard_gate_ids": [],
-      "if_held_action": "hold",
+      "if_held_action": "insufficient_data",
       "long_term_action": "buy",
       "new_money_action": "wait",
       "price_zone": "above_sma50",
-      "snapshot_hash": "fd9e49762ad7793c",
-      "unevaluated_gate_ids": []
+      "snapshot_hash": "da3f761a42853aac",
+      "unevaluated_gate_ids": [
+        "thesis_broken"
+      ]
     },
     "source": "OC T3",
     "summary_size": [],
@@ -4063,14 +4133,18 @@
         "blocked_by": [],
         "decided_by": null,
         "earliest_reassessment": null,
-        "unevaluated": []
+        "unevaluated": [
+          "falling_knife"
+        ]
       },
       "new_money": {
         "action": "buy",
         "blocked_by": [],
         "decided_by": null,
         "earliest_reassessment": null,
-        "unevaluated": []
+        "unevaluated": [
+          "falling_knife"
+        ]
       }
     },
     "dip": {
@@ -4141,8 +4215,10 @@
       "long_term_action": "buy",
       "new_money_action": "buy",
       "price_zone": "below_sma200",
-      "snapshot_hash": "f1d68bb4d54647a8",
-      "unevaluated_gate_ids": []
+      "snapshot_hash": "bc61cd35ad312c4d",
+      "unevaluated_gate_ids": [
+        "falling_knife"
+      ]
     },
     "source": "OC M9 dislocation buy (D-9)",
     "summary_size": [
@@ -4192,14 +4268,18 @@
         "blocked_by": [],
         "decided_by": null,
         "earliest_reassessment": null,
-        "unevaluated": []
+        "unevaluated": [
+          "falling_knife"
+        ]
       },
       "new_money": {
         "action": "starter",
         "blocked_by": [],
         "decided_by": null,
         "earliest_reassessment": null,
-        "unevaluated": []
+        "unevaluated": [
+          "falling_knife"
+        ]
       }
     },
     "dip": {
@@ -4264,8 +4344,10 @@
       "long_term_action": "starter",
       "new_money_action": "starter",
       "price_zone": "below_sma200",
-      "snapshot_hash": "5f55f580303fbb99",
-      "unevaluated_gate_ids": []
+      "snapshot_hash": "448a212cb07bf459",
+      "unevaluated_gate_ids": [
+        "falling_knife"
+      ]
     },
     "source": "OC M9 dislocation starter, mid condition (D-9)",
     "summary_size": [
@@ -4300,23 +4382,27 @@
     },
     "decision": {
       "if_held": {
-        "action": "reduce",
+        "action": "insufficient_data",
         "add_allowed": false,
-        "basis": "tilt_bearish"
+        "basis": "thesis_unknown"
       },
       "long_term": {
         "action": "buy",
         "blocked_by": [],
         "decided_by": null,
         "earliest_reassessment": null,
-        "unevaluated": []
+        "unevaluated": [
+          "thesis_broken"
+        ]
       },
       "new_money": {
         "action": "avoid",
         "blocked_by": [],
         "decided_by": null,
         "earliest_reassessment": null,
-        "unevaluated": []
+        "unevaluated": [
+          "thesis_broken"
+        ]
       }
     },
     "dip": {
@@ -4332,7 +4418,7 @@
       "can_start_now": false,
       "mismatch": "unclear",
       "status": null,
-      "thesis": "watch"
+      "thesis": "unknown"
     },
     "hard_gates": [],
     "horizon_fit": null,
@@ -4376,12 +4462,14 @@
     },
     "snapshot": {
       "hard_gate_ids": [],
-      "if_held_action": "reduce",
+      "if_held_action": "insufficient_data",
       "long_term_action": "buy",
       "new_money_action": "avoid",
       "price_zone": "below_sma200",
-      "snapshot_hash": "3d31f47d846b64e0",
-      "unevaluated_gate_ids": []
+      "snapshot_hash": "0dd69c87346a0a46",
+      "unevaluated_gate_ids": [
+        "thesis_broken"
+      ]
     },
     "source": "OC V1",
     "summary_size": [],

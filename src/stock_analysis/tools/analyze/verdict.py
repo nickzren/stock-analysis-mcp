@@ -221,7 +221,7 @@ def build_verdict(
     if fundamentals_summary.get("status") == "not_applicable":
         # Unsupported instrument (WP4, D5): the stock rubric doesn't apply.
         business_quality_status = "not_applicable"
-    elif not coverage.get("fundamentals", False):
+    elif fundamentals_summary.get("status") == "unverified" or not coverage.get("fundamentals", False):
         business_quality_status = "data_missing"
     elif has_explicit_unprofitable_signal:
         # Explicit signal confirms unprofitable - we HAVE evaluated business quality

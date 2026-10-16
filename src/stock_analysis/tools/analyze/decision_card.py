@@ -38,9 +38,12 @@ from stock_analysis.tools.analyze.gates import (
     clears_when_for,
     earnings_window,
     events_tool_failed,
+    falling_knife_status,
     format_day,
     is_falling_knife_technicals,
+    liquidity_applicability_unverified,
     merge_blockers,
+    stale_data_unevaluated,
 )
 from stock_analysis.tools.analyze.reassessment import permanent_support_gate
 from stock_analysis.tools.analyze.verdict import build_horizon_fit
@@ -123,12 +126,15 @@ def evaluate_gates(
         freshness_blockers=freshness_blockers, thesis_blocker=thesis_blocker, zone_blocker=zone_blocker,
     )
     not_computed = {
-        "falling_knife": not technicals_data,
-        "missing_runway": fundamentals_status == "missing",
+        "falling_knife": falling_knife_status(technicals_data) == UNEVALUATED,
+        "stale_data": stale_data_unevaluated(
+            data_quality.get("freshness"), fired=hard_gates["checks"]["stale_data"]),
+        "missing_runway": fundamentals_status in ("missing", "unverified"),
         "thesis_broken": thesis_status == UNEVALUATED,
         "earnings_blackout": events_tool_failed(data_quality.get("tool_failures")),
         "near_52w_high": zone_status == UNEVALUATED,
-        "weak_liquidity": hard_gates["checks"]["liquidity_missing"],
+        "weak_liquidity": (hard_gates["checks"]["liquidity_missing"]
+                           or liquidity_applicability_unverified(support)),
     }
     return hard_gates, frozenset(gate for gate, missing in not_computed.items() if missing)
 

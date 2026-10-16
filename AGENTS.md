@@ -90,12 +90,17 @@
   gate id must be a `GATES` entry with the same class and rank in every tool
   (only `liquidity_missing` differs: data class in analyze).
 - `if_held` (first match): runway < 4 quarters or business broken →
-  `review_exit` (`runway_critical` / `business_broken`); candidate admits new
+  `review_exit` (`runway_critical` / `business_broken`); required thesis evidence
+  unknown → `insufficient_data` (`thesis_unknown`); candidate admits new
   money → `hold`; dislocation candidate → `hold` (`price_broken_more_than_business`);
   tilt missing or candidate `insufficient_data` → `insufficient_data`; tilt
   bearish → `reduce` (`tilt_bearish`); else `hold` (`no_reduction_evidence`).
   Gates never change `action` or `basis`; `add_allowed` is new money `buy` or
   `starter`.
+- Unevaluated is not cleared: partial knife inputs, unknown stock/USD liquidity
+  applicability, missing volume, and missing price/history ages are disclosed.
+  A proven knife, stale leg or thesis failure still fires despite other unknowns.
+  This disclosure does not add an automatic entry cap.
 - `earliest_reassessment` is non-null only when a gate fired and the mapped
   candidate admits new money at that horizon; only `earnings_blackout` is dated
   (first NYSE session no window blacks out); undated gates go to `outstanding`
@@ -161,8 +166,8 @@
   money at `watch` at both horizons (most-restrictive: `wait` becomes `watch`,
   `avoid` stays `avoid`); `if_held` never reads support. There is no
   share/dollar sizing (`watch` is not an entry, so every sizing block is null)
-  and no dollar-liquidity gate (liquidity gates are not_applicable unless
-  supported). The emitted `diagnostics.pre_gate_policy` is support-capped too
+  and no fired dollar-liquidity gate. Known unsupported stock/USD scope is
+  not_applicable; unknown applicability makes `weak_liquidity` unevaluated. The emitted `diagnostics.pre_gate_policy` is support-capped too
   (`support_gates`); every other surface follows `decide()`. An unsupported
   instrument also skips the fundamentals rubric, dip and dislocation
   (`not_applicable`, including the verdict's fundamentals exclusion,
@@ -236,7 +241,13 @@
   `fundamentals_summary.cash_flow` carries `free_cash_flow_ttm_status` and
   `free_cash_flow_period_lag`.
 - Classification inputs (WP9): the dislocation balance-sheet check is `unsafe`
-  only when the cash runway fails (< 4 quarters), negative equity included;
+  only when the raw cash runway fails (< 4 quarters), negative equity included;
+  presentation and dilution calculations keep their existing rounding. The
+  existing unprofitability predicate still controls burn-metric computation.
+  Required business/runway evidence missing makes the thesis `unknown`, without
+  speculative exit templates. A non-burner needs no numeric runway. Unknown
+  instrument applicability is `unverified`, known unsupported is `not_applicable`;
+  missing currency preserves company evidence;
   net debt (`net_cash_positive` False, exactly zero included) or negative
   equity is `watch`, and `balance_sheet_safety.reasons` names why
   (`runway_under_4q`, `runway_under_8q`, `net_debt`, `net_cash_unknown`,
@@ -282,7 +293,9 @@
 - `analyze_trade_setup` cards carry `horizon: "swing"`, `decided_by` (the
   highest-ranked fired gate whose outcome is the shown action and tighter than
   the uncapped outcome; `market_closed` never decides), `unevaluated`
-  (`falling_knife` without technicals, `earnings_blackout` when events failed),
+  (`falling_knife` when inputs cannot establish a trigger or clearance,
+  `weak_liquidity` when dollar volume or applicability is unknown,
+  `earnings_blackout` when events failed),
   and blockers with their registry `class` and `effect`; duplicate ids merge
   (reasons joined by "; "). The card's rank-first resolution order is frozen.
 - `get_technicals` default response gained one additive `short_term` key;
@@ -465,7 +478,7 @@
   date is today; the bounds are the data). `snapshot_hash` covers the full set
   except clock-driven fields (`snapshot_as_of_date`, `price_stale`). Lists are
   read before normalization: unknown is null, known-empty is `[]`; the signal
-  lists are null when a tool feeding them failed (`no_options` is a known
+  lists are null when instrument applicability is unverified, a tool feeding them failed (`no_options` is a known
   state), ownership discloses `insider_transactions_error` /
   `insider_transactions_columns_unrecognized`, or the latest daily bar is
   invalid (`bar_validity.latest_bar_invalid`: the SMA rules have no value that day),

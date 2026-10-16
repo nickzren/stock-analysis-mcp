@@ -24,7 +24,7 @@ from tests.test_tools.test_trade_card import build_card
 
 TECHNICALS_FAILED = {"tool": "technicals", "error": "x"}
 EVENTS_FAILED = {"tool": "events_calendar", "error": "x"}
-KNIFE_UNEVALUATED = {"id": "falling_knife", "reason": "technicals unavailable — falling-knife rubric not computed"}
+KNIFE_UNEVALUATED = {"id": "falling_knife", "reason": "falling-knife inputs incomplete — clearance not established"}
 BLACKOUT_UNEVALUATED = {"id": "earnings_blackout", "reason": "events calendar unavailable — earnings date not checked"}
 DISCLOSURE_ONLY = frozenset({"wait_for_data", "avoid", "no_setup"})  # actions an event cap never changes
 
@@ -68,7 +68,7 @@ def test_earnings_unverifiable_on_every_card_outcome(
 
 def test_unevaluated_lists() -> None:
     """GC-R10: the card lists falling_knife unevaluated without technicals, and earnings_blackout when the
-    events tool failed and no blackout fired, in rank order; every other card case lists nothing, and no
+    events tool failed and no blackout fired, plus weak_liquidity when its inputs are unknown; no
     unevaluated id is also a blocker. RF: R2.6(f), card half."""
     no_technicals = build_card(technicals_data={}, tool_failures=[TECHNICALS_FAILED])
     no_events = build_card(events_data={}, tool_failures=[EVENTS_FAILED])
@@ -84,7 +84,9 @@ def test_unevaluated_lists() -> None:
     assert neither["unevaluated"] == [KNIFE_UNEVALUATED, BLACKOUT_UNEVALUATED]
     assert (ids(blackout["blockers"]), blackout["unevaluated"]) == (["earnings_blackout", "earnings_unverifiable"], [])
     assert {name: ids(card["unevaluated"]) for name, card in cases.items() if card["unevaluated"]} == {
-        "no_setup+events_tool_failed": ["earnings_blackout"], "events_tool_failed+stale": ["earnings_blackout"]}
+        "no_setup+events_tool_failed": ["earnings_blackout"], "events_tool_failed+stale": ["earnings_blackout"],
+        "liq_missing": ["weak_liquidity"], "summary_tool_failed": ["weak_liquidity"],
+        "risk_metrics_failed": ["weak_liquidity"], "risk_metrics_failed+no_features": ["weak_liquidity"]}
     for card in (no_technicals, no_events, neither, blackout, *cases.values()):
         assert not set(ids(card["unevaluated"])) & set(ids(card["blockers"])), card["unevaluated"]
 

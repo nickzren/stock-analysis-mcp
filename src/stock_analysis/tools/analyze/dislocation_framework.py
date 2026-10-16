@@ -38,16 +38,41 @@ def classify_dislocation_opportunity(
         health=health,
         burn_metrics=burn_metrics,
     )
+    quality_status = decomposed.get("business_quality_status")
+    known_quality = (quality_status in {"available", "evaluated", "evaluated_unprofitable"}
+                     or (quality_status is None and decomposed.get("business_quality") is not None))
+    # In the scoring branch, two negatives make the business poor. Unknown FCF
+    # or debt can still supply a missing negative; an aggregate label cannot clear it.
+    debt = health.get("debt_to_equity")
+    could_be_poor = profitability.get("fcf_positive") is not True and (debt is None or debt > 1.5)
+    business_evaluable = (
+        fundamentals_summary.get("status") != "unverified" and (
+            business_integrity["status"] == "broken"
+            or quality_status in {"available", "evaluated_unprofitable"}
+            or (known_quality and not could_be_poor)
+        )
+    )
+    runway_evaluable = (
+        fundamentals_summary.get("status") != "unverified" and (
+            balance_sheet_safety["checks"]["runway"] != "unknown"
+            or (not burn_metrics and known_quality and decomposed.get("business_quality") != "unprofitable")
+        )
+    )
     mismatch_verdict = _build_mismatch_verdict(
         setup_status=setup_status,
         business_status=business_integrity["status"],
         balance_status=balance_sheet_safety["status"],
         valuation_gate=valuation_assessment.get("gate"),
     )
+    if (not (business_evaluable and runway_evaluable)
+            and business_integrity["status"] != "broken" and balance_sheet_safety["status"] != "unsafe"):
+        mismatch_verdict["status"] = "unclear"
 
     return {
+        "business_evaluable": business_evaluable,
+        "runway_evaluable": runway_evaluable,
         "setup_status": setup_status,
-        "business_status": business_integrity["status"],
+        "business_status": business_integrity["status"] if business_evaluable else "unknown",
         "balance_status": balance_sheet_safety["status"],
         "mismatch_status": mismatch_verdict["status"],
         "is_dislocation_candidate": (
@@ -103,6 +128,9 @@ def build_dislocation_framework(
         fcf_positive=profitability.get("fcf_positive"),
     )
 
+    if not dislocation_signals["business_evaluable"]:
+        business_integrity.update(status="unknown", summary="Business quality cannot be established from the available fundamentals.")
+
     balance_sheet_safety = _build_balance_sheet_safety(
         health=health,
         burn_metrics=burn_metrics,
@@ -113,6 +141,7 @@ def build_dislocation_framework(
         business_status=business_integrity["status"],
         balance_status=balance_sheet_safety["status"],
         long_term_fit=(verdict.get("horizon_fit") or {}).get("long_term"),
+        evaluable=dislocation_signals["business_evaluable"] and dislocation_signals["runway_evaluable"],
     )
 
     mismatch_verdict = _build_mismatch_verdict(
@@ -121,6 +150,9 @@ def build_dislocation_framework(
         balance_status=balance_sheet_safety["status"],
         valuation_gate=valuation_assessment.get("gate"),
     )
+    if (not (dislocation_signals["business_evaluable"] and dislocation_signals["runway_evaluable"])
+            and dislocation_signals["mismatch_status"] == "unclear"):
+        mismatch_verdict.update(status="unclear", summary="The price-versus-business mismatch cannot be established from current evidence.")
 
     new_money_action = decision["new_money"]["action"]
     can_start_now = entry_allowed(new_money_action)
@@ -236,7 +268,7 @@ def _build_business_integrity(
     ):
         status = "broken"
     else:
-        status = "mixed"
+        status = "unknown"
 
     growth_label = "growth still healthy" if growth_status == "pass" else "growth is not convincing"
     if profitability_status == "pass":
@@ -246,7 +278,9 @@ def _build_business_integrity(
     else:
         profit_label = "profitability is broken"
 
-    if status == "intact":
+    if status == "unknown":
+        summary = "Business quality cannot be established from the available fundamentals."
+    elif status == "intact":
         summary = f"Business still looks intact: {growth_label} and {profit_label}."
     elif status == "mixed":
         summary = f"Business is mixed: {growth_label}, but {profit_label}."
@@ -340,6 +374,8 @@ def _build_balance_sheet_safety(
     # "watch" never qualifies a dislocation candidate (that needs "safe").
     if runway_status == "fail":
         status = "unsafe"
+    elif burn_metrics.get("status") == "unavailable":
+        status = "unknown"
     elif (
         net_cash_status == "pass"
         and debt_status in {"pass", "unknown"}
@@ -372,7 +408,9 @@ def _build_balance_sheet_safety(
         for reason in reasons
     )
 
-    if status == "safe":
+    if status == "unknown":
+        summary = "Cash runway cannot be established from the available cash and cash-flow data."
+    elif status == "safe":
         summary = "Balance sheet looks safe."
         if liquidity_label:
             summary = f"Balance sheet looks safe with liquidity around {liquidity_label}."
@@ -399,6 +437,7 @@ def _build_thesis_integrity(
     business_status: str,
     balance_status: str,
     long_term_fit: str | None,
+    evaluable: bool = True,
 ) -> dict[str, Any]:
     hold_thesis = thesis_checkpoints.get("hold_thesis")
     checkpoints = thesis_checkpoints.get("checkpoints") or []
@@ -407,6 +446,8 @@ def _build_thesis_integrity(
 
     if business_status == "broken" or balance_status == "unsafe":
         status = "broken"
+    elif not evaluable:
+        status = "unknown"
     elif business_status == "intact" and balance_status == "safe" and long_term_fit == "ok":
         status = "intact"
     else:
@@ -423,8 +464,13 @@ def _build_thesis_integrity(
         if isinstance(item, dict)
     ]
     sell_without_attachment_if = [item for item in sell_without_attachment_if if item][:3]
-
-    if status == "intact":
+    if status == "unknown":
+        must_remain_true = []
+        review_triggers = []
+        sell_without_attachment_if = []
+        hold_thesis = "unknown"
+        summary = "The thesis cannot be assessed until the missing fundamentals are available."
+    elif status == "intact":
         summary = "The long-term thesis still looks intact on current evidence."
     elif status == "watch":
         summary = "The long-term thesis is still alive, but it needs proof at the next checkpoints."

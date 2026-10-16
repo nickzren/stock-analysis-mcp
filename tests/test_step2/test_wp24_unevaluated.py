@@ -118,7 +118,7 @@ TRANSITIONS: dict[tuple[str, str], tuple[list[str], str]] = {
 async def test_the_field_is_hashed() -> None:
     """SN-U9: a gate listed unevaluated, nothing else moving, changes only unevaluated_gate_ids and snapshot_hash;
     the field is not in the unhashed set. RF."""
-    result = await dm.run(CLEAN)
+    result = await dm.run(CLEAN, fundamentals=dm.QUALITY)
     moved = edited(result, **STATES["unevaluated"])["watchlist_snapshot"]
     before = result["watchlist_snapshot"]
 
@@ -128,11 +128,11 @@ async def test_the_field_is_hashed() -> None:
 
 @pytest.mark.parametrize(("before", "after"), TRANSITIONS)
 async def test_each_gate_transition_has_its_line(detect: Detect, before: str, after: str) -> None:
-    """SN-U5: on S2, one gate moving between fired, evaluated clear and unevaluated (the card edited, the snapshot
+    """SN-U5: on S2 with established fundamentals, one gate moving between fired, evaluated clear and unevaluated (the card edited, the snapshot
     rebuilt) gives exactly its lines and summary sentence, and moves the hash; only fired -> clear is "Cleared",
     fired -> unevaluated is not_evaluated and never -hard_gate. RF (clear <-> fired are G controls)."""
     lines, sentence = TRANSITIONS[(before, after)]
-    result = await dm.run(CLEAN)
+    result = await dm.run(CLEAN, fundamentals=dm.QUALITY)
 
     response = await detect(edited(result, **STATES[before])["watchlist_snapshot"], edited(result, **STATES[after]))
 
@@ -147,7 +147,7 @@ async def test_each_gate_transition_has_its_line(detect: Detect, before: str, af
 async def test_an_unknown_unevaluated_list_is_one_change(detect: Detect) -> None:
     """SN-U10: the field going from known to unknown (null: the card's lists absent) and back is one line, never
     ±unevaluated_gate items (the null rule of hard_gate_ids and the signal lists). RF."""
-    result = await dm.run(CLEAN)
+    result = await dm.run(CLEAN, fundamentals=dm.QUALITY)
     unknown = edited(result, decision_card__new_money__unevaluated=None,
                      decision_card__long_term__new_money__unevaluated=None)
     listed = edited(result, **STATES["unevaluated"])
@@ -173,7 +173,8 @@ FAILURES: dict[str, tuple[str, dict[str, Any], dict[str, Any], list[str], list[s
                                "+unevaluated_gate: thesis_broken"], ["thesis_broken"]),
     "C_technicals_failed": ("C_quality_knife_dislocation", {}, {"technicals": None},
                             ["+hard_gate: data_quality_critical", "+hard_gate: freshness_unverifiable",
-                             "+unevaluated_gate: falling_knife", "+unevaluated_gate: near_52w_high"],
+                             "+unevaluated_gate: falling_knife", "+unevaluated_gate: near_52w_high",
+                             "+unevaluated_gate: stale_data"],
                             ["falling_knife"]),
     "A7_zone_undetermined": ("A7_near_52w_high_bullish", {}, {"technicals": A7_NO_ZONE},
                              ["+unevaluated_gate: near_52w_high"], ["near_52w_high"]),
@@ -223,9 +224,10 @@ async def test_the_earnings_case_reports_only_the_unevaluated_gate(detect: Detec
 
     assert (response["material_changes"], response["summary"], response["warnings"]) == (
         ["+unevaluated_gate: earnings_blackout"], "ACME: Gate(s) not evaluated: earnings_blackout.", None)
+    # S4's sparse fundamentals leave thesis_broken unevaluated on both sides; only earnings moves.
     assert [evaluated["watchlist_snapshot"]["hard_gate_ids"], failed["watchlist_snapshot"]["hard_gate_ids"],
             failed["watchlist_snapshot"][FIELD]] == [["earnings_blackout", "earnings_unverifiable"],
-                                                     ["earnings_unverifiable"], ["earnings_blackout"]]
+                                                     ["earnings_unverifiable"], ["earnings_blackout", "thesis_broken"]]
 
 
 @pytest.mark.parametrize("case", FAILURES)
@@ -301,7 +303,7 @@ async def test_an_older_snapshot_s_gate_now_unevaluated_is_not_cleared(detect: D
 async def test_a_3_0_0_previous_without_the_field_is_invalid(detect: Detect) -> None:
     """SN-U8: a 3.0.0 previous must carry unevaluated_gate_ids (null allowed): without it, invalid_snapshot before
     any analysis; a non-string item is a type problem. RF."""
-    result = await dm.run(CLEAN)
+    result = await dm.run(CLEAN, fundamentals=dm.QUALITY)
     snapshot = result["watchlist_snapshot"]
 
     response = await detect({k: v for k, v in snapshot.items() if k != FIELD}, result)
@@ -318,14 +320,14 @@ async def test_missing_liquidity_leaves_weak_liquidity_unevaluated(risk: dict[st
     """SN-U11: without a dollar volume for a supported stock, weak_liquidity is unevaluated at both horizons (with
     its reason) while liquidity_missing still fires and decides wait_for_data, as before; for an unsupported ETF
     neither liquidity gate applies, so nothing is unevaluated. RF."""
-    result = await dm.run("S9_weak_liquidity", risk=risk)
+    result = await dm.run("S9_weak_liquidity", risk=risk, fundamentals=dm.QUALITY)
     etf = await dm.run("ETF_strong", risk=risk)
     card = result["decision_card"]
 
     for decision in (card["new_money"], card["long_term"]["new_money"]):
         assert decision["action"] == "wait_for_data"
         assert "liquidity_missing" in [blocker["id"] for blocker in decision["blocked_by"]]
-        assert {"id": "weak_liquidity", "reason": "average daily dollar volume unavailable"} in decision["unevaluated"]
+        assert {"id": "weak_liquidity", "reason": "average daily dollar volume or its stock/USD applicability unverified"} in decision["unevaluated"]
     assert result["watchlist_snapshot"][FIELD] == ["weak_liquidity"]
     assert "liquidity_missing" in result["watchlist_snapshot"]["hard_gate_ids"]
     assert "weak_liquidity" not in etf["watchlist_snapshot"][FIELD]

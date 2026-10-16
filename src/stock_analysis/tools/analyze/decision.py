@@ -59,7 +59,7 @@ FULL_ENTRY_CODES = ENTRY_CODES - STARTER_ONLY_CODES
 IF_HELD_ACTIONS = ("hold", "reduce", "review_exit", "insufficient_data")
 EVIDENCE_BASES = (RUNWAY_CRITICAL, BUSINESS_BROKEN, "tilt_bearish")  # required for reduce and review_exit
 NON_EVIDENCE_BASES = ("candidate_admits_new_money", "price_broken_more_than_business", "no_reduction_evidence",
-                      "tilt_missing", "candidate_insufficient")
+                      "tilt_missing", "candidate_insufficient", "thesis_unknown")
 CORE = {"ok": "buy", "caution": "wait", "unknown": "insufficient_data", "avoid": "avoid"}  # plan §3 [D-3]
 
 
@@ -87,11 +87,13 @@ def starter_only(action: str) -> bool:
     return action == "starter"
 
 
-def if_held(*, thesis: tuple[str, ...], candidate_action: str, dislocation: bool, tilt: str | None) -> dict[str, str]:
+def if_held(*, thesis: tuple[str, ...], candidate_action: str, dislocation: bool, tilt: str | None,
+            thesis_evaluable: bool = True) -> dict[str, str]:
     """Mid-term holder guidance, first match (plan §3). Reads evidence only: never gates, zone, dip or support."""
     rules = (
         (RUNWAY_CRITICAL in thesis, "review_exit", RUNWAY_CRITICAL),
         (BUSINESS_BROKEN in thesis, "review_exit", BUSINESS_BROKEN),
+        (not thesis_evaluable, "insufficient_data", "thesis_unknown"),
         (candidate_action in ENTRY_ACTIONS, "hold", "candidate_admits_new_money"),
         (dislocation, "hold", "price_broken_more_than_business"),
         (tilt is None, "insufficient_data", "tilt_missing"),
@@ -136,6 +138,7 @@ def decide(
     window: EarningsWindow,
     today: date,
     support: Mapping[str, Any] | None,
+    thesis_evaluable: bool = True,
 ) -> dict[str, Any]:
     """new_money = most_restrictive(map(candidate), every applicable fired gate's outcome), per horizon (D-5).
 
@@ -146,7 +149,8 @@ def decide(
     mid_mapped = map_candidate(MID_TERM, candidate.get(MID_TERM))
     long_mapped = map_candidate(LONG_TERM, candidate.get(LONG_TERM))
     new_money = _new_money(MID_TERM, mid_mapped, blocking, unevaluated, window, today, support)
-    held = if_held(thesis=thesis, candidate_action=mid_mapped, dislocation=dislocation, tilt=tilt)
+    held = if_held(thesis=thesis, candidate_action=mid_mapped, dislocation=dislocation, tilt=tilt,
+                   thesis_evaluable=thesis_evaluable)
     return {
         "horizon": MID_TERM,
         "new_money": new_money,

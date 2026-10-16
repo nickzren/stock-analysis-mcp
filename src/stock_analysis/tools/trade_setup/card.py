@@ -7,13 +7,16 @@ from typing import Any
 
 from stock_analysis.tools.analyze.gates import (
     GATES,
+    UNEVALUATED,
     check_data_quality,
     check_earnings_blackout,
     check_earnings_unverifiable,
     check_liquidity,
     disclose,
     events_tool_failed,
+    falling_knife_status,
     is_falling_knife_technicals,
+    liquidity_applicability_unverified,
     merge_blockers,
 )
 from stock_analysis.tools.trade_setup.freshness import freshness_blockers
@@ -95,7 +98,7 @@ def build_trade_setup_card(
                 "id": "falling_knife",
                 "reason": "severe decline with broken trends — wait for stabilization",
             })
-    else:
+    if falling_knife_status(technicals_data) == UNEVALUATED:
         unevaluated.append(_unevaluated("falling_knife"))
     # WP4 (D5): fail closed on an unknown instrument or currency; a non-USD price
     # makes no dollar-liquidity claim and gets no executable plan.
@@ -105,6 +108,8 @@ def build_trade_setup_card(
         weak_liquidity, liquidity_missing, liquidity_blockers = check_liquidity(risk_data)
     else:
         weak_liquidity, liquidity_missing, liquidity_blockers = False, False, []
+    if liquidity_missing or liquidity_applicability_unverified(support):
+        unevaluated.append(_unevaluated("weak_liquidity"))
     blockers.extend(liquidity_blockers)
     blockers.extend(support_gates)
 

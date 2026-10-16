@@ -114,6 +114,20 @@ def _fundamentals_cash_flow_summary(cf: dict[str, Any]) -> dict[str, Any]:
     return {**{key: cf.get(key) for key in keys}, "free_cash_flow_label": fcf_label_from_cashflow(cf)}
 
 
+def _unrounded_runway(fund_data: dict[str, Any]) -> float | None:
+    """The thesis cutoff uses raw cash-flow ratios, not the displayed tenth of a quarter."""
+    health = fund_data.get("financial_health") or {}
+    liquidity = health.get("cash_and_st_investments")
+    if liquidity is None:
+        liquidity = health.get("total_cash")
+    if liquidity is None:
+        return None
+    cash_flow = fund_data.get("cash_flow") or {}
+    burn = [abs(value) / 4 for key in ("free_cash_flow_ttm", "operating_cf_ttm")
+            if (value := cash_flow.get(key)) is not None and value < 0]
+    return min((liquidity / value for value in burn), default=None)
+
+
 def _compute_burn_metrics(
     fund_data: dict[str, Any],
     summary_data: dict[str, Any],
@@ -134,7 +148,9 @@ def _compute_burn_metrics(
     health = fund_data.get("financial_health", {})
     cf = fund_data.get("cash_flow", {})
 
-    liquidity = health.get("cash_and_st_investments") or health.get("total_cash")
+    liquidity = health.get("cash_and_st_investments")
+    if liquidity is None:
+        liquidity = health.get("total_cash")
     fcf_ttm = cf.get("free_cash_flow_ttm")
     operating_cf_ttm = cf.get("operating_cf_ttm")
 
@@ -170,7 +186,10 @@ def _compute_burn_metrics(
     burn_status: str
     burn_status_reason: str | None = None
 
-    if liquidity is None:
+    if (fcf_ttm is not None or operating_cf_ttm is not None) and not (quarterly_fcf_burn or quarterly_ocf_burn):
+        burn_status = "not_applicable"
+        burn_status_reason = "cash_flow_not_negative"
+    elif liquidity is None:
         burn_status = "unavailable"
         burn_status_reason = "missing_liquidity_data"
         burn_warnings.append("liquidity_missing")
@@ -492,9 +511,10 @@ async def analyze_stock(
     # WP4 (D5): fail closed -- an unknown quoteType or currency is unverified.
     support = summary_support(summary_data, normalized_symbol)
     instrument_ok = instrument_supported(support)
+    instrument_status = (support.get("instrument") or {}).get("status")
     instrument_reason = (support.get("instrument") or {}).get("reason")
     if not instrument_ok:
-        fund_data = {}  # stock-only rules (fundamentals rubric, dislocation, dip) don't apply
+        fund_data = {}  # Stock rules require verified applicability; unknown is not known inapplicability.
     risk_data = tool_results.get("risk_metrics") or {}
     events_data = tool_results.get("events_calendar") or {}
     news_data = tool_results.get("stock_news") or {}
@@ -677,7 +697,7 @@ async def analyze_stock(
         else "Fundamentals unavailable (data fetch failed)."
     )
     if not instrument_ok:
-        fundamentals_summary["status"] = "not_applicable"
+        fundamentals_summary["status"] = "not_applicable" if instrument_status == "unsupported" else "unverified"
         fundamentals_summary["summary"] = None
 
     analyst_coverage = fund_data.get("analyst_coverage") or {}
@@ -879,7 +899,8 @@ async def analyze_stock(
         if dip_assessment:
             dip_assessment["summary"] = build_dip_summary_text(dip_assessment)
     else:
-        dip_assessment = {"status": "not_applicable", "reason": instrument_reason}
+        dip_assessment = {"status": "not_applicable" if instrument_status == "unsupported" else "unverified",
+                          "reason": instrument_reason}
 
     action_zones = apply_dip_gates_to_action_zones(
         action_zones=action_zones,
@@ -946,7 +967,7 @@ async def analyze_stock(
     net_margin_value = profit_summary.get("net_margin")
 
     if not instrument_ok:
-        fundamentals_status = "not_applicable"
+        fundamentals_status = "not_applicable" if instrument_status == "unsupported" else "unverified"
         fundamentals_status_reason = instrument_reason
     elif fund_tool_failed:
         fundamentals_status = "missing"
@@ -1036,6 +1057,13 @@ async def analyze_stock(
         "freshness": price_freshness,
     }
 
+    thesis_fundamentals = fundamentals_summary
+    if burn_metrics is not None:
+        thesis_fundamentals = {**fundamentals_summary, "burn_metrics": {
+            **burn_metrics, "cash_runway_quarters": _unrounded_runway(fund_data),
+        }}
+    thesis_signals = classify_dislocation_opportunity(verdict, action_zones, thesis_fundamentals, dip_assessment)
+
     decision_context = build_decision_context(
         signals=signals,
         tech_data=tech_data,
@@ -1046,6 +1074,7 @@ async def analyze_stock(
         action_zones=action_zones,
         news_data=news_data,
         verdict=verdict,
+        business_evaluable=thesis_signals["business_evaluable"],
     )
 
     policy_action = build_policy_action(
@@ -1059,7 +1088,6 @@ async def analyze_stock(
     )
     # The canonical decision reads the uncapped, knife-free candidate (plan §2), before the
     # support cap and before anything derived from it.
-    thesis_signals = classify_dislocation_opportunity(verdict, action_zones, fundamentals_summary, dip_assessment)
     hard_gates, unevaluated = evaluate_gates(
         events_data=events_data, data_quality=data_quality, technicals_data=tech_data,
         fundamentals_summary=fundamentals_summary, risk_data=risk_data, support=support,
@@ -1070,6 +1098,8 @@ async def analyze_stock(
     decision = decide(
         candidate=policy_action, blocking=hard_gates["blocking"], unevaluated=unevaluated,
         thesis=thesis_codes(fundamentals_status, thesis_signals),
+        thesis_evaluable=(fundamentals_status == "not_applicable" or
+                          (thesis_signals["business_evaluable"] and thesis_signals["runway_evaluable"])),
         dislocation=thesis_signals["is_dislocation_candidate"], tilt=verdict.get("tilt"),
         window=earnings_window(earnings, today), today=today, support=support,
     )
@@ -1124,7 +1154,7 @@ async def analyze_stock(
     dislocation_framework = build_dislocation_framework(
         verdict=verdict,
         action_zones=action_zones,
-        fundamentals_summary=fundamentals_summary,
+        fundamentals_summary=thesis_fundamentals,
         dip_assessment=dip_assessment,
         decision_context=decision_context,
         decision_modes=decision_modes,
@@ -1140,7 +1170,7 @@ async def analyze_stock(
     cap_dip_assessment(dip_assessment, decision["new_money"])
     if not instrument_ok:
         dislocation_framework = {
-            "status": "not_applicable",
+            "status": "not_applicable" if instrument_status == "unsupported" else "unverified",
             "reason": instrument_reason,
             "summary": None,
             "action": {"can_start_now": False},

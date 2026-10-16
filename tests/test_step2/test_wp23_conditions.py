@@ -144,9 +144,11 @@ async def test_poor_setup_avoids_carry_no_valuation_condition(name: str) -> None
 
 async def test_a_zone_capping_headwind_binds_starter_to_full_at_mid() -> None:
     """RF-E1: a headwind that caps the zone (accumulate -> hold_neutral) holds a bullish ok-fit candidate at
-    hold_or_add (starter); clearing it alone gives buy, so it is the starter -> full condition at mid term (buy and
-    add) and binds the long-term wait. RF."""
-    assert lists(await run("S2_headwind")) == ([PE], [PE], [], [PE])
+    hold_or_add (starter); clearing it alone gives buy, so it is the starter -> full condition at mid term and
+    binds the long-term wait. Sparse fundamentals make the holder thesis unknown, so there is no add condition. RF."""
+    result = await run("S2_headwind")
+    assert result["decision_card"]["if_held"]["basis"] == "thesis_unknown"
+    assert lists(result) == ([PE], [], [], [PE])
 
 
 # --- RF-E2 [FIX BL-E2] ---------------------------------------------------------------------------------------
@@ -210,14 +212,14 @@ async def test_no_volatility_condition_without_a_volatility_driver(name: str) ->
 
 EMPTY: tuple[list[str], ...] = ([], [], [], [])
 TRUTH_TABLE = {  # (mid buy_only_if, mid add_only_if, monitor, long buy_only_if)
-    "S4_earnings_gate_on_hold_or_add": ([EARN], [EARN], [], [EARN]),
+    "S4_earnings_gate_on_hold_or_add": ([EARN], [], [], [EARN]),
     "S5_earnings_gate_on_avoid": ([], [], [], [EARN]),
     "S6_knife_dislocation": ([], [], [DD35], [KNIFE]),
     "S8_fundamentals_failed": ([], [], ["revenue data available for valuation"], []),
-    "S9_weak_liquidity": ([LIQ], [LIQ], [], [LIQ]),
+    "S9_weak_liquidity": ([LIQ], [], [], [LIQ]),
     "T1_extreme_risk_bullish": ([], [], [VOL60], [VOL60]),
     "C1_headwind_hold_or_add": ([], [], [PE], [PE]),
-    "C2_headwind_earnings_gate": ([EARN], [EARN], [PE], [PE]),
+    "C2_headwind_earnings_gate": ([EARN], [], [PE], [PE]),
     "C3_headwind_plain_avoid": ([], [], [PE], []),
     "A_broken_bearish": ([], [], [DE, REV], []),
     "B_broken_bearish_knife": ([], [], [DE, REV], []),
@@ -225,9 +227,9 @@ TRUTH_TABLE = {  # (mid buy_only_if, mid add_only_if, monitor, long buy_only_if)
     "D2_quality_poor_chart_earnings_3d": ([], [], [], [EARN]),
     "E_poor_business_bullish_chart": ([BB], [], [DE], [DE]),
     "E2_mixed_fcf_bullish_chart": ([], [], [FCF], []),
-    "A7_near_52w_high_bullish": ([NEAR], [NEAR], [], []),
+    "A7_near_52w_high_bullish": ([NEAR], [], [], []),
     "H_burner_runway_2q": ([RC], [], [PM, FC, FCF], [RC]),
-    "S2_headwind": ([PE], [PE], [], [PE]),
+    "S2_headwind": ([PE], [], [], [PE]),
     "T5_dislocation_starter": ([], [], [VOL60], [VOL60]),
     "T6_dislocation_starter_extreme": ([VOL60], [VOL60], [], [VOL60]),
     "T1_near_52w_high": ([NEAR], [NEAR], [VOL60], [VOL60]),
@@ -250,6 +252,9 @@ async def test_conditions_truth_table(name: str) -> None:
     modes = result["decision_modes"]
 
     assert lists(result) == TRUTH_TABLE.get(name, EMPTY)
+    if name in {"S4_earnings_gate_on_hold_or_add", "S9_weak_liquidity", "C2_headwind_earnings_gate",
+                "A7_near_52w_high_bullish", "S2_headwind"}:
+        assert (held["action"], held["basis"]) == ("insufficient_data", "thesis_unknown")
     assert conditions["do_not_buy_if"] == [b["reason"] for b in new_money["blocked_by"]]
     assert conditions["reduce_if"] == pre_gate["conditions_to_downgrade"]
     assert conditions["add_only_if"] == (conditions["buy_only_if"] if held["action"] == "hold" else [])

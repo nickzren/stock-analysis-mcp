@@ -5,22 +5,22 @@ on. Do not edit by hand. Full rows: `after.json`.
 
 | Scenario | Source | action_now | Hard gates | Policy mid / long | Modes core / balanced / speculative | new_money (decided_by) | if_held (basis) | long_term.new_money (decided_by) |
 |---|---|---|---|---|---|---|---|---|
-| S1_hold_or_add_clean | OC S1 | starter | — | hold_or_add / accumulate | buy / starter / wait | starter (—) | hold (candidate_admits_new_money) | buy (—) |
-| S2_buy_clean | OC S2 | buy | — | buy / accumulate | buy / buy / starter | buy (—) | hold (candidate_admits_new_money) | buy (—) |
-| S3_plain_avoid | OC S3 | avoid | — | avoid / accumulate | buy / avoid / avoid | avoid (—) | reduce (tilt_bearish) | buy (—) |
-| S4_earnings_gate_on_hold_or_add | OC S4 | wait | earnings_blackout | hold_or_add / accumulate | wait / wait / wait | wait (earnings_blackout) | hold (candidate_admits_new_money) | wait (earnings_blackout) |
-| S5_earnings_gate_on_avoid | OC S5 | avoid | earnings_blackout | avoid / accumulate | wait / avoid / avoid | avoid (—) | reduce (tilt_bearish) | wait (earnings_blackout) |
+| S1_hold_or_add_clean | OC S1 | starter | — | hold_or_add / accumulate | buy / starter / wait | starter (—) | insufficient_data (thesis_unknown) | buy (—) |
+| S2_buy_clean | OC S2 | buy | — | buy / accumulate | buy / buy / starter | buy (—) | insufficient_data (thesis_unknown) | buy (—) |
+| S3_plain_avoid | OC S3 | avoid | — | avoid / accumulate | buy / avoid / avoid | avoid (—) | insufficient_data (thesis_unknown) | buy (—) |
+| S4_earnings_gate_on_hold_or_add | OC S4 | wait | earnings_blackout | hold_or_add / accumulate | wait / wait / wait | wait (earnings_blackout) | insufficient_data (thesis_unknown) | wait (earnings_blackout) |
+| S5_earnings_gate_on_avoid | OC S5 | avoid | earnings_blackout | avoid / accumulate | wait / avoid / avoid | avoid (—) | insufficient_data (thesis_unknown) | wait (earnings_blackout) |
 | S6_knife_dislocation | OC S6 | avoid | falling_knife | avoid / accumulate | avoid / avoid / avoid | avoid (—) | hold (price_broken_more_than_business) | avoid (falling_knife) |
 | S7_etf_below_sma200 | OC S7 | watch | unsupported_instrument | hold / insufficient_data | watch / watch / watch | watch (unsupported_instrument) | hold (no_reduction_evidence) | watch (unsupported_instrument) |
-| S8_fundamentals_failed | OC S8 | insufficient_data | data_quality_critical | insufficient_data / insufficient_data | insufficient_data / insufficient_data / insufficient_data | insufficient_data (—) | insufficient_data (tilt_missing) | insufficient_data (—) |
-| S9_weak_liquidity | OC S9 | avoid | weak_liquidity | hold_or_add / accumulate | avoid / avoid / avoid | avoid (weak_liquidity) | hold (candidate_admits_new_money) | avoid (weak_liquidity) |
+| S8_fundamentals_failed | OC S8 | insufficient_data | data_quality_critical | insufficient_data / insufficient_data | insufficient_data / insufficient_data / insufficient_data | insufficient_data (—) | insufficient_data (thesis_unknown) | insufficient_data (—) |
+| S9_weak_liquidity | OC S9 | avoid | weak_liquidity | hold_or_add / accumulate | avoid / avoid / avoid | avoid (weak_liquidity) | insufficient_data (thesis_unknown) | avoid (weak_liquidity) |
 | T1_extreme_risk_bullish | OC T1 | starter | — | speculative_small_position / small_position_with_stops | wait / starter / wait | starter (—) | hold (candidate_admits_new_money) | starter (—) |
 | T2_starter_weak_setup_quality | OC T2 | starter | — | speculative_small_position / accumulate | buy / starter / wait | starter (—) | hold (candidate_admits_new_money) | buy (—) |
-| T3_plain_wait_weak_setup | OC T3 | wait | — | wait_for_entry / accumulate | buy / wait / wait | wait (—) | hold (no_reduction_evidence) | buy (—) |
-| C1_headwind_hold_or_add | OC C1 | starter | — | hold_or_add / hold_size_conservatively | wait / starter / wait | starter (—) | hold (candidate_admits_new_money) | wait (—) |
-| C2_headwind_earnings_gate | OC C2 | wait | earnings_blackout | hold_or_add / hold_size_conservatively | wait / wait / wait | wait (earnings_blackout) | hold (candidate_admits_new_money) | wait (—) |
-| C3_headwind_plain_avoid | OC C3 | avoid | — | avoid / hold_size_conservatively | wait / avoid / avoid | avoid (—) | reduce (tilt_bearish) | wait (—) |
-| V1_vendor_rich_plain_avoid | OC V1 | avoid | — | avoid / accumulate | buy / avoid / avoid | avoid (—) | reduce (tilt_bearish) | buy (—) |
+| T3_plain_wait_weak_setup | OC T3 | wait | — | wait_for_entry / accumulate | buy / wait / wait | wait (—) | insufficient_data (thesis_unknown) | buy (—) |
+| C1_headwind_hold_or_add | OC C1 | starter | — | hold_or_add / hold_size_conservatively | wait / starter / wait | starter (—) | insufficient_data (thesis_unknown) | wait (—) |
+| C2_headwind_earnings_gate | OC C2 | wait | earnings_blackout | hold_or_add / hold_size_conservatively | wait / wait / wait | wait (earnings_blackout) | insufficient_data (thesis_unknown) | wait (—) |
+| C3_headwind_plain_avoid | OC C3 | avoid | — | avoid / hold_size_conservatively | wait / avoid / avoid | avoid (—) | insufficient_data (thesis_unknown) | wait (—) |
+| V1_vendor_rich_plain_avoid | OC V1 | avoid | — | avoid / accumulate | buy / avoid / avoid | avoid (—) | insufficient_data (thesis_unknown) | buy (—) |
 | A_broken_bearish | PH A | avoid | thesis_broken | avoid / avoid_core_position | avoid / avoid / avoid | avoid (—) | review_exit (business_broken) | avoid (—) |
 | B_broken_bearish_knife | PH B | avoid | falling_knife, thesis_broken | avoid / avoid_core_position | avoid / avoid / avoid | avoid (—) | review_exit (business_broken) | avoid (—) |
 | C_quality_knife_dislocation | PH C | avoid | falling_knife | avoid / accumulate | avoid / avoid / avoid | avoid (—) | hold (price_broken_more_than_business) | avoid (falling_knife) |
@@ -32,8 +32,8 @@ on. Do not edit by hand. Full rows: `after.json`.
 | G_unsupported_currency_knife | PH G | avoid | falling_knife, unsupported_currency | avoid / watch | avoid / avoid / avoid | avoid (—) | hold (price_broken_more_than_business) | avoid (falling_knife) |
 | ETF_strong | PH ETF bullish | watch | unsupported_instrument | watch / insufficient_data | watch / watch / watch | watch (unsupported_instrument) | hold (candidate_admits_new_money) | watch (unsupported_instrument) |
 | ETF_bearish | PH ETF bearish | avoid | unsupported_instrument | avoid / insufficient_data | watch / avoid / avoid | avoid (—) | reduce (tilt_bearish) | watch (unsupported_instrument) |
-| GBp_strong | WP4 GBp | watch | unsupported_currency | watch / watch | watch / watch / watch | watch (unsupported_currency) | hold (candidate_admits_new_money) | watch (unsupported_currency) |
-| A7_near_52w_high_bullish | PH A7 (D-4) | wait | near_52w_high | hold_or_add / accumulate | buy / wait / wait | wait (near_52w_high) | hold (candidate_admits_new_money) | buy (—) |
+| GBp_strong | WP4 GBp | watch | unsupported_currency | watch / watch | watch / watch / watch | watch (unsupported_currency) | insufficient_data (thesis_unknown) | watch (unsupported_currency) |
+| A7_near_52w_high_bullish | PH A7 (D-4) | wait | near_52w_high | hold_or_add / accumulate | buy / wait / wait | wait (near_52w_high) | insufficient_data (thesis_unknown) | buy (—) |
 | H_burner_runway_2q | PH CH7 burner (D-1c) | avoid | thesis_broken | speculative_small_position / speculative_only | avoid / avoid / avoid | avoid (thesis_broken) | review_exit (runway_critical) | avoid (thesis_broken) |
 | T4_starter_buy_the_dip | OC RF3 starter (D-9) | starter | — | speculative_small_position / accumulate | buy / starter / wait | starter (—) | hold (candidate_admits_new_money) | buy (—) |
 | T5_dislocation_starter | OC M9 dislocation starter (D-9) | starter | — | speculative_small_position / small_position_with_stops | wait / starter / starter | starter (—) | hold (candidate_admits_new_money) | starter (—) |

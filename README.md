@@ -101,12 +101,12 @@ schema **6** and snapshot **3.0.0**; see the [CHANGELOG](CHANGELOG.md#unreleased
 
 `decision_card` holds one decision, made after the hard gates:
 
-- `new_money`: what to do with new money over 3–12 months (the default horizon);
+- `new_money`: what to do with new money over 3–12 months (one year defaults here unless long term is explicit);
 - `if_held`: what to do if you already own it: `hold`, `reduce`, `review_exit` or `insufficient_data`;
 - `long_term.new_money`: new money over 1–5 years.
 
-For a holding, the decision is `analyze`'s `if_held`; `analyze_my_position` adds P/L,
-holding period and tax status.
+For a holding, `analyze`'s `if_held` is mid-term; `analyze_my_position` adds P/L,
+holding period and tax status. There is no long-term holder decision.
 
 `blocked_by` lists the gates that fired and `decided_by` the one that set the action;
 never upgrade past them. Read sizing only from `decision_card.sizing`: mid-term new

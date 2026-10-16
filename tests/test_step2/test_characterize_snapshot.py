@@ -31,7 +31,7 @@ diff_module = importlib.import_module("stock_analysis.tools.diff_analysis")
 
 Detect = Callable[[dict[str, Any], dict[str, Any]], Awaitable[dict[str, Any]]]
 
-CLEAN = "S2_buy_clean"  # no gate, action buy, every diffed field known
+CLEAN = "S2_buy_clean"  # no fired gate, action buy; sparse fundamentals now disclose unknown thesis
 
 
 def edited(result: dict[str, Any], **changes: Any) -> dict[str, Any]:
@@ -92,7 +92,8 @@ async def test_every_gate_firing_or_clearing_is_material_and_moves_the_hash(
 ) -> None:
     """SN-C1: same-version, a gate firing gives +hard_gate: id and clearing gives -hard_gate: id.
     G: the snapshot keeps reading decision_card.hard_gates.blocking through 2a (plan §2)."""
-    clean = await dm.run(CLEAN)
+    clean = await dm.run(CLEAN, fundamentals=dm.QUALITY)
+    assert clean["watchlist_snapshot"]["unevaluated_gate_ids"] == []
     gated = edited(clean, decision_card__hard_gates__blocking=firing(gate_id))
 
     fired = await detect(clean["watchlist_snapshot"], gated)
@@ -141,8 +142,8 @@ MUTATIONS: dict[str, tuple[dict[str, Any], str]] = {
     "risk_regime": ({"risk_summary__risk_regime__classification": "high"}, "risk_regime: medium -> high"),
     "valuation_gate": ({"action_zones__valuation_assessment__gate": "stretched"},
                        "valuation_gate: attractive -> stretched"),
-    "support_instrument": ({"summary__support__instrument__status": "unverified"},
-                           "support_instrument: supported -> unverified"),
+    "support_instrument": ({"summary__support__instrument__status": "unsupported"},
+                           "support_instrument: supported -> unsupported"),
     "support_currency": ({"summary__support__currency__status": "unverified"},
                          "support_currency: supported -> unverified"),
     "price_source": ({"summary__price_provenance__price_source": "info_quote_fallback"},
@@ -150,7 +151,7 @@ MUTATIONS: dict[str, tuple[dict[str, Any], str]] = {
     # The canonical decision and the neutral price zone (snapshot 3.0.0, plan §8).
     "price_zone": ({"action_zones__price_zone": "near_52w_high"}, "price_zone: below_sma200 -> near_52w_high"),
     "new_money_action": ({"decision_card__new_money__action": "wait"}, "new_money_action: buy -> wait"),
-    "if_held_action": ({"decision_card__if_held__action": "reduce"}, "if_held_action: hold -> reduce"),
+    "if_held_action": ({"decision_card__if_held__action": "reduce"}, "if_held_action: insufficient_data -> reduce"),
     "long_term_action": ({"decision_card__long_term__new_money__action": "wait"}, "long_term_action: buy -> wait"),
 }
 

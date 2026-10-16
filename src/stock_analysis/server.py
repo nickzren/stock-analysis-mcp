@@ -45,18 +45,18 @@ log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(level=getattr(logging, log_level, logging.INFO))
 logger = logging.getLogger(__name__)
 
-INSTRUCTIONS = """Stock research from Yahoo Finance data. Informational only, not financial advice; it places no orders.
+INSTRUCTIONS = """Stock research from Yahoo Finance. Informational only, not financial advice; no orders.
 
-Start with `analyze` for any question about one stock. A bare ticker ("Analyze HOOD") never triggers a question: run `analyze` and lead with the mid-term decision (3-12 months), labelled as mid-term. Ask which horizon to use only when the request names two horizons, or a holding period that fits none ("1-2 months"); a request that names one horizon, or a period that maps to one ("hold for five years" is long term), gets that horizon without a question. Horizons and where each answer lives:
-- swing trade, days to weeks: `analyze_trade_setup` (or `scan_watchlist` for the saved watchlist);
-- new money, mid-term (the default): `decision_card.new_money`;
-- an existing holding (mid-term): `decision_card.if_held` (`analyze_my_position` adds P/L and tax, not the decision);
-- long term, 1-5 years: `decision_card.long_term.new_money`.
-The horizons are independent; a different action at another horizon is not a contradiction.
+Start with `analyze`. A bare ticker ("Analyze HOOD") never triggers a question: lead with mid-term (3-12 months). 12 months / one year means mid-term unless long term is explicit. Ask only for two horizons or a period fitting none ("1-2 months"); one matching period ("hold for five years": long term) needs no question.
+- swing, days to weeks: `analyze_trade_setup` or `scan_watchlist`;
+- mid-term new money (default): `decision_card.new_money`;
+- mid-term holding: `decision_card.if_held`; `analyze_my_position` adds P/L and tax, not the decision;
+- long-term new money, 1-5 years: `decision_card.long_term.new_money`.
+There is no long-term holder decision; label holder guidance mid-term, never substitute the long-term new-money action. Horizons are independent.
 
-Report each new-money action verbatim with its `blocked_by`, and `decision_card.if_held` action verbatim with its `basis`; never upgrade past `blocked_by`: no narrative, zone, dip, rating or news turns it into a buy. Size only from `decision_card.sizing`, mid-term new money only; there is no long-term or holder size, so never attach it to a long-term or holder answer. When it is null, say "no entry size: new_money is <action>". `earliest_reassessment` is a date to re-run analyze, not a buy date. `diagnostics`, `action_zones.price_zone`, the dip assessment and third-party data (analysts, news, ownership, options) are context, not advice.
+Report each new-money action verbatim with its `blocked_by`, and `decision_card.if_held` action verbatim with its `basis`. Adding requires `add_allowed`; a basis is no permission to add. Never upgrade past `blocked_by`: no narrative, zone, dip, rating or news turns it into a buy. List `unevaluated` gates beside entry as not checked, never cleared. Size only from `decision_card.sizing`, mid-term new money only; there is no long-term or holder size, so never attach it to a long-term or holder answer. When null, say "no entry size: new_money is <action>". `earliest_reassessment` means re-run analyze, not a buy date. `diagnostics`, `action_zones.price_zone`, dip and third-party data (analysts, news, ownership, options) are context, not advice.
 
-Rendering rules for `analyze`: the resource `stock-analysis://guides/analyze-rendering`."""
+Rendering: `stock-analysis://guides/analyze-rendering`."""
 
 mcp = FastMCP(name="stock-analysis", instructions=INSTRUCTIONS)
 
@@ -249,26 +249,28 @@ async def analyze(
     detail: str = "standard",
 ) -> str:
     """
-    Use when the user asks about a stock: new money (buy, wait or avoid), what
-    to do if they hold it, or the long-term view. A bare ticker means this tool.
+    Use when asked about new money, a holding or the long-term view of a stock.
+    A bare ticker means this tool.
 
     `decision_card` (every detail level) holds `decision_card.new_money`
     (mid-term, 3-12 months) and `decision_card.long_term.new_money` (1-5
-    years), each with `blocked_by`, and `decision_card.if_held` for a holder.
+    years), each with `blocked_by`, and `decision_card.if_held` for a holder
+    (mid-term only). A one-year period defaults to mid-term unless long term is
+    explicit; there is no long-term holder decision.
     Report each action verbatim and never upgrade past `blocked_by`. Size only
     from `decision_card.sizing` (mid-term new money only, never long-term or
     holder; null: no entry size). `earliest_reassessment` is a date to re-run
-    analyze, not a buy date. For presentation rules, read the MCP resource
+    analyze, not a buy date. Rendering guide:
     `stock-analysis://guides/analyze-rendering`.
 
     Args:
-        symbol: Stock ticker symbol or company name query
-        profile: Investor profile preset (core, balanced, or speculative);
+        symbol: Ticker or company name
+        profile: core, balanced or speculative;
             changes sizing only, never the decision
-        account_size: Optional account size for dollar sizing
-        risk_per_trade_pct: Optional risk budget used for sizing
-        max_position_pct: Optional max single-position cap
-        detail: Response detail level: standard (default), decision, or full
+        account_size: Account size for dollar sizing
+        risk_per_trade_pct: Risk budget for sizing
+        max_position_pct: Single-position cap
+        detail: standard (default), decision or full
 
     Returns:
         JSON analysis payload.
@@ -532,7 +534,7 @@ async def scan_watchlist(
     Two-phase: a cheap daily screen, then the full analyze_trade_setup card only for
     candidates and previously-actionable symbols.
 
-    `changes` lists card transitions since the last scan; `rows` is the full
+    `changes` lists screen/card transitions since the last scan; `rows` is the full
     current state. Informational only — not financial advice.
 
     Args:

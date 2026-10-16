@@ -253,6 +253,7 @@ def build_decision_context(
     action_zones: dict[str, Any],
     news_data: dict[str, Any],
     verdict: dict[str, Any],
+    business_evaluable: bool = True,
 ) -> dict[str, Any]:
     """
     Build multi-factor decision context explaining what would change the verdict.
@@ -932,10 +933,10 @@ def build_decision_context(
         }
 
     # === THESIS CHECKPOINTS (2-year framework for long-term investors) ===
-    if business_quality_status == "not_applicable":
-        # Unsupported instrument (WP4, D5): no business thesis to track.
+    if business_quality_status in {"not_applicable", "data_missing"} or not business_evaluable:
+        # Unknown business evidence cannot establish a speculative thesis or an exit template.
         thesis_checkpoints: dict[str, Any] = {
-            "hold_thesis": "not_applicable",
+            "hold_thesis": "not_applicable" if business_quality_status == "not_applicable" else "unknown",
             "checkpoints": [],
             "review_triggers": [],
             "thesis_stop_triggers": None,
@@ -1420,7 +1421,7 @@ def _build_thesis_checkpoints(
         ]
 
     else:
-        # Poor or unknown business quality
+        # Known poor business quality
         hold_thesis = "speculative"
         checkpoints.append({
             "milestone": "thesis_validation",

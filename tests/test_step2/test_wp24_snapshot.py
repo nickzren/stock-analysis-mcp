@@ -159,7 +159,7 @@ async def test_a_gated_hold_or_add_records_no_pre_gate_code() -> None:
     snapshot = result["watchlist_snapshot"]
 
     assert result["diagnostics"]["pre_gate_policy"]["mid_term"] == "hold_or_add"
-    assert [snapshot[f] for f in ACTIONS] == ["wait", "hold", "wait"]
+    assert [snapshot[f] for f in ACTIONS] == ["wait", "insufficient_data", "wait"]
     assert "hold_or_add" not in snapshot.values()
 
 
@@ -538,9 +538,11 @@ async def test_a_freshness_only_change_is_material(detect: Detect, monkeypatch: 
 
     assert (fired["material_changes"], fired["hash_changed"]) == (
         ["new_money_action: starter -> wait_for_data", "long_term_action: buy -> wait_for_data",
-         f"+hard_gate: {gate}"], True)
+         f"+hard_gate: {gate}"] + (["-unevaluated_gate: stale_data"] if row == "R6" else []), True)
+    # R6 retains a rejected quote after the injected gate removal, so its stale status is unknown.
     assert cleared["material_changes"] == ["new_money_action: wait_for_data -> starter",
-                                           "long_term_action: wait_for_data -> buy", f"-hard_gate: {gate}"]
+                                           "long_term_action: wait_for_data -> buy"] + (
+        ["+unevaluated_gate: stale_data"] if row == "R6" else [f"-hard_gate: {gate}"])
 
 
 MONDAY_EVENING = fr.TruthRow(fr.at(2026, 10, 12, 17), lambda: (fr.daily(fr.E_MON), None), (), fr.E_MON, 0, fr.DAILY)

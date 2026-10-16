@@ -115,8 +115,11 @@ def screen_symbol(df: pd.DataFrame | None, *, now: datetime, session: str) -> di
     # tools/__init__ -> watchlist -> scan_screen.
     from stock_analysis.tools.analyze.gates import (
         SCREEN_UNEVALUATED,
+        UNEVALUATED,
         check_liquidity,
+        falling_knife_status,
         is_falling_knife_technicals,
+        liquidity_applicability_unverified,
     )
     from stock_analysis.tools.trade_setup.setups import detect_setup
 
@@ -135,13 +138,11 @@ def screen_symbol(df: pd.DataFrame | None, *, now: datetime, session: str) -> di
     blockers |= {f"{b['id']}@daily" for b in freshness_blockers(freshness)}
     data_veto = bool(blockers)
 
-    knife = False
-    if payload is None:
+    knife, _ = is_falling_knife_technicals(payload or {})
+    if knife:
+        blockers.add("falling_knife")
+    if falling_knife_status(payload) == UNEVALUATED:
         unevaluated.add("falling_knife")
-    else:
-        knife, _ = is_falling_knife_technicals(payload)
-        if knife:
-            blockers.add("falling_knife")
 
     # WP4 (D5): instrument and currency come with the daily history. Unsupported caps;
     # unknown is unverified, so stage 1 leaves it to the card.
@@ -165,6 +166,8 @@ def screen_symbol(df: pd.DataFrame | None, *, now: datetime, session: str) -> di
             {"liquidity": {"avg_dollar_volume": _card_liquidity(df)}}
         )
         blockers |= {b["id"] for b in liq_blockers}
+    if missing or liquidity_applicability_unverified(support):
+        unevaluated.add("weak_liquidity")
 
     setup: dict[str, Any] | None = None
     if data_veto:

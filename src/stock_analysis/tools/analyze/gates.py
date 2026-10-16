@@ -329,6 +329,50 @@ def is_falling_knife_technicals(technicals_data: dict[str, Any]) -> tuple[bool, 
     return score >= FALLING_KNIFE_SCORE_THRESHOLD, reasons
 
 
+def falling_knife_status(technicals_data: dict[str, Any] | None) -> str:
+    """A proven knife wins; a false result needs enough evidence to establish clearance."""
+    data = technicals_data or {}
+    if is_falling_knife_technicals(data)[0]:
+        return FIRED
+    ma = data.get("moving_averages") or {}
+    rules = ma.get("rules") or {}
+    above = (rules.get("above_sma200") or {}).get("triggered")
+    death_cross = (rules.get("death_cross") or {}).get("triggered")
+    ret = (data.get("returns") or {}).get("return_3m")
+    pos = data.get("price_position") or {}
+    numeric = (ret, pos.get("position_in_range"), ma.get("sma_200_slope_pct_per_day"),
+               pos.get("days_since_52w_high"))
+    if above is True and isinstance(ret, (int, float)) and math.isfinite(ret) and ret >= -0.20:
+        return CLEAR  # The rubric requires a decline, regardless of its other inputs.
+    if (isinstance(above, bool) and isinstance(death_cross, bool)
+            and all(isinstance(value, (int, float)) and math.isfinite(value) for value in numeric)):
+        return CLEAR
+    return UNEVALUATED
+
+
+def liquidity_applicability_unverified(support: dict[str, Any] | None) -> bool:
+    """Unknown classification is not the known inapplicability of an ETF or non-USD price."""
+    if support is None:
+        return False  # Legacy callers that already supplied applicable dollar-volume inputs.
+    statuses = [(support.get(dimension) or {}).get("status") for dimension in ("instrument", "currency")]
+    return "unsupported" not in statuses and any(status != "supported" for status in statuses)
+
+
+def stale_data_unevaluated(freshness: dict[str, Any] | None, *, fired: bool) -> bool:
+    """An established stale leg wins. Otherwise both required legs must establish current data."""
+    if fired:
+        return False
+    if freshness is None:
+        return False  # Legacy pure callers do not provide the per-leg disclosure.
+    codes = set(freshness.get("codes") or [])
+    quote_known = (freshness.get("price_source") in ("intraday_quote", "daily_close")
+                   and not codes.intersection(_INTRADAY_REJECTIONS))
+    history_known = (freshness.get("daily_completed_session") is not None
+                     and isinstance(freshness.get("daily_sessions_behind"), int)
+                     and not codes.intersection({"daily_future_bar", "daily_bar_after_last_session"}))
+    return not (quote_known and history_known)
+
+
 # --- The freshness gate (plan §5, D-7): leg Q (the selected price), leg H (technicals' daily history) ---
 
 FRESHNESS_CODE_IDS: dict[str, str] = {  # plan §5's id table: leg Q codes, then leg H codes in rule order
@@ -473,10 +517,11 @@ _WAIT_FOR_DATA = _outcome("wait_for_data", "wait_for_data", "wait_for_data", "wa
 _AVOID = _outcome("avoid", "avoid", "avoid", "avoid")
 _SUPPORT_CAP = _outcome("watch", "watch", "watch", "watch")
 _EVENT_CAP = _outcome("wait", "wait", "watch", _UE)
-_FUNDAMENTALS_MISSING = "fundamentals missing or failed"
-_TECHNICALS_MISSING = "technicals unavailable — falling-knife rubric not computed"
+_FUNDAMENTALS_MISSING = "fundamentals missing, failed, or applicability unverified"
+_THESIS_UNVERIFIED = "business or cash-runway evidence unavailable, or applicability unverified"
+_TECHNICALS_MISSING = "falling-knife inputs incomplete — clearance not established"
 _EVENTS_FAILED = "events calendar unavailable — earnings date not checked"
-_DOLLAR_VOLUME_MISSING = "average daily dollar volume unavailable"
+_DOLLAR_VOLUME_MISSING = "average daily dollar volume or its stock/USD applicability unverified"
 _QUOTE_LEG = "quote leg in the regular session: stage 1 reads no intraday quote"
 _SUPPORT_UNVERIFIED = "support status unverified (history attrs missing): a setup promotes"
 _MARKET_DATA_CURRENT = "current market data with a verifiable timestamp: a current price and a current daily history"
@@ -504,7 +549,9 @@ GATES: dict[str, Gate] = {
     STALE_DATA: Gate(
         "data", "veto", _WAIT_FOR_DATA,
         predicate="the selected price or the daily history is >= 1 session behind the last completed session",
-        clears_when=_MARKET_DATA_CURRENT, unevaluated_when={"screen": _QUOTE_LEG},
+        clears_when=_MARKET_DATA_CURRENT,
+        unevaluated_when={"mid_term": "price or daily-history age unavailable",
+                          "long_term": "price or daily-history age unavailable", "screen": _QUOTE_LEG},
         tool_predicates=_FRESHNESS_TOOL_PREDICATES),
     FRESHNESS_UNVERIFIABLE: Gate(
         "data", "veto", _WAIT_FOR_DATA,
@@ -530,12 +577,12 @@ GATES: dict[str, Gate] = {
         predicate=f"is_falling_knife_technicals: rubric score >= {FALLING_KNIFE_SCORE_THRESHOLD}, every instrument",
         clears_when=f"falling-knife rubric score below {FALLING_KNIFE_SCORE_THRESHOLD}",
         unevaluated_when={"mid_term": _TECHNICALS_MISSING, "long_term": _TECHNICALS_MISSING,
-                          "swing": _TECHNICALS_MISSING, "screen": "fewer than 21 bars: no screen payload"}),
+                          "swing": _TECHNICALS_MISSING, "screen": _TECHNICALS_MISSING}),
     "weak_liquidity": Gate(
         "liquidity", "veto", _AVOID,
         predicate=f"check_liquidity: 1-year mean volume x last close < {_LIQUIDITY_FLOOR}",
         clears_when=f"1-year average daily dollar volume >= {_LIQUIDITY_FLOOR}",
-        unevaluated_when={"mid_term": _DOLLAR_VOLUME_MISSING, "long_term": _DOLLAR_VOLUME_MISSING},
+        unevaluated_when=dict.fromkeys(SURFACES, _DOLLAR_VOLUME_MISSING),
         requires_supported=True),
     "liquidity_missing": Gate(
         "liquidity", "veto", _outcome("wait_for_data", "wait_for_data", "avoid", "avoid"),
@@ -546,7 +593,7 @@ GATES: dict[str, Gate] = {
         "thesis", "cap", _outcome("avoid", "avoid", _NA, _NA),
         predicate="business_status == broken or balance_status == unsafe (classify_dislocation_opportunity)",
         clears_when=" and ".join(THESIS_CLEARS_WHEN.values()),
-        unevaluated_when={"mid_term": _FUNDAMENTALS_MISSING, "long_term": _FUNDAMENTALS_MISSING}),
+        unevaluated_when={"mid_term": _THESIS_UNVERIFIED, "long_term": _THESIS_UNVERIFIED}),
     "unsupported_instrument": Gate(
         "support", "cap", _SUPPORT_CAP,
         predicate="support_blockers: quote type unsupported or unverified",
@@ -606,7 +653,7 @@ FIRED, CLEAR = "fired", "clear"
 
 def thesis_codes(fundamentals_status: str | None, signals: Mapping[str, Any]) -> tuple[str, ...]:
     """The failing thesis components (classify_dislocation_opportunity); none unless fundamentals apply."""
-    if fundamentals_status in ("missing", "not_applicable"):
+    if fundamentals_status in ("missing", "not_applicable", "unverified"):
         return ()
     failing = ((BUSINESS_BROKEN, signals.get("business_status") == "broken"),
                (RUNWAY_CRITICAL, signals.get("balance_status") == "unsafe"))
@@ -615,14 +662,16 @@ def thesis_codes(fundamentals_status: str | None, signals: Mapping[str, Any]) ->
 
 def check_thesis_broken(fundamentals_status: str | None, signals: Mapping[str, Any]) -> tuple[str, dict[str, Any] | None]:
     """(status, blocker) for thesis_broken: not_applicable for unsupported instruments, unevaluated when
-    fundamentals are missing; the blocker's codes name the failing components (plan §4)."""
+    applicability or required component evidence is unknown. A known failure wins over an unknown component;
+    the blocker's codes name only the failing components."""
     if fundamentals_status == "not_applicable":
         return NOT_APPLICABLE, None
-    if fundamentals_status == "missing":
+    if fundamentals_status in ("missing", "unverified"):
         return UNEVALUATED, None
     codes = thesis_codes(fundamentals_status, signals)
     if not codes:
-        return CLEAR, None
+        incomplete = any(signals.get(key) is False for key in ("business_evaluable", "runway_evaluable"))
+        return (UNEVALUATED if incomplete else CLEAR), None
     reason = "thesis broken: " + " and ".join(THESIS_REASONS[code] for code in codes)
     return FIRED, {"id": "thesis_broken", "reason": reason, "codes": list(codes)}
 

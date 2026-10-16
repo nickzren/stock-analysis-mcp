@@ -213,7 +213,7 @@ def test_reduce_requires_an_evidence_basis() -> None:
     assert dc.IF_HELD_ACTIONS == ("hold", "reduce", "review_exit", "insufficient_data")
     assert dc.EVIDENCE_BASES == ("runway_critical", "business_broken", "tilt_bearish")
     assert dc.NON_EVIDENCE_BASES == ("candidate_admits_new_money", "price_broken_more_than_business",
-                                     "no_reduction_evidence", "tilt_missing", "candidate_insufficient")
+                                     "no_reduction_evidence", "tilt_missing", "candidate_insufficient", "thesis_unknown")
     for (mid, tilt, zone, disl), thesis in product(grid(), THESES):
         got = run_decide(candidate(mid, tilt, zone, disl, knife=False), [], thesis, disl, tilt)["if_held"]
         assert got["action"] in dc.IF_HELD_ACTIONS
@@ -301,12 +301,12 @@ def test_unevaluated_gates_never_change_if_held(gate_id: str) -> None:
             assert listed["if_held"]["add_allowed"] is (listed["new_money"]["action"] in ENTRY)
 
 
-@pytest.mark.parametrize(("name", "expected"), [("S3_plain_avoid", ("reduce", "tilt_bearish")),
+@pytest.mark.parametrize(("name", "expected"), [("S3_plain_avoid", ("insufficient_data", "thesis_unknown")),
                                                 ("D_quality_attractive_poor_chart", ("hold", "no_reduction_evidence")),
-                                                ("T3_plain_wait_weak_setup", ("hold", "no_reduction_evidence"))])
+                                                ("T3_plain_wait_weak_setup", ("insufficient_data", "thesis_unknown"))])
 async def test_an_events_failure_never_changes_if_held(name: str, expected: tuple[str, str]) -> None:
     """PH-RF8 / GC-R6 through analyze: with the events tool failing (earnings_blackout unevaluated), S3, D and T3
-    keep the if_held of the run with events. RF."""
+    keep the if_held of the run with events. S3/T3's sparse fundamentals leave the thesis unknown in both runs. RF."""
     present, failed = (await dm.run(name))["decision_card"], (await dm.run(name, events=None))["decision_card"]
 
     assert held(present) == held(failed) == expected
@@ -328,20 +328,22 @@ async def test_gate_pairs_through_the_pipeline(plain: str, gated: str) -> None:
 
 
 def test_if_held_reads_only_its_evidence() -> None:
-    """PH-RF8: if_held's inputs are the thesis, the mapped candidate, the dislocation flag and tilt: never gates,
+    """PH-RF8: if_held's inputs are the thesis, the mapped candidate, the dislocation flag, tilt and thesis evaluability: never gates,
     zone, dip or support (plan §3). RF."""
-    assert set(inspect.signature(dc.if_held).parameters) == {"thesis", "candidate_action", "dislocation", "tilt"}
+    assert set(inspect.signature(dc.if_held).parameters) == {"thesis", "candidate_action", "dislocation", "tilt", "thesis_evaluable"}
 
 
 # --- PH-RF11 [D-4]: near_52w_high, mid-term new money only (Codex boundary 1) ---------------------------
 
 
-@pytest.mark.parametrize(("scenario", "long_term", "core"), [
-    (dm.SCENARIOS["A7_near_52w_high_bullish"], "buy", "buy"), (A7_CAUTION, "starter", "wait")], ids=["ok", "caution"])
-async def test_a7_caps_mid_term_new_money_only(scenario: dm.Scenario, long_term: str, core: str) -> None:
-    """PH-RF11: A7 (reduce zone, bullish; ok fit hold_or_add, caution speculative_small_position) gives new_money
-    wait [near_52w_high], if_held hold (candidate_admits_new_money) with add_allowed false, and leaves
-    long_term.new_money and core alone. PD D-4."""
+@pytest.mark.parametrize(("scenario", "long_term", "core", "holder"), [
+    (dm.SCENARIOS["A7_near_52w_high_bullish"], "buy", "buy", ("insufficient_data", "thesis_unknown")),
+    (A7_CAUTION, "starter", "wait", ("hold", "candidate_admits_new_money"))], ids=["ok", "caution"])
+async def test_a7_caps_mid_term_new_money_only(
+    scenario: dm.Scenario, long_term: str, core: str, holder: tuple[str, str],
+) -> None:
+    """PH-RF11: A7 caps only mid-term new money, leaving long-term/core and the evidence-based holder result
+    unchanged. The sparse ok-fit fixture's thesis is unknown; the caution fixture has sufficient evidence. PD D-4."""
     result = await dm.run(scenario)
     card = result["decision_card"]
     long = card["long_term"]["new_money"]
@@ -349,8 +351,9 @@ async def test_a7_caps_mid_term_new_money_only(scenario: dm.Scenario, long_term:
     assert result["action_zones"]["price_zone"] == "near_52w_high"
     assert (card["new_money"]["action"], ids(card["new_money"]["blocked_by"]), card["new_money"]["decided_by"]) == (
         "wait", ["near_52w_high"], "near_52w_high")
-    assert card["if_held"] == {"action": "hold", "add_allowed": False, "basis": "candidate_admits_new_money"}
-    assert (long["action"], long["blocked_by"], long["decided_by"], long["unevaluated"]) == (long_term, [], None, [])
+    assert card["if_held"] == {"action": holder[0], "add_allowed": False, "basis": holder[1]}
+    assert (long["action"], long["blocked_by"], long["decided_by"]) == (long_term, [], None)
+    assert ids(long["unevaluated"]) == (["thesis_broken"] if holder[1] == "thesis_unknown" else [])
     assert result["decision_modes"]["core"]["action"] == core
 
 

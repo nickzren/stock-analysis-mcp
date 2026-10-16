@@ -146,7 +146,9 @@ Then provide:
 4. **Exit Plan**: `decision_card.exit`, `decision_card.exit_triggers` and `decision_card.conditions.reduce_if`
 5. **New Money**: `decision_card.new_money.action` with its `blocked_by`, for any addition
 
-The decision comes from analyze, not from P/L, tax or technical signals alone. Report it verbatim.""",
+The decision comes from analyze, not from P/L, tax or technical signals alone. Report it verbatim as mid-term.
+There is no long-term holder decision; do not substitute the long-term new-money action for one.
+`candidate_admits_new_money` describes the pre-gate candidate, not permission to add; `add_allowed` still governs additions.""",
                 }
             ]
         }

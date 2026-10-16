@@ -6,6 +6,7 @@ Use this guide when presenting the result of the `analyze` tool.
 `analyze` returns `detail="standard"` by default; `detail="decision"` is
 smaller and `detail="full"` adds the audit sections. Render only the sections
 present in the response. The decision card is present at every detail level.
+12 months / one year means mid-term unless long term is explicit.
 
 ## Order
 
@@ -19,9 +20,11 @@ present in the response. The decision card is present at every detail level.
    `decision_card` first, in three labelled horizon segments:
    - New money, mid-term (3-12 months): `decision_card.new_money.action`
      verbatim, with every `decision_card.new_money.blocked_by` id and reason.
-   - If held: `decision_card.if_held.action` verbatim, with its `basis`.
+   - If held, mid-term: `decision_card.if_held.action` verbatim, with its `basis`.
      Adding to a holding is allowed only when `decision_card.if_held.add_allowed`
      is true.
+     There is no long-term holder decision; label this guidance mid-term and
+     never substitute the long-term new-money action for it.
    - Long term (1-5 years): `decision_card.long_term.new_money.action`
      verbatim, with its own `decision_card.long_term.new_money.blocked_by`.
    - New-money actions: `buy`, `starter`, `wait`, `wait_for_data`,
@@ -35,6 +38,17 @@ present in the response. The decision card is present at every detail level.
    - `decision_card.action_now` is a deprecated alias of
      `decision_card.new_money.action`, kept for one release.
    - Render `why`, `exit`, `exit_triggers`, and `data_flags` when not empty.
+
+   Holder `basis` explains the action, not an instruction to add:
+   - `candidate_admits_new_money` describes the pre-gate candidate, not permission
+     to add; `add_allowed` still governs additions.
+   - `runway_critical` / `business_broken`: established thesis failure.
+   - `thesis_unknown`: required thesis evidence is unavailable or unverified.
+   - `price_broken_more_than_business`: the dislocation classifier still supports
+     holding. `tilt_bearish` is the residual bearish-score rule.
+   - `tilt_missing` / `candidate_insufficient`: too little evidence for a holder
+     decision. `no_reduction_evidence` means no reduction rule fired, not proof
+     that the investment is safe.
 
 3. Reassessment date (`earliest_reassessment`, one per horizon):
    - It is not a buy date; re-run analyze on or after it and act only on the
@@ -70,8 +84,10 @@ present in the response. The decision card is present at every detail level.
      or `decision_card.entry` to a long-term or holder answer.
    - Dollar and share amounts need `account_size`.
    - Never derive a size from levels, zones, presets, modes, or ratings.
-   - `decision_card.entry` is the price band for a new entry; it is null unless
+   - `decision_card.entry` is a reference band; it is null unless
      mid-term new money is `buy` or `starter`.
+     For the quoted entry, use the returned action and `decision_card.sizing.at_price`,
+     even outside that band. Never invent an entry-price gate from the band.
 
 7. Verdict summary:
    - Tilt and confidence.

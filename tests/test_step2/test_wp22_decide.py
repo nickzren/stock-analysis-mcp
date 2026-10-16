@@ -331,19 +331,20 @@ def test_a_gate_tightens_any_base_and_never_loosens() -> None:
 
 # --- GC-R10, analyze half ---------------------------------------------------------------------------------
 
+# Unrelated gate cases use established business evidence; PROFITABLE lacks FCF/debt inputs.
 UNEVALUATED_CASES: dict[str, tuple[dm.Scenario, list[str], list[str]]] = {
-    "technicals_failed": (dm.Scenario("GC-R10", None, dm.PROFITABLE, dm.CALM),
-                          ["falling_knife", "near_52w_high"], ["falling_knife"]),
+    "technicals_failed": (dm.Scenario("GC-R10", None, dm.QUALITY, dm.CALM),
+                          ["stale_data", "falling_knife", "near_52w_high"], ["stale_data", "falling_knife"]),
     "fundamentals_failed": (dm.SCENARIOS["S8_fundamentals_failed"], ["missing_runway", "thesis_broken"],
                             ["missing_runway", "thesis_broken"]),
-    "events_failed": (dm.Scenario("GC-R10", dm.STRONG, dm.PROFITABLE, dm.CALM, events=None),
+    "events_failed": (dm.Scenario("GC-R10", dm.STRONG, dm.QUALITY, dm.CALM, events=None),
                       ["earnings_blackout"], ["earnings_blackout"]),
     "us_sink": (dm.Scenario("GC-R11", dm.KNIFE, None, None, events=None),
                 ["missing_runway", "weak_liquidity", "thesis_broken", "earnings_blackout"],
                 ["missing_runway", "weak_liquidity", "thesis_broken", "earnings_blackout"]),
     "etf_sink": (dm.Scenario("GC-R11", dm.KNIFE, None, None, events=None, summary=dm.ETF),
                  ["earnings_blackout"], ["earnings_blackout"]),
-    "clean": (dm.SCENARIOS["S1_hold_or_add_clean"], [], []),
+    "clean": (dm.Scenario("GC-R10 clean", dm.STRONG, dm.QUALITY, dm.CALM), [], []),
     "etf": (dm.SCENARIOS["ETF_strong"], [], []),
 }
 

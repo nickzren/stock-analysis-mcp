@@ -298,8 +298,8 @@ async def test_scan_rows_disclose_source_and_unevaluated(monkeypatch: pytest.Mon
     assert [list(row) for row in (unverified, card)] == [ROW_KEYS, ROW_KEYS]
     assert [set(entry) for entry in entries] == [STATE_KEYS, STATE_KEYS]
     assert (unverified["source"], unverified["horizon"], unverified["unevaluated"]) == (
-        "screen", "swing", sorted([*ALWAYS, "unsupported_instrument"]))
-    assert unverified_regular["unevaluated"] == sorted([*ALWAYS, *QUOTE, "unsupported_instrument"])
+        "screen", "swing", sorted([*ALWAYS, "unsupported_instrument", "weak_liquidity"]))
+    assert unverified_regular["unevaluated"] == sorted([*ALWAYS, *QUOTE, "unsupported_instrument", "weak_liquidity"])
     assert (short["source"], short["action"], short["blockers"]) == ("screen", "wait_for_data", SHORT)
     assert "falling_knife" in short["unevaluated"]
     assert (card["source"], card["horizon"], card["unevaluated"]) == ("card", "swing", [])
