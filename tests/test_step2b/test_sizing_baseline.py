@@ -5,6 +5,7 @@ arithmetic or input validation is implemented by these tests.
 """
 
 import copy
+import hashlib
 import json
 from contextlib import suppress
 
@@ -149,3 +150,54 @@ async def test_generator_detects_swallowed_network_attempt_outside_pytest_guard(
     monkeypatch.setattr(sm, "run_case", accidental_read)
     with pytest.raises(AssertionError, match="example.invalid/forbidden"):
         await sm.build()
+
+
+@pytest.mark.parametrize(("name", "regime", "starter", "full", "stop"), [
+    ("balanced_low_wide", "low", 2.5, 10.0, 80.0),
+    ("balanced_wide", "medium", 2.5, 8.0, 80.0),
+    ("balanced_high_wide", "high", 2.0, 6.0, 80.0),
+])
+async def test_default_budget_can_be_exceeded_in_full_size_regimes(name, regime, starter, full, stop):
+    row = await sm.run_case(name)
+    size = row["decision_card"]["sizing"]
+    zones = row["action_zones"]
+    assert zones["position_sizing_range"]["rationale"] == f"{regime}_risk_regime"
+    assert (size["starter_pct"], size["full_pct_cap"]) == (starter, full)
+    assert row["decision_card"]["exit"]["stop_or_invalidation"] == stop
+    assert size["full_dollars"] / 100 * (100 - stop) > 100
+
+
+async def test_rounded_distance_and_missing_atr_percentage_warning_branches():
+    rounded = (await sm.run_case("rounded_stop_warning"))["action_zones"]
+    assert "stop_too_tight" in rounded["zone_warnings"]
+    assert rounded["stop_calculation"]["stop_distance_pct"] == 0.0404
+    # The tool stub supplies an unrounded percentage. The stop meets the raw
+    # 2x ATR boundary, but its display-rounded distance falls below that input.
+    assert (99 - 95) / 99 == 2 * (2 / 99) > 0.0404
+    assert "stop_too_tight" not in (await sm.run_case("balanced_high_wide"))["action_zones"]["zone_warnings"]
+    missing = (await sm.run_case("missing_atr_pct"))["action_zones"]
+    assert missing["stop_calculation"]["atr_pct"] is None
+    assert missing["stop_calculation"]["stop_price"] == 96.0
+    assert "stop_too_tight" in missing["zone_warnings"]
+
+
+@pytest.mark.parametrize(("filename", "expected"), [
+    ("before.json", "0e62ae4b886689e8d9cdc37b5deccc9abf90f3efefc91dad365ed1585d601763"),
+    ("before.md", "4f22dce449e3bcff3c7658138922b1062a17f1d6e107d172d5b41f1f7793441a"),
+])
+def test_frozen_baseline_bytes_survive_future_sizing_changes(filename, expected):
+    # Keep this independent pin when live-output defect tests change in 2b.1/2b.2.
+    assert hashlib.sha256((sm.FIXTURE_DIR / filename).read_bytes()).hexdigest() == expected
+
+
+async def test_extreme_regime_preserves_starter_only_visibility():
+    row = await sm.run_case("balanced_extreme_wide")
+    card = row["decision_card"]
+    assert card["new_money"]["action"] == "starter"
+    assert card["sizing"]["starter_pct"] == 0.5
+    assert card["sizing"]["starter_dollars"] == 50.0
+    assert card["sizing"]["full_pct_cap"] is None
+    assert card["sizing"]["full_dollars"] is None
+    assert card["exit"]["stop_or_invalidation"] == 62.5
+    assert row["action_zones"]["position_sizing_range"] is None
+    assert "extreme_risk_regime" in row["action_zones"]["zone_warnings"]

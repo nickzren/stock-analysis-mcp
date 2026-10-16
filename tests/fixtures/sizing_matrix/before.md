@@ -16,6 +16,11 @@ For `tiny_risk`, the supplied 0.001% rounds to 0 here, then sizing falls back to
 | balanced_wide | 1 (profile) / 10 (profile) | buy / hold | 80.0 | 2.5 / 8.0 | 250.0 / 800.0 | 2 | 50 / 160 |
 | speculative_narrow | 1.5 (profile) / 6 (profile) | buy / hold | 96.0 | 1.0 / 6.0 | 100.0 / 600.0 | 1 | 4 / 24 |
 | speculative_wide | 1.5 (profile) / 6 (profile) | buy / hold | 80.0 | 1.0 / 6.0 | 100.0 / 600.0 | 1 | 20 / 120 |
+| balanced_low_wide | 1 (profile) / 10 (profile) | buy / hold | 80.0 | 2.5 / 10.0 | 250.0 / 1000.0 | 2 | 50 / 200 |
+| balanced_high_wide | 1 (profile) / 10 (profile) | buy / hold | 80.0 | 2.0 / 6.0 | 200.0 / 600.0 | 2 | 40 / 120 |
+| balanced_extreme_wide | 1 (profile) / 10 (profile) | starter / hold | 62.5 | 0.5 / None | 50.0 / None | 0 | 18.75 / — |
+| rounded_stop_warning | 1 (profile) / 10 (profile) | buy / hold | 95.0 | 2.0 / 6.0 | 200.0 / 600.0 | 2 | 8.08081 / 24.2424 |
+| missing_atr_pct | 1 (profile) / 10 (profile) | buy / hold | 96.0 | 2.5 / 8.0 | 250.0 / 800.0 | 2 | 10 / 32 |
 | speculative_binding | 1.5 (profile) / 6 (profile) | buy / hold | 70.0 | 1.0 / 6.0 | 100.0 / 600.0 | 1 | 30 / 180 |
 | risk_only | 0.25 (caller) / 10 (profile) | buy / hold | 80.0 | 2.5 / 8.0 | 250.0 / 800.0 | 2 | 50 / 160 |
 | cap_only_tight | 1 (profile) / 2 (caller) | buy / hold | 80.0 | 2.0 / 2.0 | 200.0 / 200.0 | 2 | 40 / 40 |
@@ -39,3 +44,12 @@ For `tiny_risk`, the supplied 0.001% rounds to 0 here, then sizing falls back to
 | fractional_amounts | 8 | 8.25 | 825.0 | 24.75 |
 | zero_whole_shares | 0 | 0.8 | 80.0 | 2.4 |
 | no_account | None | None | None | None |
+
+## Scan-promoted card
+
+The public scan row contains no size. These values come from the captured real card
+at the scan fixture's own clock, 2026-03-10T08:00:00-04:00, with synthetic data and temporary state.
+
+| Action | Whole shares | Fractional shares | Position dollars | Reported max_loss_dollars |
+|---|---|---|---|---|
+| enter_on_trigger | 7 | 7.3687 | 825.0 | 8.25 |

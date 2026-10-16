@@ -23,6 +23,7 @@ from stock_analysis.tools.analyze.investor_profile import resolve_investor_profi
 from stock_analysis.tools.trade_setup.plan import build_plan
 from tests.support import decision_matrix as dm
 from tests.support.network_guard import blocked_request, violation_report
+from tests.support.sizing_scan import build_scan_case
 
 BASE_COMMIT = "7d581f11562cf68a6eafb6489ad7c67aa5f25bee"
 FIXTURE_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "sizing_matrix"
@@ -32,6 +33,11 @@ CASES: dict[str, dict[str, Any]] = {
     **{f"{profile}_{distance}": {"profile": profile, "atr": atr}
        for profile in ("core", "balanced", "speculative")
        for distance, atr in (("narrow", 2.0), ("wide", 10.0))},
+    "balanced_low_wide": {"annualized": 0.20, "drawdown": -0.10, "beta": 0.7},
+    "balanced_high_wide": {"annualized": 0.50},
+    "balanced_extreme_wide": {"annualized": 0.75, "atr": 15.0},
+    "rounded_stop_warning": {"price": 99.0, "atr": 2.0, "annualized": 0.50},
+    "missing_atr_pct": {"atr": 2.0, "atr_pct_missing": True},
     "speculative_binding": {"profile": "speculative", "atr": 15.0},
     "risk_only": {"risk_per_trade_pct": 0.25},
     "cap_only_tight": {"max_position_pct": 2.0},
@@ -74,7 +80,12 @@ def scenario(name: str) -> dm.Scenario:
     tech["price_position"].update(week_52_low=price * values["low_multiple"], week_52_high=price * 1.4)
     risk = copy.deepcopy(dm.MODERATE)
     risk["volatility"]["annualized"] = values["annualized"]
-    risk["atr"] = {"value": atr, "as_pct_of_price": None if atr is None else atr / price}
+    if "drawdown" in values:
+        risk["drawdown"]["max_1y"] = values["drawdown"]
+    if "beta" in values:
+        risk["beta"]["value"] = values["beta"]
+    risk["atr"] = {"value": atr, "as_pct_of_price": (
+        None if atr is None or values.get("atr_pct_missing") else atr / price)}
     return dm.Scenario("v0.3.0 sizing characterization", tech, copy.deepcopy(dm.QUALITY), risk,
                        events=dm.NEAR if values.get("earnings_blocked") else dm.FAR,
                        profile=values["profile"], account_size=values["account_size"])
@@ -136,11 +147,12 @@ async def build() -> dict[str, Any]:
             patch.object(requests.Session, "request", blocked_request("requests", violations)):
         rows = {name: digest(name, await run_case(name)) for name in CASES}
         swing = swing_cases()
+        scan = await build_scan_case()
     if violations:
         raise AssertionError(violation_report(violations))
     return {"recorded_code": BASE_COMMIT, "clock": dm.FRIDAY_EVENING.isoformat(),
             "notice": "Observed v0.3.0 behavior, including defects; not the approved future contract.",
-            "analyze": rows, "swing": swing}
+            "analyze": rows, "swing": swing, "scan": scan}
 
 
 def _implied_loss(amount: Any, price: float, stop: float | None) -> str:
@@ -180,6 +192,15 @@ def markdown(recording: dict[str, Any]) -> str:
         plan = row["plan"]
         lines.append(f"| {name} | {plan['shares']} | {plan['fractional_shares']} |"
                      f" {plan['position_dollars']} | {plan['max_loss_dollars']} |")
+    scan = recording["scan"]
+    plan = scan["promoted_card"]["plan"]
+    lines += ["", "## Scan-promoted card", "",
+              "The public scan row contains no size. These values come from the captured real card",
+              f"at the scan fixture's own clock, {scan['clock']}, with synthetic data and temporary state.", "",
+              "| Action | Whole shares | Fractional shares | Position dollars | Reported max_loss_dollars |",
+              "|---|---|---|---|---|",
+              f"| {scan['promoted_card']['action']} | {plan['shares']} | {plan['fractional_shares']} |"
+              f" {plan['position_dollars']} | {plan['max_loss_dollars']} |"]
     return "\n".join(lines) + "\n"
 
 
