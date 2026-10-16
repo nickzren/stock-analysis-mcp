@@ -1,10 +1,8 @@
 # Changelog
 
-## Unreleased: Step 2, one canonical decision
+## 0.3.0 (2026-10-16): Step 2, one canonical decision
 
-Not released yet. The README install commands still install v0.2.0; keep a live MCP client on v0.2.0 until the release (see [Running main before the release](#running-main-before-the-release)).
-
-Two versions change; the package version (`meta.server_version`) stays `0.2.0` until the release:
+The package version (`meta.server_version`) goes from `0.2.0` to `0.3.0`. Two other versions change independently:
 
 - **Response schema:** `meta.schema_version` goes from `"5"` to `"6"`.
 - **Watchlist snapshot:** `watchlist_snapshot.snapshot_version` goes from `"2.0.0"` to `"3.0.0"`. `detect_changes` accepts 1.0.0, 1.1.0, 2.0.0 and 3.0.0 snapshots.
@@ -24,7 +22,7 @@ Two versions change; the package version (`meta.server_version`) stays `0.2.0` u
 - **Snapshots:** the first `detect_changes` against a saved 2.0.0 snapshot compares no action fields and no zone, and can report one round of rule-driven gate changes ([One-time alerts](#one-time-alerts-after-upgrading)).
 - **Horizons:** In `watchlist_snapshot`, `new_money_action` and `if_held_action` are the mid-term decision and `long_term_action` the long-term one; `scan_watchlist` state holds swing-card actions. When the two disagree, they describe different horizons, not a contradiction.
 
-**Examples (v0.2.0 → main):** `hold_or_add` maps to `starter` before gates. An earnings blackout imposes `wait`, missing required thesis evidence `wait_for_data`, and weak liquidity `avoid`; the strongest restriction wins. An ETF's `hold` becomes `watch`; a broken business with a bullish chart goes from `hold_or_add` to `avoid` (`thesis_broken`).
+**Examples (v0.2.0 → v0.3.0):** `hold_or_add` maps to `starter` before gates. An earnings blackout imposes `wait`, missing required thesis evidence `wait_for_data`, and weak liquidity `avoid`; the strongest restriction wins. An ETF's `hold` becomes `watch`; a broken business with a bullish chart goes from `hold_or_add` to `avoid` (`thesis_broken`).
 
 ### Decision rules
 
@@ -159,12 +157,12 @@ Two versions change; the package version (`meta.server_version`) stays `0.2.0` u
 - **`detect_changes` with a saved 2.0.0 (or 1.x) snapshot:** the version warning, the "not compared" summary for the action fields and `price_zone`, and `±hard_gate` lines for gates the new rules fire or clear: `+earnings_unverifiable`, `+stale_data` / `+freshness_unverifiable`, `+thesis_unverifiable`, `+thesis_broken`, `+near_52w_high`, `+falling_knife` on ETFs and other unsupported instruments, `-data_quality_critical` where only beta was missing. Save the new 3.0.0 snapshot to restore full comparison.
 - **First `scan_watchlist`:** a `rules_changed` warning, plus one round of `changes` from the new rules: `earnings_unverifiable` on non-setup cards, and rows whose stage-1 outcome or `trigger_satisfied` changed. Leg suffixes and merged duplicate ids alone are not reported.
 
-### Running main before the release
+### Upgrade and rollback
 
-- Keep a live MCP client on v0.2.0 (the README commands pin it). If you run main, give it its own `STOCK_ANALYSIS_DATA_DIR`.
-- **Rollback:** a v0.2.0 scan on a data dir last written by main reports one round of rule-driven changes with no warning (v0.2.0 has no `rules_version` check), and v0.2.0's `detect_changes` rejects a 3.0.0 snapshot as `invalid_snapshot` (`unsupported snapshot_version: '3.0.0'`). Keep the 2.0.0 snapshot until you upgrade.
+- Pin the install to `git+https://github.com/nickzren/stock-analysis-mcp@v0.3.0`. Keep a copy of existing 2.0.0 snapshots and watchlist/scan state before upgrading. Use a separate `STOCK_ANALYSIS_DATA_DIR` when trying development versions.
+- **Rollback:** a v0.2.0 scan on a data dir last written by v0.3.0 reports one round of rule-driven changes with no warning (v0.2.0 has no `rules_version` check), and v0.2.0's `detect_changes` rejects a 3.0.0 snapshot as `invalid_snapshot` (`unsupported snapshot_version: '3.0.0'`). Use the saved 2.0.0 snapshots and state when returning to v0.2.0.
 
-### Known limitations (main)
+### Known limitations (0.3.0)
 
 - **Resolved from 0.2.0:** earnings verification in analyze (`earnings_unverifiable`); the earnings-day warning; the core profile mismatch (core follows `long_term.new_money`).
 - **Intraday price basis, narrowed:** a stale or missing in-session quote now blocks new money (`wait_for_data`). Zones and stops still use the last completed close while technicals include the forming bar (flag `includes_forming_bar`), and `if_held` is unchanged.

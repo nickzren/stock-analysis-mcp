@@ -26,7 +26,7 @@ No extra parameters needed. For more specific questions:
 | Question | What you get |
 |---|---|
 | “Analyze MSFT. What supports buying, and what would make you wait?” | A decision card, supporting evidence, blockers, and conditions to revisit. |
-| “I own 20 AAPL shares bought at $150 on 2025-01-02. Should I hold or sell?” | Position P&L, technical sell signals, and holding-period context. |
+| “I own 20 AAPL shares bought at $150 on 2025-01-02. Should I hold or sell?” | Mid-term holder guidance from `analyze`, plus position P&L and holding-period context. |
 | “Compare MSFT, AAPL, and GOOGL.” | Valuation, growth, profitability, and momentum side by side. |
 | “Any swing setup on HOOD? Account $3,000, risk 1%, position cap 10%.” | Entry, stop, targets, and stop-based sizing when a setup is actionable. |
 | “Add AAPL and MSFT to my watchlist, then scan for setups.” | A saved watchlist and setup screen; later scans highlight changes. |
@@ -52,16 +52,16 @@ Choose your client:
 **Claude Code**
 
 ```bash
-claude mcp add -s user stock-analysis -- uvx --from git+https://github.com/nickzren/stock-analysis-mcp@v0.2.0 stock-analysis
+claude mcp add -s user stock-analysis -- uvx --from git+https://github.com/nickzren/stock-analysis-mcp@v0.3.0 stock-analysis
 ```
 
 **Codex**
 
 ```bash
-codex mcp add stock-analysis -- uvx --from git+https://github.com/nickzren/stock-analysis-mcp@v0.2.0 stock-analysis
+codex mcp add stock-analysis -- uvx --from git+https://github.com/nickzren/stock-analysis-mcp@v0.3.0 stock-analysis
 ```
 
-These commands are pinned to **v0.2.0**. Other MCP clients can use the same `uvx`
+These commands are pinned to **v0.3.0**. Other MCP clients can use the same `uvx`
 command as a stdio server.
 
 ## For agents
@@ -73,7 +73,7 @@ use `search_symbol` to resolve names before calling other tools.
 |---|---|
 | General stock decision | `analyze`: `detail="standard"` by default; `"decision"` for a smaller response, `"full"` for the audit detail. |
 | Long-only swing trade, days to weeks | `analyze_trade_setup` |
-| Existing holding | `analyze_my_position`: provide `symbol`, `cost_basis`, `purchase_date`; `shares` is optional. |
+| Existing holding | `analyze` for `decision_card.if_held`; `analyze_my_position` for P&L and tax context (`symbol`, `cost_basis`, `purchase_date`; optional `shares`). |
 | Compare 2–5 stocks / review portfolio exposure | `compare` / `analyze_portfolio` |
 | Recheck a stock | Save `watchlist_snapshot`; pass it as `previous_snapshot` to `detect_changes`. |
 | Maintain and scan up to 25 symbols | `manage_watchlist` / `scan_watchlist` |
@@ -91,13 +91,10 @@ data; unverifiable earnings cap the card at `watch`.
 guarantee that every suggestion fits the risk budget. Use `analyze_trade_setup`
 for stop-based risk sizing; `risk_per_trade_pct=1` means 1% of the account.
 
-v0.2.0 responses use schema **5**; snapshots use **2.0.0**.
+Responses use schema **6**; snapshots use **3.0.0**.
 [CHANGELOG.md](CHANGELOG.md) covers field meanings, migration, and known limitations.
 
-## Unreleased (main)
-
-Not released yet: the commands above install v0.2.0. On `main`, `analyze` returns
-schema **6** and snapshot **3.0.0**; see the [CHANGELOG](CHANGELOG.md#unreleased-step-2-one-canonical-decision).
+## Decision
 
 `decision_card` holds one decision, made after the hard gates:
 
@@ -162,10 +159,9 @@ swing-card actions.
   is a ratio (`1.2 = 120%`). Undefined or unverified ratios are null;
   `metric_status` marks ratios excluded from scoring. Read cash-flow period labels:
   a field named `*_ttm` can contain an annual fallback.
-- **Limits remain:** in v0.2.0, `analyze` does not apply all the swing card's
-  freshness and earnings-verification gates (main does). Some statement reads
-  become missing fields after failure. Scores and sizing are rule-based estimates.
-  See the [known limitations](CHANGELOG.md#known-limitations).
+- **Limits remain:** some statement reads become missing fields after failure.
+  Scores and sizing are rule-based estimates; holder guidance is stateless.
+  See the [known limitations](CHANGELOG.md#known-limitations-030).
 - **Local state:** watchlist and scan state persist in `$STOCK_ANALYSIS_DATA_DIR`,
   otherwise `$XDG_DATA_HOME/stock-analysis`, otherwise `~/.local/share/stock-analysis`.
   Price-history `price://` resources last only in the server process that fetched

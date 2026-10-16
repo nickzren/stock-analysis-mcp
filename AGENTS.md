@@ -163,8 +163,8 @@
   `SCHEMA_VERSION` in `src/stock_analysis/__init__.py`, now "6"; v0.2.0 shipped
   "5") and `watchlist_snapshot.snapshot_version` (`normalize.SNAPSHOT_VERSION`,
   now "3.0.0"; v0.2.0 shipped "2.0.0"). CHANGELOG.md lists every field that
-  changed meaning or units since schema 4, unreleased changes under
-  "Unreleased"; update it with any further output change.
+  changed meaning or units since schema 4; the 0.3.0 section covers schema 6
+  and snapshot 3.0.0. Record future output changes under "Unreleased".
 - `technicals` returns `current_price` at the top level, not under a `summary` object.
 - `analyze` returns price, name, sector, market cap, and currency under `summary`, not as duplicated top-level fields.
 - Support boundaries (WP4, D5): `summary.support` (and the trade card's
