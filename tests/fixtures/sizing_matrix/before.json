@@ -1,0 +1,5212 @@
+{
+  "analyze": {
+    "balanced_narrow": {
+      "card": {
+        "entry": {
+          "buy_zone_high": 101.0,
+          "buy_zone_low": 71.4,
+          "current_price": 100.0
+        },
+        "exit": {
+          "stop_basis": "current_minus_2.0atr",
+          "stop_or_invalidation": 96.0
+        },
+        "sizing": {
+          "at_price": 100.0,
+          "fractional_shares": 2.5,
+          "full_dollars": 800.0,
+          "full_pct_cap": 8.0,
+          "starter_dollars": 250.0,
+          "starter_pct": 2.5,
+          "unavailable_reason": null,
+          "whole_shares": 2
+        }
+      },
+      "decision": {
+        "if_held": {
+          "action": "hold",
+          "add_allowed": true,
+          "basis": "candidate_admits_new_money"
+        },
+        "long_term": {
+          "action": "buy",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        },
+        "new_money": {
+          "action": "buy",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        }
+      },
+      "inputs": {
+        "account_size": 10000.0,
+        "annualized": 0.35,
+        "atr": 2.0,
+        "low_multiple": 0.7,
+        "price": 100.0,
+        "profile": "balanced"
+      },
+      "limit_origins": {
+        "max_position_pct": "profile",
+        "risk_per_trade_pct": "profile"
+      },
+      "modes": {
+        "balanced": {
+          "action": "buy",
+          "capital_at_risk": null,
+          "max_position": {
+            "dollars": 800.0,
+            "pct": 8.0,
+            "shares": 8
+          },
+          "starter_position": {
+            "dollars": 250.0,
+            "pct": 2.5,
+            "shares": 2
+          }
+        },
+        "core": {
+          "action": "buy",
+          "capital_at_risk": null,
+          "max_position": {
+            "dollars": 800.0,
+            "pct": 8.0,
+            "shares": 8
+          },
+          "starter_position": {
+            "dollars": 200.0,
+            "pct": 2.0,
+            "shares": 2
+          }
+        },
+        "speculative": {
+          "action": "starter",
+          "capital_at_risk": "10.0K",
+          "max_position": null,
+          "starter_position": {
+            "dollars": 100.0,
+            "pct": 1.0,
+            "shares": 1
+          }
+        }
+      },
+      "resolved_profile": {
+        "account_bucket": "small",
+        "account_size": 10000.0,
+        "account_size_status": "provided",
+        "add_on_confirmation_pct": 5.0,
+        "description": "Default profile that blends quality, valuation, and tactical entry discipline.",
+        "label": "Balanced",
+        "max_position_pct": 10.0,
+        "profile": "balanced",
+        "risk_per_trade_decimal": 0.01,
+        "risk_per_trade_pct": 1.0,
+        "small_account": true,
+        "starter_position_pct": 2.5
+      },
+      "snapshot": {
+        "as_of_kind": "session_close",
+        "bearish_signals": [],
+        "bullish_signals": [
+          "golden_cross",
+          "macd_bullish",
+          "net_cash_positive",
+          "positive_free_cash_flow",
+          "price_above_sma200",
+          "strong_3m_momentum"
+        ],
+        "confidence": "high",
+        "hard_gate_ids": [],
+        "if_held_action": "hold",
+        "is_unprofitable": null,
+        "long_term_action": "buy",
+        "long_term_fit": "ok",
+        "market_cap": 10000000000,
+        "mid_term_fit": "ok",
+        "new_money_action": "buy",
+        "next_catalyst": {
+          "date": "2026-11-18",
+          "source": null,
+          "status": "available",
+          "type": "earnings"
+        },
+        "price": 100.0,
+        "price_as_of": "2026-10-09",
+        "price_source": "daily_close",
+        "price_stale": false,
+        "price_zone": "below_sma200",
+        "risk_regime": "medium",
+        "score": 0.75,
+        "sector": null,
+        "snapshot_as_of_date": "2026-10-10",
+        "snapshot_hash": "8a4032a7ae8abf3c",
+        "snapshot_version": "3.0.0",
+        "support_currency": "supported",
+        "support_instrument": "supported",
+        "symbol": "ACME",
+        "tilt": "bullish",
+        "unevaluated_gate_ids": [],
+        "valuation_gate": "attractive",
+        "volatility_ann": 0.35
+      },
+      "summary": "Decision (mid-term, new money): buy; size ~2.5-8.0%. If held: hold. Long-term (1-5y): buy. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "tiers": {
+        "decision": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 71.4,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 2.5,
+            "full_dollars": 800.0,
+            "full_pct_cap": 8.0,
+            "starter_dollars": 250.0,
+            "starter_pct": 2.5,
+            "unavailable_reason": null,
+            "whole_shares": 2
+          }
+        },
+        "full": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 71.4,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 2.5,
+            "full_dollars": 800.0,
+            "full_pct_cap": 8.0,
+            "starter_dollars": 250.0,
+            "starter_pct": 2.5,
+            "unavailable_reason": null,
+            "whole_shares": 2
+          }
+        },
+        "standard": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 71.4,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 2.5,
+            "full_dollars": 800.0,
+            "full_pct_cap": 8.0,
+            "starter_dollars": 250.0,
+            "starter_pct": 2.5,
+            "unavailable_reason": null,
+            "whole_shares": 2
+          }
+        }
+      },
+      "zones": {
+        "basis": {
+          "accumulate_near": "sma_200",
+          "reduce_above": "52w_high_minus_1atr",
+          "stop_loss": "current_minus_2.0atr",
+          "strong_buy_below": "52w_low_plus_1atr"
+        },
+        "position_sizing_range": {
+          "dollars_for_account": {
+            "max": 800.0,
+            "min": 250.0,
+            "portfolio_assumption": 10000.0
+          },
+          "max_pct": 8.0,
+          "profile_cap_pct": 10.0,
+          "rationale": "medium_risk_regime",
+          "risk_per_trade_pct": 1.0,
+          "shares_range": {
+            "at_price": 100.0,
+            "max": 8,
+            "min": 2
+          },
+          "starter_pct": 2.5,
+          "stop_implied_max": {
+            "dollars_for_account": 800.0,
+            "pct": 8.0,
+            "risk_per_trade_pct": 1.0,
+            "stop_distance_pct": 4.0
+          },
+          "suggested_pct_range": [
+            2.5,
+            8.0
+          ]
+        },
+        "stop_calculation": {
+          "atr_pct": 0.02,
+          "min_multiple_required": 1.5,
+          "stop_distance_pct": 0.04,
+          "stop_multiple_used": 2.0,
+          "stop_price": 96.0
+        },
+        "zone_warnings": []
+      }
+    },
+    "balanced_wide": {
+      "card": {
+        "entry": {
+          "buy_zone_high": 101.0,
+          "buy_zone_low": 77.0,
+          "current_price": 100.0
+        },
+        "exit": {
+          "stop_basis": "current_minus_2.0atr",
+          "stop_or_invalidation": 80.0
+        },
+        "sizing": {
+          "at_price": 100.0,
+          "fractional_shares": 2.5,
+          "full_dollars": 800.0,
+          "full_pct_cap": 8.0,
+          "starter_dollars": 250.0,
+          "starter_pct": 2.5,
+          "unavailable_reason": null,
+          "whole_shares": 2
+        }
+      },
+      "decision": {
+        "if_held": {
+          "action": "hold",
+          "add_allowed": true,
+          "basis": "candidate_admits_new_money"
+        },
+        "long_term": {
+          "action": "buy",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        },
+        "new_money": {
+          "action": "buy",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        }
+      },
+      "inputs": {
+        "account_size": 10000.0,
+        "annualized": 0.35,
+        "atr": 10.0,
+        "low_multiple": 0.7,
+        "price": 100.0,
+        "profile": "balanced"
+      },
+      "limit_origins": {
+        "max_position_pct": "profile",
+        "risk_per_trade_pct": "profile"
+      },
+      "modes": {
+        "balanced": {
+          "action": "buy",
+          "capital_at_risk": null,
+          "max_position": {
+            "dollars": 800.0,
+            "pct": 8.0,
+            "shares": 8
+          },
+          "starter_position": {
+            "dollars": 250.0,
+            "pct": 2.5,
+            "shares": 2
+          }
+        },
+        "core": {
+          "action": "buy",
+          "capital_at_risk": null,
+          "max_position": {
+            "dollars": 800.0,
+            "pct": 8.0,
+            "shares": 8
+          },
+          "starter_position": {
+            "dollars": 200.0,
+            "pct": 2.0,
+            "shares": 2
+          }
+        },
+        "speculative": {
+          "action": "wait",
+          "capital_at_risk": null,
+          "max_position": null,
+          "starter_position": null
+        }
+      },
+      "resolved_profile": {
+        "account_bucket": "small",
+        "account_size": 10000.0,
+        "account_size_status": "provided",
+        "add_on_confirmation_pct": 5.0,
+        "description": "Default profile that blends quality, valuation, and tactical entry discipline.",
+        "label": "Balanced",
+        "max_position_pct": 10.0,
+        "profile": "balanced",
+        "risk_per_trade_decimal": 0.01,
+        "risk_per_trade_pct": 1.0,
+        "small_account": true,
+        "starter_position_pct": 2.5
+      },
+      "snapshot": {
+        "as_of_kind": "session_close",
+        "bearish_signals": [],
+        "bullish_signals": [
+          "golden_cross",
+          "macd_bullish",
+          "net_cash_positive",
+          "positive_free_cash_flow",
+          "price_above_sma200",
+          "strong_3m_momentum"
+        ],
+        "confidence": "high",
+        "hard_gate_ids": [],
+        "if_held_action": "hold",
+        "is_unprofitable": null,
+        "long_term_action": "buy",
+        "long_term_fit": "ok",
+        "market_cap": 10000000000,
+        "mid_term_fit": "ok",
+        "new_money_action": "buy",
+        "next_catalyst": {
+          "date": "2026-11-18",
+          "source": null,
+          "status": "available",
+          "type": "earnings"
+        },
+        "price": 100.0,
+        "price_as_of": "2026-10-09",
+        "price_source": "daily_close",
+        "price_stale": false,
+        "price_zone": "below_sma200",
+        "risk_regime": "medium",
+        "score": 0.75,
+        "sector": null,
+        "snapshot_as_of_date": "2026-10-10",
+        "snapshot_hash": "8a4032a7ae8abf3c",
+        "snapshot_version": "3.0.0",
+        "support_currency": "supported",
+        "support_instrument": "supported",
+        "symbol": "ACME",
+        "tilt": "bullish",
+        "unevaluated_gate_ids": [],
+        "valuation_gate": "attractive",
+        "volatility_ann": 0.35
+      },
+      "summary": "Decision (mid-term, new money): buy; size ~2.5-8.0%. If held: hold. Long-term (1-5y): buy. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "tiers": {
+        "decision": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 77.0,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 2.5,
+            "full_dollars": 800.0,
+            "full_pct_cap": 8.0,
+            "starter_dollars": 250.0,
+            "starter_pct": 2.5,
+            "unavailable_reason": null,
+            "whole_shares": 2
+          }
+        },
+        "full": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 77.0,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 2.5,
+            "full_dollars": 800.0,
+            "full_pct_cap": 8.0,
+            "starter_dollars": 250.0,
+            "starter_pct": 2.5,
+            "unavailable_reason": null,
+            "whole_shares": 2
+          }
+        },
+        "standard": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 77.0,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 2.5,
+            "full_dollars": 800.0,
+            "full_pct_cap": 8.0,
+            "starter_dollars": 250.0,
+            "starter_pct": 2.5,
+            "unavailable_reason": null,
+            "whole_shares": 2
+          }
+        }
+      },
+      "zones": {
+        "basis": {
+          "accumulate_near": "sma_200",
+          "reduce_above": "52w_high_minus_1atr",
+          "stop_loss": "current_minus_2.0atr",
+          "strong_buy_below": "52w_low_plus_1atr"
+        },
+        "position_sizing_range": {
+          "dollars_for_account": {
+            "max": 800.0,
+            "min": 250.0,
+            "portfolio_assumption": 10000.0
+          },
+          "max_pct": 8.0,
+          "profile_cap_pct": 10.0,
+          "rationale": "medium_risk_regime",
+          "risk_per_trade_pct": 1.0,
+          "shares_range": {
+            "at_price": 100.0,
+            "max": 8,
+            "min": 2
+          },
+          "starter_pct": 2.5,
+          "stop_implied_max": {
+            "dollars_for_account": 500.0,
+            "pct": 5.0,
+            "risk_per_trade_pct": 1.0,
+            "stop_distance_pct": 20.0
+          },
+          "suggested_pct_range": [
+            2.5,
+            8.0
+          ]
+        },
+        "stop_calculation": {
+          "atr_pct": 0.1,
+          "min_multiple_required": 1.5,
+          "stop_distance_pct": 0.2,
+          "stop_multiple_used": 2.0,
+          "stop_price": 80.0
+        },
+        "zone_warnings": []
+      }
+    },
+    "both_overrides": {
+      "card": {
+        "entry": {
+          "buy_zone_high": 101.0,
+          "buy_zone_low": 77.0,
+          "current_price": 100.0
+        },
+        "exit": {
+          "stop_basis": "current_minus_2.0atr",
+          "stop_or_invalidation": 80.0
+        },
+        "sizing": {
+          "at_price": 100.0,
+          "fractional_shares": 0.5,
+          "full_dollars": 50.0,
+          "full_pct_cap": 0.5,
+          "starter_dollars": 50.0,
+          "starter_pct": 0.5,
+          "unavailable_reason": null,
+          "whole_shares": 0
+        }
+      },
+      "decision": {
+        "if_held": {
+          "action": "hold",
+          "add_allowed": true,
+          "basis": "candidate_admits_new_money"
+        },
+        "long_term": {
+          "action": "buy",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        },
+        "new_money": {
+          "action": "buy",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        }
+      },
+      "inputs": {
+        "account_size": 10000.0,
+        "annualized": 0.35,
+        "atr": 10.0,
+        "low_multiple": 0.7,
+        "max_position_pct": 0.5,
+        "price": 100.0,
+        "profile": "balanced",
+        "risk_per_trade_pct": 0.25
+      },
+      "limit_origins": {
+        "max_position_pct": "caller",
+        "risk_per_trade_pct": "caller"
+      },
+      "modes": {
+        "balanced": {
+          "action": "buy",
+          "capital_at_risk": null,
+          "max_position": {
+            "dollars": 800.0,
+            "pct": 8.0,
+            "shares": 8
+          },
+          "starter_position": {
+            "dollars": 250.0,
+            "pct": 2.5,
+            "shares": 2
+          }
+        },
+        "core": {
+          "action": "buy",
+          "capital_at_risk": null,
+          "max_position": {
+            "dollars": 800.0,
+            "pct": 8.0,
+            "shares": 8
+          },
+          "starter_position": {
+            "dollars": 200.0,
+            "pct": 2.0,
+            "shares": 2
+          }
+        },
+        "speculative": {
+          "action": "wait",
+          "capital_at_risk": null,
+          "max_position": null,
+          "starter_position": null
+        }
+      },
+      "resolved_profile": {
+        "account_bucket": "small",
+        "account_size": 10000.0,
+        "account_size_status": "provided",
+        "add_on_confirmation_pct": 5.0,
+        "description": "Default profile that blends quality, valuation, and tactical entry discipline.",
+        "label": "Balanced",
+        "max_position_pct": 0.5,
+        "profile": "balanced",
+        "risk_per_trade_decimal": 0.0025,
+        "risk_per_trade_pct": 0.25,
+        "small_account": true,
+        "starter_position_pct": 2.5
+      },
+      "snapshot": {
+        "as_of_kind": "session_close",
+        "bearish_signals": [],
+        "bullish_signals": [
+          "golden_cross",
+          "macd_bullish",
+          "net_cash_positive",
+          "positive_free_cash_flow",
+          "price_above_sma200",
+          "strong_3m_momentum"
+        ],
+        "confidence": "high",
+        "hard_gate_ids": [],
+        "if_held_action": "hold",
+        "is_unprofitable": null,
+        "long_term_action": "buy",
+        "long_term_fit": "ok",
+        "market_cap": 10000000000,
+        "mid_term_fit": "ok",
+        "new_money_action": "buy",
+        "next_catalyst": {
+          "date": "2026-11-18",
+          "source": null,
+          "status": "available",
+          "type": "earnings"
+        },
+        "price": 100.0,
+        "price_as_of": "2026-10-09",
+        "price_source": "daily_close",
+        "price_stale": false,
+        "price_zone": "below_sma200",
+        "risk_regime": "medium",
+        "score": 0.75,
+        "sector": null,
+        "snapshot_as_of_date": "2026-10-10",
+        "snapshot_hash": "8a4032a7ae8abf3c",
+        "snapshot_version": "3.0.0",
+        "support_currency": "supported",
+        "support_instrument": "supported",
+        "symbol": "ACME",
+        "tilt": "bullish",
+        "unevaluated_gate_ids": [],
+        "valuation_gate": "attractive",
+        "volatility_ann": 0.35
+      },
+      "summary": "Decision (mid-term, new money): buy; size ~0.5-0.5%. If held: hold. Long-term (1-5y): buy. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "tiers": {
+        "decision": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 77.0,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 0.5,
+            "full_dollars": 50.0,
+            "full_pct_cap": 0.5,
+            "starter_dollars": 50.0,
+            "starter_pct": 0.5,
+            "unavailable_reason": null,
+            "whole_shares": 0
+          }
+        },
+        "full": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 77.0,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 0.5,
+            "full_dollars": 50.0,
+            "full_pct_cap": 0.5,
+            "starter_dollars": 50.0,
+            "starter_pct": 0.5,
+            "unavailable_reason": null,
+            "whole_shares": 0
+          }
+        },
+        "standard": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 77.0,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 0.5,
+            "full_dollars": 50.0,
+            "full_pct_cap": 0.5,
+            "starter_dollars": 50.0,
+            "starter_pct": 0.5,
+            "unavailable_reason": null,
+            "whole_shares": 0
+          }
+        }
+      },
+      "zones": {
+        "basis": {
+          "accumulate_near": "sma_200",
+          "reduce_above": "52w_high_minus_1atr",
+          "stop_loss": "current_minus_2.0atr",
+          "strong_buy_below": "52w_low_plus_1atr"
+        },
+        "position_sizing_range": {
+          "dollars_for_account": {
+            "max": 50.0,
+            "min": 50.0,
+            "portfolio_assumption": 10000.0
+          },
+          "max_pct": 0.5,
+          "profile_cap_pct": 0.5,
+          "rationale": "medium_risk_regime",
+          "risk_per_trade_pct": 0.25,
+          "shares_range": {
+            "at_price": 100.0,
+            "max": 0,
+            "min": 0
+          },
+          "starter_pct": 0.5,
+          "stop_implied_max": {
+            "dollars_for_account": 50.0,
+            "pct": 0.5,
+            "risk_per_trade_pct": 0.25,
+            "stop_distance_pct": 20.0
+          },
+          "suggested_pct_range": [
+            0.5,
+            0.5
+          ]
+        },
+        "stop_calculation": {
+          "atr_pct": 0.1,
+          "min_multiple_required": 1.5,
+          "stop_distance_pct": 0.2,
+          "stop_multiple_used": 2.0,
+          "stop_price": 80.0
+        },
+        "zone_warnings": []
+      }
+    },
+    "cap_only_tight": {
+      "card": {
+        "entry": {
+          "buy_zone_high": 101.0,
+          "buy_zone_low": 77.0,
+          "current_price": 100.0
+        },
+        "exit": {
+          "stop_basis": "current_minus_2.0atr",
+          "stop_or_invalidation": 80.0
+        },
+        "sizing": {
+          "at_price": 100.0,
+          "fractional_shares": 2.0,
+          "full_dollars": 200.0,
+          "full_pct_cap": 2.0,
+          "starter_dollars": 200.0,
+          "starter_pct": 2.0,
+          "unavailable_reason": null,
+          "whole_shares": 2
+        }
+      },
+      "decision": {
+        "if_held": {
+          "action": "hold",
+          "add_allowed": true,
+          "basis": "candidate_admits_new_money"
+        },
+        "long_term": {
+          "action": "buy",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        },
+        "new_money": {
+          "action": "buy",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        }
+      },
+      "inputs": {
+        "account_size": 10000.0,
+        "annualized": 0.35,
+        "atr": 10.0,
+        "low_multiple": 0.7,
+        "max_position_pct": 2.0,
+        "price": 100.0,
+        "profile": "balanced"
+      },
+      "limit_origins": {
+        "max_position_pct": "caller",
+        "risk_per_trade_pct": "profile"
+      },
+      "modes": {
+        "balanced": {
+          "action": "buy",
+          "capital_at_risk": null,
+          "max_position": {
+            "dollars": 800.0,
+            "pct": 8.0,
+            "shares": 8
+          },
+          "starter_position": {
+            "dollars": 250.0,
+            "pct": 2.5,
+            "shares": 2
+          }
+        },
+        "core": {
+          "action": "buy",
+          "capital_at_risk": null,
+          "max_position": {
+            "dollars": 800.0,
+            "pct": 8.0,
+            "shares": 8
+          },
+          "starter_position": {
+            "dollars": 200.0,
+            "pct": 2.0,
+            "shares": 2
+          }
+        },
+        "speculative": {
+          "action": "wait",
+          "capital_at_risk": null,
+          "max_position": null,
+          "starter_position": null
+        }
+      },
+      "resolved_profile": {
+        "account_bucket": "small",
+        "account_size": 10000.0,
+        "account_size_status": "provided",
+        "add_on_confirmation_pct": 5.0,
+        "description": "Default profile that blends quality, valuation, and tactical entry discipline.",
+        "label": "Balanced",
+        "max_position_pct": 2.0,
+        "profile": "balanced",
+        "risk_per_trade_decimal": 0.01,
+        "risk_per_trade_pct": 1.0,
+        "small_account": true,
+        "starter_position_pct": 2.5
+      },
+      "snapshot": {
+        "as_of_kind": "session_close",
+        "bearish_signals": [],
+        "bullish_signals": [
+          "golden_cross",
+          "macd_bullish",
+          "net_cash_positive",
+          "positive_free_cash_flow",
+          "price_above_sma200",
+          "strong_3m_momentum"
+        ],
+        "confidence": "high",
+        "hard_gate_ids": [],
+        "if_held_action": "hold",
+        "is_unprofitable": null,
+        "long_term_action": "buy",
+        "long_term_fit": "ok",
+        "market_cap": 10000000000,
+        "mid_term_fit": "ok",
+        "new_money_action": "buy",
+        "next_catalyst": {
+          "date": "2026-11-18",
+          "source": null,
+          "status": "available",
+          "type": "earnings"
+        },
+        "price": 100.0,
+        "price_as_of": "2026-10-09",
+        "price_source": "daily_close",
+        "price_stale": false,
+        "price_zone": "below_sma200",
+        "risk_regime": "medium",
+        "score": 0.75,
+        "sector": null,
+        "snapshot_as_of_date": "2026-10-10",
+        "snapshot_hash": "8a4032a7ae8abf3c",
+        "snapshot_version": "3.0.0",
+        "support_currency": "supported",
+        "support_instrument": "supported",
+        "symbol": "ACME",
+        "tilt": "bullish",
+        "unevaluated_gate_ids": [],
+        "valuation_gate": "attractive",
+        "volatility_ann": 0.35
+      },
+      "summary": "Decision (mid-term, new money): buy; size ~2.0-2.0%. If held: hold. Long-term (1-5y): buy. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "tiers": {
+        "decision": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 77.0,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 2.0,
+            "full_dollars": 200.0,
+            "full_pct_cap": 2.0,
+            "starter_dollars": 200.0,
+            "starter_pct": 2.0,
+            "unavailable_reason": null,
+            "whole_shares": 2
+          }
+        },
+        "full": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 77.0,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 2.0,
+            "full_dollars": 200.0,
+            "full_pct_cap": 2.0,
+            "starter_dollars": 200.0,
+            "starter_pct": 2.0,
+            "unavailable_reason": null,
+            "whole_shares": 2
+          }
+        },
+        "standard": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 77.0,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 2.0,
+            "full_dollars": 200.0,
+            "full_pct_cap": 2.0,
+            "starter_dollars": 200.0,
+            "starter_pct": 2.0,
+            "unavailable_reason": null,
+            "whole_shares": 2
+          }
+        }
+      },
+      "zones": {
+        "basis": {
+          "accumulate_near": "sma_200",
+          "reduce_above": "52w_high_minus_1atr",
+          "stop_loss": "current_minus_2.0atr",
+          "strong_buy_below": "52w_low_plus_1atr"
+        },
+        "position_sizing_range": {
+          "dollars_for_account": {
+            "max": 200.0,
+            "min": 200.0,
+            "portfolio_assumption": 10000.0
+          },
+          "max_pct": 2.0,
+          "profile_cap_pct": 2.0,
+          "rationale": "medium_risk_regime",
+          "risk_per_trade_pct": 1.0,
+          "shares_range": {
+            "at_price": 100.0,
+            "max": 2,
+            "min": 2
+          },
+          "starter_pct": 2.0,
+          "stop_implied_max": {
+            "dollars_for_account": 200.0,
+            "pct": 2.0,
+            "risk_per_trade_pct": 1.0,
+            "stop_distance_pct": 20.0
+          },
+          "suggested_pct_range": [
+            2.0,
+            2.0
+          ]
+        },
+        "stop_calculation": {
+          "atr_pct": 0.1,
+          "min_multiple_required": 1.5,
+          "stop_distance_pct": 0.2,
+          "stop_multiple_used": 2.0,
+          "stop_price": 80.0
+        },
+        "zone_warnings": []
+      }
+    },
+    "cap_only_wide": {
+      "card": {
+        "entry": {
+          "buy_zone_high": 101.0,
+          "buy_zone_low": 77.0,
+          "current_price": 100.0
+        },
+        "exit": {
+          "stop_basis": "current_minus_2.0atr",
+          "stop_or_invalidation": 80.0
+        },
+        "sizing": {
+          "at_price": 100.0,
+          "fractional_shares": 2.5,
+          "full_dollars": 800.0,
+          "full_pct_cap": 8.0,
+          "starter_dollars": 250.0,
+          "starter_pct": 2.5,
+          "unavailable_reason": null,
+          "whole_shares": 2
+        }
+      },
+      "decision": {
+        "if_held": {
+          "action": "hold",
+          "add_allowed": true,
+          "basis": "candidate_admits_new_money"
+        },
+        "long_term": {
+          "action": "buy",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        },
+        "new_money": {
+          "action": "buy",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        }
+      },
+      "inputs": {
+        "account_size": 10000.0,
+        "annualized": 0.35,
+        "atr": 10.0,
+        "low_multiple": 0.7,
+        "max_position_pct": 8.0,
+        "price": 100.0,
+        "profile": "balanced"
+      },
+      "limit_origins": {
+        "max_position_pct": "caller",
+        "risk_per_trade_pct": "profile"
+      },
+      "modes": {
+        "balanced": {
+          "action": "buy",
+          "capital_at_risk": null,
+          "max_position": {
+            "dollars": 800.0,
+            "pct": 8.0,
+            "shares": 8
+          },
+          "starter_position": {
+            "dollars": 250.0,
+            "pct": 2.5,
+            "shares": 2
+          }
+        },
+        "core": {
+          "action": "buy",
+          "capital_at_risk": null,
+          "max_position": {
+            "dollars": 800.0,
+            "pct": 8.0,
+            "shares": 8
+          },
+          "starter_position": {
+            "dollars": 200.0,
+            "pct": 2.0,
+            "shares": 2
+          }
+        },
+        "speculative": {
+          "action": "wait",
+          "capital_at_risk": null,
+          "max_position": null,
+          "starter_position": null
+        }
+      },
+      "resolved_profile": {
+        "account_bucket": "small",
+        "account_size": 10000.0,
+        "account_size_status": "provided",
+        "add_on_confirmation_pct": 5.0,
+        "description": "Default profile that blends quality, valuation, and tactical entry discipline.",
+        "label": "Balanced",
+        "max_position_pct": 8.0,
+        "profile": "balanced",
+        "risk_per_trade_decimal": 0.01,
+        "risk_per_trade_pct": 1.0,
+        "small_account": true,
+        "starter_position_pct": 2.5
+      },
+      "snapshot": {
+        "as_of_kind": "session_close",
+        "bearish_signals": [],
+        "bullish_signals": [
+          "golden_cross",
+          "macd_bullish",
+          "net_cash_positive",
+          "positive_free_cash_flow",
+          "price_above_sma200",
+          "strong_3m_momentum"
+        ],
+        "confidence": "high",
+        "hard_gate_ids": [],
+        "if_held_action": "hold",
+        "is_unprofitable": null,
+        "long_term_action": "buy",
+        "long_term_fit": "ok",
+        "market_cap": 10000000000,
+        "mid_term_fit": "ok",
+        "new_money_action": "buy",
+        "next_catalyst": {
+          "date": "2026-11-18",
+          "source": null,
+          "status": "available",
+          "type": "earnings"
+        },
+        "price": 100.0,
+        "price_as_of": "2026-10-09",
+        "price_source": "daily_close",
+        "price_stale": false,
+        "price_zone": "below_sma200",
+        "risk_regime": "medium",
+        "score": 0.75,
+        "sector": null,
+        "snapshot_as_of_date": "2026-10-10",
+        "snapshot_hash": "8a4032a7ae8abf3c",
+        "snapshot_version": "3.0.0",
+        "support_currency": "supported",
+        "support_instrument": "supported",
+        "symbol": "ACME",
+        "tilt": "bullish",
+        "unevaluated_gate_ids": [],
+        "valuation_gate": "attractive",
+        "volatility_ann": 0.35
+      },
+      "summary": "Decision (mid-term, new money): buy; size ~2.5-8.0%. If held: hold. Long-term (1-5y): buy. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "tiers": {
+        "decision": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 77.0,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 2.5,
+            "full_dollars": 800.0,
+            "full_pct_cap": 8.0,
+            "starter_dollars": 250.0,
+            "starter_pct": 2.5,
+            "unavailable_reason": null,
+            "whole_shares": 2
+          }
+        },
+        "full": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 77.0,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 2.5,
+            "full_dollars": 800.0,
+            "full_pct_cap": 8.0,
+            "starter_dollars": 250.0,
+            "starter_pct": 2.5,
+            "unavailable_reason": null,
+            "whole_shares": 2
+          }
+        },
+        "standard": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 77.0,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 2.5,
+            "full_dollars": 800.0,
+            "full_pct_cap": 8.0,
+            "starter_dollars": 250.0,
+            "starter_pct": 2.5,
+            "unavailable_reason": null,
+            "whole_shares": 2
+          }
+        }
+      },
+      "zones": {
+        "basis": {
+          "accumulate_near": "sma_200",
+          "reduce_above": "52w_high_minus_1atr",
+          "stop_loss": "current_minus_2.0atr",
+          "strong_buy_below": "52w_low_plus_1atr"
+        },
+        "position_sizing_range": {
+          "dollars_for_account": {
+            "max": 800.0,
+            "min": 250.0,
+            "portfolio_assumption": 10000.0
+          },
+          "max_pct": 8.0,
+          "profile_cap_pct": 8.0,
+          "rationale": "medium_risk_regime",
+          "risk_per_trade_pct": 1.0,
+          "shares_range": {
+            "at_price": 100.0,
+            "max": 8,
+            "min": 2
+          },
+          "starter_pct": 2.5,
+          "stop_implied_max": {
+            "dollars_for_account": 500.0,
+            "pct": 5.0,
+            "risk_per_trade_pct": 1.0,
+            "stop_distance_pct": 20.0
+          },
+          "suggested_pct_range": [
+            2.5,
+            8.0
+          ]
+        },
+        "stop_calculation": {
+          "atr_pct": 0.1,
+          "min_multiple_required": 1.5,
+          "stop_distance_pct": 0.2,
+          "stop_multiple_used": 2.0,
+          "stop_price": 80.0
+        },
+        "zone_warnings": []
+      }
+    },
+    "core_narrow": {
+      "card": {
+        "entry": {
+          "buy_zone_high": 101.0,
+          "buy_zone_low": 71.4,
+          "current_price": 100.0
+        },
+        "exit": {
+          "stop_basis": "current_minus_2.0atr",
+          "stop_or_invalidation": 96.0
+        },
+        "sizing": {
+          "at_price": 100.0,
+          "fractional_shares": 2.0,
+          "full_dollars": 800.0,
+          "full_pct_cap": 8.0,
+          "starter_dollars": 200.0,
+          "starter_pct": 2.0,
+          "unavailable_reason": null,
+          "whole_shares": 2
+        }
+      },
+      "decision": {
+        "if_held": {
+          "action": "hold",
+          "add_allowed": true,
+          "basis": "candidate_admits_new_money"
+        },
+        "long_term": {
+          "action": "buy",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        },
+        "new_money": {
+          "action": "buy",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        }
+      },
+      "inputs": {
+        "account_size": 10000.0,
+        "annualized": 0.35,
+        "atr": 2.0,
+        "low_multiple": 0.7,
+        "price": 100.0,
+        "profile": "core"
+      },
+      "limit_origins": {
+        "max_position_pct": "profile",
+        "risk_per_trade_pct": "profile"
+      },
+      "modes": {
+        "balanced": {
+          "action": "buy",
+          "capital_at_risk": null,
+          "max_position": {
+            "dollars": 800.0,
+            "pct": 8.0,
+            "shares": 8
+          },
+          "starter_position": {
+            "dollars": 250.0,
+            "pct": 2.5,
+            "shares": 2
+          }
+        },
+        "core": {
+          "action": "buy",
+          "capital_at_risk": null,
+          "max_position": {
+            "dollars": 800.0,
+            "pct": 8.0,
+            "shares": 8
+          },
+          "starter_position": {
+            "dollars": 200.0,
+            "pct": 2.0,
+            "shares": 2
+          }
+        },
+        "speculative": {
+          "action": "starter",
+          "capital_at_risk": "10.0K",
+          "max_position": null,
+          "starter_position": {
+            "dollars": 100.0,
+            "pct": 1.0,
+            "shares": 1
+          }
+        }
+      },
+      "resolved_profile": {
+        "account_bucket": "small",
+        "account_size": 10000.0,
+        "account_size_status": "provided",
+        "add_on_confirmation_pct": 4.0,
+        "description": "Quality-first profile with tighter risk budgets and larger preference for durable businesses.",
+        "label": "Core compounder",
+        "max_position_pct": 8.0,
+        "profile": "core",
+        "risk_per_trade_decimal": 0.005,
+        "risk_per_trade_pct": 0.5,
+        "small_account": true,
+        "starter_position_pct": 2.0
+      },
+      "snapshot": {
+        "as_of_kind": "session_close",
+        "bearish_signals": [],
+        "bullish_signals": [
+          "golden_cross",
+          "macd_bullish",
+          "net_cash_positive",
+          "positive_free_cash_flow",
+          "price_above_sma200",
+          "strong_3m_momentum"
+        ],
+        "confidence": "high",
+        "hard_gate_ids": [],
+        "if_held_action": "hold",
+        "is_unprofitable": null,
+        "long_term_action": "buy",
+        "long_term_fit": "ok",
+        "market_cap": 10000000000,
+        "mid_term_fit": "ok",
+        "new_money_action": "buy",
+        "next_catalyst": {
+          "date": "2026-11-18",
+          "source": null,
+          "status": "available",
+          "type": "earnings"
+        },
+        "price": 100.0,
+        "price_as_of": "2026-10-09",
+        "price_source": "daily_close",
+        "price_stale": false,
+        "price_zone": "below_sma200",
+        "risk_regime": "medium",
+        "score": 0.75,
+        "sector": null,
+        "snapshot_as_of_date": "2026-10-10",
+        "snapshot_hash": "8a4032a7ae8abf3c",
+        "snapshot_version": "3.0.0",
+        "support_currency": "supported",
+        "support_instrument": "supported",
+        "symbol": "ACME",
+        "tilt": "bullish",
+        "unevaluated_gate_ids": [],
+        "valuation_gate": "attractive",
+        "volatility_ann": 0.35
+      },
+      "summary": "Decision (mid-term, new money): buy; size ~2.0-8.0%. If held: hold. Long-term (1-5y): buy. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "tiers": {
+        "decision": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 71.4,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 2.0,
+            "full_dollars": 800.0,
+            "full_pct_cap": 8.0,
+            "starter_dollars": 200.0,
+            "starter_pct": 2.0,
+            "unavailable_reason": null,
+            "whole_shares": 2
+          }
+        },
+        "full": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 71.4,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 2.0,
+            "full_dollars": 800.0,
+            "full_pct_cap": 8.0,
+            "starter_dollars": 200.0,
+            "starter_pct": 2.0,
+            "unavailable_reason": null,
+            "whole_shares": 2
+          }
+        },
+        "standard": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 71.4,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 2.0,
+            "full_dollars": 800.0,
+            "full_pct_cap": 8.0,
+            "starter_dollars": 200.0,
+            "starter_pct": 2.0,
+            "unavailable_reason": null,
+            "whole_shares": 2
+          }
+        }
+      },
+      "zones": {
+        "basis": {
+          "accumulate_near": "sma_200",
+          "reduce_above": "52w_high_minus_1atr",
+          "stop_loss": "current_minus_2.0atr",
+          "strong_buy_below": "52w_low_plus_1atr"
+        },
+        "position_sizing_range": {
+          "dollars_for_account": {
+            "max": 800.0,
+            "min": 200.0,
+            "portfolio_assumption": 10000.0
+          },
+          "max_pct": 8.0,
+          "profile_cap_pct": 8.0,
+          "rationale": "medium_risk_regime",
+          "risk_per_trade_pct": 0.5,
+          "shares_range": {
+            "at_price": 100.0,
+            "max": 8,
+            "min": 2
+          },
+          "starter_pct": 2.0,
+          "stop_implied_max": {
+            "dollars_for_account": 800.0,
+            "pct": 8.0,
+            "risk_per_trade_pct": 0.5,
+            "stop_distance_pct": 4.0
+          },
+          "suggested_pct_range": [
+            2.0,
+            8.0
+          ]
+        },
+        "stop_calculation": {
+          "atr_pct": 0.02,
+          "min_multiple_required": 1.5,
+          "stop_distance_pct": 0.04,
+          "stop_multiple_used": 2.0,
+          "stop_price": 96.0
+        },
+        "zone_warnings": []
+      }
+    },
+    "core_wide": {
+      "card": {
+        "entry": {
+          "buy_zone_high": 101.0,
+          "buy_zone_low": 77.0,
+          "current_price": 100.0
+        },
+        "exit": {
+          "stop_basis": "current_minus_2.0atr",
+          "stop_or_invalidation": 80.0
+        },
+        "sizing": {
+          "at_price": 100.0,
+          "fractional_shares": 2.0,
+          "full_dollars": 800.0,
+          "full_pct_cap": 8.0,
+          "starter_dollars": 200.0,
+          "starter_pct": 2.0,
+          "unavailable_reason": null,
+          "whole_shares": 2
+        }
+      },
+      "decision": {
+        "if_held": {
+          "action": "hold",
+          "add_allowed": true,
+          "basis": "candidate_admits_new_money"
+        },
+        "long_term": {
+          "action": "buy",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        },
+        "new_money": {
+          "action": "buy",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        }
+      },
+      "inputs": {
+        "account_size": 10000.0,
+        "annualized": 0.35,
+        "atr": 10.0,
+        "low_multiple": 0.7,
+        "price": 100.0,
+        "profile": "core"
+      },
+      "limit_origins": {
+        "max_position_pct": "profile",
+        "risk_per_trade_pct": "profile"
+      },
+      "modes": {
+        "balanced": {
+          "action": "buy",
+          "capital_at_risk": null,
+          "max_position": {
+            "dollars": 800.0,
+            "pct": 8.0,
+            "shares": 8
+          },
+          "starter_position": {
+            "dollars": 250.0,
+            "pct": 2.5,
+            "shares": 2
+          }
+        },
+        "core": {
+          "action": "buy",
+          "capital_at_risk": null,
+          "max_position": {
+            "dollars": 800.0,
+            "pct": 8.0,
+            "shares": 8
+          },
+          "starter_position": {
+            "dollars": 200.0,
+            "pct": 2.0,
+            "shares": 2
+          }
+        },
+        "speculative": {
+          "action": "wait",
+          "capital_at_risk": null,
+          "max_position": null,
+          "starter_position": null
+        }
+      },
+      "resolved_profile": {
+        "account_bucket": "small",
+        "account_size": 10000.0,
+        "account_size_status": "provided",
+        "add_on_confirmation_pct": 4.0,
+        "description": "Quality-first profile with tighter risk budgets and larger preference for durable businesses.",
+        "label": "Core compounder",
+        "max_position_pct": 8.0,
+        "profile": "core",
+        "risk_per_trade_decimal": 0.005,
+        "risk_per_trade_pct": 0.5,
+        "small_account": true,
+        "starter_position_pct": 2.0
+      },
+      "snapshot": {
+        "as_of_kind": "session_close",
+        "bearish_signals": [],
+        "bullish_signals": [
+          "golden_cross",
+          "macd_bullish",
+          "net_cash_positive",
+          "positive_free_cash_flow",
+          "price_above_sma200",
+          "strong_3m_momentum"
+        ],
+        "confidence": "high",
+        "hard_gate_ids": [],
+        "if_held_action": "hold",
+        "is_unprofitable": null,
+        "long_term_action": "buy",
+        "long_term_fit": "ok",
+        "market_cap": 10000000000,
+        "mid_term_fit": "ok",
+        "new_money_action": "buy",
+        "next_catalyst": {
+          "date": "2026-11-18",
+          "source": null,
+          "status": "available",
+          "type": "earnings"
+        },
+        "price": 100.0,
+        "price_as_of": "2026-10-09",
+        "price_source": "daily_close",
+        "price_stale": false,
+        "price_zone": "below_sma200",
+        "risk_regime": "medium",
+        "score": 0.75,
+        "sector": null,
+        "snapshot_as_of_date": "2026-10-10",
+        "snapshot_hash": "8a4032a7ae8abf3c",
+        "snapshot_version": "3.0.0",
+        "support_currency": "supported",
+        "support_instrument": "supported",
+        "symbol": "ACME",
+        "tilt": "bullish",
+        "unevaluated_gate_ids": [],
+        "valuation_gate": "attractive",
+        "volatility_ann": 0.35
+      },
+      "summary": "Decision (mid-term, new money): buy; size ~2.0-8.0%. If held: hold. Long-term (1-5y): buy. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "tiers": {
+        "decision": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 77.0,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 2.0,
+            "full_dollars": 800.0,
+            "full_pct_cap": 8.0,
+            "starter_dollars": 200.0,
+            "starter_pct": 2.0,
+            "unavailable_reason": null,
+            "whole_shares": 2
+          }
+        },
+        "full": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 77.0,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 2.0,
+            "full_dollars": 800.0,
+            "full_pct_cap": 8.0,
+            "starter_dollars": 200.0,
+            "starter_pct": 2.0,
+            "unavailable_reason": null,
+            "whole_shares": 2
+          }
+        },
+        "standard": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 77.0,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 2.0,
+            "full_dollars": 800.0,
+            "full_pct_cap": 8.0,
+            "starter_dollars": 200.0,
+            "starter_pct": 2.0,
+            "unavailable_reason": null,
+            "whole_shares": 2
+          }
+        }
+      },
+      "zones": {
+        "basis": {
+          "accumulate_near": "sma_200",
+          "reduce_above": "52w_high_minus_1atr",
+          "stop_loss": "current_minus_2.0atr",
+          "strong_buy_below": "52w_low_plus_1atr"
+        },
+        "position_sizing_range": {
+          "dollars_for_account": {
+            "max": 800.0,
+            "min": 200.0,
+            "portfolio_assumption": 10000.0
+          },
+          "max_pct": 8.0,
+          "profile_cap_pct": 8.0,
+          "rationale": "medium_risk_regime",
+          "risk_per_trade_pct": 0.5,
+          "shares_range": {
+            "at_price": 100.0,
+            "max": 8,
+            "min": 2
+          },
+          "starter_pct": 2.0,
+          "stop_implied_max": {
+            "dollars_for_account": 250.0,
+            "pct": 2.5,
+            "risk_per_trade_pct": 0.5,
+            "stop_distance_pct": 20.0
+          },
+          "suggested_pct_range": [
+            2.0,
+            8.0
+          ]
+        },
+        "stop_calculation": {
+          "atr_pct": 0.1,
+          "min_multiple_required": 1.5,
+          "stop_distance_pct": 0.2,
+          "stop_multiple_used": 2.0,
+          "stop_price": 80.0
+        },
+        "zone_warnings": []
+      }
+    },
+    "earnings_blocked": {
+      "card": {
+        "entry": null,
+        "exit": {
+          "stop_basis": "current_minus_2.0atr",
+          "stop_or_invalidation": 80.0
+        },
+        "sizing": null
+      },
+      "decision": {
+        "if_held": {
+          "action": "hold",
+          "add_allowed": false,
+          "basis": "candidate_admits_new_money"
+        },
+        "long_term": {
+          "action": "wait",
+          "blocked_by": [
+            "earnings_blackout"
+          ],
+          "decided_by": "earnings_blackout",
+          "earliest_reassessment": {
+            "basis": "earnings_clear",
+            "date": "2026-10-13"
+          },
+          "unevaluated": []
+        },
+        "new_money": {
+          "action": "wait",
+          "blocked_by": [
+            "earnings_blackout"
+          ],
+          "decided_by": "earnings_blackout",
+          "earliest_reassessment": {
+            "basis": "earnings_clear",
+            "date": "2026-10-13"
+          },
+          "unevaluated": []
+        }
+      },
+      "inputs": {
+        "account_size": 10000.0,
+        "annualized": 0.35,
+        "atr": 10.0,
+        "earnings_blocked": true,
+        "low_multiple": 0.7,
+        "price": 100.0,
+        "profile": "balanced"
+      },
+      "limit_origins": {
+        "max_position_pct": "profile",
+        "risk_per_trade_pct": "profile"
+      },
+      "modes": {
+        "balanced": {
+          "action": "wait",
+          "capital_at_risk": null,
+          "max_position": null,
+          "starter_position": null
+        },
+        "core": {
+          "action": "wait",
+          "capital_at_risk": null,
+          "max_position": null,
+          "starter_position": null
+        },
+        "speculative": {
+          "action": "wait",
+          "capital_at_risk": null,
+          "max_position": null,
+          "starter_position": null
+        }
+      },
+      "resolved_profile": {
+        "account_bucket": "small",
+        "account_size": 10000.0,
+        "account_size_status": "provided",
+        "add_on_confirmation_pct": 5.0,
+        "description": "Default profile that blends quality, valuation, and tactical entry discipline.",
+        "label": "Balanced",
+        "max_position_pct": 10.0,
+        "profile": "balanced",
+        "risk_per_trade_decimal": 0.01,
+        "risk_per_trade_pct": 1.0,
+        "small_account": true,
+        "starter_position_pct": 2.5
+      },
+      "snapshot": {
+        "as_of_kind": "session_close",
+        "bearish_signals": [],
+        "bullish_signals": [
+          "golden_cross",
+          "macd_bullish",
+          "net_cash_positive",
+          "positive_free_cash_flow",
+          "price_above_sma200",
+          "strong_3m_momentum"
+        ],
+        "confidence": "high",
+        "hard_gate_ids": [
+          "earnings_blackout"
+        ],
+        "if_held_action": "hold",
+        "is_unprofitable": null,
+        "long_term_action": "wait",
+        "long_term_fit": "ok",
+        "market_cap": 10000000000,
+        "mid_term_fit": "ok",
+        "new_money_action": "wait",
+        "next_catalyst": {
+          "date": "2026-10-12",
+          "source": null,
+          "status": "available",
+          "type": "earnings"
+        },
+        "price": 100.0,
+        "price_as_of": "2026-10-09",
+        "price_source": "daily_close",
+        "price_stale": false,
+        "price_zone": "below_sma200",
+        "risk_regime": "medium",
+        "score": 0.75,
+        "sector": null,
+        "snapshot_as_of_date": "2026-10-10",
+        "snapshot_hash": "ed954c4d6053df75",
+        "snapshot_version": "3.0.0",
+        "support_currency": "supported",
+        "support_instrument": "supported",
+        "symbol": "ACME",
+        "tilt": "bullish",
+        "unevaluated_gate_ids": [],
+        "valuation_gate": "attractive",
+        "volatility_ann": 0.35
+      },
+      "summary": "Decision (mid-term, new money): wait; blocked by earnings_blackout; reassess on or after Tue Oct 13 (not a buy date). If held: hold. Long-term (1-5y): wait; blocked by earnings_blackout; reassess on or after Tue Oct 13 (not a buy date). Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "tiers": {
+        "decision": {
+          "entry": null,
+          "sizing": null
+        },
+        "full": {
+          "entry": null,
+          "sizing": null
+        },
+        "standard": {
+          "entry": null,
+          "sizing": null
+        }
+      },
+      "zones": {
+        "basis": {
+          "accumulate_near": "sma_200",
+          "reduce_above": "52w_high_minus_1atr",
+          "stop_loss": "current_minus_2.0atr",
+          "strong_buy_below": "52w_low_plus_1atr"
+        },
+        "position_sizing_range": null,
+        "stop_calculation": {
+          "atr_pct": 0.1,
+          "min_multiple_required": 1.5,
+          "stop_distance_pct": 0.2,
+          "stop_multiple_used": 2.0,
+          "stop_price": 80.0
+        },
+        "zone_warnings": []
+      }
+    },
+    "inverted_band": {
+      "card": {
+        "entry": {
+          "buy_zone_high": 101.0,
+          "buy_zone_low": 115.5,
+          "current_price": 100.0
+        },
+        "exit": {
+          "stop_basis": "current_minus_2.0atr",
+          "stop_or_invalidation": 80.0
+        },
+        "sizing": {
+          "at_price": 100.0,
+          "fractional_shares": 2.5,
+          "full_dollars": 800.0,
+          "full_pct_cap": 8.0,
+          "starter_dollars": 250.0,
+          "starter_pct": 2.5,
+          "unavailable_reason": null,
+          "whole_shares": 2
+        }
+      },
+      "decision": {
+        "if_held": {
+          "action": "hold",
+          "add_allowed": true,
+          "basis": "candidate_admits_new_money"
+        },
+        "long_term": {
+          "action": "buy",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        },
+        "new_money": {
+          "action": "buy",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        }
+      },
+      "inputs": {
+        "account_size": 10000.0,
+        "annualized": 0.35,
+        "atr": 10.0,
+        "low_multiple": 1.05,
+        "price": 100.0,
+        "profile": "balanced"
+      },
+      "limit_origins": {
+        "max_position_pct": "profile",
+        "risk_per_trade_pct": "profile"
+      },
+      "modes": {
+        "balanced": {
+          "action": "buy",
+          "capital_at_risk": null,
+          "max_position": {
+            "dollars": 800.0,
+            "pct": 8.0,
+            "shares": 8
+          },
+          "starter_position": {
+            "dollars": 250.0,
+            "pct": 2.5,
+            "shares": 2
+          }
+        },
+        "core": {
+          "action": "buy",
+          "capital_at_risk": null,
+          "max_position": {
+            "dollars": 800.0,
+            "pct": 8.0,
+            "shares": 8
+          },
+          "starter_position": {
+            "dollars": 200.0,
+            "pct": 2.0,
+            "shares": 2
+          }
+        },
+        "speculative": {
+          "action": "wait",
+          "capital_at_risk": null,
+          "max_position": null,
+          "starter_position": null
+        }
+      },
+      "resolved_profile": {
+        "account_bucket": "small",
+        "account_size": 10000.0,
+        "account_size_status": "provided",
+        "add_on_confirmation_pct": 5.0,
+        "description": "Default profile that blends quality, valuation, and tactical entry discipline.",
+        "label": "Balanced",
+        "max_position_pct": 10.0,
+        "profile": "balanced",
+        "risk_per_trade_decimal": 0.01,
+        "risk_per_trade_pct": 1.0,
+        "small_account": true,
+        "starter_position_pct": 2.5
+      },
+      "snapshot": {
+        "as_of_kind": "session_close",
+        "bearish_signals": [],
+        "bullish_signals": [
+          "golden_cross",
+          "macd_bullish",
+          "net_cash_positive",
+          "positive_free_cash_flow",
+          "price_above_sma200",
+          "strong_3m_momentum"
+        ],
+        "confidence": "high",
+        "hard_gate_ids": [],
+        "if_held_action": "hold",
+        "is_unprofitable": null,
+        "long_term_action": "buy",
+        "long_term_fit": "ok",
+        "market_cap": 10000000000,
+        "mid_term_fit": "ok",
+        "new_money_action": "buy",
+        "next_catalyst": {
+          "date": "2026-11-18",
+          "source": null,
+          "status": "available",
+          "type": "earnings"
+        },
+        "price": 100.0,
+        "price_as_of": "2026-10-09",
+        "price_source": "daily_close",
+        "price_stale": false,
+        "price_zone": "near_52w_low",
+        "risk_regime": "medium",
+        "score": 0.75,
+        "sector": null,
+        "snapshot_as_of_date": "2026-10-10",
+        "snapshot_hash": "08c1326b92c6b298",
+        "snapshot_version": "3.0.0",
+        "support_currency": "supported",
+        "support_instrument": "supported",
+        "symbol": "ACME",
+        "tilt": "bullish",
+        "unevaluated_gate_ids": [],
+        "valuation_gate": "attractive",
+        "volatility_ann": 0.35
+      },
+      "summary": "Decision (mid-term, new money): buy; size ~2.5-8.0%. If held: hold. Long-term (1-5y): buy. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "tiers": {
+        "decision": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 115.5,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 2.5,
+            "full_dollars": 800.0,
+            "full_pct_cap": 8.0,
+            "starter_dollars": 250.0,
+            "starter_pct": 2.5,
+            "unavailable_reason": null,
+            "whole_shares": 2
+          }
+        },
+        "full": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 115.5,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 2.5,
+            "full_dollars": 800.0,
+            "full_pct_cap": 8.0,
+            "starter_dollars": 250.0,
+            "starter_pct": 2.5,
+            "unavailable_reason": null,
+            "whole_shares": 2
+          }
+        },
+        "standard": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 115.5,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 2.5,
+            "full_dollars": 800.0,
+            "full_pct_cap": 8.0,
+            "starter_dollars": 250.0,
+            "starter_pct": 2.5,
+            "unavailable_reason": null,
+            "whole_shares": 2
+          }
+        }
+      },
+      "zones": {
+        "basis": {
+          "accumulate_near": "sma_200",
+          "reduce_above": "52w_high_minus_1atr",
+          "stop_loss": "current_minus_2.0atr",
+          "strong_buy_below": "52w_low_plus_1atr"
+        },
+        "position_sizing_range": {
+          "dollars_for_account": {
+            "max": 800.0,
+            "min": 250.0,
+            "portfolio_assumption": 10000.0
+          },
+          "max_pct": 8.0,
+          "profile_cap_pct": 10.0,
+          "rationale": "medium_risk_regime",
+          "risk_per_trade_pct": 1.0,
+          "shares_range": {
+            "at_price": 100.0,
+            "max": 8,
+            "min": 2
+          },
+          "starter_pct": 2.5,
+          "stop_implied_max": {
+            "dollars_for_account": 500.0,
+            "pct": 5.0,
+            "risk_per_trade_pct": 1.0,
+            "stop_distance_pct": 20.0
+          },
+          "suggested_pct_range": [
+            2.5,
+            8.0
+          ]
+        },
+        "stop_calculation": {
+          "atr_pct": 0.1,
+          "min_multiple_required": 1.5,
+          "stop_distance_pct": 0.2,
+          "stop_multiple_used": 2.0,
+          "stop_price": 80.0
+        },
+        "zone_warnings": []
+      }
+    },
+    "negative_stop": {
+      "card": {
+        "entry": {
+          "buy_zone_high": 4.04,
+          "buy_zone_low": 4.06,
+          "current_price": 4.0
+        },
+        "exit": {
+          "stop_basis": "current_minus_2.5atr",
+          "stop_or_invalidation": -0.5
+        },
+        "sizing": {
+          "at_price": 4.0,
+          "fractional_shares": 12.5,
+          "full_dollars": null,
+          "full_pct_cap": null,
+          "starter_dollars": 50.0,
+          "starter_pct": 0.5,
+          "unavailable_reason": null,
+          "whole_shares": 12
+        }
+      },
+      "decision": {
+        "if_held": {
+          "action": "hold",
+          "add_allowed": true,
+          "basis": "candidate_admits_new_money"
+        },
+        "long_term": {
+          "action": "starter",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        },
+        "new_money": {
+          "action": "starter",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        }
+      },
+      "inputs": {
+        "account_size": 10000.0,
+        "annualized": 0.75,
+        "atr": 1.8,
+        "low_multiple": 0.7,
+        "price": 4.0,
+        "profile": "balanced"
+      },
+      "limit_origins": {
+        "max_position_pct": "profile",
+        "risk_per_trade_pct": "profile"
+      },
+      "modes": {
+        "balanced": {
+          "action": "starter",
+          "capital_at_risk": null,
+          "max_position": null,
+          "starter_position": {
+            "dollars": 50.0,
+            "pct": 0.5,
+            "shares": 12
+          }
+        },
+        "core": {
+          "action": "wait",
+          "capital_at_risk": null,
+          "max_position": null,
+          "starter_position": null
+        },
+        "speculative": {
+          "action": "wait",
+          "capital_at_risk": null,
+          "max_position": null,
+          "starter_position": null
+        }
+      },
+      "resolved_profile": {
+        "account_bucket": "small",
+        "account_size": 10000.0,
+        "account_size_status": "provided",
+        "add_on_confirmation_pct": 5.0,
+        "description": "Default profile that blends quality, valuation, and tactical entry discipline.",
+        "label": "Balanced",
+        "max_position_pct": 10.0,
+        "profile": "balanced",
+        "risk_per_trade_decimal": 0.01,
+        "risk_per_trade_pct": 1.0,
+        "small_account": true,
+        "starter_position_pct": 2.5
+      },
+      "snapshot": {
+        "as_of_kind": "session_close",
+        "bearish_signals": [
+          "very_high_volatility"
+        ],
+        "bullish_signals": [
+          "golden_cross",
+          "macd_bullish",
+          "net_cash_positive",
+          "positive_free_cash_flow",
+          "price_above_sma200",
+          "strong_3m_momentum"
+        ],
+        "confidence": "moderate",
+        "hard_gate_ids": [],
+        "if_held_action": "hold",
+        "is_unprofitable": null,
+        "long_term_action": "starter",
+        "long_term_fit": "caution",
+        "market_cap": 10000000000,
+        "mid_term_fit": "caution",
+        "new_money_action": "starter",
+        "next_catalyst": {
+          "date": "2026-11-18",
+          "source": null,
+          "status": "available",
+          "type": "earnings"
+        },
+        "price": 4.0,
+        "price_as_of": "2026-10-09",
+        "price_source": "daily_close",
+        "price_stale": false,
+        "price_zone": "near_52w_low",
+        "risk_regime": "extreme",
+        "score": 0.5,
+        "sector": null,
+        "snapshot_as_of_date": "2026-10-10",
+        "snapshot_hash": "3d6f6b0ab0fe71a4",
+        "snapshot_version": "3.0.0",
+        "support_currency": "supported",
+        "support_instrument": "supported",
+        "symbol": "ACME",
+        "tilt": "bullish",
+        "unevaluated_gate_ids": [],
+        "valuation_gate": "attractive",
+        "volatility_ann": 0.75
+      },
+      "summary": "Decision (mid-term, new money): starter; size ~0.5%. If held: hold. Long-term (1-5y): starter. Acme has extreme risk (vol 75.0%, dd -30.0%). Fundamentals: revenue_yoy +12.0%; net_margin 20.0%. Technicals are strong (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%).",
+      "tiers": {
+        "decision": {
+          "entry": {
+            "buy_zone_high": 4.04,
+            "buy_zone_low": 4.06,
+            "current_price": 4.0
+          },
+          "sizing": {
+            "at_price": 4.0,
+            "fractional_shares": 12.5,
+            "full_dollars": null,
+            "full_pct_cap": null,
+            "starter_dollars": 50.0,
+            "starter_pct": 0.5,
+            "unavailable_reason": null,
+            "whole_shares": 12
+          }
+        },
+        "full": {
+          "entry": {
+            "buy_zone_high": 4.04,
+            "buy_zone_low": 4.06,
+            "current_price": 4.0
+          },
+          "sizing": {
+            "at_price": 4.0,
+            "fractional_shares": 12.5,
+            "full_dollars": null,
+            "full_pct_cap": null,
+            "starter_dollars": 50.0,
+            "starter_pct": 0.5,
+            "unavailable_reason": null,
+            "whole_shares": 12
+          }
+        },
+        "standard": {
+          "entry": {
+            "buy_zone_high": 4.04,
+            "buy_zone_low": 4.06,
+            "current_price": 4.0
+          },
+          "sizing": {
+            "at_price": 4.0,
+            "fractional_shares": 12.5,
+            "full_dollars": null,
+            "full_pct_cap": null,
+            "starter_dollars": 50.0,
+            "starter_pct": 0.5,
+            "unavailable_reason": null,
+            "whole_shares": 12
+          }
+        }
+      },
+      "zones": {
+        "basis": {
+          "accumulate_near": "sma_200",
+          "reduce_above": "52w_high_minus_1atr",
+          "stop_loss": "current_minus_2.5atr",
+          "strong_buy_below": "52w_low_plus_1atr"
+        },
+        "position_sizing_range": null,
+        "stop_calculation": {
+          "atr_pct": 0.45,
+          "min_multiple_required": 2.0,
+          "stop_distance_pct": 1.125,
+          "stop_multiple_used": 2.5,
+          "stop_price": -0.5
+        },
+        "zone_warnings": [
+          "zone_capped_due_to_extreme_risk",
+          "extreme_risk_regime",
+          "zone_capped_extreme_risk"
+        ]
+      }
+    },
+    "no_account": {
+      "card": {
+        "entry": {
+          "buy_zone_high": 101.0,
+          "buy_zone_low": 77.0,
+          "current_price": 100.0
+        },
+        "exit": {
+          "stop_basis": "current_minus_2.0atr",
+          "stop_or_invalidation": 80.0
+        },
+        "sizing": {
+          "at_price": 100.0,
+          "fractional_shares": null,
+          "full_dollars": null,
+          "full_pct_cap": 8.0,
+          "starter_dollars": null,
+          "starter_pct": 2.5,
+          "unavailable_reason": null,
+          "whole_shares": null
+        }
+      },
+      "decision": {
+        "if_held": {
+          "action": "hold",
+          "add_allowed": true,
+          "basis": "candidate_admits_new_money"
+        },
+        "long_term": {
+          "action": "buy",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        },
+        "new_money": {
+          "action": "buy",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        }
+      },
+      "inputs": {
+        "account_size": null,
+        "annualized": 0.35,
+        "atr": 10.0,
+        "low_multiple": 0.7,
+        "price": 100.0,
+        "profile": "balanced"
+      },
+      "limit_origins": {
+        "max_position_pct": "profile",
+        "risk_per_trade_pct": "profile"
+      },
+      "modes": {
+        "balanced": {
+          "action": "buy",
+          "capital_at_risk": null,
+          "max_position": {
+            "pct": 8.0
+          },
+          "starter_position": {
+            "pct": 2.5
+          }
+        },
+        "core": {
+          "action": "buy",
+          "capital_at_risk": null,
+          "max_position": {
+            "pct": 8.0
+          },
+          "starter_position": {
+            "pct": 2.0
+          }
+        },
+        "speculative": {
+          "action": "wait",
+          "capital_at_risk": null,
+          "max_position": null,
+          "starter_position": null
+        }
+      },
+      "resolved_profile": {
+        "account_bucket": "unknown",
+        "account_size": null,
+        "account_size_status": "not_provided",
+        "add_on_confirmation_pct": 5.0,
+        "description": "Default profile that blends quality, valuation, and tactical entry discipline.",
+        "label": "Balanced",
+        "max_position_pct": 10.0,
+        "profile": "balanced",
+        "risk_per_trade_decimal": 0.01,
+        "risk_per_trade_pct": 1.0,
+        "small_account": false,
+        "starter_position_pct": 2.5
+      },
+      "snapshot": {
+        "as_of_kind": "session_close",
+        "bearish_signals": [],
+        "bullish_signals": [
+          "golden_cross",
+          "macd_bullish",
+          "net_cash_positive",
+          "positive_free_cash_flow",
+          "price_above_sma200",
+          "strong_3m_momentum"
+        ],
+        "confidence": "high",
+        "hard_gate_ids": [],
+        "if_held_action": "hold",
+        "is_unprofitable": null,
+        "long_term_action": "buy",
+        "long_term_fit": "ok",
+        "market_cap": 10000000000,
+        "mid_term_fit": "ok",
+        "new_money_action": "buy",
+        "next_catalyst": {
+          "date": "2026-11-18",
+          "source": null,
+          "status": "available",
+          "type": "earnings"
+        },
+        "price": 100.0,
+        "price_as_of": "2026-10-09",
+        "price_source": "daily_close",
+        "price_stale": false,
+        "price_zone": "below_sma200",
+        "risk_regime": "medium",
+        "score": 0.75,
+        "sector": null,
+        "snapshot_as_of_date": "2026-10-10",
+        "snapshot_hash": "8a4032a7ae8abf3c",
+        "snapshot_version": "3.0.0",
+        "support_currency": "supported",
+        "support_instrument": "supported",
+        "symbol": "ACME",
+        "tilt": "bullish",
+        "unevaluated_gate_ids": [],
+        "valuation_gate": "attractive",
+        "volatility_ann": 0.35
+      },
+      "summary": "Decision (mid-term, new money): buy; size ~2.5-8.0%. If held: hold. Long-term (1-5y): buy. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "tiers": {
+        "decision": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 77.0,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": null,
+            "full_dollars": null,
+            "full_pct_cap": 8.0,
+            "starter_dollars": null,
+            "starter_pct": 2.5,
+            "unavailable_reason": null,
+            "whole_shares": null
+          }
+        },
+        "full": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 77.0,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": null,
+            "full_dollars": null,
+            "full_pct_cap": 8.0,
+            "starter_dollars": null,
+            "starter_pct": 2.5,
+            "unavailable_reason": null,
+            "whole_shares": null
+          }
+        },
+        "standard": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 77.0,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": null,
+            "full_dollars": null,
+            "full_pct_cap": 8.0,
+            "starter_dollars": null,
+            "starter_pct": 2.5,
+            "unavailable_reason": null,
+            "whole_shares": null
+          }
+        }
+      },
+      "zones": {
+        "basis": {
+          "accumulate_near": "sma_200",
+          "reduce_above": "52w_high_minus_1atr",
+          "stop_loss": "current_minus_2.0atr",
+          "strong_buy_below": "52w_low_plus_1atr"
+        },
+        "position_sizing_range": {
+          "dollars_for_account": null,
+          "max_pct": 8.0,
+          "profile_cap_pct": 10.0,
+          "rationale": "medium_risk_regime",
+          "risk_per_trade_pct": 1.0,
+          "shares_range": null,
+          "starter_pct": 2.5,
+          "stop_implied_max": {
+            "dollars_for_account": null,
+            "pct": 5.0,
+            "risk_per_trade_pct": 1.0,
+            "stop_distance_pct": 20.0
+          },
+          "suggested_pct_range": [
+            2.5,
+            8.0
+          ]
+        },
+        "stop_calculation": {
+          "atr_pct": 0.1,
+          "min_multiple_required": 1.5,
+          "stop_distance_pct": 0.2,
+          "stop_multiple_used": 2.0,
+          "stop_price": 80.0
+        },
+        "zone_warnings": []
+      }
+    },
+    "no_atr": {
+      "card": {
+        "entry": {
+          "buy_zone_high": 101.0,
+          "buy_zone_low": 71.4,
+          "current_price": 100.0
+        },
+        "exit": {
+          "stop_basis": null,
+          "stop_or_invalidation": null
+        },
+        "sizing": {
+          "at_price": 100.0,
+          "fractional_shares": 2.5,
+          "full_dollars": 800.0,
+          "full_pct_cap": 8.0,
+          "starter_dollars": 250.0,
+          "starter_pct": 2.5,
+          "unavailable_reason": null,
+          "whole_shares": 2
+        }
+      },
+      "decision": {
+        "if_held": {
+          "action": "hold",
+          "add_allowed": true,
+          "basis": "candidate_admits_new_money"
+        },
+        "long_term": {
+          "action": "buy",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        },
+        "new_money": {
+          "action": "buy",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        }
+      },
+      "inputs": {
+        "account_size": 10000.0,
+        "annualized": 0.35,
+        "atr": null,
+        "low_multiple": 0.7,
+        "price": 100.0,
+        "profile": "balanced"
+      },
+      "limit_origins": {
+        "max_position_pct": "profile",
+        "risk_per_trade_pct": "profile"
+      },
+      "modes": {
+        "balanced": {
+          "action": "buy",
+          "capital_at_risk": null,
+          "max_position": {
+            "dollars": 800.0,
+            "pct": 8.0,
+            "shares": 8
+          },
+          "starter_position": {
+            "dollars": 250.0,
+            "pct": 2.5,
+            "shares": 2
+          }
+        },
+        "core": {
+          "action": "buy",
+          "capital_at_risk": null,
+          "max_position": {
+            "dollars": 800.0,
+            "pct": 8.0,
+            "shares": 8
+          },
+          "starter_position": {
+            "dollars": 200.0,
+            "pct": 2.0,
+            "shares": 2
+          }
+        },
+        "speculative": {
+          "action": "wait",
+          "capital_at_risk": null,
+          "max_position": null,
+          "starter_position": null
+        }
+      },
+      "resolved_profile": {
+        "account_bucket": "small",
+        "account_size": 10000.0,
+        "account_size_status": "provided",
+        "add_on_confirmation_pct": 5.0,
+        "description": "Default profile that blends quality, valuation, and tactical entry discipline.",
+        "label": "Balanced",
+        "max_position_pct": 10.0,
+        "profile": "balanced",
+        "risk_per_trade_decimal": 0.01,
+        "risk_per_trade_pct": 1.0,
+        "small_account": true,
+        "starter_position_pct": 2.5
+      },
+      "snapshot": {
+        "as_of_kind": "session_close",
+        "bearish_signals": [],
+        "bullish_signals": [
+          "golden_cross",
+          "macd_bullish",
+          "net_cash_positive",
+          "positive_free_cash_flow",
+          "price_above_sma200",
+          "strong_3m_momentum"
+        ],
+        "confidence": "high",
+        "hard_gate_ids": [],
+        "if_held_action": "hold",
+        "is_unprofitable": null,
+        "long_term_action": "buy",
+        "long_term_fit": "ok",
+        "market_cap": 10000000000,
+        "mid_term_fit": "ok",
+        "new_money_action": "buy",
+        "next_catalyst": {
+          "date": "2026-11-18",
+          "source": null,
+          "status": "available",
+          "type": "earnings"
+        },
+        "price": 100.0,
+        "price_as_of": "2026-10-09",
+        "price_source": "daily_close",
+        "price_stale": false,
+        "price_zone": "below_sma200",
+        "risk_regime": "medium",
+        "score": 0.75,
+        "sector": null,
+        "snapshot_as_of_date": "2026-10-10",
+        "snapshot_hash": "8a4032a7ae8abf3c",
+        "snapshot_version": "3.0.0",
+        "support_currency": "supported",
+        "support_instrument": "supported",
+        "symbol": "ACME",
+        "tilt": "bullish",
+        "unevaluated_gate_ids": [],
+        "valuation_gate": "attractive",
+        "volatility_ann": 0.35
+      },
+      "summary": "Decision (mid-term, new money): buy; size ~2.5-8.0%. If held: hold. Long-term (1-5y): buy. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "tiers": {
+        "decision": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 71.4,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 2.5,
+            "full_dollars": 800.0,
+            "full_pct_cap": 8.0,
+            "starter_dollars": 250.0,
+            "starter_pct": 2.5,
+            "unavailable_reason": null,
+            "whole_shares": 2
+          }
+        },
+        "full": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 71.4,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 2.5,
+            "full_dollars": 800.0,
+            "full_pct_cap": 8.0,
+            "starter_dollars": 250.0,
+            "starter_pct": 2.5,
+            "unavailable_reason": null,
+            "whole_shares": 2
+          }
+        },
+        "standard": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 71.4,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 2.5,
+            "full_dollars": 800.0,
+            "full_pct_cap": 8.0,
+            "starter_dollars": 250.0,
+            "starter_pct": 2.5,
+            "unavailable_reason": null,
+            "whole_shares": 2
+          }
+        }
+      },
+      "zones": {
+        "basis": {
+          "accumulate_near": "sma_200",
+          "reduce_above": "52w_high_minus_1atr",
+          "stop_loss": null,
+          "strong_buy_below": "52w_low_plus_1atr"
+        },
+        "position_sizing_range": {
+          "dollars_for_account": {
+            "max": 800.0,
+            "min": 250.0,
+            "portfolio_assumption": 10000.0
+          },
+          "max_pct": 8.0,
+          "profile_cap_pct": 10.0,
+          "rationale": "medium_risk_regime",
+          "risk_per_trade_pct": 1.0,
+          "shares_range": {
+            "at_price": 100.0,
+            "max": 8,
+            "min": 2
+          },
+          "starter_pct": 2.5,
+          "stop_implied_max": null,
+          "suggested_pct_range": [
+            2.5,
+            8.0
+          ]
+        },
+        "stop_calculation": null,
+        "zone_warnings": [
+          "atr_unavailable_using_default"
+        ]
+      }
+    },
+    "risk_only": {
+      "card": {
+        "entry": {
+          "buy_zone_high": 101.0,
+          "buy_zone_low": 77.0,
+          "current_price": 100.0
+        },
+        "exit": {
+          "stop_basis": "current_minus_2.0atr",
+          "stop_or_invalidation": 80.0
+        },
+        "sizing": {
+          "at_price": 100.0,
+          "fractional_shares": 2.5,
+          "full_dollars": 800.0,
+          "full_pct_cap": 8.0,
+          "starter_dollars": 250.0,
+          "starter_pct": 2.5,
+          "unavailable_reason": null,
+          "whole_shares": 2
+        }
+      },
+      "decision": {
+        "if_held": {
+          "action": "hold",
+          "add_allowed": true,
+          "basis": "candidate_admits_new_money"
+        },
+        "long_term": {
+          "action": "buy",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        },
+        "new_money": {
+          "action": "buy",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        }
+      },
+      "inputs": {
+        "account_size": 10000.0,
+        "annualized": 0.35,
+        "atr": 10.0,
+        "low_multiple": 0.7,
+        "price": 100.0,
+        "profile": "balanced",
+        "risk_per_trade_pct": 0.25
+      },
+      "limit_origins": {
+        "max_position_pct": "profile",
+        "risk_per_trade_pct": "caller"
+      },
+      "modes": {
+        "balanced": {
+          "action": "buy",
+          "capital_at_risk": null,
+          "max_position": {
+            "dollars": 800.0,
+            "pct": 8.0,
+            "shares": 8
+          },
+          "starter_position": {
+            "dollars": 250.0,
+            "pct": 2.5,
+            "shares": 2
+          }
+        },
+        "core": {
+          "action": "buy",
+          "capital_at_risk": null,
+          "max_position": {
+            "dollars": 800.0,
+            "pct": 8.0,
+            "shares": 8
+          },
+          "starter_position": {
+            "dollars": 200.0,
+            "pct": 2.0,
+            "shares": 2
+          }
+        },
+        "speculative": {
+          "action": "wait",
+          "capital_at_risk": null,
+          "max_position": null,
+          "starter_position": null
+        }
+      },
+      "resolved_profile": {
+        "account_bucket": "small",
+        "account_size": 10000.0,
+        "account_size_status": "provided",
+        "add_on_confirmation_pct": 5.0,
+        "description": "Default profile that blends quality, valuation, and tactical entry discipline.",
+        "label": "Balanced",
+        "max_position_pct": 10.0,
+        "profile": "balanced",
+        "risk_per_trade_decimal": 0.0025,
+        "risk_per_trade_pct": 0.25,
+        "small_account": true,
+        "starter_position_pct": 2.5
+      },
+      "snapshot": {
+        "as_of_kind": "session_close",
+        "bearish_signals": [],
+        "bullish_signals": [
+          "golden_cross",
+          "macd_bullish",
+          "net_cash_positive",
+          "positive_free_cash_flow",
+          "price_above_sma200",
+          "strong_3m_momentum"
+        ],
+        "confidence": "high",
+        "hard_gate_ids": [],
+        "if_held_action": "hold",
+        "is_unprofitable": null,
+        "long_term_action": "buy",
+        "long_term_fit": "ok",
+        "market_cap": 10000000000,
+        "mid_term_fit": "ok",
+        "new_money_action": "buy",
+        "next_catalyst": {
+          "date": "2026-11-18",
+          "source": null,
+          "status": "available",
+          "type": "earnings"
+        },
+        "price": 100.0,
+        "price_as_of": "2026-10-09",
+        "price_source": "daily_close",
+        "price_stale": false,
+        "price_zone": "below_sma200",
+        "risk_regime": "medium",
+        "score": 0.75,
+        "sector": null,
+        "snapshot_as_of_date": "2026-10-10",
+        "snapshot_hash": "8a4032a7ae8abf3c",
+        "snapshot_version": "3.0.0",
+        "support_currency": "supported",
+        "support_instrument": "supported",
+        "symbol": "ACME",
+        "tilt": "bullish",
+        "unevaluated_gate_ids": [],
+        "valuation_gate": "attractive",
+        "volatility_ann": 0.35
+      },
+      "summary": "Decision (mid-term, new money): buy; size ~2.5-8.0%. If held: hold. Long-term (1-5y): buy. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "tiers": {
+        "decision": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 77.0,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 2.5,
+            "full_dollars": 800.0,
+            "full_pct_cap": 8.0,
+            "starter_dollars": 250.0,
+            "starter_pct": 2.5,
+            "unavailable_reason": null,
+            "whole_shares": 2
+          }
+        },
+        "full": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 77.0,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 2.5,
+            "full_dollars": 800.0,
+            "full_pct_cap": 8.0,
+            "starter_dollars": 250.0,
+            "starter_pct": 2.5,
+            "unavailable_reason": null,
+            "whole_shares": 2
+          }
+        },
+        "standard": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 77.0,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 2.5,
+            "full_dollars": 800.0,
+            "full_pct_cap": 8.0,
+            "starter_dollars": 250.0,
+            "starter_pct": 2.5,
+            "unavailable_reason": null,
+            "whole_shares": 2
+          }
+        }
+      },
+      "zones": {
+        "basis": {
+          "accumulate_near": "sma_200",
+          "reduce_above": "52w_high_minus_1atr",
+          "stop_loss": "current_minus_2.0atr",
+          "strong_buy_below": "52w_low_plus_1atr"
+        },
+        "position_sizing_range": {
+          "dollars_for_account": {
+            "max": 800.0,
+            "min": 250.0,
+            "portfolio_assumption": 10000.0
+          },
+          "max_pct": 8.0,
+          "profile_cap_pct": 10.0,
+          "rationale": "medium_risk_regime",
+          "risk_per_trade_pct": 0.25,
+          "shares_range": {
+            "at_price": 100.0,
+            "max": 8,
+            "min": 2
+          },
+          "starter_pct": 2.5,
+          "stop_implied_max": {
+            "dollars_for_account": 120.0,
+            "pct": 1.2,
+            "risk_per_trade_pct": 0.25,
+            "stop_distance_pct": 20.0
+          },
+          "suggested_pct_range": [
+            2.5,
+            8.0
+          ]
+        },
+        "stop_calculation": {
+          "atr_pct": 0.1,
+          "min_multiple_required": 1.5,
+          "stop_distance_pct": 0.2,
+          "stop_multiple_used": 2.0,
+          "stop_price": 80.0
+        },
+        "zone_warnings": []
+      }
+    },
+    "small_account": {
+      "card": {
+        "entry": {
+          "buy_zone_high": 50.5,
+          "buy_zone_low": 35.7,
+          "current_price": 50.0
+        },
+        "exit": {
+          "stop_basis": "current_minus_2.0atr",
+          "stop_or_invalidation": 48.0
+        },
+        "sizing": {
+          "at_price": 50.0,
+          "fractional_shares": 0.5,
+          "full_dollars": 80.0,
+          "full_pct_cap": 8.0,
+          "starter_dollars": 25.0,
+          "starter_pct": 2.5,
+          "unavailable_reason": null,
+          "whole_shares": 0
+        }
+      },
+      "decision": {
+        "if_held": {
+          "action": "hold",
+          "add_allowed": true,
+          "basis": "candidate_admits_new_money"
+        },
+        "long_term": {
+          "action": "buy",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        },
+        "new_money": {
+          "action": "buy",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        }
+      },
+      "inputs": {
+        "account_size": 1000.0,
+        "annualized": 0.35,
+        "atr": 1.0,
+        "low_multiple": 0.7,
+        "price": 50.0,
+        "profile": "balanced"
+      },
+      "limit_origins": {
+        "max_position_pct": "profile",
+        "risk_per_trade_pct": "profile"
+      },
+      "modes": {
+        "balanced": {
+          "action": "buy",
+          "capital_at_risk": null,
+          "max_position": {
+            "dollars": 80.0,
+            "pct": 8.0,
+            "shares": 1
+          },
+          "starter_position": {
+            "dollars": 25.0,
+            "pct": 2.5,
+            "shares": 0
+          }
+        },
+        "core": {
+          "action": "buy",
+          "capital_at_risk": null,
+          "max_position": {
+            "dollars": 80.0,
+            "pct": 8.0,
+            "shares": 1
+          },
+          "starter_position": {
+            "dollars": 20.0,
+            "pct": 2.0,
+            "shares": 0
+          }
+        },
+        "speculative": {
+          "action": "starter",
+          "capital_at_risk": "1.0K",
+          "max_position": null,
+          "starter_position": {
+            "dollars": 10.0,
+            "pct": 1.0,
+            "shares": 0
+          }
+        }
+      },
+      "resolved_profile": {
+        "account_bucket": "micro",
+        "account_size": 1000.0,
+        "account_size_status": "provided",
+        "add_on_confirmation_pct": 5.0,
+        "description": "Default profile that blends quality, valuation, and tactical entry discipline.",
+        "label": "Balanced",
+        "max_position_pct": 10.0,
+        "profile": "balanced",
+        "risk_per_trade_decimal": 0.01,
+        "risk_per_trade_pct": 1.0,
+        "small_account": true,
+        "starter_position_pct": 2.5
+      },
+      "snapshot": {
+        "as_of_kind": "session_close",
+        "bearish_signals": [],
+        "bullish_signals": [
+          "golden_cross",
+          "macd_bullish",
+          "net_cash_positive",
+          "positive_free_cash_flow",
+          "price_above_sma200",
+          "strong_3m_momentum"
+        ],
+        "confidence": "high",
+        "hard_gate_ids": [],
+        "if_held_action": "hold",
+        "is_unprofitable": null,
+        "long_term_action": "buy",
+        "long_term_fit": "ok",
+        "market_cap": 10000000000,
+        "mid_term_fit": "ok",
+        "new_money_action": "buy",
+        "next_catalyst": {
+          "date": "2026-11-18",
+          "source": null,
+          "status": "available",
+          "type": "earnings"
+        },
+        "price": 50.0,
+        "price_as_of": "2026-10-09",
+        "price_source": "daily_close",
+        "price_stale": false,
+        "price_zone": "below_sma200",
+        "risk_regime": "medium",
+        "score": 0.75,
+        "sector": null,
+        "snapshot_as_of_date": "2026-10-10",
+        "snapshot_hash": "8b33d822e970a49d",
+        "snapshot_version": "3.0.0",
+        "support_currency": "supported",
+        "support_instrument": "supported",
+        "symbol": "ACME",
+        "tilt": "bullish",
+        "unevaluated_gate_ids": [],
+        "valuation_gate": "attractive",
+        "volatility_ann": 0.35
+      },
+      "summary": "Decision (mid-term, new money): buy; size ~2.5-8.0%. If held: hold. Long-term (1-5y): buy. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "tiers": {
+        "decision": {
+          "entry": {
+            "buy_zone_high": 50.5,
+            "buy_zone_low": 35.7,
+            "current_price": 50.0
+          },
+          "sizing": {
+            "at_price": 50.0,
+            "fractional_shares": 0.5,
+            "full_dollars": 80.0,
+            "full_pct_cap": 8.0,
+            "starter_dollars": 25.0,
+            "starter_pct": 2.5,
+            "unavailable_reason": null,
+            "whole_shares": 0
+          }
+        },
+        "full": {
+          "entry": {
+            "buy_zone_high": 50.5,
+            "buy_zone_low": 35.7,
+            "current_price": 50.0
+          },
+          "sizing": {
+            "at_price": 50.0,
+            "fractional_shares": 0.5,
+            "full_dollars": 80.0,
+            "full_pct_cap": 8.0,
+            "starter_dollars": 25.0,
+            "starter_pct": 2.5,
+            "unavailable_reason": null,
+            "whole_shares": 0
+          }
+        },
+        "standard": {
+          "entry": {
+            "buy_zone_high": 50.5,
+            "buy_zone_low": 35.7,
+            "current_price": 50.0
+          },
+          "sizing": {
+            "at_price": 50.0,
+            "fractional_shares": 0.5,
+            "full_dollars": 80.0,
+            "full_pct_cap": 8.0,
+            "starter_dollars": 25.0,
+            "starter_pct": 2.5,
+            "unavailable_reason": null,
+            "whole_shares": 0
+          }
+        }
+      },
+      "zones": {
+        "basis": {
+          "accumulate_near": "sma_200",
+          "reduce_above": "52w_high_minus_1atr",
+          "stop_loss": "current_minus_2.0atr",
+          "strong_buy_below": "52w_low_plus_1atr"
+        },
+        "position_sizing_range": {
+          "dollars_for_account": {
+            "max": 80.0,
+            "min": 25.0,
+            "portfolio_assumption": 1000.0
+          },
+          "max_pct": 8.0,
+          "profile_cap_pct": 10.0,
+          "rationale": "medium_risk_regime",
+          "risk_per_trade_pct": 1.0,
+          "shares_range": {
+            "at_price": 50.0,
+            "max": 1,
+            "min": 0
+          },
+          "starter_pct": 2.5,
+          "stop_implied_max": {
+            "dollars_for_account": 80.0,
+            "pct": 8.0,
+            "risk_per_trade_pct": 1.0,
+            "stop_distance_pct": 4.0
+          },
+          "suggested_pct_range": [
+            2.5,
+            8.0
+          ]
+        },
+        "stop_calculation": {
+          "atr_pct": 0.02,
+          "min_multiple_required": 1.5,
+          "stop_distance_pct": 0.04,
+          "stop_multiple_used": 2.0,
+          "stop_price": 48.0
+        },
+        "zone_warnings": []
+      }
+    },
+    "speculative_binding": {
+      "card": {
+        "entry": {
+          "buy_zone_high": 101.0,
+          "buy_zone_low": 80.5,
+          "current_price": 100.0
+        },
+        "exit": {
+          "stop_basis": "current_minus_2.0atr",
+          "stop_or_invalidation": 70.0
+        },
+        "sizing": {
+          "at_price": 100.0,
+          "fractional_shares": 1.0,
+          "full_dollars": 600.0,
+          "full_pct_cap": 6.0,
+          "starter_dollars": 100.0,
+          "starter_pct": 1.0,
+          "unavailable_reason": null,
+          "whole_shares": 1
+        }
+      },
+      "decision": {
+        "if_held": {
+          "action": "hold",
+          "add_allowed": true,
+          "basis": "candidate_admits_new_money"
+        },
+        "long_term": {
+          "action": "buy",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        },
+        "new_money": {
+          "action": "buy",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        }
+      },
+      "inputs": {
+        "account_size": 10000.0,
+        "annualized": 0.35,
+        "atr": 15.0,
+        "low_multiple": 0.7,
+        "price": 100.0,
+        "profile": "speculative"
+      },
+      "limit_origins": {
+        "max_position_pct": "profile",
+        "risk_per_trade_pct": "profile"
+      },
+      "modes": {
+        "balanced": {
+          "action": "buy",
+          "capital_at_risk": null,
+          "max_position": {
+            "dollars": 800.0,
+            "pct": 8.0,
+            "shares": 8
+          },
+          "starter_position": {
+            "dollars": 250.0,
+            "pct": 2.5,
+            "shares": 2
+          }
+        },
+        "core": {
+          "action": "buy",
+          "capital_at_risk": null,
+          "max_position": {
+            "dollars": 800.0,
+            "pct": 8.0,
+            "shares": 8
+          },
+          "starter_position": {
+            "dollars": 200.0,
+            "pct": 2.0,
+            "shares": 2
+          }
+        },
+        "speculative": {
+          "action": "wait",
+          "capital_at_risk": null,
+          "max_position": null,
+          "starter_position": null
+        }
+      },
+      "resolved_profile": {
+        "account_bucket": "small",
+        "account_size": 10000.0,
+        "account_size_status": "provided",
+        "add_on_confirmation_pct": 2.5,
+        "description": "Small-starter profile for solo investors willing to risk limited principal for higher upside.",
+        "label": "Speculative asymmetric",
+        "max_position_pct": 6.0,
+        "profile": "speculative",
+        "risk_per_trade_decimal": 0.015,
+        "risk_per_trade_pct": 1.5,
+        "small_account": true,
+        "starter_position_pct": 1.0
+      },
+      "snapshot": {
+        "as_of_kind": "session_close",
+        "bearish_signals": [],
+        "bullish_signals": [
+          "golden_cross",
+          "macd_bullish",
+          "net_cash_positive",
+          "positive_free_cash_flow",
+          "price_above_sma200",
+          "strong_3m_momentum"
+        ],
+        "confidence": "high",
+        "hard_gate_ids": [],
+        "if_held_action": "hold",
+        "is_unprofitable": null,
+        "long_term_action": "buy",
+        "long_term_fit": "ok",
+        "market_cap": 10000000000,
+        "mid_term_fit": "ok",
+        "new_money_action": "buy",
+        "next_catalyst": {
+          "date": "2026-11-18",
+          "source": null,
+          "status": "available",
+          "type": "earnings"
+        },
+        "price": 100.0,
+        "price_as_of": "2026-10-09",
+        "price_source": "daily_close",
+        "price_stale": false,
+        "price_zone": "below_sma200",
+        "risk_regime": "medium",
+        "score": 0.75,
+        "sector": null,
+        "snapshot_as_of_date": "2026-10-10",
+        "snapshot_hash": "8a4032a7ae8abf3c",
+        "snapshot_version": "3.0.0",
+        "support_currency": "supported",
+        "support_instrument": "supported",
+        "symbol": "ACME",
+        "tilt": "bullish",
+        "unevaluated_gate_ids": [],
+        "valuation_gate": "attractive",
+        "volatility_ann": 0.35
+      },
+      "summary": "Decision (mid-term, new money): buy; size ~1.0-6.0%. If held: hold. Long-term (1-5y): buy. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "tiers": {
+        "decision": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 80.5,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 1.0,
+            "full_dollars": 600.0,
+            "full_pct_cap": 6.0,
+            "starter_dollars": 100.0,
+            "starter_pct": 1.0,
+            "unavailable_reason": null,
+            "whole_shares": 1
+          }
+        },
+        "full": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 80.5,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 1.0,
+            "full_dollars": 600.0,
+            "full_pct_cap": 6.0,
+            "starter_dollars": 100.0,
+            "starter_pct": 1.0,
+            "unavailable_reason": null,
+            "whole_shares": 1
+          }
+        },
+        "standard": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 80.5,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 1.0,
+            "full_dollars": 600.0,
+            "full_pct_cap": 6.0,
+            "starter_dollars": 100.0,
+            "starter_pct": 1.0,
+            "unavailable_reason": null,
+            "whole_shares": 1
+          }
+        }
+      },
+      "zones": {
+        "basis": {
+          "accumulate_near": "sma_200",
+          "reduce_above": "52w_high_minus_1atr",
+          "stop_loss": "current_minus_2.0atr",
+          "strong_buy_below": "52w_low_plus_1atr"
+        },
+        "position_sizing_range": {
+          "dollars_for_account": {
+            "max": 600.0,
+            "min": 100.0,
+            "portfolio_assumption": 10000.0
+          },
+          "max_pct": 6.0,
+          "profile_cap_pct": 6.0,
+          "rationale": "medium_risk_regime",
+          "risk_per_trade_pct": 1.5,
+          "shares_range": {
+            "at_price": 100.0,
+            "max": 6,
+            "min": 1
+          },
+          "starter_pct": 1.0,
+          "stop_implied_max": {
+            "dollars_for_account": 500.0,
+            "pct": 5.0,
+            "risk_per_trade_pct": 1.5,
+            "stop_distance_pct": 30.0
+          },
+          "suggested_pct_range": [
+            1.0,
+            6.0
+          ]
+        },
+        "stop_calculation": {
+          "atr_pct": 0.15,
+          "min_multiple_required": 1.5,
+          "stop_distance_pct": 0.3,
+          "stop_multiple_used": 2.0,
+          "stop_price": 70.0
+        },
+        "zone_warnings": []
+      }
+    },
+    "speculative_mode_override": {
+      "card": {
+        "entry": {
+          "buy_zone_high": 66.0,
+          "buy_zone_low": 45.9,
+          "current_price": 60.0
+        },
+        "exit": {
+          "stop_basis": "current_minus_2.0atr",
+          "stop_or_invalidation": 56.0
+        },
+        "sizing": {
+          "at_price": 60.0,
+          "fractional_shares": 0.8333,
+          "full_dollars": 50.0,
+          "full_pct_cap": 0.5,
+          "starter_dollars": 50.0,
+          "starter_pct": 0.5,
+          "unavailable_reason": null,
+          "whole_shares": 0
+        }
+      },
+      "decision": {
+        "if_held": {
+          "action": "hold",
+          "add_allowed": true,
+          "basis": "candidate_admits_new_money"
+        },
+        "long_term": {
+          "action": "buy",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": [
+            "falling_knife"
+          ]
+        },
+        "new_money": {
+          "action": "buy",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": [
+            "falling_knife"
+          ]
+        }
+      },
+      "inputs": {
+        "account_size": 10000.0,
+        "annualized": 0.22,
+        "atr": 2.0,
+        "max_position_pct": 0.5,
+        "price": 60.0,
+        "profile": "balanced",
+        "template": "dislocation"
+      },
+      "limit_origins": {
+        "max_position_pct": "caller",
+        "risk_per_trade_pct": "profile"
+      },
+      "modes": {
+        "balanced": {
+          "action": "buy",
+          "capital_at_risk": null,
+          "max_position": {
+            "dollars": 800.0,
+            "pct": 8.0,
+            "shares": 13
+          },
+          "starter_position": {
+            "dollars": 250.0,
+            "pct": 2.5,
+            "shares": 4
+          }
+        },
+        "core": {
+          "action": "buy",
+          "capital_at_risk": null,
+          "max_position": {
+            "dollars": 800.0,
+            "pct": 8.0,
+            "shares": 13
+          },
+          "starter_position": {
+            "dollars": 200.0,
+            "pct": 2.0,
+            "shares": 3
+          }
+        },
+        "speculative": {
+          "action": "starter",
+          "capital_at_risk": "10.0K",
+          "max_position": null,
+          "starter_position": {
+            "dollars": 100.0,
+            "pct": 1.0,
+            "shares": 1
+          }
+        }
+      },
+      "resolved_profile": {
+        "account_bucket": "small",
+        "account_size": 10000.0,
+        "account_size_status": "provided",
+        "add_on_confirmation_pct": 5.0,
+        "description": "Default profile that blends quality, valuation, and tactical entry discipline.",
+        "label": "Balanced",
+        "max_position_pct": 0.5,
+        "profile": "balanced",
+        "risk_per_trade_decimal": 0.01,
+        "risk_per_trade_pct": 1.0,
+        "small_account": true,
+        "starter_position_pct": 2.5
+      },
+      "snapshot": {
+        "as_of_kind": "session_close",
+        "bearish_signals": [
+          "price_below_sma200"
+        ],
+        "bullish_signals": [
+          "golden_cross",
+          "macd_bullish",
+          "net_cash_positive",
+          "positive_free_cash_flow"
+        ],
+        "confidence": "high",
+        "hard_gate_ids": [],
+        "if_held_action": "hold",
+        "is_unprofitable": null,
+        "long_term_action": "buy",
+        "long_term_fit": "ok",
+        "market_cap": 10000000000,
+        "mid_term_fit": "ok",
+        "new_money_action": "buy",
+        "next_catalyst": {
+          "date": "2026-11-18",
+          "source": null,
+          "status": "available",
+          "type": "earnings"
+        },
+        "price": 60.0,
+        "price_as_of": "2026-10-09",
+        "price_source": "daily_close",
+        "price_stale": false,
+        "price_zone": "below_sma200",
+        "risk_regime": "medium",
+        "score": 0.55,
+        "sector": null,
+        "snapshot_as_of_date": "2026-10-10",
+        "snapshot_hash": "bc61cd35ad312c4d",
+        "snapshot_version": "3.0.0",
+        "support_currency": "supported",
+        "support_instrument": "supported",
+        "symbol": "ACME",
+        "tilt": "bullish",
+        "unevaluated_gate_ids": [
+          "falling_knife"
+        ],
+        "valuation_gate": "attractive",
+        "volatility_ann": 0.22
+      },
+      "summary": "Decision (mid-term, new money): buy; size ~0.5-0.5%. If held: hold. Long-term (1-5y): buy. Acme has a strong technical setup (golden cross, MACD bullish, 1M +12.0%, 3M +10.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "tiers": {
+        "decision": {
+          "entry": {
+            "buy_zone_high": 66.0,
+            "buy_zone_low": 45.9,
+            "current_price": 60.0
+          },
+          "sizing": {
+            "at_price": 60.0,
+            "fractional_shares": 0.8333,
+            "full_dollars": 50.0,
+            "full_pct_cap": 0.5,
+            "starter_dollars": 50.0,
+            "starter_pct": 0.5,
+            "unavailable_reason": null,
+            "whole_shares": 0
+          }
+        },
+        "full": {
+          "entry": {
+            "buy_zone_high": 66.0,
+            "buy_zone_low": 45.9,
+            "current_price": 60.0
+          },
+          "sizing": {
+            "at_price": 60.0,
+            "fractional_shares": 0.8333,
+            "full_dollars": 50.0,
+            "full_pct_cap": 0.5,
+            "starter_dollars": 50.0,
+            "starter_pct": 0.5,
+            "unavailable_reason": null,
+            "whole_shares": 0
+          }
+        },
+        "standard": {
+          "entry": {
+            "buy_zone_high": 66.0,
+            "buy_zone_low": 45.9,
+            "current_price": 60.0
+          },
+          "sizing": {
+            "at_price": 60.0,
+            "fractional_shares": 0.8333,
+            "full_dollars": 50.0,
+            "full_pct_cap": 0.5,
+            "starter_dollars": 50.0,
+            "starter_pct": 0.5,
+            "unavailable_reason": null,
+            "whole_shares": 0
+          }
+        }
+      },
+      "zones": {
+        "basis": {
+          "accumulate_near": "sma_200",
+          "reduce_above": "52w_high_minus_1atr",
+          "stop_loss": "current_minus_2.0atr",
+          "strong_buy_below": "52w_low_plus_1atr"
+        },
+        "position_sizing_range": {
+          "dollars_for_account": {
+            "max": 50.0,
+            "min": 50.0,
+            "portfolio_assumption": 10000.0
+          },
+          "max_pct": 0.5,
+          "profile_cap_pct": 0.5,
+          "rationale": "medium_risk_regime",
+          "risk_per_trade_pct": 1.0,
+          "shares_range": {
+            "at_price": 60.0,
+            "max": 0,
+            "min": 0
+          },
+          "starter_pct": 0.5,
+          "stop_implied_max": {
+            "dollars_for_account": 50.0,
+            "pct": 0.5,
+            "risk_per_trade_pct": 1.0,
+            "stop_distance_pct": 6.7
+          },
+          "suggested_pct_range": [
+            0.5,
+            0.5
+          ]
+        },
+        "stop_calculation": {
+          "atr_pct": 0.02,
+          "min_multiple_required": 1.5,
+          "stop_distance_pct": 0.0667,
+          "stop_multiple_used": 2.0,
+          "stop_price": 56.0
+        },
+        "zone_warnings": []
+      }
+    },
+    "speculative_narrow": {
+      "card": {
+        "entry": {
+          "buy_zone_high": 101.0,
+          "buy_zone_low": 71.4,
+          "current_price": 100.0
+        },
+        "exit": {
+          "stop_basis": "current_minus_2.0atr",
+          "stop_or_invalidation": 96.0
+        },
+        "sizing": {
+          "at_price": 100.0,
+          "fractional_shares": 1.0,
+          "full_dollars": 600.0,
+          "full_pct_cap": 6.0,
+          "starter_dollars": 100.0,
+          "starter_pct": 1.0,
+          "unavailable_reason": null,
+          "whole_shares": 1
+        }
+      },
+      "decision": {
+        "if_held": {
+          "action": "hold",
+          "add_allowed": true,
+          "basis": "candidate_admits_new_money"
+        },
+        "long_term": {
+          "action": "buy",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        },
+        "new_money": {
+          "action": "buy",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        }
+      },
+      "inputs": {
+        "account_size": 10000.0,
+        "annualized": 0.35,
+        "atr": 2.0,
+        "low_multiple": 0.7,
+        "price": 100.0,
+        "profile": "speculative"
+      },
+      "limit_origins": {
+        "max_position_pct": "profile",
+        "risk_per_trade_pct": "profile"
+      },
+      "modes": {
+        "balanced": {
+          "action": "buy",
+          "capital_at_risk": null,
+          "max_position": {
+            "dollars": 800.0,
+            "pct": 8.0,
+            "shares": 8
+          },
+          "starter_position": {
+            "dollars": 250.0,
+            "pct": 2.5,
+            "shares": 2
+          }
+        },
+        "core": {
+          "action": "buy",
+          "capital_at_risk": null,
+          "max_position": {
+            "dollars": 800.0,
+            "pct": 8.0,
+            "shares": 8
+          },
+          "starter_position": {
+            "dollars": 200.0,
+            "pct": 2.0,
+            "shares": 2
+          }
+        },
+        "speculative": {
+          "action": "starter",
+          "capital_at_risk": "10.0K",
+          "max_position": null,
+          "starter_position": {
+            "dollars": 100.0,
+            "pct": 1.0,
+            "shares": 1
+          }
+        }
+      },
+      "resolved_profile": {
+        "account_bucket": "small",
+        "account_size": 10000.0,
+        "account_size_status": "provided",
+        "add_on_confirmation_pct": 2.5,
+        "description": "Small-starter profile for solo investors willing to risk limited principal for higher upside.",
+        "label": "Speculative asymmetric",
+        "max_position_pct": 6.0,
+        "profile": "speculative",
+        "risk_per_trade_decimal": 0.015,
+        "risk_per_trade_pct": 1.5,
+        "small_account": true,
+        "starter_position_pct": 1.0
+      },
+      "snapshot": {
+        "as_of_kind": "session_close",
+        "bearish_signals": [],
+        "bullish_signals": [
+          "golden_cross",
+          "macd_bullish",
+          "net_cash_positive",
+          "positive_free_cash_flow",
+          "price_above_sma200",
+          "strong_3m_momentum"
+        ],
+        "confidence": "high",
+        "hard_gate_ids": [],
+        "if_held_action": "hold",
+        "is_unprofitable": null,
+        "long_term_action": "buy",
+        "long_term_fit": "ok",
+        "market_cap": 10000000000,
+        "mid_term_fit": "ok",
+        "new_money_action": "buy",
+        "next_catalyst": {
+          "date": "2026-11-18",
+          "source": null,
+          "status": "available",
+          "type": "earnings"
+        },
+        "price": 100.0,
+        "price_as_of": "2026-10-09",
+        "price_source": "daily_close",
+        "price_stale": false,
+        "price_zone": "below_sma200",
+        "risk_regime": "medium",
+        "score": 0.75,
+        "sector": null,
+        "snapshot_as_of_date": "2026-10-10",
+        "snapshot_hash": "8a4032a7ae8abf3c",
+        "snapshot_version": "3.0.0",
+        "support_currency": "supported",
+        "support_instrument": "supported",
+        "symbol": "ACME",
+        "tilt": "bullish",
+        "unevaluated_gate_ids": [],
+        "valuation_gate": "attractive",
+        "volatility_ann": 0.35
+      },
+      "summary": "Decision (mid-term, new money): buy; size ~1.0-6.0%. If held: hold. Long-term (1-5y): buy. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "tiers": {
+        "decision": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 71.4,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 1.0,
+            "full_dollars": 600.0,
+            "full_pct_cap": 6.0,
+            "starter_dollars": 100.0,
+            "starter_pct": 1.0,
+            "unavailable_reason": null,
+            "whole_shares": 1
+          }
+        },
+        "full": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 71.4,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 1.0,
+            "full_dollars": 600.0,
+            "full_pct_cap": 6.0,
+            "starter_dollars": 100.0,
+            "starter_pct": 1.0,
+            "unavailable_reason": null,
+            "whole_shares": 1
+          }
+        },
+        "standard": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 71.4,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 1.0,
+            "full_dollars": 600.0,
+            "full_pct_cap": 6.0,
+            "starter_dollars": 100.0,
+            "starter_pct": 1.0,
+            "unavailable_reason": null,
+            "whole_shares": 1
+          }
+        }
+      },
+      "zones": {
+        "basis": {
+          "accumulate_near": "sma_200",
+          "reduce_above": "52w_high_minus_1atr",
+          "stop_loss": "current_minus_2.0atr",
+          "strong_buy_below": "52w_low_plus_1atr"
+        },
+        "position_sizing_range": {
+          "dollars_for_account": {
+            "max": 600.0,
+            "min": 100.0,
+            "portfolio_assumption": 10000.0
+          },
+          "max_pct": 6.0,
+          "profile_cap_pct": 6.0,
+          "rationale": "medium_risk_regime",
+          "risk_per_trade_pct": 1.5,
+          "shares_range": {
+            "at_price": 100.0,
+            "max": 6,
+            "min": 1
+          },
+          "starter_pct": 1.0,
+          "stop_implied_max": {
+            "dollars_for_account": 600.0,
+            "pct": 6.0,
+            "risk_per_trade_pct": 1.5,
+            "stop_distance_pct": 4.0
+          },
+          "suggested_pct_range": [
+            1.0,
+            6.0
+          ]
+        },
+        "stop_calculation": {
+          "atr_pct": 0.02,
+          "min_multiple_required": 1.5,
+          "stop_distance_pct": 0.04,
+          "stop_multiple_used": 2.0,
+          "stop_price": 96.0
+        },
+        "zone_warnings": []
+      }
+    },
+    "speculative_wide": {
+      "card": {
+        "entry": {
+          "buy_zone_high": 101.0,
+          "buy_zone_low": 77.0,
+          "current_price": 100.0
+        },
+        "exit": {
+          "stop_basis": "current_minus_2.0atr",
+          "stop_or_invalidation": 80.0
+        },
+        "sizing": {
+          "at_price": 100.0,
+          "fractional_shares": 1.0,
+          "full_dollars": 600.0,
+          "full_pct_cap": 6.0,
+          "starter_dollars": 100.0,
+          "starter_pct": 1.0,
+          "unavailable_reason": null,
+          "whole_shares": 1
+        }
+      },
+      "decision": {
+        "if_held": {
+          "action": "hold",
+          "add_allowed": true,
+          "basis": "candidate_admits_new_money"
+        },
+        "long_term": {
+          "action": "buy",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        },
+        "new_money": {
+          "action": "buy",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        }
+      },
+      "inputs": {
+        "account_size": 10000.0,
+        "annualized": 0.35,
+        "atr": 10.0,
+        "low_multiple": 0.7,
+        "price": 100.0,
+        "profile": "speculative"
+      },
+      "limit_origins": {
+        "max_position_pct": "profile",
+        "risk_per_trade_pct": "profile"
+      },
+      "modes": {
+        "balanced": {
+          "action": "buy",
+          "capital_at_risk": null,
+          "max_position": {
+            "dollars": 800.0,
+            "pct": 8.0,
+            "shares": 8
+          },
+          "starter_position": {
+            "dollars": 250.0,
+            "pct": 2.5,
+            "shares": 2
+          }
+        },
+        "core": {
+          "action": "buy",
+          "capital_at_risk": null,
+          "max_position": {
+            "dollars": 800.0,
+            "pct": 8.0,
+            "shares": 8
+          },
+          "starter_position": {
+            "dollars": 200.0,
+            "pct": 2.0,
+            "shares": 2
+          }
+        },
+        "speculative": {
+          "action": "wait",
+          "capital_at_risk": null,
+          "max_position": null,
+          "starter_position": null
+        }
+      },
+      "resolved_profile": {
+        "account_bucket": "small",
+        "account_size": 10000.0,
+        "account_size_status": "provided",
+        "add_on_confirmation_pct": 2.5,
+        "description": "Small-starter profile for solo investors willing to risk limited principal for higher upside.",
+        "label": "Speculative asymmetric",
+        "max_position_pct": 6.0,
+        "profile": "speculative",
+        "risk_per_trade_decimal": 0.015,
+        "risk_per_trade_pct": 1.5,
+        "small_account": true,
+        "starter_position_pct": 1.0
+      },
+      "snapshot": {
+        "as_of_kind": "session_close",
+        "bearish_signals": [],
+        "bullish_signals": [
+          "golden_cross",
+          "macd_bullish",
+          "net_cash_positive",
+          "positive_free_cash_flow",
+          "price_above_sma200",
+          "strong_3m_momentum"
+        ],
+        "confidence": "high",
+        "hard_gate_ids": [],
+        "if_held_action": "hold",
+        "is_unprofitable": null,
+        "long_term_action": "buy",
+        "long_term_fit": "ok",
+        "market_cap": 10000000000,
+        "mid_term_fit": "ok",
+        "new_money_action": "buy",
+        "next_catalyst": {
+          "date": "2026-11-18",
+          "source": null,
+          "status": "available",
+          "type": "earnings"
+        },
+        "price": 100.0,
+        "price_as_of": "2026-10-09",
+        "price_source": "daily_close",
+        "price_stale": false,
+        "price_zone": "below_sma200",
+        "risk_regime": "medium",
+        "score": 0.75,
+        "sector": null,
+        "snapshot_as_of_date": "2026-10-10",
+        "snapshot_hash": "8a4032a7ae8abf3c",
+        "snapshot_version": "3.0.0",
+        "support_currency": "supported",
+        "support_instrument": "supported",
+        "symbol": "ACME",
+        "tilt": "bullish",
+        "unevaluated_gate_ids": [],
+        "valuation_gate": "attractive",
+        "volatility_ann": 0.35
+      },
+      "summary": "Decision (mid-term, new money): buy; size ~1.0-6.0%. If held: hold. Long-term (1-5y): buy. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "tiers": {
+        "decision": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 77.0,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 1.0,
+            "full_dollars": 600.0,
+            "full_pct_cap": 6.0,
+            "starter_dollars": 100.0,
+            "starter_pct": 1.0,
+            "unavailable_reason": null,
+            "whole_shares": 1
+          }
+        },
+        "full": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 77.0,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 1.0,
+            "full_dollars": 600.0,
+            "full_pct_cap": 6.0,
+            "starter_dollars": 100.0,
+            "starter_pct": 1.0,
+            "unavailable_reason": null,
+            "whole_shares": 1
+          }
+        },
+        "standard": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 77.0,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 1.0,
+            "full_dollars": 600.0,
+            "full_pct_cap": 6.0,
+            "starter_dollars": 100.0,
+            "starter_pct": 1.0,
+            "unavailable_reason": null,
+            "whole_shares": 1
+          }
+        }
+      },
+      "zones": {
+        "basis": {
+          "accumulate_near": "sma_200",
+          "reduce_above": "52w_high_minus_1atr",
+          "stop_loss": "current_minus_2.0atr",
+          "strong_buy_below": "52w_low_plus_1atr"
+        },
+        "position_sizing_range": {
+          "dollars_for_account": {
+            "max": 600.0,
+            "min": 100.0,
+            "portfolio_assumption": 10000.0
+          },
+          "max_pct": 6.0,
+          "profile_cap_pct": 6.0,
+          "rationale": "medium_risk_regime",
+          "risk_per_trade_pct": 1.5,
+          "shares_range": {
+            "at_price": 100.0,
+            "max": 6,
+            "min": 1
+          },
+          "starter_pct": 1.0,
+          "stop_implied_max": {
+            "dollars_for_account": 600.0,
+            "pct": 6.0,
+            "risk_per_trade_pct": 1.5,
+            "stop_distance_pct": 20.0
+          },
+          "suggested_pct_range": [
+            1.0,
+            6.0
+          ]
+        },
+        "stop_calculation": {
+          "atr_pct": 0.1,
+          "min_multiple_required": 1.5,
+          "stop_distance_pct": 0.2,
+          "stop_multiple_used": 2.0,
+          "stop_price": 80.0
+        },
+        "zone_warnings": []
+      }
+    },
+    "starter": {
+      "card": {
+        "entry": {
+          "buy_zone_high": 90.0,
+          "buy_zone_low": 77.0,
+          "current_price": 100.0
+        },
+        "exit": {
+          "stop_basis": "current_minus_2.0atr",
+          "stop_or_invalidation": 80.0
+        },
+        "sizing": {
+          "at_price": 100.0,
+          "fractional_shares": 2.5,
+          "full_dollars": null,
+          "full_pct_cap": null,
+          "starter_dollars": 250.0,
+          "starter_pct": 2.5,
+          "unavailable_reason": null,
+          "whole_shares": 2
+        }
+      },
+      "decision": {
+        "if_held": {
+          "action": "hold",
+          "add_allowed": true,
+          "basis": "candidate_admits_new_money"
+        },
+        "long_term": {
+          "action": "buy",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        },
+        "new_money": {
+          "action": "starter",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        }
+      },
+      "inputs": {
+        "account_size": 10000.0,
+        "annualized": 0.35,
+        "atr": 10.0,
+        "low_multiple": 0.7,
+        "price": 100.0,
+        "profile": "balanced",
+        "starter": true
+      },
+      "limit_origins": {
+        "max_position_pct": "profile",
+        "risk_per_trade_pct": "profile"
+      },
+      "modes": {
+        "balanced": {
+          "action": "starter",
+          "capital_at_risk": null,
+          "max_position": null,
+          "starter_position": {
+            "dollars": 250.0,
+            "pct": 2.5,
+            "shares": 2
+          }
+        },
+        "core": {
+          "action": "buy",
+          "capital_at_risk": null,
+          "max_position": null,
+          "starter_position": {
+            "dollars": 200.0,
+            "pct": 2.0,
+            "shares": 2
+          }
+        },
+        "speculative": {
+          "action": "wait",
+          "capital_at_risk": null,
+          "max_position": null,
+          "starter_position": null
+        }
+      },
+      "resolved_profile": {
+        "account_bucket": "small",
+        "account_size": 10000.0,
+        "account_size_status": "provided",
+        "add_on_confirmation_pct": 5.0,
+        "description": "Default profile that blends quality, valuation, and tactical entry discipline.",
+        "label": "Balanced",
+        "max_position_pct": 10.0,
+        "profile": "balanced",
+        "risk_per_trade_decimal": 0.01,
+        "risk_per_trade_pct": 1.0,
+        "small_account": true,
+        "starter_position_pct": 2.5
+      },
+      "snapshot": {
+        "as_of_kind": "session_close",
+        "bearish_signals": [],
+        "bullish_signals": [
+          "golden_cross",
+          "macd_bullish",
+          "net_cash_positive",
+          "positive_free_cash_flow",
+          "price_above_sma200",
+          "strong_3m_momentum"
+        ],
+        "confidence": "high",
+        "hard_gate_ids": [],
+        "if_held_action": "hold",
+        "is_unprofitable": null,
+        "long_term_action": "buy",
+        "long_term_fit": "ok",
+        "market_cap": 10000000000,
+        "mid_term_fit": "ok",
+        "new_money_action": "starter",
+        "next_catalyst": {
+          "date": "2026-11-18",
+          "source": null,
+          "status": "available",
+          "type": "earnings"
+        },
+        "price": 100.0,
+        "price_as_of": "2026-10-09",
+        "price_source": "daily_close",
+        "price_stale": false,
+        "price_zone": "at_or_below_sma50",
+        "risk_regime": "medium",
+        "score": 0.75,
+        "sector": null,
+        "snapshot_as_of_date": "2026-10-10",
+        "snapshot_hash": "5fc52f8f28e59b6f",
+        "snapshot_version": "3.0.0",
+        "support_currency": "supported",
+        "support_instrument": "supported",
+        "symbol": "ACME",
+        "tilt": "bullish",
+        "unevaluated_gate_ids": [],
+        "valuation_gate": "attractive",
+        "volatility_ann": 0.35
+      },
+      "summary": "Decision (mid-term, new money): starter; size ~2.5%. If held: hold. Long-term (1-5y): buy. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "tiers": {
+        "decision": {
+          "entry": {
+            "buy_zone_high": 90.0,
+            "buy_zone_low": 77.0,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 2.5,
+            "full_dollars": null,
+            "full_pct_cap": null,
+            "starter_dollars": 250.0,
+            "starter_pct": 2.5,
+            "unavailable_reason": null,
+            "whole_shares": 2
+          }
+        },
+        "full": {
+          "entry": {
+            "buy_zone_high": 90.0,
+            "buy_zone_low": 77.0,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 2.5,
+            "full_dollars": null,
+            "full_pct_cap": null,
+            "starter_dollars": 250.0,
+            "starter_pct": 2.5,
+            "unavailable_reason": null,
+            "whole_shares": 2
+          }
+        },
+        "standard": {
+          "entry": {
+            "buy_zone_high": 90.0,
+            "buy_zone_low": 77.0,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 2.5,
+            "full_dollars": null,
+            "full_pct_cap": null,
+            "starter_dollars": 250.0,
+            "starter_pct": 2.5,
+            "unavailable_reason": null,
+            "whole_shares": 2
+          }
+        }
+      },
+      "zones": {
+        "basis": {
+          "accumulate_near": "sma_200",
+          "reduce_above": "52w_high_minus_1atr",
+          "stop_loss": "current_minus_2.0atr",
+          "strong_buy_below": "52w_low_plus_1atr"
+        },
+        "position_sizing_range": null,
+        "stop_calculation": {
+          "atr_pct": 0.1,
+          "min_multiple_required": 1.5,
+          "stop_distance_pct": 0.2,
+          "stop_multiple_used": 2.0,
+          "stop_price": 80.0
+        },
+        "zone_warnings": []
+      }
+    },
+    "tiny_cap": {
+      "card": {
+        "entry": {
+          "buy_zone_high": 101.0,
+          "buy_zone_low": 77.0,
+          "current_price": 100.0
+        },
+        "exit": {
+          "stop_basis": "current_minus_2.0atr",
+          "stop_or_invalidation": 80.0
+        },
+        "sizing": {
+          "at_price": 100.0,
+          "fractional_shares": 0.1,
+          "full_dollars": 10.0,
+          "full_pct_cap": 0.1,
+          "starter_dollars": 10.0,
+          "starter_pct": 0.1,
+          "unavailable_reason": null,
+          "whole_shares": 0
+        }
+      },
+      "decision": {
+        "if_held": {
+          "action": "hold",
+          "add_allowed": true,
+          "basis": "candidate_admits_new_money"
+        },
+        "long_term": {
+          "action": "buy",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        },
+        "new_money": {
+          "action": "buy",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        }
+      },
+      "inputs": {
+        "account_size": 10000.0,
+        "annualized": 0.35,
+        "atr": 10.0,
+        "low_multiple": 0.7,
+        "max_position_pct": 0.06,
+        "price": 100.0,
+        "profile": "balanced"
+      },
+      "limit_origins": {
+        "max_position_pct": "caller",
+        "risk_per_trade_pct": "profile"
+      },
+      "modes": {
+        "balanced": {
+          "action": "buy",
+          "capital_at_risk": null,
+          "max_position": {
+            "dollars": 800.0,
+            "pct": 8.0,
+            "shares": 8
+          },
+          "starter_position": {
+            "dollars": 250.0,
+            "pct": 2.5,
+            "shares": 2
+          }
+        },
+        "core": {
+          "action": "buy",
+          "capital_at_risk": null,
+          "max_position": {
+            "dollars": 800.0,
+            "pct": 8.0,
+            "shares": 8
+          },
+          "starter_position": {
+            "dollars": 200.0,
+            "pct": 2.0,
+            "shares": 2
+          }
+        },
+        "speculative": {
+          "action": "wait",
+          "capital_at_risk": null,
+          "max_position": null,
+          "starter_position": null
+        }
+      },
+      "resolved_profile": {
+        "account_bucket": "small",
+        "account_size": 10000.0,
+        "account_size_status": "provided",
+        "add_on_confirmation_pct": 5.0,
+        "description": "Default profile that blends quality, valuation, and tactical entry discipline.",
+        "label": "Balanced",
+        "max_position_pct": 0.06,
+        "profile": "balanced",
+        "risk_per_trade_decimal": 0.01,
+        "risk_per_trade_pct": 1.0,
+        "small_account": true,
+        "starter_position_pct": 2.5
+      },
+      "snapshot": {
+        "as_of_kind": "session_close",
+        "bearish_signals": [],
+        "bullish_signals": [
+          "golden_cross",
+          "macd_bullish",
+          "net_cash_positive",
+          "positive_free_cash_flow",
+          "price_above_sma200",
+          "strong_3m_momentum"
+        ],
+        "confidence": "high",
+        "hard_gate_ids": [],
+        "if_held_action": "hold",
+        "is_unprofitable": null,
+        "long_term_action": "buy",
+        "long_term_fit": "ok",
+        "market_cap": 10000000000,
+        "mid_term_fit": "ok",
+        "new_money_action": "buy",
+        "next_catalyst": {
+          "date": "2026-11-18",
+          "source": null,
+          "status": "available",
+          "type": "earnings"
+        },
+        "price": 100.0,
+        "price_as_of": "2026-10-09",
+        "price_source": "daily_close",
+        "price_stale": false,
+        "price_zone": "below_sma200",
+        "risk_regime": "medium",
+        "score": 0.75,
+        "sector": null,
+        "snapshot_as_of_date": "2026-10-10",
+        "snapshot_hash": "8a4032a7ae8abf3c",
+        "snapshot_version": "3.0.0",
+        "support_currency": "supported",
+        "support_instrument": "supported",
+        "symbol": "ACME",
+        "tilt": "bullish",
+        "unevaluated_gate_ids": [],
+        "valuation_gate": "attractive",
+        "volatility_ann": 0.35
+      },
+      "summary": "Decision (mid-term, new money): buy; size ~0.1-0.1%. If held: hold. Long-term (1-5y): buy. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "tiers": {
+        "decision": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 77.0,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 0.1,
+            "full_dollars": 10.0,
+            "full_pct_cap": 0.1,
+            "starter_dollars": 10.0,
+            "starter_pct": 0.1,
+            "unavailable_reason": null,
+            "whole_shares": 0
+          }
+        },
+        "full": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 77.0,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 0.1,
+            "full_dollars": 10.0,
+            "full_pct_cap": 0.1,
+            "starter_dollars": 10.0,
+            "starter_pct": 0.1,
+            "unavailable_reason": null,
+            "whole_shares": 0
+          }
+        },
+        "standard": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 77.0,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 0.1,
+            "full_dollars": 10.0,
+            "full_pct_cap": 0.1,
+            "starter_dollars": 10.0,
+            "starter_pct": 0.1,
+            "unavailable_reason": null,
+            "whole_shares": 0
+          }
+        }
+      },
+      "zones": {
+        "basis": {
+          "accumulate_near": "sma_200",
+          "reduce_above": "52w_high_minus_1atr",
+          "stop_loss": "current_minus_2.0atr",
+          "strong_buy_below": "52w_low_plus_1atr"
+        },
+        "position_sizing_range": {
+          "dollars_for_account": {
+            "max": 10.0,
+            "min": 10.0,
+            "portfolio_assumption": 10000.0
+          },
+          "max_pct": 0.1,
+          "profile_cap_pct": 0.06,
+          "rationale": "medium_risk_regime",
+          "risk_per_trade_pct": 1.0,
+          "shares_range": {
+            "at_price": 100.0,
+            "max": 0,
+            "min": 0
+          },
+          "starter_pct": 0.1,
+          "stop_implied_max": {
+            "dollars_for_account": 10.0,
+            "pct": 0.1,
+            "risk_per_trade_pct": 1.0,
+            "stop_distance_pct": 20.0
+          },
+          "suggested_pct_range": [
+            0.1,
+            0.1
+          ]
+        },
+        "stop_calculation": {
+          "atr_pct": 0.1,
+          "min_multiple_required": 1.5,
+          "stop_distance_pct": 0.2,
+          "stop_multiple_used": 2.0,
+          "stop_price": 80.0
+        },
+        "zone_warnings": []
+      }
+    },
+    "tiny_risk": {
+      "card": {
+        "entry": {
+          "buy_zone_high": 101.0,
+          "buy_zone_low": 77.0,
+          "current_price": 100.0
+        },
+        "exit": {
+          "stop_basis": "current_minus_2.0atr",
+          "stop_or_invalidation": 80.0
+        },
+        "sizing": {
+          "at_price": 100.0,
+          "fractional_shares": 2.5,
+          "full_dollars": 800.0,
+          "full_pct_cap": 8.0,
+          "starter_dollars": 250.0,
+          "starter_pct": 2.5,
+          "unavailable_reason": null,
+          "whole_shares": 2
+        }
+      },
+      "decision": {
+        "if_held": {
+          "action": "hold",
+          "add_allowed": true,
+          "basis": "candidate_admits_new_money"
+        },
+        "long_term": {
+          "action": "buy",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        },
+        "new_money": {
+          "action": "buy",
+          "blocked_by": [],
+          "decided_by": null,
+          "earliest_reassessment": null,
+          "unevaluated": []
+        }
+      },
+      "inputs": {
+        "account_size": 10000.0,
+        "annualized": 0.35,
+        "atr": 10.0,
+        "low_multiple": 0.7,
+        "price": 100.0,
+        "profile": "balanced",
+        "risk_per_trade_pct": 0.001
+      },
+      "limit_origins": {
+        "max_position_pct": "profile",
+        "risk_per_trade_pct": "caller"
+      },
+      "modes": {
+        "balanced": {
+          "action": "buy",
+          "capital_at_risk": null,
+          "max_position": {
+            "dollars": 800.0,
+            "pct": 8.0,
+            "shares": 8
+          },
+          "starter_position": {
+            "dollars": 250.0,
+            "pct": 2.5,
+            "shares": 2
+          }
+        },
+        "core": {
+          "action": "buy",
+          "capital_at_risk": null,
+          "max_position": {
+            "dollars": 800.0,
+            "pct": 8.0,
+            "shares": 8
+          },
+          "starter_position": {
+            "dollars": 200.0,
+            "pct": 2.0,
+            "shares": 2
+          }
+        },
+        "speculative": {
+          "action": "wait",
+          "capital_at_risk": null,
+          "max_position": null,
+          "starter_position": null
+        }
+      },
+      "resolved_profile": {
+        "account_bucket": "small",
+        "account_size": 10000.0,
+        "account_size_status": "provided",
+        "add_on_confirmation_pct": 5.0,
+        "description": "Default profile that blends quality, valuation, and tactical entry discipline.",
+        "label": "Balanced",
+        "max_position_pct": 10.0,
+        "profile": "balanced",
+        "risk_per_trade_decimal": 0.0,
+        "risk_per_trade_pct": 0.0,
+        "small_account": true,
+        "starter_position_pct": 2.5
+      },
+      "snapshot": {
+        "as_of_kind": "session_close",
+        "bearish_signals": [],
+        "bullish_signals": [
+          "golden_cross",
+          "macd_bullish",
+          "net_cash_positive",
+          "positive_free_cash_flow",
+          "price_above_sma200",
+          "strong_3m_momentum"
+        ],
+        "confidence": "high",
+        "hard_gate_ids": [],
+        "if_held_action": "hold",
+        "is_unprofitable": null,
+        "long_term_action": "buy",
+        "long_term_fit": "ok",
+        "market_cap": 10000000000,
+        "mid_term_fit": "ok",
+        "new_money_action": "buy",
+        "next_catalyst": {
+          "date": "2026-11-18",
+          "source": null,
+          "status": "available",
+          "type": "earnings"
+        },
+        "price": 100.0,
+        "price_as_of": "2026-10-09",
+        "price_source": "daily_close",
+        "price_stale": false,
+        "price_zone": "below_sma200",
+        "risk_regime": "medium",
+        "score": 0.75,
+        "sector": null,
+        "snapshot_as_of_date": "2026-10-10",
+        "snapshot_hash": "8a4032a7ae8abf3c",
+        "snapshot_version": "3.0.0",
+        "support_currency": "supported",
+        "support_instrument": "supported",
+        "symbol": "ACME",
+        "tilt": "bullish",
+        "unevaluated_gate_ids": [],
+        "valuation_gate": "attractive",
+        "volatility_ann": 0.35
+      },
+      "summary": "Decision (mid-term, new money): buy; size ~2.5-8.0%. If held: hold. Long-term (1-5y): buy. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "tiers": {
+        "decision": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 77.0,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 2.5,
+            "full_dollars": 800.0,
+            "full_pct_cap": 8.0,
+            "starter_dollars": 250.0,
+            "starter_pct": 2.5,
+            "unavailable_reason": null,
+            "whole_shares": 2
+          }
+        },
+        "full": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 77.0,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 2.5,
+            "full_dollars": 800.0,
+            "full_pct_cap": 8.0,
+            "starter_dollars": 250.0,
+            "starter_pct": 2.5,
+            "unavailable_reason": null,
+            "whole_shares": 2
+          }
+        },
+        "standard": {
+          "entry": {
+            "buy_zone_high": 101.0,
+            "buy_zone_low": 77.0,
+            "current_price": 100.0
+          },
+          "sizing": {
+            "at_price": 100.0,
+            "fractional_shares": 2.5,
+            "full_dollars": 800.0,
+            "full_pct_cap": 8.0,
+            "starter_dollars": 250.0,
+            "starter_pct": 2.5,
+            "unavailable_reason": null,
+            "whole_shares": 2
+          }
+        }
+      },
+      "zones": {
+        "basis": {
+          "accumulate_near": "sma_200",
+          "reduce_above": "52w_high_minus_1atr",
+          "stop_loss": "current_minus_2.0atr",
+          "strong_buy_below": "52w_low_plus_1atr"
+        },
+        "position_sizing_range": {
+          "dollars_for_account": {
+            "max": 800.0,
+            "min": 250.0,
+            "portfolio_assumption": 10000.0
+          },
+          "max_pct": 8.0,
+          "profile_cap_pct": 10.0,
+          "rationale": "medium_risk_regime",
+          "risk_per_trade_pct": 1.0,
+          "shares_range": {
+            "at_price": 100.0,
+            "max": 8,
+            "min": 2
+          },
+          "starter_pct": 2.5,
+          "stop_implied_max": {
+            "dollars_for_account": 500.0,
+            "pct": 5.0,
+            "risk_per_trade_pct": 1.0,
+            "stop_distance_pct": 20.0
+          },
+          "suggested_pct_range": [
+            2.5,
+            8.0
+          ]
+        },
+        "stop_calculation": {
+          "atr_pct": 0.1,
+          "min_multiple_required": 1.5,
+          "stop_distance_pct": 0.2,
+          "stop_multiple_used": 2.0,
+          "stop_price": 80.0
+        },
+        "zone_warnings": []
+      }
+    }
+  },
+  "clock": "2026-10-09T20:00:00-04:00",
+  "notice": "Observed v0.3.0 behavior, including defects; not the approved future contract.",
+  "recorded_code": "7d581f11562cf68a6eafb6489ad7c67aa5f25bee",
+  "swing": {
+    "fractional_amounts": {
+      "inputs": {
+        "account_size": 10000.0,
+        "entry": 100.0,
+        "max_position_pct": 8.25,
+        "risk_per_trade_pct": 1.0,
+        "stop": 97.0
+      },
+      "plan": {
+        "entry": {
+          "condition_text": "Trigger already satisfied \u2014 enter at market",
+          "trigger_price": 100.0,
+          "type": "market",
+          "valid": "good_till_time_stop"
+        },
+        "fractional_shares": 8.25,
+        "max_loss_dollars": 24.75,
+        "position_dollars": 825.0,
+        "position_pct": 8.25,
+        "reward_risk": 1.0,
+        "shares": 8,
+        "stop": {
+          "basis": "synthetic_stop",
+          "distance_pct": 0.03,
+          "price": 97.0
+        },
+        "targets": [
+          {
+            "basis": "r_multiple",
+            "price": 103.0,
+            "r_multiple": 1.0
+          },
+          {
+            "basis": "r_multiple",
+            "price": 106.0,
+            "r_multiple": 2.0
+          }
+        ],
+        "time_stop": {
+          "date": "2026-10-23",
+          "trading_days": 10
+        }
+      }
+    },
+    "no_account": {
+      "inputs": {
+        "account_size": null,
+        "entry": 100.0,
+        "max_position_pct": 10.0,
+        "risk_per_trade_pct": 1.0,
+        "stop": 97.0
+      },
+      "plan": {
+        "entry": {
+          "condition_text": "Trigger already satisfied \u2014 enter at market",
+          "trigger_price": 100.0,
+          "type": "market",
+          "valid": "good_till_time_stop"
+        },
+        "fractional_shares": null,
+        "max_loss_dollars": null,
+        "position_dollars": null,
+        "position_pct": 10.0,
+        "reward_risk": 1.0,
+        "shares": null,
+        "stop": {
+          "basis": "synthetic_stop",
+          "distance_pct": 0.03,
+          "price": 97.0
+        },
+        "targets": [
+          {
+            "basis": "r_multiple",
+            "price": 103.0,
+            "r_multiple": 1.0
+          },
+          {
+            "basis": "r_multiple",
+            "price": 106.0,
+            "r_multiple": 2.0
+          }
+        ],
+        "time_stop": {
+          "date": "2026-10-23",
+          "trading_days": 10
+        }
+      }
+    },
+    "zero_whole_shares": {
+      "inputs": {
+        "account_size": 1000.0,
+        "entry": 100.0,
+        "max_position_pct": 8.0,
+        "risk_per_trade_pct": 1.0,
+        "stop": 97.0
+      },
+      "plan": {
+        "entry": {
+          "condition_text": "Trigger already satisfied \u2014 enter at market",
+          "trigger_price": 100.0,
+          "type": "market",
+          "valid": "good_till_time_stop"
+        },
+        "fractional_shares": 0.8,
+        "max_loss_dollars": 2.4,
+        "position_dollars": 80.0,
+        "position_pct": 8.0,
+        "reward_risk": 1.0,
+        "shares": 0,
+        "stop": {
+          "basis": "synthetic_stop",
+          "distance_pct": 0.03,
+          "price": 97.0
+        },
+        "targets": [
+          {
+            "basis": "r_multiple",
+            "price": 103.0,
+            "r_multiple": 1.0
+          },
+          {
+            "basis": "r_multiple",
+            "price": 106.0,
+            "r_multiple": 2.0
+          }
+        ],
+        "time_stop": {
+          "date": "2026-10-23",
+          "trading_days": 10
+        }
+      }
+    }
+  }
+}
