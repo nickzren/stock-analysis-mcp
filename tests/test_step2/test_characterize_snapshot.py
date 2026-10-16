@@ -130,6 +130,8 @@ MUTATIONS: dict[str, tuple[dict[str, Any], str]] = {
     "price": ({"summary__current_price": 95.23}, "price +7.0%"),
     "score": ({"verdict__score": 0.5}, "score +0.20"),
     "hard_gate_ids": ({"decision_card__hard_gates__blocking": firing("falling_knife")}, "+hard_gate: falling_knife"),
+    "unevaluated_gate_ids": ({"decision_card__new_money__unevaluated": [{"id": "falling_knife", "reason": "r"}]},
+                             "+unevaluated_gate: falling_knife"),
     "mid_term_fit": ({"verdict__horizon_fit__mid_term": "poor"}, "mid_term_fit: ok -> poor"),
     "long_term_fit": ({"verdict__horizon_fit__long_term": "avoid"}, "long_term_fit: ok -> avoid"),
     "bullish_signals": ({"signals__bullish": lambda old: [*old, "insider_buying"]}, "+bullish: insider_buying"),

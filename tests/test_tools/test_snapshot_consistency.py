@@ -39,8 +39,8 @@ def raw_result(**changes: Any) -> dict[str, Any]:
                     "horizon_fit": {"mid_term": "good", "long_term": "fair"}},
         "diagnostics": {"pre_gate_policy": {"mid_term": "hold_or_add", "long_term": "accumulate",
                                             "inputs": {"zone": "accumulate"}}},
-        "decision_card": {"new_money": {"action": "buy"}, "if_held": {"action": "hold"},
-                          "long_term": {"new_money": {"action": "buy"}}, "action_now": "buy",
+        "decision_card": {"new_money": {"action": "buy", "unevaluated": []}, "if_held": {"action": "hold"},
+                          "long_term": {"new_money": {"action": "buy", "unevaluated": []}}, "action_now": "buy",
                           "hard_gates": {"blocking": [{"id": "earnings_blackout"}]}},
         "risk_summary": {"risk_regime": {"classification": "medium"}, "annualized_volatility": 0.3},
         "events_summary": {"next_catalyst": {"type": "earnings", "status": "available", "date": "2026-10-30",
@@ -263,7 +263,8 @@ class TestDiffEdges:
 
 # Fields only a 2.0.0 snapshot carries, and the legacy signal lists, which are ambiguous.
 NEW_FIELDS = ["as_of_kind", "price_as_of", "price_source", "price_stale", "support_currency", "support_instrument"]
-V3_FIELDS = ["if_held_action", "long_term_action", "new_money_action", "price_zone"]  # 3.0.0 only
+V3_FIELDS = ["if_held_action", "long_term_action", "new_money_action", "price_zone",
+             "unevaluated_gate_ids"]  # 3.0.0 only
 LEGACY_SIGNALS = ["bearish_signals", "bullish_signals"]
 
 

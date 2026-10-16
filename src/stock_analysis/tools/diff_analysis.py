@@ -19,7 +19,8 @@ from stock_analysis.utils.provenance import build_meta
 _FIELD_TYPES: dict[str, str] = {
     "price": "number", "market_cap": "number", "score": "number", "volatility_ann": "number",
     "is_unprofitable": "bool", "price_stale": "bool",
-    "hard_gate_ids": "string_list", "bullish_signals": "string_list", "bearish_signals": "string_list",
+    "hard_gate_ids": "string_list", "unevaluated_gate_ids": "string_list", "bullish_signals": "string_list",
+    "bearish_signals": "string_list",
     "next_catalyst": "object",
     **dict.fromkeys(
         ("sector", "tilt", "confidence", "mid_term_fit", "long_term_fit", "action_mid_term", "action_long_term",
@@ -90,8 +91,8 @@ _SCALAR_FIELDS = (
 # but not compared: analyze stores a known False as null, and staleness moves with
 # the clock alone).
 _DIFFED_FIELDS = (
-    "price", "score", "hard_gate_ids", "mid_term_fit", "long_term_fit", "bullish_signals", "bearish_signals",
-    *(field for field, _, _ in _SCALAR_FIELDS),
+    "price", "score", "hard_gate_ids", "unevaluated_gate_ids", "mid_term_fit", "long_term_fit", "bullish_signals",
+    "bearish_signals", *(field for field, _, _ in _SCALAR_FIELDS),
 )
 
 
@@ -222,23 +223,57 @@ def _diff_hard_gates(
     prev: dict[str, Any],
     curr: dict[str, Any],
 ) -> dict[str, Any]:
-    """Diff the set of active hard-gate ids — what fired or cleared between snapshots."""
+    """Diff the set of active hard-gate ids — what fired or cleared between snapshots. A
+    gate that fired before and is now unevaluated (its input failed) is not_evaluated,
+    never cleared; only the current snapshot's unevaluated ids are read, so this holds
+    against an older snapshot without them."""
     previous = prev.get("hard_gate_ids")
     current = curr.get("hard_gate_ids")
     if previous is None or current is None:
         # Unknown on either side: no gate is reported as new or cleared, only that
         # the list went from unknown to known (or back).
-        return {"previous": previous, "current": current, "new": [], "cleared": [],
+        return {"previous": previous, "current": current, "new": [], "cleared": [], "not_evaluated": [],
                 "changed": (previous is None) != (current is None)}
     prev_gates = set(previous)
     curr_gates = set(current)
+    gone = prev_gates - curr_gates
+    unevaluated = set(curr.get("unevaluated_gate_ids") or [])
     return {
         "previous": sorted(prev_gates),
         "current": sorted(curr_gates),
         "new": sorted(curr_gates - prev_gates),
-        "cleared": sorted(prev_gates - curr_gates),
+        "cleared": sorted(gone - unevaluated),
+        "not_evaluated": sorted(gone & unevaluated),
         "changed": prev_gates != curr_gates,
     }
+
+
+def _diff_unevaluated_gates(
+    prev: dict[str, Any],
+    curr: dict[str, Any],
+) -> dict[str, Any]:
+    """Diff the unevaluated gate ids: which gates are no longer evaluated and which are
+    evaluated again. Unknown on either side is a change of the list only."""
+    previous = prev.get("unevaluated_gate_ids")
+    current = curr.get("unevaluated_gate_ids")
+    if previous is None or current is None:
+        return {"previous": previous, "current": current, "not_evaluated": [], "evaluated_again": [],
+                "changed": (previous is None) != (current is None)}
+    before, after = set(previous), set(current)
+    return {
+        "previous": sorted(before),
+        "current": sorted(after),
+        "not_evaluated": sorted(after - before),
+        "evaluated_again": sorted(before - after),
+        "changed": before != after,
+    }
+
+
+def _not_evaluated(changes: dict[str, Any]) -> list[str]:
+    """Gates no longer evaluated: from the unevaluated list's diff and, when that list is not
+    comparable (an older previous snapshot), from the fired gates now unevaluated."""
+    return sorted({*changes.get("hard_gates", {}).get("not_evaluated", []),
+                   *changes.get("unevaluated_gates", {}).get("not_evaluated", [])})
 
 
 def _build_material_changes(changes: dict[str, Any]) -> list[str]:
@@ -269,6 +304,10 @@ def _build_material_changes(changes: dict[str, Any]) -> list[str]:
         items.append(f"+hard_gate: {gate_id}")
     for gate_id in hard_gates.get("cleared", []):
         items.append(f"-hard_gate: {gate_id}")
+    for gate_id in _not_evaluated(changes):
+        items.append(f"+unevaluated_gate: {gate_id}")
+    for gate_id in changes.get("unevaluated_gates", {}).get("evaluated_again", []):
+        items.append(f"-unevaluated_gate: {gate_id}")
 
     horizon = changes.get("horizon_fit", {})
     mid = horizon.get("mid_term", {})
@@ -332,6 +371,10 @@ def _build_summary(
         parts.append(f"New hard gate(s): {', '.join(hard_gates['new'])}.")
     if hard_gates.get("cleared"):
         parts.append(f"Cleared hard gate(s): {', '.join(hard_gates['cleared'])}.")
+    if not_evaluated := _not_evaluated(changes):
+        parts.append(f"Gate(s) not evaluated: {', '.join(not_evaluated)}.")
+    if evaluated_again := changes.get("unevaluated_gates", {}).get("evaluated_again"):
+        parts.append(f"Gate(s) evaluated again: {', '.join(evaluated_again)}.")
 
     score = changes.get("score", {})
     if score.get("material") and score.get("change") is not None:
@@ -467,6 +510,8 @@ async def what_changed(
         source["material"] = False
     if comparable("hard_gate_ids"):
         changes["hard_gates"] = _diff_hard_gates(previous_snapshot, current_snapshot)
+    if comparable("unevaluated_gate_ids"):
+        changes["unevaluated_gates"] = _diff_unevaluated_gates(previous_snapshot, current_snapshot)
     horizon_fit = {
         name: _diff_scalar(previous_snapshot, current_snapshot, f"{name}_fit")
         for name in ("mid_term", "long_term")
@@ -479,7 +524,7 @@ async def what_changed(
     material_changes = _build_material_changes(changes)
     # A list that was unknown (null) and is now known, or the reverse, is a change
     # even when no item moved.
-    for field in ("hard_gate_ids", "bullish_signals", "bearish_signals"):
+    for field in ("hard_gate_ids", "unevaluated_gate_ids", "bullish_signals", "bearish_signals"):
         if comparable(field) and (previous_snapshot[field] is None) != (current_snapshot[field] is None):
             material_changes.append(f"{field}: {previous_snapshot[field]} -> {current_snapshot[field]}")
     if any(comparable(field) for field in _DIFFED_FIELDS):

@@ -27,7 +27,8 @@ from typing import Any
 
 # Snapshot format version - bump when normalization logic changes.
 # 3.0.0 (Step 2, plan §8): the canonical decision (new_money / if_held / long_term actions) and the neutral
-# price_zone replace the pre-gate action codes, decision_action_now and zone; hard_gate_ids lists every fired gate.
+# price_zone replace the pre-gate action codes, decision_action_now and zone; hard_gate_ids lists every fired gate
+# and unevaluated_gate_ids every gate whose input failed (not evaluated, so never cleared).
 SNAPSHOT_VERSION = "3.0.0"
 # Each version's field set, frozen: detect_changes validates and compares a previous snapshot on its own
 # version's fields and ignores any other key. 1.0.0 lists the enriched copy's fields (zone, fits, signals).
@@ -55,8 +56,8 @@ SNAPSHOT_FIELDS: dict[str, frozenset[str]] = {
         "snapshot_version", "symbol", "snapshot_hash", "snapshot_as_of_date", "price", "market_cap", "sector",
         "tilt", "confidence", "score", "new_money_action", "if_held_action", "long_term_action", "valuation_gate",
         "is_unprofitable", "risk_regime", "volatility_ann", "next_catalyst", "price_zone", "mid_term_fit",
-        "long_term_fit", "bullish_signals", "bearish_signals", "hard_gate_ids", "support_instrument",
-        "support_currency", "price_source", "price_as_of", "as_of_kind", "price_stale",
+        "long_term_fit", "bullish_signals", "bearish_signals", "hard_gate_ids", "unevaluated_gate_ids",
+        "support_instrument", "support_currency", "price_source", "price_as_of", "as_of_kind", "price_stale",
     }),
 }
 # Versions detect_changes accepts as a previous snapshot (a literal: never derived from SNAPSHOT_VERSION).
@@ -507,6 +508,18 @@ def _hard_gate_ids(decision_card: Any) -> list[str] | None:
     return sorted(str(gate["id"]) for gate in blocking if isinstance(gate, dict) and gate.get("id"))
 
 
+def _unevaluated_gate_ids(decision_card: Any) -> list[str] | None:
+    """The ids either horizon's new money lists as unevaluated, or None when neither list is known."""
+    card = _section(decision_card)
+    lists = [_section(card.get("new_money")).get("unevaluated"),
+             _section(_section(card.get("long_term")).get("new_money")).get("unevaluated")]
+    known = [entries for entries in lists if isinstance(entries, list)]
+    if not known:
+        return None
+    return sorted({str(gate["id"]) for entries in known for gate in entries
+                   if isinstance(gate, dict) and gate.get("id")})
+
+
 def build_watchlist_snapshot(raw: dict[str, Any]) -> dict[str, Any]:
     """
     Build the watchlist snapshot: the one record analyze returns at every detail
@@ -516,9 +529,9 @@ def build_watchlist_snapshot(raw: dict[str, Any]) -> dict[str, Any]:
     - snapshot_version: Format version for compatibility checking
     - snapshot_hash: SHA-256 of the canonical snapshot, without fetch-derived fields
     - snapshot_as_of_date: Latest fetch date across all components (time anchor)
-    - decision fields (the canonical actions, every fired gate, price_zone, horizon
-      fit, signals, support, price provenance); a list that is unknown is null, a
-      known-empty list is []
+    - decision fields (the canonical actions, every fired gate, every unevaluated
+      gate, price_zone, horizon fit, signals, support, price provenance); a list
+      that is unknown is null, a known-empty list is []
 
     Args:
         raw: Raw analyze_stock output
@@ -574,6 +587,8 @@ def build_watchlist_snapshot(raw: dict[str, Any]) -> dict[str, Any]:
         "is_unprofitable": valuation.get("is_unprofitable") or None,
         # Every fired gate (decision_card.hard_gates.blocking), not only those that set an action
         "hard_gate_ids": _hard_gate_ids(raw.get("decision_card")),
+        # Every gate whose input failed (new_money.unevaluated at either horizon): not evaluated, never cleared
+        "unevaluated_gate_ids": _unevaluated_gate_ids(raw.get("decision_card")),
         # The neutral, uncapped price-zone diagnostic (plan §7b)
         "price_zone": zones.get("price_zone"),
         "bullish_signals": _string_list(raw_signals.get("bullish")),

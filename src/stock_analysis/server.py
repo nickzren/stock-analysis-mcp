@@ -455,7 +455,9 @@ async def detect_changes(
     every analyze detail level) against previous_snapshot. Material changes: price moves
     >5%, score changes >0.10, and any change in new_money_action, if_held_action or
     long_term_action, hard gates (a freshness gate, stale_data or
-    freshness_unverifiable, firing or clearing included), price_zone, horizon fit, tilt,
+    freshness_unverifiable, firing or clearing included), gates not evaluated (a gate
+    whose input failed is reported as not evaluated, never as cleared), price_zone,
+    horizon fit, tilt,
     confidence, risk regime, valuation gate, support, a switch to or from the fallback
     price source, or a new or removed signal. Fetch times, cache hits, ages, price_stale
     and the reassessment date never count. A 1.0.0, 1.1.0 or 2.0.0 snapshot is compared

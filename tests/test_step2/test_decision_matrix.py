@@ -269,13 +269,16 @@ class TestBeforeTable:
 
     def test_the_after_table_snapshot_follows_the_decision(self) -> None:
         """DM-RF1 (SN-R8 / OC-RF12, matrix clause): in after.json every row's snapshot block is its decision:
-        new_money, if_held and long-term actions, the sorted fired gates and price_zone (plan §8). RF (WP2.4)."""
+        new_money, if_held and long-term actions, the sorted fired gates, the sorted unevaluated gates of both
+        horizons (SN-U1) and price_zone (plan §8). RF (WP2.4)."""
         for name, row in AFTER.items():
             decision = row["decision"]
+            unevaluated = {*decision["new_money"]["unevaluated"], *decision["long_term"]["unevaluated"]}
             assert row["snapshot"] | {"snapshot_hash": None} == {
                 "new_money_action": decision["new_money"]["action"], "if_held_action": decision["if_held"]["action"],
                 "long_term_action": decision["long_term"]["action"], "hard_gate_ids": sorted(row["hard_gates"]),
-                "price_zone": row["price_zone"], "snapshot_hash": None}, name
+                "unevaluated_gate_ids": sorted(unevaluated), "price_zone": row["price_zone"],
+                "snapshot_hash": None}, name
 
     def test_the_after_table_changes_only_the_listed_cells(self) -> None:
         """DM-CH3: after.json differs from before.json, over before.json's paths, exactly in ROW_CHANGES;

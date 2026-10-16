@@ -453,8 +453,10 @@
   builds one `watchlist_snapshot` before projection (identical at every
   `detail` level) and `detect_changes` uses it as is. It holds the compact,
   enriched (`price_zone`, horizon fit, signals) and decision fields
-  (`new_money_action`, `if_held_action`, `long_term_action`, and
-  `hard_gate_ids` = every fired gate; 3.0.0 retired `action_mid_term`,
+  (`new_money_action`, `if_held_action`, `long_term_action`,
+  `hard_gate_ids` = every fired gate, and `unevaluated_gate_ids` = every gate
+  whose input failed, from `new_money.unevaluated` at either horizon; 3.0.0
+  retired `action_mid_term`,
   `action_long_term`, `decision_action_now` and `zone`) plus
   `support_instrument` / `support_currency` and `price_source` /
   `price_as_of` / `as_of_kind` / `price_stale`; fetch time, cache hit, ages and
@@ -478,14 +480,17 @@
   its `window` bounds included) and matches its symbol against the ticker
   analyze resolved, returning `invalid_snapshot` with `problems`. It compares
   only fields both snapshots carry (the rest are `not_comparable`; across
-  versions the three actions and `price_zone` are never compared and the
-  summary names them; a pre-2.0.0
+  versions the three actions, `price_zone` and `unevaluated_gate_ids` are
+  never compared and the summary names them; a pre-2.0.0
   snapshot's signal lists are treated as absent, since the old producers wrote
   `[]` or partial lists when a source failed); null -> value is a change, and
   an unknown list on either side is one change, never new or removed items.
   Material: price > 5% (judged before rounding, with a 1e-9 tolerance so an
   exact 5% or 0.10 is not crossed by float error) or a
-  price/score appearing or disappearing, score > 0.10, gates, `price_zone`,
+  price/score appearing or disappearing, score > 0.10, gates (a fired gate
+  now in the current `unevaluated_gate_ids` is `not_evaluated`,
+  `+unevaluated_gate`, never cleared, also against an older snapshot; a gate
+  leaving that list is `-unevaluated_gate`), `price_zone`,
   horizon fit, signals, tilt, confidence, risk regime, the three actions (a
   new-money change caused only by a freshness gate included), valuation gate,
   support, and a price-source change involving the info fallback (a

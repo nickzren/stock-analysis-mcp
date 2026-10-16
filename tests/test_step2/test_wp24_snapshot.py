@@ -47,7 +47,7 @@ decision_card_module = importlib.import_module("stock_analysis.tools.analyze.dec
 Detect = Callable[[Any, dict[str, Any]], Awaitable[dict[str, Any]]]
 
 ACTIONS = ("new_money_action", "if_held_action", "long_term_action")
-V3_ONLY = ["if_held_action", "long_term_action", "new_money_action", "price_zone"]
+V3_ONLY = ["if_held_action", "long_term_action", "new_money_action", "price_zone", "unevaluated_gate_ids"]
 RETIRED_2_0_0 = ["action_long_term", "action_mid_term", "decision_action_now", "zone"]
 # Frozen 3.0.0 vocabularies. Do not update: a vocabulary change bumps SNAPSHOT_VERSION (annex SN §3, R5).
 NEW_MONEY_3_0_0 = frozenset({"buy", "starter", "wait", "wait_for_data", "insufficient_data", "watch", "avoid"})
@@ -60,7 +60,7 @@ RULE_NOTE = ("3.0.0 rule changes (a gate change may come from these, not from th
              "falling_knife and weak_liquidity give avoid, earnings gates give wait, liquidity_missing is a data "
              "gate; falling_knife is evaluated for every instrument, unsupported ones included; a missing beta "
              "alone no longer fires data_quality_critical; zone is replaced by price_zone")
-GOLDEN = {"3.0.0": "e61598dde22138de"}  # raw_result() in test_snapshot_consistency
+GOLDEN = {"3.0.0": "b497ea0025ed4f8b"}  # raw_result() in test_snapshot_consistency
 
 
 def version_warning(previous: str, retired: list[str]) -> str:
@@ -113,7 +113,7 @@ def test_the_accepted_versions_are_a_literal() -> None:
     the producer's version is 3.0.0 (a plain bump would have rejected 2.0.0, normalize.py:34). RF."""
     assert SNAPSHOT_VERSION == "3.0.0"
     assert COMPATIBLE_SNAPSHOT_VERSIONS == {"1.0.0", "1.1.0", "2.0.0", "3.0.0"} == set(SNAPSHOT_FIELDS)
-    assert [len(SNAPSHOT_FIELDS[v]) for v in ("1.0.0", "1.1.0", "2.0.0", "3.0.0")] == [22, 24, 30, 30]
+    assert [len(SNAPSHOT_FIELDS[v]) for v in ("1.0.0", "1.1.0", "2.0.0", "3.0.0")] == [22, 24, 30, 31]
     assert SNAPSHOT_FIELDS["3.0.0"] == (SNAPSHOT_FIELDS["2.0.0"] - set(RETIRED_2_0_0)) | set(V3_ONLY)
     assert set().union(*SNAPSHOT_FIELDS.values()) - {"snapshot_version", "symbol"} == set(diff_module._FIELD_TYPES)
 
@@ -378,7 +378,7 @@ async def test_the_recorded_2_0_0_snapshots_migrate(detect: Detect, name: str) -
     assert (response["not_comparable"], response["hash_changed"]) == (V3_ONLY, None)
     assert response["summary"].endswith(
         "Not compared with the previous 2.0.0 snapshot: if_held_action, long_term_action, new_money_action, "
-        "price_zone.")
+        "price_zone, unevaluated_gate_ids.")
     assert response["warnings"] == [version_warning("2.0.0", RETIRED_2_0_0)]
 
 
@@ -511,7 +511,7 @@ async def test_an_action_only_change_against_1_1_0_is_disclosed(detect: Detect) 
     assert response["summary"] == (
         "ACME: No material changes detected. Not compared with the previous 1.1.0 snapshot: bearish_signals, "
         "bullish_signals, if_held_action, long_term_action, long_term_fit, mid_term_fit, new_money_action, "
-        "price_source, price_zone, support_currency, support_instrument.")
+        "price_source, price_zone, support_currency, support_instrument, unevaluated_gate_ids.")
 
 
 # --- Freshness (FR-R-F15 inverted, SN-R21) [D-8] ----------------------------------------------------------------

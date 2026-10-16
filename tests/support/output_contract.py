@@ -115,9 +115,11 @@ FIELD_REGISTRY: tuple[Field, ...] = (
     R("risk_summary.**", D, tiers=SF), R("events_summary.**", D, tiers=SF), R("signals.**", D, tiers=FULL),
     R("market_context.**", D, tiers=FULL), R("relative_performance.**", D, tiers=SF),
     R("sector_comparison.**", D, tiers=SF), R("quality.**", D, tiers=FULL), R("valuation_context.**", D, tiers=FULL),
-    # watchlist_snapshot 3.0.0 (plan §8): closed key by key; the canonical actions and the fired gate ids are A
+    # watchlist_snapshot 3.0.0 (plan §8): closed key by key; the canonical actions, the fired and the unevaluated
+    # gate ids are A
     R("watchlist_snapshot.new_money_action", A, MID), R("watchlist_snapshot.if_held_action", A, HOLDER),
     R("watchlist_snapshot.long_term_action", A, LONG), R("watchlist_snapshot.hard_gate_ids.**", A, MID),
+    R("watchlist_snapshot.unevaluated_gate_ids.**", A, MID),
     *(R(f"watchlist_snapshot.{key}", D) for key in (
         "snapshot_version", "symbol", "snapshot_hash", "snapshot_as_of_date", "price", "market_cap", "sector", "tilt",
         "confidence", "score", "mid_term_fit", "long_term_fit", "valuation_gate", "is_unprofitable", "price_zone",
