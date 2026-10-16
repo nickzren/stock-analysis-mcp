@@ -38,6 +38,7 @@ from stock_analysis.resources.analyze_guide import ANALYZE_RENDERING_GUIDE
 from stock_analysis.server import mcp
 from stock_analysis.tools import compare as compare_module
 from stock_analysis.tools import portfolio as portfolio_module
+from stock_analysis.tools.analyze.decision import IF_HELD_ACTIONS
 from stock_analysis.utils.watch_store import load_scan_state
 from tests.support import decision_matrix as dm
 from tests.support import swing_matrix as sm
@@ -141,17 +142,23 @@ class TestStandardTierCarriesTheDecision:
         action = result["dislocation_framework"]["action"]
         assert (action["can_start_now"], action["buy_now"]) == (False, None)
 
-    async def test_the_guide_answers_what_to_do_from_the_full_tier_action(self) -> None:
-        """SC-CH10: the rendering guide answers "What should I do now?" from dislocation `action` and
-        `action.can_start_now` and assumes detail="full", while analyze defaults to standard.
-        CH: flipped by WP2.4 (guide rewritten: the card first at the standard tier; can_start_now
-        deprecated, plan §9)."""
+    async def test_the_guide_answers_what_to_do_from_the_card_at_every_tier(self) -> None:
+        """SC-CH10 (flipped by WP2.4): analyze still defaults to standard, and the rendering guide no longer
+        assumes detail="full": its second step answers "What should I do now?" from decision_card, present at
+        every detail level, in three labelled horizon segments (new money mid-term, if held, long term), never
+        upgrading past blocked_by; can_start_now is no longer the source (plan §9). G from WP2.4 (S-C10, BL-F1)."""
         tools = {tool.name: tool for tool in await mcp.list_tools()}
+        steps = re.split(r"(?m)^(?=\d+\. )", ANALYZE_RENDERING_GUIDE)
+        card = " ".join(next(s for s in steps if s.startswith("2. ")).split())
 
         assert tools["analyze"].parameters["properties"]["detail"]["default"] == "standard"
-        assert 'This guide assumes `detail="full"`' in ANALYZE_RENDERING_GUIDE
-        assert "What should I do now?" in ANALYZE_RENDERING_GUIDE
-        assert "If `action.can_start_now` is true, say a small starter is acceptable now" in ANALYZE_RENDERING_GUIDE
+        assert 'assumes `detail="full"`' not in ANALYZE_RENDERING_GUIDE
+        assert "If `action.can_start_now` is true" not in ANALYZE_RENDERING_GUIDE
+        assert [t.strip() for _, t in re.findall(r"(?m)^(\d+)\. ([^:(\n]+)", ANALYZE_RENDERING_GUIDE)][:2] == [
+            "Header", "Decision card"]
+        assert "every detail level" in card and "What should I do now?" in card and "`decision_card`" in card
+        assert card.index("New money, mid-term") < card.index("If held") < card.index("Long term")
+        assert "Never upgrade past `blocked_by`" in card
 
 
 class TestSpeculativeMode:
@@ -260,23 +267,24 @@ def position_decision_text() -> str:
 
 
 class TestPositionDecisionPrompt:
-    def test_the_prompt_decides_from_position_and_technicals_only(self) -> None:
-        """SC-CH15: position_decision calls analyze_my_position and get_technicals, never analyze, and asks
-        for HOLD / SELL / TRIM. CH: flipped by WP2.4 (position_decision calls analyze for the decision
-        in the canonical vocabulary, plan §9)."""
+    def test_the_prompt_decides_from_analyze(self) -> None:
+        """SC-CH15 (flipped by WP2.4): position_decision calls analyze first for the decision, then
+        analyze_my_position for P/L and tax, and asks for decision_card.if_held.action in the holder vocabulary,
+        not HOLD / SELL / TRIM and not get_technicals (plan §9). G from WP2.4."""
         text = position_decision_text()
 
-        assert re.findall(r"^\d+\. (\w+)\(", text, flags=re.MULTILINE) == ["analyze_my_position", "get_technicals"]
-        assert not re.search(r"\banalyze\(", text)
-        assert "**Recommendation**: HOLD / SELL / TRIM" in text
+        assert re.findall(r"^\d+\. (\w+)\(", text, flags=re.MULTILINE) == ["analyze", "analyze_my_position"]
+        assert "`decision_card.if_held.action`" in text
+        assert [a for a in IF_HELD_ACTIONS if not re.search(rf"\b{a}\b", text)] == []
+        assert "HOLD / SELL / TRIM" not in text and "get_technicals" not in text
 
-    async def test_the_prompt_tools_cannot_tell_a_broken_business_from_a_quality_one(
+    async def test_the_prompt_decision_tool_tells_a_broken_business_from_a_quality_one(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """SC-CH15: A (broken business) and D (quality business) share the BEARISH chart. Analyze tells them
-        apart (thesis broken vs intact; long-term fit avoid vs ok), but analyze_my_position, the
-        prompt's position tool, reads technicals only and returns the same signals for both.
-        CH: flipped by WP2.4 (position_decision calls analyze, plan §9)."""
+        """SC-CH15 (flipped by WP2.4): A (broken business) and D (quality business) share the BEARISH chart.
+        analyze_my_position reads technicals only and returns the same signals for both, so the prompt takes the
+        decision from analyze's if_held, which tells them apart (review_exit business_broken vs hold
+        no_reduction_evidence). G from WP2.4 (plan §9)."""
         def technicals(body: dict[str, Any] | None) -> Any:
             async def fake(symbol: str, **kwargs: Any) -> dict[str, Any]:
                 return {"symbol": symbol, **copy.deepcopy(body or {})}
@@ -291,11 +299,11 @@ class TestPositionDecisionPrompt:
             read = await position_module.analyze_position("ACME", cost_basis=80.0, purchase_date="2025-01-02")
             reads[name] = {key: value for key, value in read.items() if key != "meta"}
             result = await dm.run(scenario)
-            analyzed[name] = (result["dislocation_framework"]["thesis_integrity"]["status"],
-                              result["verdict"]["horizon_fit"]["long_term"])
+            analyzed[name] = (result["decision_card"]["if_held"]["action"], result["decision_card"]["if_held"]["basis"])
 
-        assert "analyze_my_position" in position_decision_text()
-        assert analyzed == {"A_broken_bearish": ("broken", "avoid"), "D_quality_attractive_poor_chart": ("intact", "ok")}
+        assert re.findall(r"^\d+\. (\w+)\(", position_decision_text(), flags=re.MULTILINE)[0] == "analyze"
+        assert analyzed == {"A_broken_bearish": ("review_exit", "business_broken"),
+                            "D_quality_attractive_poor_chart": ("hold", "no_reduction_evidence")}
         assert reads["A_broken_bearish"] == reads["D_quality_attractive_poor_chart"]
         assert reads["A_broken_bearish"]["sell_signals"] == {
             "broke_sma50": True, "broke_sma200": True, "death_cross": False, "rsi_overbought": False,

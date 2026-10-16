@@ -17,7 +17,7 @@ PROMPTS = {
         "arguments": [{"name": "symbol", "required": True}],
     },
     "position_decision": {
-        "description": "Sell/hold analysis for existing position",
+        "description": "Holder decision for an existing position (analyze's if_held, with P/L and tax)",
         "arguments": [
             {"name": "symbol", "required": True},
             {"name": "cost_basis", "required": True},
@@ -66,15 +66,14 @@ If you need detailed presentation rules, read:
 `stock-analysis://guides/analyze-rendering`
 
 When you present the result, lead with:
-1. `executive_summary`
-2. `dislocation_framework`
-3. `policy_action`
-4. `decision_modes.core`
-5. `decision_modes.balanced`
-6. `decision_modes.speculative`
-7. `verdict`, `action_zones`, `dip_assessment`, and the catalyst-rich `news_summary`
+1. `decision_card`: `decision_card.new_money` (mid-term), `decision_card.if_held` and `decision_card.long_term.new_money`, each action verbatim with its `blocked_by`
+2. `executive_summary`, verbatim
+3. `decision_card.sizing` (when null: no entry size)
+4. `decision_modes.core`, `decision_modes.balanced` and `decision_modes.speculative`, with any `capped_by`
+5. `dislocation_framework` (its `action` mirrors the card)
+6. `verdict`, `action_zones`, `dip_assessment` and the catalyst-rich `news_summary`, as diagnostics, timing and third-party context
 
-Keep the response decision-focused and use the exact fields from the tool output instead of inventing a new schema.""",
+Never upgrade past `blocked_by`. Keep the response decision-focused and use the exact fields from the tool output instead of inventing a new schema.""",
                 }
             ]
         }
@@ -93,9 +92,9 @@ Then provide:
 1. **Thesis** (2-3 sentences): Why this is/isn't a good growth investment
 2. **Key Metrics**: Revenue growth, EPS growth, momentum signals, next catalyst
 3. **Risks**: Top 3 risks
-4. **Action**: Buy / Wait / Pass with specific reasoning
+4. **Decision**: `decision_card.new_money.action` verbatim (mid-term new money: buy, starter, wait, wait_for_data, insufficient_data, watch or avoid) and `decision_card.long_term.new_money.action` (long term), each with its `blocked_by` and the specific reasoning
 
-Be direct. No hedging.""",
+Be direct. Never upgrade past `blocked_by`.""",
                 }
             ]
         }
@@ -115,9 +114,9 @@ Then provide:
 2. **Key Metrics**: P/E, P/B, debt levels, cash flow
 3. **Margin of Safety**: Current price vs intrinsic value estimate
 4. **Risks**: Top 3 risks
-5. **Action**: Buy / Wait / Pass with specific reasoning
+5. **Decision**: `decision_card.new_money.action` verbatim (mid-term new money: buy, starter, wait, wait_for_data, insufficient_data, watch or avoid) and `decision_card.long_term.new_money.action` (long term), each with its `blocked_by` and the specific reasoning
 
-Be direct. No hedging.""",
+Be direct. Never upgrade past `blocked_by`.""",
                 }
             ]
         }
@@ -130,25 +129,24 @@ Be direct. No hedging.""",
             "messages": [
                 {
                     "role": "user",
-                    "content": f"""Help me decide whether to hold or sell my position in {symbol}.
+                    "content": f"""Help me decide what to do with my position in {symbol}.
 
 Position details:
 - Cost basis: ${cost_basis}
 - Purchase date: {purchase_date}
 
 Use these tools:
-1. analyze_my_position("{symbol}", cost_basis={cost_basis}, purchase_date="{purchase_date}")
-2. get_technicals("{symbol}")
+1. analyze("{symbol}")
+2. analyze_my_position("{symbol}", cost_basis={cost_basis}, purchase_date="{purchase_date}")
 
 Then provide:
-1. **Position Status**: Current P/L and holding period
-2. **Tax Implications**: Short-term vs long-term status and impact
-3. **Technical Signals**: Current sell signals active
-4. **Recommendation**: HOLD / SELL / TRIM with specific reasoning
-5. **If Holding**: Key levels to watch for potential exit
-6. **If Selling**: Suggested execution approach
+1. **Decision**: `decision_card.if_held.action` verbatim (hold, reduce, review_exit or insufficient_data) with its `basis`; adding is allowed only when `decision_card.if_held.add_allowed` is true
+2. **Position Status**: Current P/L and holding period
+3. **Tax Implications**: Short-term vs long-term status and impact
+4. **Exit Plan**: `decision_card.exit`, `decision_card.exit_triggers` and `decision_card.conditions.reduce_if`
+5. **New Money**: `decision_card.new_money.action` with its `blocked_by`, for any addition
 
-Be decisive. Give a clear recommendation.""",
+The decision comes from analyze, not from P/L, tax or technical signals alone. Report it verbatim.""",
                 }
             ]
         }

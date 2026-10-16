@@ -45,9 +45,20 @@ log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(level=getattr(logging, log_level, logging.INFO))
 logger = logging.getLogger(__name__)
 
-mcp = FastMCP(
-    name="stock-analysis",
-)
+INSTRUCTIONS = """Stock research from Yahoo Finance data. Informational only, not financial advice; it places no orders.
+
+Start with `analyze` for any question about one stock. A bare ticker ("Analyze HOOD") never triggers a question: run `analyze` and lead with the mid-term decision (3-12 months), labelled as mid-term. Ask which horizon to use only when the request names two horizons, or a holding period that conflicts with mid-term; a request that names one horizon gets that horizon without a question. Horizons and where each answer lives:
+- swing trade, days to weeks: `analyze_trade_setup` (or `scan_watchlist` for the saved watchlist);
+- new money, mid-term (the default): `decision_card.new_money`;
+- an existing holding (mid-term): `decision_card.if_held` (`analyze_my_position` adds P/L and tax, not the decision);
+- long term, 1-5 years: `decision_card.long_term.new_money`.
+The horizons are independent; a different action at another horizon is not a contradiction.
+
+Report each action verbatim with its `blocked_by`, and never upgrade past `blocked_by`: no narrative, zone, dip, rating or news turns it into a buy. Size only from `decision_card.sizing`; when it is null, say "no entry size: new_money is <action>". `earliest_reassessment` is a date to re-run analyze, not a buy date. `diagnostics`, `action_zones.price_zone`, the dip assessment and third-party data (analysts, news, ownership, options) are context, not advice.
+
+Rendering rules for `analyze`: the resource `stock-analysis://guides/analyze-rendering`."""
+
+mcp = FastMCP(name="stock-analysis", instructions=INSTRUCTIONS)
 
 
 def _sanitize_for_json(value: Any) -> Any:
@@ -85,7 +96,8 @@ def _json_response(result: dict[str, Any]) -> str:
 @mcp.tool
 async def search_symbol(query: str, limit: int = 10) -> str:
     """
-    Search for stock symbols by company name or ticker.
+    Use when you have a company name or an uncertain ticker and need the exact symbol
+    before calling another tool.
 
     Args:
         query: Search query (company name or ticker symbol)
@@ -101,7 +113,8 @@ async def search_symbol(query: str, limit: int = 10) -> str:
 @mcp.tool
 async def get_stock_summary(symbol: str) -> str:
     """
-    Get basic stock information including name, sector, price, and market cap.
+    Use when you need only basic facts for a stock (name, sector, price, market cap),
+    not a decision.
 
     Args:
         symbol: Stock ticker symbol (e.g., AAPL, GOOGL, MSFT)
@@ -122,7 +135,7 @@ async def get_price_history(
     include_preview: bool = True,
 ) -> str:
     """
-    Fetch historical price data with summary statistics.
+    Use when you need raw price bars or return statistics for a period, not a decision.
 
     Args:
         symbol: Stock ticker symbol
@@ -147,7 +160,7 @@ async def get_price_history(
 @mcp.tool
 async def get_technicals(symbol: str, timeframe: str = "position") -> str:
     """
-    Calculate technical indicators for a stock.
+    Use when you need the technical indicators themselves; for a decision call analyze.
 
     Includes moving averages (SMA 20/50/200, EMA 12/26), RSI, MACD, ATR,
     52-week position, multi-period returns, and a `short_term` block
@@ -172,7 +185,7 @@ async def get_technicals(symbol: str, timeframe: str = "position") -> str:
 @mcp.tool
 async def get_fundamentals(symbol: str) -> str:
     """
-    Get fundamental financial metrics for a stock.
+    Use when you need the fundamental metrics themselves; for a decision call analyze.
 
     Includes valuation ratios (P/E, P/B, PEG), growth rates,
     profitability margins, financial health metrics, and cash flow.
@@ -190,7 +203,8 @@ async def get_fundamentals(symbol: str) -> str:
 @mcp.tool
 async def get_events(symbol: str) -> str:
     """
-    Get upcoming events and historical earnings for a stock.
+    Use when you need earnings dates and their verification, dividends or splits on
+    their own.
 
     Includes next earnings date, earnings history with beat/miss,
     dividend information, and recent stock splits.
@@ -208,7 +222,8 @@ async def get_events(symbol: str) -> str:
 @mcp.tool
 async def get_news(symbol: str, days: int = 7) -> str:
     """
-    Get recent news and earnings for a stock.
+    Use when you need recent headlines or a recent earnings report; news is third-party
+    context, not advice.
 
     Fetches news from the past week by default. Also includes recent earnings
     report if one occurred within the lookback period.
@@ -234,19 +249,28 @@ async def analyze(
     detail: str = "standard",
 ) -> str:
     """
-    Comprehensive single-stock analysis with optional sizing inputs.
+    Use when the user asks about a stock: new money (buy, wait or avoid), what
+    to do if they hold it, or the long-term view. A bare ticker means this tool.
+
+    `decision_card` (every detail level) holds `decision_card.new_money`
+    (mid-term, 3-12 months) and `decision_card.long_term.new_money` (1-5
+    years), each with `blocked_by`, and `decision_card.if_held` for a holder.
+    Report each action verbatim and never upgrade past `blocked_by`. Size only
+    from `decision_card.sizing` (null: no entry size). `earliest_reassessment`
+    is a date to re-run analyze, not a buy date. For presentation rules, read
+    the MCP resource `stock-analysis://guides/analyze-rendering`.
 
     Args:
         symbol: Stock ticker symbol or company name query
-        profile: Investor profile preset (core, balanced, or speculative)
+        profile: Investor profile preset (core, balanced, or speculative);
+            changes sizing only, never the decision
         account_size: Optional account size for dollar sizing
         risk_per_trade_pct: Optional risk budget used for sizing
         max_position_pct: Optional max single-position cap
         detail: Response detail level: standard (default), decision, or full
 
     Returns:
-        JSON analysis payload. For detailed presentation guidance, read the MCP
-        resource `stock-analysis://guides/analyze-rendering`.
+        JSON analysis payload.
     """
     try:
         normalized_detail = normalize_analyze_detail(detail)
@@ -275,7 +299,8 @@ async def analyze_trade_setup(
     max_position_pct: float = 10.0,
 ) -> str:
     """
-    Swing-trade setup card for a single stock (days-to-weeks horizon, long-only).
+    Use when the user asks for a swing trade on one stock (days to weeks, long-only).
+    Its action is the swing horizon, separate from analyze's mid-term decision.
 
     Detects pullback_in_uptrend / breakout / oversold_mean_reversion setups and
     returns an action (trade_now, enter_on_trigger, watch, no_setup, avoid,
@@ -314,7 +339,9 @@ async def analyze_my_position(
     shares: float | None = None,
 ) -> str:
     """
-    Analyze an existing position for hold/sell decision.
+    Use when the user gives a holding's cost basis and purchase date and wants P/L,
+    holding period and tax status. It reads technicals only; the hold/reduce decision is
+    analyze's `decision_card.if_held`.
 
     Calculates P/L, tax implications (short vs long-term),
     technical sell signals, and support levels.
@@ -340,7 +367,8 @@ async def analyze_my_position(
 @mcp.tool
 async def analyze_portfolio(positions: list[dict[str, Any]]) -> str:
     """
-    Analyze portfolio concentration, sector exposure, and correlation risk.
+    Use when the user gives several holdings with values and wants concentration, sector
+    and correlation exposure.
 
     Args:
         positions: List of positions, each with 'symbol' and 'value' keys.
@@ -356,7 +384,8 @@ async def analyze_portfolio(positions: list[dict[str, Any]]) -> str:
 @mcp.tool
 async def get_ownership(symbol: str) -> str:
     """
-    Get insider transactions and institutional ownership for a stock.
+    Use when you need insider transactions or institutional holders (third-party data,
+    context only).
 
     Includes insider buy/sell activity (3/6/12 month aggregates),
     top 5 recent transactions, insider sentiment, and top 10 institutional holders.
@@ -374,7 +403,8 @@ async def get_ownership(symbol: str) -> str:
 @mcp.tool
 async def get_options_signals(symbol: str) -> str:
     """
-    Get options-derived signals for a stock.
+    Use when you need implied volatility, put/call ratios or unusual options activity
+    (context only).
 
     Computes ATM implied volatility, IV/HV ratio, put/call ratios
     (volume and open interest based), and flags unusual options activity.
@@ -392,7 +422,8 @@ async def get_options_signals(symbol: str) -> str:
 @mcp.tool
 async def compare(symbols: list[str]) -> str:
     """
-    Compare 2-5 stocks side by side across key metrics.
+    Use when the user wants 2-5 stocks side by side on metrics; it applies no decision
+    gates.
 
     Compares valuation, growth, profitability, risk, technicals, and yield.
     Ranks each stock per metric (direction-aware) and computes composite ranking.
@@ -413,7 +444,11 @@ async def detect_changes(
     previous_snapshot: dict[str, Any] | None = None,
 ) -> str:
     """
-    Detect material changes for a stock since a previous snapshot.
+    Use when the user wants to know what changed for a stock since a saved analyze
+    snapshot. `new_money_action` and `if_held_action` are the mid-term decision and
+    `long_term_action` the long-term one; scan_watchlist's saved state holds swing-card
+    actions, so a difference between the two is a different horizon, not a
+    contradiction.
 
     Runs fresh analysis and diffs its watchlist_snapshot (snapshot 3.0.0, the same at
     every analyze detail level) against previous_snapshot. Material changes: price moves
@@ -446,7 +481,7 @@ async def detect_changes(
 @mcp.tool
 async def check_data_quality(symbols: list[str]) -> str:
     """
-    Check data availability and quality for a list of symbols.
+    Use when you want to check data availability for symbols before analysis.
 
     Useful before running analysis to identify any data gaps.
 
@@ -463,7 +498,8 @@ async def check_data_quality(symbols: list[str]) -> str:
 @mcp.tool
 async def manage_watchlist(action: str, symbols: list[str] | None = None) -> str:
     """
-    Manage the persisted watchlist (max 25 symbols).
+    Use when the user wants to add, remove or list symbols in the saved watchlist
+    (max 25).
 
     Storage: $STOCK_ANALYSIS_DATA_DIR, else $XDG_DATA_HOME/stock-analysis,
     else ~/.local/share/stock-analysis.
@@ -486,9 +522,12 @@ async def scan_watchlist(
     max_position_pct: float = 10.0,
 ) -> str:
     """
-    Scan the persisted watchlist for swing setups (two-phase: cheap daily
-    screen, full analyze_trade_setup card only for candidates and
-    previously-actionable symbols).
+    Use when the user wants the saved watchlist screened for swing setups (days to
+    weeks), with changes since the last scan. Rows and the saved scan state carry
+    swing-card actions, not analyze's mid-term decision.
+
+    Two-phase: a cheap daily screen, then the full analyze_trade_setup card only for
+    candidates and previously-actionable symbols.
 
     `changes` lists card transitions since the last scan; `rows` is the full
     current state. Informational only — not financial advice.
@@ -598,14 +637,14 @@ def value_memo(symbol: str) -> str:
 
 @mcp.prompt
 def position_decision(symbol: str, cost_basis: str, purchase_date: str) -> str:
-    """Generate a hold/sell analysis for an existing position."""
+    """Holder decision for an existing position: analyze's if_held, with P/L and tax."""
     result = get_prompt(
         "position_decision",
         {"symbol": symbol, "cost_basis": cost_basis, "purchase_date": purchase_date},
     )
     if result:
         return result["messages"][0]["content"]
-    return f"Analyze position in {symbol} using analyze_my_position."
+    return f"Analyze {symbol} with analyze and read decision_card.if_held."
 
 
 # ============================================================================
