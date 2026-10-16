@@ -97,7 +97,7 @@ async def test_the_summary_opens_with_three_linted_horizon_segments(name: str) -
 
 
 THESIS_WAIT = ("wait for data; blocked by thesis_unverifiable; no reassessment date: re-run analyze after "
-               "applicability verified and required business and cash-runway checks evaluable.")
+               "the stock type is confirmed and the required business and cash-runway data are available.")
 
 
 @pytest.mark.parametrize(("name", "segments"), [
@@ -114,8 +114,8 @@ THESIS_WAIT = ("wait for data; blocked by thesis_unverifiable; no reassessment d
         "reassess on or after Tue Oct 13 (not a buy date).")),
     ("A7_near_52w_high_bullish", (
         "Decision (mid-term, new money): wait for data; blocked by thesis_unverifiable, near_52w_high; "
-        "no reassessment date: re-run analyze after applicability verified and required business and "
-        "cash-runway checks evaluable and price leaves the near-52-week-high band.", "If held: insufficient data.",
+        "no reassessment date: re-run analyze after the stock type is confirmed and the required business and "
+        "cash-runway data are available and price leaves the near-52-week-high band.", "If held: insufficient data.",
         "Long-term (1-5y): " + THESIS_WAIT)),
     ("GBp_strong", (
         "Decision (mid-term, new money): watch; blocked by thesis_unverifiable, unsupported_currency; "

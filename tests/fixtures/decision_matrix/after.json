@@ -11,11 +11,11 @@
     "conditions": {
       "add_only_if": [],
       "buy_only_if": [
-        "applicability verified and required business and cash-runway checks evaluable",
+        "the stock type is confirmed and the required business and cash-runway data are available",
         "price leaves the near-52-week-high band"
       ],
       "long_term_buy_only_if": [
-        "applicability verified and required business and cash-runway checks evaluable"
+        "the stock type is confirmed and the required business and cash-runway data are available"
       ],
       "monitor": []
     },
@@ -400,10 +400,10 @@
     "conditions": {
       "add_only_if": [],
       "buy_only_if": [
-        "applicability verified and required business and cash-runway checks evaluable"
+        "the stock type is confirmed and the required business and cash-runway data are available"
       ],
       "long_term_buy_only_if": [
-        "applicability verified and required business and cash-runway checks evaluable",
+        "the stock type is confirmed and the required business and cash-runway data are available",
         "P/E <= 50x (currently headwind)"
       ],
       "monitor": [
@@ -535,11 +535,11 @@
     "conditions": {
       "add_only_if": [],
       "buy_only_if": [
-        "applicability verified and required business and cash-runway checks evaluable",
+        "the stock type is confirmed and the required business and cash-runway data are available",
         "no earnings date or window within 5 days"
       ],
       "long_term_buy_only_if": [
-        "applicability verified and required business and cash-runway checks evaluable",
+        "the stock type is confirmed and the required business and cash-runway data are available",
         "P/E <= 50x (currently headwind)"
       ],
       "monitor": [
@@ -676,7 +676,7 @@
       "add_only_if": [],
       "buy_only_if": [],
       "long_term_buy_only_if": [
-        "applicability verified and required business and cash-runway checks evaluable"
+        "the stock type is confirmed and the required business and cash-runway data are available"
       ],
       "monitor": [
         "P/E <= 50x (currently headwind)"
@@ -2161,10 +2161,10 @@
     "conditions": {
       "add_only_if": [],
       "buy_only_if": [
-        "applicability verified and required business and cash-runway checks evaluable"
+        "the stock type is confirmed and the required business and cash-runway data are available"
       ],
       "long_term_buy_only_if": [
-        "applicability verified and required business and cash-runway checks evaluable"
+        "the stock type is confirmed and the required business and cash-runway data are available"
       ],
       "monitor": []
     },
@@ -2296,10 +2296,10 @@
     "conditions": {
       "add_only_if": [],
       "buy_only_if": [
-        "applicability verified and required business and cash-runway checks evaluable"
+        "the stock type is confirmed and the required business and cash-runway data are available"
       ],
       "long_term_buy_only_if": [
-        "applicability verified and required business and cash-runway checks evaluable"
+        "the stock type is confirmed and the required business and cash-runway data are available"
       ],
       "monitor": []
     },
@@ -2434,7 +2434,7 @@
       "add_only_if": [],
       "buy_only_if": [],
       "long_term_buy_only_if": [
-        "applicability verified and required business and cash-runway checks evaluable"
+        "the stock type is confirmed and the required business and cash-runway data are available"
       ],
       "monitor": []
     },
@@ -2566,11 +2566,11 @@
     "conditions": {
       "add_only_if": [],
       "buy_only_if": [
-        "applicability verified and required business and cash-runway checks evaluable",
+        "the stock type is confirmed and the required business and cash-runway data are available",
         "no earnings date or window within 5 days"
       ],
       "long_term_buy_only_if": [
-        "applicability verified and required business and cash-runway checks evaluable",
+        "the stock type is confirmed and the required business and cash-runway data are available",
         "no earnings date or window within 5 days"
       ],
       "monitor": []
@@ -2708,7 +2708,7 @@
       "add_only_if": [],
       "buy_only_if": [],
       "long_term_buy_only_if": [
-        "applicability verified and required business and cash-runway checks evaluable",
+        "the stock type is confirmed and the required business and cash-runway data are available",
         "no earnings date or window within 5 days"
       ],
       "monitor": []
@@ -3232,11 +3232,11 @@
     "conditions": {
       "add_only_if": [],
       "buy_only_if": [
-        "applicability verified and required business and cash-runway checks evaluable",
+        "the stock type is confirmed and the required business and cash-runway data are available",
         "1-year average daily dollar volume >= $1M"
       ],
       "long_term_buy_only_if": [
-        "applicability verified and required business and cash-runway checks evaluable",
+        "the stock type is confirmed and the required business and cash-runway data are available",
         "1-year average daily dollar volume >= $1M"
       ],
       "monitor": []
@@ -3856,10 +3856,10 @@
     "conditions": {
       "add_only_if": [],
       "buy_only_if": [
-        "applicability verified and required business and cash-runway checks evaluable"
+        "the stock type is confirmed and the required business and cash-runway data are available"
       ],
       "long_term_buy_only_if": [
-        "applicability verified and required business and cash-runway checks evaluable"
+        "the stock type is confirmed and the required business and cash-runway data are available"
       ],
       "monitor": []
     },
@@ -4488,7 +4488,7 @@
       "add_only_if": [],
       "buy_only_if": [],
       "long_term_buy_only_if": [
-        "applicability verified and required business and cash-runway checks evaluable"
+        "the stock type is confirmed and the required business and cash-runway data are available"
       ],
       "monitor": []
     },

@@ -109,8 +109,8 @@
   the action under normal precedence. An unverified-support `watch` and an
   existing `avoid` remain stronger. Known unsupported instruments, including
   ETFs, are exempt; other unevaluated checks retain their own policies.
-  Its clear-when condition is "applicability verified and required business and
-  cash-runway checks evaluable"; the existing non-burner exemption still applies.
+  Its clear-when condition is "the stock type is confirmed and the required
+  business and cash-runway data are available"; the existing non-burner exemption still applies.
   Re-run analyze afterwards; clearance never promises a buy.
   No entry means no sizing and `add_allowed: false`; the existing holder rule
   (`insufficient_data`, `thesis_unknown`) is unchanged.

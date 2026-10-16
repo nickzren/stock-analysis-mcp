@@ -198,7 +198,7 @@ for name in ("S4_earnings_gate_on_hold_or_add", "S9_weak_liquidity", "C2_headwin
 # Approved narrow thesis cap: keep the sparse scenario inputs and the frozen baseline.
 # These are expected final cells, not values read back from after.json or production.
 THESIS_DATA = "thesis_unverifiable"
-THESIS_CLEAR = "applicability verified and required business and cash-runway checks evaluable"
+THESIS_CLEAR = "the stock type is confirmed and the required business and cash-runway data are available"
 CAP_MID = {"S1_hold_or_add_clean", "S2_buy_clean", "S4_earnings_gate_on_hold_or_add",
            "C1_headwind_hold_or_add", "C2_headwind_earnings_gate", "T3_plain_wait_weak_setup"}
 CAP_LONG = set(WP25_UNKNOWN_THESIS) - {"S8_fundamentals_failed", "S9_weak_liquidity", "GBp_strong"}

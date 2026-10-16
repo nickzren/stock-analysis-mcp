@@ -575,7 +575,7 @@ GATES: dict[str, Gate] = {
     "thesis_unverifiable": Gate(
         "data", "veto", _outcome("wait_for_data", "wait_for_data", _NA, _NA),
         predicate="check_thesis_broken is unevaluated: required evidence or applicability unverified",
-        clears_when="applicability verified and required business and cash-runway checks evaluable"),
+        clears_when="the stock type is confirmed and the required business and cash-runway data are available"),
     "falling_knife": Gate(
         "price_risk", "veto", _AVOID,
         predicate=f"is_falling_knife_technicals: rubric score >= {FALLING_KNIFE_SCORE_THRESHOLD}, every instrument",

@@ -57,8 +57,8 @@ async def test_conditions_and_reassessment_name_evidence_not_a_failed_thesis() -
     result = await dm.run(CLEAN)
     card = result["decision_card"]
     assert GATE in dm.gate_ids(result)
-    clearing = GATES[GATE].clears_when
-    assert all(word in clearing for word in ("applicability", "business", "cash-runway", "evaluable"))
+    clearing = "the stock type is confirmed and the required business and cash-runway data are available"
+    assert GATES[GATE].clears_when == clearing
     assert card["conditions"]["buy_only_if"] == [clearing]
     assert card["long_term"]["new_money"]["conditions"]["buy_only_if"] == [clearing]
     for money in horizons(card):
@@ -68,6 +68,16 @@ async def test_conditions_and_reassessment_name_evidence_not_a_failed_thesis() -
         assert review["outstanding"] == [{"id": GATE, "clears_when": clearing}]
     assert result["dislocation_framework"]["action"]["buy_only_if"] == [clearing]
     assert result["decision_modes"]["core"]["required_before_full_size"] == [clearing]
+    for tier, shown in dm.tiers(result).items():
+        shown_card = shown["decision_card"]
+        if tier == "decision":
+            assert "executive_summary" not in shown
+        else:
+            assert shown["executive_summary"].count(f"re-run analyze after {clearing}.") == 2
+        assert shown_card["conditions"]["buy_only_if"] == [clearing]
+        assert shown_card["long_term"]["new_money"]["conditions"]["buy_only_if"] == [clearing]
+        for money in horizons(shown_card):
+            assert money["earliest_reassessment"]["outstanding"] == [{"id": GATE, "clears_when": clearing}]
 
 
 def test_new_data_gate_applies_only_to_analyze() -> None:

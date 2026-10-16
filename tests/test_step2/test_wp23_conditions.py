@@ -39,7 +39,7 @@ orchestrator = importlib.import_module("stock_analysis.tools.analyze.orchestrato
 PE = "P/E <= 50x (currently headwind)"
 PEG = "PEG <= 3.0 (currently headwind)"
 EARN = "no earnings date or window within 5 days"
-TU = "applicability verified and required business and cash-runway checks evaluable"
+TU = "the stock type is confirmed and the required business and cash-runway data are available"
 LIQ = "1-year average daily dollar volume >= $1M"
 KNIFE = "falling-knife rubric score below 4"
 NEAR = "price leaves the near-52-week-high band"
