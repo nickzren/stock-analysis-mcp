@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 
 INSTRUCTIONS = """Stock research from Yahoo Finance data. Informational only, not financial advice; it places no orders.
 
-Start with `analyze` for any question about one stock. A bare ticker ("Analyze HOOD") never triggers a question: run `analyze` and lead with the mid-term decision (3-12 months), labelled as mid-term. Ask which horizon to use only when the request names two horizons, or a holding period that conflicts with mid-term; a request that names one horizon gets that horizon without a question. Horizons and where each answer lives:
+Start with `analyze` for any question about one stock. A bare ticker ("Analyze HOOD") never triggers a question: run `analyze` and lead with the mid-term decision (3-12 months), labelled as mid-term. Ask which horizon to use only when the request names two horizons, or a holding period that fits none ("1-2 months"); a request that names one horizon, or a period that maps to one ("hold for five years" is long term), gets that horizon without a question. Horizons and where each answer lives:
 - swing trade, days to weeks: `analyze_trade_setup` (or `scan_watchlist` for the saved watchlist);
 - new money, mid-term (the default): `decision_card.new_money`;
 - an existing holding (mid-term): `decision_card.if_held` (`analyze_my_position` adds P/L and tax, not the decision);

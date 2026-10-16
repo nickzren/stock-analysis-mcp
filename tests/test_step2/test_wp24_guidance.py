@@ -212,7 +212,8 @@ async def test_sizing_names_its_horizon() -> None:
 
 def test_the_server_instructions_state_the_horizon_rule() -> None:
     """BL-F2 (PD D-3 for the horizon clauses): instructions= carries the disclaimer, the §3 horizon rule (a bare
-    ticker never asks; mid-term is the labelled default; ask only for two horizons or a conflicting holding period),
+    ticker never asks; mid-term is the labelled default; a period that maps to one horizon gets it; ask only for two
+    horizons or a period that fits none),
     where each horizon's answer lives, never upgrading past blocked_by, card-only sizing, the reassessment date and
     the guide's URI, within 2,000 characters. PD D-3. Review fix (G): nothing turns an action into a buy, and
     diagnostics, price_zone, the dip and third-party data are context, not advice."""
@@ -221,7 +222,8 @@ def test_the_server_instructions_state_the_horizon_rule() -> None:
     for needle in ("Informational only, not financial advice", 'A bare ticker ("Analyze HOOD") never triggers a question',
                    "lead with the mid-term decision (3-12 months), labelled as mid-term",
                    "Ask which horizon to use only when the request names two horizons, or a holding period that "
-                   "conflicts with mid-term",
+                   "fits none",
+                   'a period that maps to one ("hold for five years" is long term), gets that horizon without a question',
                    "swing trade, days to weeks: `analyze_trade_setup`",
                    "new money, mid-term (the default): `decision_card.new_money`",
                    "an existing holding (mid-term): `decision_card.if_held`",
