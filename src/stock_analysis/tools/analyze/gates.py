@@ -572,6 +572,10 @@ GATES: dict[str, Gate] = {
         predicate="unprofitable (P/E not meaningful) and burn metrics unavailable",
         clears_when="burn metrics available, or the company no longer unprofitable (P/E meaningful)",
         unevaluated_when={"mid_term": _FUNDAMENTALS_MISSING, "long_term": _FUNDAMENTALS_MISSING}),
+    "thesis_unverifiable": Gate(
+        "data", "veto", _outcome("wait_for_data", "wait_for_data", _NA, _NA),
+        predicate="check_thesis_broken is unevaluated: required evidence or applicability unverified",
+        clears_when="applicability verified and required business and cash-runway checks evaluable"),
     "falling_knife": Gate(
         "price_risk", "veto", _AVOID,
         predicate=f"is_falling_knife_technicals: rubric score >= {FALLING_KNIFE_SCORE_THRESHOLD}, every instrument",

@@ -40,6 +40,7 @@ REGISTRY: dict[str, tuple[str, ...]] = {
     "freshness_unverifiable": ("data", "veto", WFD, WFD, WFD, WFD),
     "data_quality_critical": ("data", "veto", WFD, WFD, WFD, WFD),
     "missing_runway": ("data", "veto", WFD, WFD, NA, NA),
+    "thesis_unverifiable": ("data", "veto", WFD, WFD, NA, NA),
     "falling_knife": ("price_risk", "veto", "avoid", "avoid", "avoid", "avoid"),
     "weak_liquidity": ("liquidity", "veto", "avoid", "avoid", "avoid", "avoid"),
     "liquidity_missing": ("liquidity", "veto", WFD, WFD, "avoid", "avoid"),
@@ -77,7 +78,7 @@ def ids(blockers: list[dict[str, Any]]) -> list[str]:
 
 
 def test_registry_complete() -> None:
-    """GC-R1: GATES holds the 15 plan §4 gates in disclosure order, each with its class, effect, outcome per
+    """GC-R1: GATES holds the plan gates plus the approved thesis-data cap in disclosure order, each with its class, effect, outcome per
     surface, clears_when and unevaluated rule; ranks, the listed exceptions and the derived orders follow.
     RF: plan §4 registry, §0 #19 ranks, R2.6(a)(c)."""
     assert list(GATES) == list(REGISTRY)
@@ -105,7 +106,7 @@ def test_registry_complete() -> None:
     assert {g for g, gate in GATES.items() if gate.requires_supported} == {"weak_liquidity", "liquidity_missing"}
 
     assert ANALYZE_GATE_IDS == disclosure_order("mid_term") == (
-        "stale_data", "freshness_unverifiable", "data_quality_critical", "missing_runway", "liquidity_missing",
+        "stale_data", "freshness_unverifiable", "data_quality_critical", "missing_runway", "thesis_unverifiable", "liquidity_missing",
         "falling_knife", "weak_liquidity", "thesis_broken", "unsupported_instrument", "unsupported_currency",
         "earnings_blackout", "earnings_unverifiable", "near_52w_high")
     assert disclosure_order("swing") == disclosure_order("screen") == SWING_ORDER

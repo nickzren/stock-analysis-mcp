@@ -130,7 +130,7 @@ class TestZoneAndDislocationCodes:
 
 class TestCoreMode:
     @pytest.mark.parametrize(("name", "long_fit", "long_policy", "gates", "core"), [
-        ("C1_headwind_hold_or_add", "ok", "hold_size_conservatively", [], "wait"),
+        ("C1_headwind_hold_or_add", "ok", "hold_size_conservatively", ["thesis_unverifiable"], "wait_for_data"),
         ("F3_quality_neutral_valuation_poor_chart", "ok", "hold", [], "wait"),
         ("D_quality_attractive_poor_chart", "ok", "accumulate", [], "buy"),
         ("D2_quality_poor_chart_earnings_3d", "ok", "accumulate", ["earnings_blackout"], "wait"),
@@ -141,7 +141,7 @@ class TestCoreMode:
         self, name: str, long_fit: str, long_policy: str, gates: list[str], core: str
     ) -> None:
         """PH-CH4: core = most_restrictive(CORE[long fit], long_term.new_money): the long-term policy maps and
-        gates reach it (C1, F3 wait; D buy; D2 wait; C avoid), and its own cap holds a caution fit at wait (E2).
+        gates reach it (C1 wait_for_data; F3 wait; D buy; D2 wait; C avoid), and its own cap holds a caution fit at wait (E2).
         G from WP2.2 (PD D-3, D-5b; flipped from "core reads long_term_fit alone"; PH-RF15 to RF18 own the cases)."""
         result = await dm.run(name)
 
@@ -187,14 +187,14 @@ class TestThesisSurfaces:
 
     @pytest.mark.parametrize(("snapshot", "runway", "balance", "thesis_status", "gates", "now"), [
         (BURNER_SNAPSHOT, 2.0, "unsafe", "broken", ["thesis_broken"], "avoid"),
-        (UNKNOWN_RUNWAY_SNAPSHOT, None, "unknown", "unknown", ["missing_runway"], "wait_for_data"),
+        (UNKNOWN_RUNWAY_SNAPSHOT, None, "unknown", "unknown", ["missing_runway", "thesis_unverifiable"], "wait_for_data"),
     ], ids=["runway_2q", "runway_unknown"])
     async def test_a_known_short_runway_is_blocked_like_an_unknown_one(
         self, snapshot: dict[str, Any], runway: float | None, balance: str, thesis_status: str,
         gates: list[str], now: str
     ) -> None:
         """PH-CH7: through analyze (weak bullish chart), the 2-quarter burner (thesis broken) is blocked by
-        thesis_broken (new_money avoid) and its unknown-runway twin by missing_runway: the p5 inversion is closed.
+        thesis_broken (new_money avoid) and its unknown-runway twin by missing_runway plus thesis_unverifiable: the p5 inversion is closed.
         The pre-gate codes are read from diagnostics.pre_gate_policy (WP2.3, D-9).
         PD D-1c (G from WP2.2; flipped from "no gate, starter"; PH-RF12 owns the burner)."""
         result = await dm.run(dm.Scenario("PH CH7 burner (p5)", dm.WEAK, snapshot, dm.MODERATE))

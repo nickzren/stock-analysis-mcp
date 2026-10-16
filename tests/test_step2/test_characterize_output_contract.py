@@ -11,6 +11,7 @@ tests/support/decision_matrix.py, which pins the clock. Plan §0 #16 and §7(a) 
 
 import json
 import re
+from dataclasses import replace
 from typing import Any
 
 import pytest
@@ -76,9 +77,12 @@ def leaves(node: Any, path: str = "") -> list[tuple[str, Any]]:
     return [(path, node)]
 
 
-async def analyze(name: str, **kwargs: Any) -> dict[str, Any]:
-    """A matrix scenario run with analyze's own profile and cap arguments (dm.run takes neither cap)."""
+async def analyze(name: str, *, known_debt: bool = False, **kwargs: Any) -> dict[str, Any]:
+    """Run profile/cap cases; known debt isolates sizing arithmetic from missing thesis evidence."""
     scenario = dm.SCENARIOS[name]
+    if known_debt:
+        scenario = replace(scenario, fundamentals={
+            **scenario.fundamentals, "financial_health": {"debt_to_equity": 0.5}})
     with dm.stubbed(scenario):
         result: dict[str, Any] = await dm.orchestrator.analyze_stock(
             "ACME", account_size=scenario.account_size, _now=scenario.now, **kwargs
@@ -108,18 +112,18 @@ def sizing_presence(result: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 class TestEntrySizingUnderNonEntryActions:
     async def test_plain_avoid_carries_no_entry_sizing(self) -> None:
-        """OC-CH1 (flipped by WP2.3): S3, a plain avoid with no gate, carries no entry sizing on any path: card
+        """OC-CH1 (flipped by WP2.3): S3, a candidate avoid with unknown thesis, carries no entry sizing on any path: card
         sizing and buy band null at every tier, position_sizing_range null (key kept) and no "size ~" text at
         standard and full, no sizing_guidance (policy_action moved to diagnostics), no mode size and no
         capital_at_risk; no current_zone (price_zone below_sma200); the dip's buy_the_dip and entry codes are watch,
-        capped by new_money; core stays buy (long_term.new_money, D-3). G from WP2.3 (PD D-9; plan §7)."""
+        capped by new_money; core follows the long-term wait_for_data cap. G from WP2.3 (PD D-9; plan §7)."""
         result = await dm.run("S3_plain_avoid")
         shown = dm.tiers(result)
         card = result["decision_card"]
         modes = result["decision_modes"]
         dip = result["dip_assessment"]
 
-        assert (card["action_now"], dm.gate_ids(result)) == ("avoid", [])
+        assert (card["action_now"], dm.gate_ids(result)) == ("avoid", ["thesis_unverifiable"])
         for tier, payload in shown.items():
             assert (payload["decision_card"]["sizing"], payload["decision_card"]["entry"]) == (None, None), tier
         for tier in ("standard", "full"):
@@ -136,16 +140,16 @@ class TestEntrySizingUnderNonEntryActions:
         assert (dip["assessment"]["recommendation"], dip["assessment"]["capped_by"]) == ("watch", "new_money_avoid")
         assert [(s["action"], s["capped_by"]) for s in dip["entry_timing"]["signals"]] == [
             ("watch", "new_money_avoid")] * 2
-        assert modes["core"]["action"] == "buy"
+        assert modes["core"]["action"] == "wait_for_data"
 
-    @pytest.mark.parametrize(("name", "action"), [("T3_plain_wait_weak_setup", "wait"),
+    @pytest.mark.parametrize(("name", "action"), [("T3_plain_wait_weak_setup", "wait_for_data"),
                                                   ("C3_headwind_plain_avoid", "avoid")])
     async def test_plain_wait_and_headwind_avoid_carry_no_card_sizing(self, name: str, action: str) -> None:
-        """OC-CH2 (flipped by WP2.3): T3 (plain wait) and C3 (headwind avoid), neither gated, carry no card sizing
+        """OC-CH2 (flipped by WP2.3): T3 (wait for thesis data) and C3 (headwind avoid), both thesis gated, carry no card sizing
         and no buy band at any tier: sizing is keyed on entry_allowed. G from WP2.3 (PD D-9; plan §7)."""
         result = await dm.run(name)
 
-        assert (result["decision_card"]["action_now"], dm.gate_ids(result)) == (action, [])
+        assert (result["decision_card"]["action_now"], dm.gate_ids(result)) == (action, ["thesis_unverifiable"])
         for tier, payload in dm.tiers(result).items():
             assert (payload["decision_card"]["sizing"], payload["decision_card"]["entry"]) == (None, None), tier
 
@@ -213,7 +217,8 @@ class TestConditionsUnderAdmittingActions:
         so the card's buy_only_if and add_only_if are empty and monitor keeps the upgrade condition; the long
         term (wait from the headwind) lists it in long_term.new_money.conditions.buy_only_if and in core's
         required_before_full_size. G from WP2.3 (§7e, RF-E1's placement)."""
-        result = await dm.run("C1_headwind_hold_or_add")
+        result = await dm.run("C1_headwind_hold_or_add", fundamentals={
+            **dm.HEADWIND, "financial_health": {"debt_to_equity": 0.5}})
         card = result["decision_card"]
         conditions = card["conditions"]
         upgrade = result["diagnostics"]["pre_gate_policy"]["conditions_to_upgrade"]
@@ -229,18 +234,18 @@ class TestSizingWordsInCodesAndText:
     @pytest.mark.parametrize("name", HEADWIND_ROWS)
     async def test_headwind_rows_put_no_sizing_code_on_the_card(self, name: str) -> None:
         """OC-CH6 (flipped by WP2.3): C1-C3 have no card.horizon_fit at any tier and their long-term action is
-        long_term.new_money.action wait (plan §0 #8). G from WP2.3 (PD D-9)."""
+        long_term.new_money.action wait_for_data (missing thesis evidence). G from WP2.3 (PD D-9)."""
         for tier, payload in dm.tiers(await dm.run(name)).items():
             card = payload["decision_card"]
-            assert ("horizon_fit" in card, card["long_term"]["new_money"]["action"]) == (False, "wait"), tier
+            assert ("horizon_fit" in card, card["long_term"]["new_money"]["action"]) == (False, "wait_for_data"), tier
 
     @pytest.mark.parametrize("name", HEADWIND_ROWS)
     async def test_headwind_rows_put_no_sizing_code_in_the_snapshot(self, name: str) -> None:
-        """OC-CH6 (snapshot half, flipped by WP2.4): C1-C3 record long_term_action wait (long_term.new_money.action,
+        """OC-CH6 (snapshot half, flipped by WP2.4): C1-C3 record long_term_action wait_for_data (long_term.new_money.action,
         plan §0 #8, #18), no action_long_term and no sizing word in any snapshot value. G from WP2.4 (PD D-9)."""
         snapshot = (await dm.run(name))["watchlist_snapshot"]
 
-        assert (snapshot["long_term_action"], "action_long_term" in snapshot) == ("wait", False)
+        assert (snapshot["long_term_action"], "action_long_term" in snapshot) == ("wait_for_data", False)
         assert not [v for v in snapshot.values() if isinstance(v, str) and re.search(r"(?i)siz", v)]
 
     def test_mixed_fundamentals_reason_carries_no_sizing_advice(self) -> None:
@@ -287,7 +292,7 @@ class TestZoneCapsLeavePriceZoneUncapped:
         result = await dm.run("S3_plain_avoid", technicals=EXTENDED_DECLINE)
         zones = result["action_zones"]
 
-        assert (result["decision_card"]["action_now"], dm.gate_ids(result)) == ("avoid", [])
+        assert (result["decision_card"]["action_now"], dm.gate_ids(result)) == ("avoid", ["thesis_unverifiable"])
         assert result["dip_assessment"]["dip_classification"]["type"] == "extended_decline"
         assert (zones["price_zone"], zones["zone_warnings"]) == ("near_52w_low", ["zone_capped_extended_decline"])
         assert result["diagnostics"]["pre_gate_policy"]["inputs"]["zone"] == "accumulate"
@@ -302,7 +307,7 @@ class TestModesIgnoreUserCaps:
     async def test_balanced_max_position_ignores_max_position_pct(self) -> None:
         """OC-CH-2b: S2 with max_position_pct=2 caps the card at 2%, but modes.balanced.max_position stays 8%.
         Flips only in 2b (sizing arithmetic); 2a changes presence, never numbers."""
-        result = await analyze("S2_buy_clean", max_position_pct=2.0)
+        result = await analyze("S2_buy_clean", known_debt=True, max_position_pct=2.0)
 
         assert result["decision_card"]["sizing"]["full_pct_cap"] == 2.0
         assert result["decision_modes"]["balanced"]["max_position"]["pct"] == 8.0
@@ -352,8 +357,8 @@ class TestProfileInvariance:
 
     async def test_profile_and_caps_reach_the_sizing_numbers(self) -> None:
         """OC-G2: the profile and caps do change S2's card sizing, so the invariance above is not vacuous.
-        Holds throughout 2a: S2 is a buy and keeps its card sizing."""
-        runs = [await analyze("S2_buy_clean", **kwargs) for kwargs in PROFILES_AND_CAPS]
+        Known debt restores the S2 buy to isolate sizing arithmetic."""
+        runs = [await analyze("S2_buy_clean", known_debt=True, **kwargs) for kwargs in PROFILES_AND_CAPS]
 
         assert [(run["decision_card"]["sizing"]["starter_pct"], run["decision_card"]["sizing"]["full_pct_cap"])
                 for run in runs] == [(2.5, 8.0), (1.0, 6.0), (2.0, 8.0), (2.0, 2.0)]
@@ -362,11 +367,14 @@ class TestProfileInvariance:
 class TestSizingNumbers:
     @pytest.mark.parametrize("name", ENTRY_ROWS)
     async def test_present_sizing_numbers_equal_the_before_table(self, name: str) -> None:
-        """OC-G3: on the entry rows (S2 buy, T1 and T2 starter) every sizing number still shown, on the card,
+        """OC-G3: on the entry rows (S2 with known debt, T1 and T2 starter) every sizing number still shown, on the card,
         the zone band and the summary text at every tier, equals the 2.0 before table, and each mode size
         still shown equals its 0609fde value. Holds throughout 2a, which changes presence only (2b owns
         the arithmetic)."""
-        result = await dm.run(name)
+        fund = dm.SCENARIOS[name].fundamentals
+        if name == "S2_buy_clean":
+            fund = {**fund, "financial_health": {"debt_to_equity": 0.5}}
+        result = await dm.run(name, fundamentals=fund)
         before = BEFORE[name]["card_sizing"]
         for tier, payload in dm.tiers(result).items():
             sizing = payload["decision_card"]["sizing"]

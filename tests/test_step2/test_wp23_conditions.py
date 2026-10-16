@@ -39,6 +39,7 @@ orchestrator = importlib.import_module("stock_analysis.tools.analyze.orchestrato
 PE = "P/E <= 50x (currently headwind)"
 PEG = "PEG <= 3.0 (currently headwind)"
 EARN = "no earnings date or window within 5 days"
+TU = "applicability verified and required business and cash-runway checks evaluable"
 LIQ = "1-year average daily dollar volume >= $1M"
 KNIFE = "falling-knife rubric score below 4"
 NEAR = "price leaves the near-52-week-high band"
@@ -83,7 +84,8 @@ async def test_headwind_condition_binds_at_long_term_only() -> None:
     """RF-E1 (C1, valuation headwind): mid-term is already a starter that clearing the headwind would not lift to
     buy, so the valuation condition is not in the mid-term lists (monitored only); it binds the long-term wait
     and core's conditionals, quoting the assessment's own P/E threshold, never "P/E < 25x". RF."""
-    result = await dm.run("C1_headwind_hold_or_add")
+    result = await dm.run("C1_headwind_hold_or_add", fundamentals={
+        **dm.HEADWIND, "financial_health": {"debt_to_equity": 0.5}})
     for tier, shown in dm.tiers(result).items():
         card = shown["decision_card"]
         assert card["new_money"]["action"] == "starter", tier
@@ -128,7 +130,8 @@ def test_the_quoted_thresholds_are_the_gate_boundaries(fund: dict[str, Any], hea
 async def test_a_peg_headwind_binds_with_its_own_text() -> None:
     """RF-E1 (pipeline): a PEG headwind (which had no text before) binds the long-term wait with "PEG <= 3.0";
     the mid-term starter list stays empty. RF."""
-    assert lists(await run("C1_peg"))[0::3] == ([], [PEG])
+    assert lists(await dm.run(LOCAL["C1_peg"], fundamentals={
+        **PEG_HEADWIND, "financial_health": {"debt_to_equity": 0.5}}))[0::3] == ([], [PEG])
 
 
 @pytest.mark.parametrize("name", ["C3_headwind_plain_avoid", "F3_quality_neutral_valuation_poor_chart"])
@@ -145,10 +148,11 @@ async def test_poor_setup_avoids_carry_no_valuation_condition(name: str) -> None
 async def test_a_zone_capping_headwind_binds_starter_to_full_at_mid() -> None:
     """RF-E1: a headwind that caps the zone (accumulate -> hold_neutral) holds a bullish ok-fit candidate at
     hold_or_add (starter); clearing it alone gives buy, so it is the starter -> full condition at mid term and
-    binds the long-term wait. Sparse fundamentals make the holder thesis unknown, so there is no add condition. RF."""
-    result = await run("S2_headwind")
-    assert result["decision_card"]["if_held"]["basis"] == "thesis_unknown"
-    assert lists(result) == ([PE], [], [], [PE])
+    binds the long-term wait. Known debt makes the thesis assessable, so the holder also receives the add condition. RF."""
+    result = await dm.run(LOCAL["S2_headwind"], fundamentals={
+        **dm.HEADWIND, "financial_health": {"debt_to_equity": 0.5}})
+    assert result["decision_card"]["if_held"]["basis"] == "candidate_admits_new_money"
+    assert lists(result) == ([PE], [PE], [], [PE])
 
 
 # --- RF-E2 [FIX BL-E2] ---------------------------------------------------------------------------------------
@@ -212,24 +216,29 @@ async def test_no_volatility_condition_without_a_volatility_driver(name: str) ->
 
 EMPTY: tuple[list[str], ...] = ([], [], [], [])
 TRUTH_TABLE = {  # (mid buy_only_if, mid add_only_if, monitor, long buy_only_if)
-    "S4_earnings_gate_on_hold_or_add": ([EARN], [], [], [EARN]),
-    "S5_earnings_gate_on_avoid": ([], [], [], [EARN]),
+    "S1_hold_or_add_clean": ([TU], [], [], [TU]),
+    "S2_buy_clean": ([TU], [], [], [TU]),
+    "S3_plain_avoid": ([], [], [], [TU]),
+    "T3_plain_wait_weak_setup": ([TU], [], [], [TU]),
+    "V1_vendor_rich_plain_avoid": ([], [], [], [TU]),
+    "S4_earnings_gate_on_hold_or_add": ([TU, EARN], [], [], [TU, EARN]),
+    "S5_earnings_gate_on_avoid": ([], [], [], [TU, EARN]),
     "S6_knife_dislocation": ([], [], [DD35], [KNIFE]),
     "S8_fundamentals_failed": ([], [], ["revenue data available for valuation"], []),
-    "S9_weak_liquidity": ([LIQ], [], [], [LIQ]),
+    "S9_weak_liquidity": ([TU, LIQ], [], [], [TU, LIQ]),
     "T1_extreme_risk_bullish": ([], [], [VOL60], [VOL60]),
-    "C1_headwind_hold_or_add": ([], [], [PE], [PE]),
-    "C2_headwind_earnings_gate": ([EARN], [], [PE], [PE]),
-    "C3_headwind_plain_avoid": ([], [], [PE], []),
+    "C1_headwind_hold_or_add": ([TU], [], [PE], [TU, PE]),
+    "C2_headwind_earnings_gate": ([TU, EARN], [], [PE], [TU, PE]),
+    "C3_headwind_plain_avoid": ([], [], [PE], [TU]),
     "A_broken_bearish": ([], [], [DE, REV], []),
     "B_broken_bearish_knife": ([], [], [DE, REV], []),
     "C_quality_knife_dislocation": ([], [], [], [KNIFE]),
     "D2_quality_poor_chart_earnings_3d": ([], [], [], [EARN]),
     "E_poor_business_bullish_chart": ([BB], [], [DE], [DE]),
     "E2_mixed_fcf_bullish_chart": ([], [], [FCF], []),
-    "A7_near_52w_high_bullish": ([NEAR], [], [], []),
+    "A7_near_52w_high_bullish": ([TU, NEAR], [], [], [TU]),
     "H_burner_runway_2q": ([RC], [], [PM, FC, FCF], [RC]),
-    "S2_headwind": ([PE], [], [], [PE]),
+    "S2_headwind": ([TU], [], [PE], [TU, PE]),
     "T5_dislocation_starter": ([], [], [VOL60], [VOL60]),
     "T6_dislocation_starter_extreme": ([VOL60], [VOL60], [], [VOL60]),
     "T1_near_52w_high": ([NEAR], [NEAR], [VOL60], [VOL60]),

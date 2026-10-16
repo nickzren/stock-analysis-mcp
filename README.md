@@ -124,11 +124,15 @@ money only (no long-term or holder size), null unless new money is `buy` or `sta
 | `avoid` | No entry: a poor setup, falling knife, weak liquidity or broken thesis. |
 
 Gates, by rank: `stale_data`, `freshness_unverifiable`, `data_quality_critical`,
-`missing_runway`, `liquidity_missing` → `wait_for_data`; `falling_knife`,
+`missing_runway`, `thesis_unverifiable`, `liquidity_missing` → `wait_for_data`; `falling_knife`,
 `weak_liquidity`, `thesis_broken` → `avoid`; `unsupported_instrument`,
 `unsupported_currency` → `watch`; `earnings_blackout`, `earnings_unverifiable` →
 `wait`; `near_52w_high` → `wait` (mid-term only). The `profile` argument (`core`,
 `balanced`, `speculative`) changes sizing only, never an action.
+
+If required business or cash-runway evidence cannot be checked, `thesis_unverifiable`
+blocks new money at both horizons. Re-run `analyze` when the evidence is available;
+clearing that check alone does not mean buy. Known unsupported instruments do not get this gate.
 
 | Class | Fields | Read as |
 |---|---|---|

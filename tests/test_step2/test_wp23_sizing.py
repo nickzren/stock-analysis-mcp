@@ -91,7 +91,10 @@ async def test_a_starter_hides_the_full_size_everywhere(name: str) -> None:
     (equal to the 2.0 before table on baseline rows) with full_pct_cap and full_dollars null; the zone band and
     every mode max_position are null; the summary shows "size ~<starter>%" only; dislocation buy_now is starter.
     PD D-9."""
-    result = await dm.run(name)
+    fund = dm.SCENARIOS[name].fundamentals
+    if name in {"S1_hold_or_add_clean", "C1_headwind_hold_or_add"}:
+        fund = {**fund, "financial_health": {"debt_to_equity": 0.5}}
+    result = await dm.run(name, fundamentals=fund)
     card = result["decision_card"]
     assert card["new_money"]["action"] == "starter"
 
@@ -114,7 +117,10 @@ async def test_a_starter_shows_no_full_entry_dip_code(name: str) -> None:
     """OC-RF3 (dip clause; lands with the dip area's §7 cap): under new_money starter neither the dip
     recommendation nor any entry signal is a full-entry code (strong_buy_the_dip, buy_the_dip,
     cautious_accumulation, accumulate, add_position). PD D-9."""
-    result = await dm.run(name)
+    fund = dm.SCENARIOS[name].fundamentals
+    if name in {"S1_hold_or_add_clean", "C1_headwind_hold_or_add"}:
+        fund = {**fund, "financial_health": {"debt_to_equity": 0.5}}
+    result = await dm.run(name, fundamentals=fund)
     assessment = result["dip_assessment"]["assessment"]
     signals = result["dip_assessment"]["entry_timing"]["signals"]
 

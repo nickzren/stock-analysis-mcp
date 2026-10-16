@@ -299,7 +299,7 @@ async def test_a_missing_price_has_no_zone() -> None:
             assert shown["action_zones"]["price_zone"] is None, tier
         assert shown["decision_card"]["why"] == [
             "decided by unsupported_instrument", "mid-term fit unknown, tilt missing",
-            "other gates fired: freshness_unverifiable, data_quality_critical, unsupported_currency"], tier
+            "other gates fired: freshness_unverifiable, data_quality_critical, thesis_unverifiable, unsupported_currency"], tier
 
 
 STALE = {"R3": {}, "R3_fundamentals_failed": {"fundamentals": None}}  # the R3 freshness run, with overrides
@@ -307,11 +307,13 @@ STALE = {"R3": {}, "R3_fundamentals_failed": {"fundamentals": None}}  # the R3 f
 
 @pytest.mark.parametrize(("name", "field", "expected"), [
     ("S4_earnings_gate_on_hold_or_add", "why",
-     ["decided by earnings_blackout", "mid-term fit ok, tilt bullish, price zone above_sma50"]),
+     ["decided by thesis_unverifiable", "mid-term fit ok, tilt bullish, price zone above_sma50",
+      "other gates fired: earnings_blackout"]),
     ("S5_earnings_gate_on_avoid", "why",
-     ["mid-term fit avoid, tilt bearish, price zone below_sma200", "other gates fired: earnings_blackout"]),
+     ["mid-term fit avoid, tilt bearish, price zone below_sma200", "other gates fired: thesis_unverifiable, earnings_blackout"]),
     ("A7_near_52w_high_bullish", "why",
-     ["decided by near_52w_high", "mid-term fit ok, tilt bullish, price zone near_52w_high"]),
+     ["decided by thesis_unverifiable", "mid-term fit ok, tilt bullish, price zone near_52w_high",
+      "other gates fired: near_52w_high"]),
     ("H_burner_runway_2q", "exit_triggers",
      ["cash_runway < 4 quarters (dilutive raise imminent)",
       "net margin worsens 3 consecutive quarters (path to profitability not progressing)",
@@ -327,8 +329,8 @@ STALE = {"R3": {}, "R3_fundamentals_failed": {"fundamentals": None}}  # the R3 f
      ["fundamentals_missing", "price_stale_2_sessions", "valuation_gate_unknown_no_metrics"]),
 ])
 async def test_pinned_explanations(name: str, field: str, expected: list[str]) -> None:
-    """BL-E3 (pinned values): S4 decided by the blackout; S5's blackout fired but did not decide; A7's price
-    zone; H's three runway triggers; none on an ETF or with fundamentals missing; T1's regime flags; S8's
+    """BL-E3 (pinned values): S4/A7 decided by thesis_unverifiable with event/zone also disclosed;
+    S5 keeps candidate avoid and lists both gates; H's three runway triggers; none on an ETF or with fundamentals missing; T1's regime flags; S8's
     missing fundamentals; H's not-meaningful fundamentals; none on a clean row; R3's stale price; R3 with
     fundamentals failing lists the fundamentals status, then staleness, then zone warnings (plan §1.5). RF."""
     run = dm.run(fr.scenario(fr.TRUTH_TABLE["R3"], "R3"), **STALE[name]) if name in STALE else dm.run(name)

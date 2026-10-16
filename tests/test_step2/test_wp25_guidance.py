@@ -45,7 +45,8 @@ def test_guide_explains_each_holder_basis_including_unknown_thesis() -> None:
 
 
 async def test_entry_band_is_a_reference_not_a_new_price_gate() -> None:
-    card = (await dm.run("S1_hold_or_add_clean"))["decision_card"]
+    card = (await dm.run("S1_hold_or_add_clean", fundamentals={
+        **dm.PROFITABLE, "financial_health": {"debt_to_equity": 0.5}}))["decision_card"]
     assert card["new_money"]["action"] == "starter"
     assert card["sizing"]["at_price"] > card["entry"]["buy_zone_high"]
     guide = flat(GUIDE)

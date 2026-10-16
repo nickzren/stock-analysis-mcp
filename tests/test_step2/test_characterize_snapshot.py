@@ -31,7 +31,7 @@ diff_module = importlib.import_module("stock_analysis.tools.diff_analysis")
 
 Detect = Callable[[dict[str, Any], dict[str, Any]], Awaitable[dict[str, Any]]]
 
-CLEAN = "S2_buy_clean"  # no fired gate, action buy; sparse fundamentals now disclose unknown thesis
+CLEAN = "S2_buy_clean"  # sparse thesis inputs now cap new money at wait_for_data
 
 
 def edited(result: dict[str, Any], **changes: Any) -> dict[str, Any]:
@@ -81,7 +81,7 @@ def detect(monkeypatch: pytest.MonkeyPatch) -> Detect:
 
 async def test_every_gate_analyze_evaluates_has_a_case() -> None:
     """SN-C1: guard, set(GATE_IDS) == the gates analyze evaluates (decision_card.hard_gates.checks).
-    G from WP2.1: set(GATE_IDS) == checks, all 13 analyze gates from WP2.2 (thesis_broken, near_52w_high)."""
+    G from WP2.1: set(GATE_IDS) == checks, including every subsequently added analyze gate."""
     checks = (await dm.run(CLEAN))["decision_card"]["hard_gates"]["checks"]
     assert set(GATE_IDS) == set(checks)
 
@@ -150,9 +150,9 @@ MUTATIONS: dict[str, tuple[dict[str, Any], str]] = {
                      "price_source: daily_close -> info_quote_fallback"),
     # The canonical decision and the neutral price zone (snapshot 3.0.0, plan §8).
     "price_zone": ({"action_zones__price_zone": "near_52w_high"}, "price_zone: below_sma200 -> near_52w_high"),
-    "new_money_action": ({"decision_card__new_money__action": "wait"}, "new_money_action: buy -> wait"),
+    "new_money_action": ({"decision_card__new_money__action": "wait"}, "new_money_action: wait_for_data -> wait"),
     "if_held_action": ({"decision_card__if_held__action": "reduce"}, "if_held_action: insufficient_data -> reduce"),
-    "long_term_action": ({"decision_card__long_term__new_money__action": "wait"}, "long_term_action: buy -> wait"),
+    "long_term_action": ({"decision_card__long_term__new_money__action": "wait"}, "long_term_action: wait_for_data -> wait"),
 }
 
 

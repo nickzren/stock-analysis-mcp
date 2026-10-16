@@ -61,7 +61,8 @@ _RELIABLE_SIGNAL_VERSIONS = frozenset({"2.0.0", "3.0.0"})
 _COMPLETE_VERSIONS = frozenset({"3.0.0"})
 # The 3.0.0 rules that can move a retained field (gate ids) against an older snapshot (plan §8, D-10).
 _RULE_CHANGES_3_0_0 = (
-    "new analyze gates earnings_unverifiable, stale_data, freshness_unverifiable, thesis_broken and near_52w_high",
+    "new analyze gates earnings_unverifiable, stale_data, freshness_unverifiable, "
+    "thesis_broken, thesis_unverifiable and near_52w_high",
     "falling_knife and weak_liquidity give avoid, earnings gates give wait, liquidity_missing is a data gate",
     "falling_knife is evaluated for every instrument, unsupported ones included",
     "a missing beta alone no longer fires data_quality_critical",

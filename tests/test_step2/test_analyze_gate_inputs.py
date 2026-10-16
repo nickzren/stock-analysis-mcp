@@ -188,7 +188,7 @@ async def test_blocker_ids_unique() -> None:
         assert blocking == [g for g in ANALYZE_GATE_IDS if g in blocking], name
         emitted[name] = blocking
 
-    assert emitted["us_sink"] == ["data_quality_critical", "liquidity_missing", "falling_knife",
+    assert emitted["us_sink"] == ["data_quality_critical", "thesis_unverifiable", "liquidity_missing", "falling_knife",
                                   "earnings_unverifiable"]
     assert emitted["etf_sink"] == ["data_quality_critical", "falling_knife", "unsupported_instrument",
                                    "earnings_unverifiable"]

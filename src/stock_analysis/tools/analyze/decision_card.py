@@ -56,6 +56,8 @@ _DEFAULT_REVIEW_HORIZON_DAYS = 30
 
 _MISSING_RUNWAY = {"id": "missing_runway",
                    "reason": "unprofitable company with no usable runway data — uninvestable for sizing"}
+_THESIS_UNVERIFIABLE = {"id": "thesis_unverifiable",
+                        "reason": "required business or cash-runway evidence unavailable, or applicability unverified"}
 _FALLING_KNIFE = {"id": "falling_knife", "reason": "severe decline with broken trends — wait for stabilization"}
 _ANALYZE_ORDER = {gate_id: i for i, gate_id in enumerate(ANALYZE_GATE_IDS)}
 
@@ -70,6 +72,7 @@ def _compute_hard_gates(
     freshness_blockers: list[dict[str, Any]] | None = None,
     *,
     thesis_blocker: dict[str, Any] | None = None,
+    thesis_unverifiable: bool = False,
     zone_blocker: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Every gate analyze evaluates, once each, in disclosure order (gates.ANALYZE_GATE_IDS).
@@ -89,6 +92,7 @@ def _compute_hard_gates(
         *(freshness_blockers or []),
         check_data_quality(data_quality)[1],
         _MISSING_RUNWAY if missing_runway else None,
+        _THESIS_UNVERIFIABLE if thesis_unverifiable else None,
         _FALLING_KNIFE if knife else None,
         *(check_liquidity(risk_data)[2] if liquidity_applies else []),
         thesis_blocker,
@@ -124,6 +128,7 @@ def evaluate_gates(
         events_data=events_data, data_quality=data_quality, technicals_data=technicals_data,
         fundamentals_summary=fundamentals_summary, risk_data=risk_data, support=support,
         freshness_blockers=freshness_blockers, thesis_blocker=thesis_blocker, zone_blocker=zone_blocker,
+        thesis_unverifiable=thesis_status == UNEVALUATED,
     )
     not_computed = {
         "falling_knife": falling_knife_status(technicals_data) == UNEVALUATED,

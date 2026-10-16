@@ -75,8 +75,9 @@ class TestGatedSummary:
         and its reassessment and carries no size, while S1's names the starter size only; no "Policy:" clause
         remains, and the descriptive sentences after the three segments are unchanged. The action clause flipped
         in WP2.2 (D-2, D-5a). G from WP2.3 (PD D-9: executive-summary segments, plan §7)."""
-        gated = await dm.run(name)
-        clean = await dm.run("S1_hold_or_add_clean")
+        fund = {**dm.PROFITABLE, "financial_health": {"debt_to_equity": 0.5}}
+        gated = await dm.run(name, fundamentals=fund)
+        clean = await dm.run("S1_hold_or_add_clean", fundamentals=fund)
         gated_sentences = gated["executive_summary"].split(". ")
         clean_sentences = clean["executive_summary"].split(". ")
 
@@ -225,7 +226,8 @@ class TestPortfolioThreshold:
         unflagged. CH: flipped by Step 3 (portfolio threshold, plan §11); holds through Step 2."""
         caps: dict[str, tuple[float, float]] = {}
         for profile in ("core", "balanced", "speculative"):
-            result = await dm.run("S2_buy_clean", profile=profile)
+            result = await dm.run("S2_buy_clean", profile=profile, fundamentals={
+                **dm.PROFITABLE, "financial_health": {"debt_to_equity": 0.5}})
             caps[profile] = (result["action_zones"]["position_sizing_range"]["profile_cap_pct"],
                              result["decision_card"]["sizing"]["full_pct_cap"])
 

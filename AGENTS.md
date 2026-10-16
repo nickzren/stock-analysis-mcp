@@ -81,7 +81,8 @@
   whose outcome equals the action and is tighter than `map(candidate)`.
 - Gates, by rank (analyze's `blocking`, `blocked_by`, `checks` and
   `outstanding` use this order): data 1 (`stale_data`, `freshness_unverifiable`,
-  `data_quality_critical`, `missing_runway`, and in analyze `liquidity_missing`)
+  `data_quality_critical`, `missing_runway`, and in analyze `thesis_unverifiable`,
+  `liquidity_missing`)
   → wait_for_data; price_risk / liquidity 2 (`falling_knife`, `weak_liquidity`)
   → avoid; thesis 3 (`thesis_broken`) → avoid; support 4 → watch; event 5
   (`earnings_blackout`, `earnings_unverifiable`) → wait in analyze, watch on the
@@ -101,6 +102,18 @@
   applicability, missing volume, and missing price/history ages are disclosed.
   A proven knife, stale leg or thesis failure still fires despite other unknowns.
   This disclosure does not add an automatic entry cap.
+- In analyze only, an applicable thesis check that cannot be evaluated fires
+  `thesis_unverifiable` (data, `wait_for_data` at both horizons), while
+  `thesis_broken` stays unevaluated. It appears in `blocked_by`, `hard_gates`
+  and snapshot `hard_gate_ids`; `decided_by` names it only when it determines
+  the action under normal precedence. An unverified-support `watch` and an
+  existing `avoid` remain stronger. Known unsupported instruments, including
+  ETFs, are exempt; other unevaluated checks retain their own policies.
+  Its clear-when condition is "applicability verified and required business and
+  cash-runway checks evaluable"; the existing non-burner exemption still applies.
+  Re-run analyze afterwards; clearance never promises a buy.
+  No entry means no sizing and `add_allowed: false`; the existing holder rule
+  (`insufficient_data`, `thesis_unknown`) is unchanged.
 - `earliest_reassessment` is non-null only when a gate fired and the mapped
   candidate admits new money at that horizon; only `earnings_blackout` is dated
   (first NYSE session no window blacks out); undated gates go to `outstanding`

@@ -56,7 +56,8 @@ IF_HELD_3_0_0 = frozenset({"hold", "reduce", "review_exit", "insufficient_data"}
 GATES_2_0_0 = frozenset({"data_quality_critical", "missing_runway", "liquidity_missing", "falling_knife",
                          "weak_liquidity", "unsupported_instrument", "unsupported_currency", "earnings_blackout"})
 RULE_NOTE = ("3.0.0 rule changes (a gate change may come from these, not from the data): new analyze gates "
-             "earnings_unverifiable, stale_data, freshness_unverifiable, thesis_broken and near_52w_high; "
+             "earnings_unverifiable, stale_data, freshness_unverifiable, thesis_broken, thesis_unverifiable and "
+             "near_52w_high; "
              "falling_knife and weak_liquidity give avoid, earnings gates give wait, liquidity_missing is a data "
              "gate; falling_knife is evaluated for every instrument, unsupported ones included; a missing beta "
              "alone no longer fires data_quality_critical; zone is replaced by price_zone")
@@ -95,13 +96,16 @@ def detect(monkeypatch: pytest.MonkeyPatch) -> Detect:
     return run
 
 
+# Complete only the debt input: the snapshot's retained fields stay equal to S2's
+# frozen recording, while the current thesis can be evaluated for isolated diffs.
+COMPLETE_PROFITABLE = {**dm.PROFITABLE, "financial_health": {"debt_to_equity": 0.5}}
 _CLEAN: dict[str, Any] = {}
 
 
 async def clean() -> dict[str, Any]:
     """S2 (buy, no gate), analyzed once per session."""
     if not _CLEAN:
-        _CLEAN["result"] = await dm.run(CLEAN)
+        _CLEAN["result"] = await dm.run(CLEAN, fundamentals=COMPLETE_PROFITABLE)
     return copy.deepcopy(_CLEAN["result"])
 
 
@@ -153,13 +157,14 @@ async def test_the_snapshot_records_the_decision(name: str) -> None:
 
 
 async def test_a_gated_hold_or_add_records_no_pre_gate_code() -> None:
-    """SN-R8: S4 (earnings in 3 days on a hold_or_add candidate) records new money wait, never hold_or_add.
+    """SN-R8: S4 has earnings risk plus an unknown thesis: wait_for_data, never hold_or_add.
     RF."""
     result = await dm.run("S4_earnings_gate_on_hold_or_add")
     snapshot = result["watchlist_snapshot"]
 
     assert result["diagnostics"]["pre_gate_policy"]["mid_term"] == "hold_or_add"
-    assert [snapshot[f] for f in ACTIONS] == ["wait", "insufficient_data", "wait"]
+    assert [snapshot[f] for f in ACTIONS] == ["wait_for_data", "insufficient_data", "wait_for_data"]
+    assert snapshot["hard_gate_ids"] == ["earnings_blackout", "thesis_unverifiable"]
     assert "hold_or_add" not in snapshot.values()
 
 
@@ -276,7 +281,7 @@ async def test_a_gate_firing_through_analyze_moves_the_recorded_decision(
     result = await clean()
     if gate == "falling_knife":
         knife_fires(monkeypatch)
-    gated = await dm.run(CLEAN, **overrides)
+    gated = await dm.run(CLEAN, fundamentals=COMPLETE_PROFITABLE, **overrides)
 
     fired = await detect(result["watchlist_snapshot"], gated)
     cleared = await detect(gated["watchlist_snapshot"], result)
@@ -368,7 +373,7 @@ def test_an_unknown_version_still_type_checks_every_key() -> None:
 @pytest.mark.parametrize("name", sorted(set(dm.SCENARIOS) & {p.stem for p in dm.SNAPSHOT_DIR.glob("*.json")}))
 async def test_the_recorded_2_0_0_snapshots_migrate(detect: Detect, name: str) -> None:
     """SN-R9 (PD D-10) and SN-R22 (amended): against its WP2.0 recording, each baseline scenario reports exactly
-    the rule-driven gate lines of the before/after table (+thesis_broken on A, B and E, WP2.2), never an action or
+    the rule-driven gate lines of the before/after table (broken and unverifiable thesis), never an action or
     zone line; the three actions and price_zone are not_comparable and named in the summary; hash_changed is
     None; one version warning names the retired fields and the 3.0.0 rule changes. PD D-10."""
     response = await detect(recorded(name), await dm.run(name))
@@ -425,7 +430,8 @@ async def test_retained_fields_alert_across_2_to_3(detect: Detect, case: str) ->
     line as a same-version compare. RF (the 14 single-field cases are a 2 -> 2 control on 71f5bde; m0 fails them,
     m1 the signal cases)."""
     name, changes, line = RETAINED[case]
-    response = await detect(recorded(name), edited(await dm.run(name), **changes))
+    fundamentals = dm.SCENARIOS[name].fundamentals if case == "-bearish" else COMPLETE_PROFITABLE
+    response = await detect(recorded(name), edited(await dm.run(name, fundamentals=fundamentals), **changes))
 
     assert response["material_changes"] == [line]
 
@@ -449,7 +455,8 @@ async def test_a_rule_driven_gate_change_is_reported_with_the_rule_note(detect: 
     """SN-R15: a 2.0.0 data_quality_critical that fired on a missing beta alone clears under 3.0.0 (B3): reported
     as -hard_gate, with the rule note; no day-0 claim. PD D-10."""
     risk = {k: v for k, v in dm.CALM.items() if k != "beta"}
-    response = await detect({**recorded(CLEAN), **S2_NO_BETA_2_0_0}, await dm.run(CLEAN, risk=risk))
+    response = await detect({**recorded(CLEAN), **S2_NO_BETA_2_0_0},
+                            await dm.run(CLEAN, risk=risk, fundamentals=COMPLETE_PROFITABLE))
 
     assert response["material_changes"] == ["-hard_gate: data_quality_critical"]
     assert response["warnings"] == [version_warning("2.0.0", RETIRED_2_0_0)] and "day 0" not in RULE_NOTE
@@ -460,7 +467,8 @@ def test_the_rule_note_names_every_new_analyze_gate() -> None:
     """SN-R15 (guard): the rule note names exactly the analyze gates 0609fde did not have. G."""
     new = set(ANALYZE_GATE_IDS) - GATES_2_0_0
     assert set(ANALYZE_GATE_IDS) >= GATES_2_0_0
-    assert new == {"earnings_unverifiable", "stale_data", "freshness_unverifiable", "thesis_broken", "near_52w_high"}
+    assert new == {"earnings_unverifiable", "stale_data", "freshness_unverifiable", "thesis_broken",
+                   "thesis_unverifiable", "near_52w_high"}
     assert all(g in diff_module._RULE_CHANGES_3_0_0[0] for g in new)
 
 
@@ -527,10 +535,10 @@ async def test_a_freshness_only_change_is_material(detect: Detect, monkeypatch: 
     gate: +hard_gate and the new-money and long-term lines are material and the hash moves; clearing reports the
     reverse. PD D-8."""
     scenario = fr.scenario(fr.TRUTH_TABLE[row], row)
-    gated = await dm.run(scenario)
+    gated = await dm.run(scenario, fundamentals=COMPLETE_PROFITABLE)
     real = dm.orchestrator.check_price_freshness
     monkeypatch.setattr(dm.orchestrator, "check_price_freshness", lambda **kw: ([], real(**kw)[1]))
-    ungated = await dm.run(scenario)
+    ungated = await dm.run(scenario, fundamentals=COMPLETE_PROFITABLE)
     gate = FRESHNESS_ROWS[row]
 
     fired = await detect(ungated["watchlist_snapshot"], gated)
@@ -552,8 +560,8 @@ async def test_a_post_close_lag_alerts_through_the_gate_not_the_age(detect: Dete
     """SN-R21 (D-8): saved Monday after the close, re-run Tuesday after the close before Tuesday's bar exists (O2):
     stale_data fires, so +hard_gate and the new-money change alert; price_stale flips too but is never compared
     (D-8: a growing age alone is never an alert). PD D-8."""
-    monday = await dm.run(fr.scenario(MONDAY_EVENING, "Mon 17:00"))
-    tuesday = await dm.run(fr.scenario(fr.TRUTH_TABLE["O2"], "O2"))
+    monday = await dm.run(fr.scenario(MONDAY_EVENING, "Mon 17:00"), fundamentals=COMPLETE_PROFITABLE)
+    tuesday = await dm.run(fr.scenario(fr.TRUTH_TABLE["O2"], "O2"), fundamentals=COMPLETE_PROFITABLE)
 
     response = await detect(monday["watchlist_snapshot"], tuesday)
 

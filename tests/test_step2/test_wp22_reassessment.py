@@ -54,6 +54,8 @@ REVERIFY = {"id": "earnings_reverify", "clears_when": GATES["earnings_unverifiab
 NEVER = "never: outside this tool's supported scope"
 FALLBACK = "clock_only_no_holidays_fallback"
 BANNED = re.compile(r"(?i)re-?entr|re-?enter|resum|\bbuy\b")
+# Event-only examples establish thesis evidence without changing their candidate inputs.
+EVIDENCED_PROFITABLE = {**dm.PROFITABLE, "financial_health": {"debt_to_equity": .5}}
 
 
 def dated(day: str, through: str, method: str = "calendar_static",
@@ -78,6 +80,8 @@ def er(result: dict[str, Any], horizon: str = "mid_term") -> Any:
 
 async def analyze(events_at: EventsAt, evidence: Evidence, today: date, scenario: str = "S2_buy_clean",
                   **overrides: Any) -> dict[str, Any]:
+    if scenario == "S2_buy_clean":
+        overrides.setdefault("fundamentals", EVIDENCED_PROFITABLE)
     return await dm.run(scenario, events=await events_at(evidence, today), now=evening(today), **overrides)
 
 
@@ -192,7 +196,7 @@ async def test_knife_only_is_undated(events_at: EventsAt) -> None:
 async def test_lower_bound_with_an_undated_veto() -> None:
     """RA.7 (E18 type): weak liquidity with the NEAR blackout keeps the earnings date as a lower bound and lists
     the veto before earnings_reverify. RF."""
-    result = await dm.run("S9_weak_liquidity", events=dm.NEAR)
+    result = await dm.run("S9_weak_liquidity", events=dm.NEAR, fundamentals=EVIDENCED_PROFITABLE)
     expected = dated("2026-10-13", "2026-10-12", outstanding=(
         {"id": "weak_liquidity", "clears_when": GATES["weak_liquidity"].clears_when}, REVERIFY))
 
@@ -206,7 +210,7 @@ async def test_a_freshness_gate_is_conditions_only(events: str) -> None:
     stale = {**dm.at_price(dm.STRONG, 89.0), "daily_history": {
         "last_row_date": "2026-10-07", "last_valid_date": "2026-10-07", "last_row_valid": True,
         "completed_valid_date": "2026-10-07"}}
-    result = await dm.run("S2_buy_clean", technicals=stale, events=getattr(dm, events))
+    result = await dm.run("S2_buy_clean", technicals=stale, events=getattr(dm, events), fundamentals=EVIDENCED_PROFITABLE)
     condition = {"id": "stale_data", "clears_when": GATES["stale_data"].clears_when}
 
     assert er(result) == (undated(condition) if events == "FAR" else
@@ -219,7 +223,7 @@ async def test_unverifiable_only(events_at: EventsAt, case: str) -> None:
     earnings_unverifiable alone: undated, earnings_reverify outstanding; an unevaluated blackout is never listed.
     RF."""
     if case == "tool_failure":
-        result = await dm.run("S2_buy_clean", events=None)
+        result = await dm.run("S2_buy_clean", events=None, fundamentals=EVIDENCED_PROFITABLE)
     else:
         evidence = (Evidence(calendar("2026-10-20", "2026-10-24")) if case == "E16"
                     else Evidence(FAILED_CALENDAR, FAILED_PAGE, info_fails=True))
@@ -252,23 +256,27 @@ async def test_permanent_support_lists_only_itself(events_at: EventsAt) -> None:
 
 
 async def test_unverified_support_is_dated(events_at: EventsAt) -> None:
-    """RA.9 (E22): an unknown quote type is an ordinary undated condition beside the dated blackout. RF."""
+    """RA.9 (E22): unknown quote type and thesis applicability remain conditions beside the dated blackout. RF."""
     result = await analyze(events_at, E1, D(2026, 10, 12), summary={**dm.EQUITY, "quote_type": None})
     condition = {"id": "unsupported_instrument", "clears_when": "quote type verified as supported"}
+    thesis = {"id": "thesis_unverifiable", "clears_when": GATES["thesis_unverifiable"].clears_when}
 
-    assert er(result) == dated("2026-10-16", "2026-10-15", outstanding=(condition, REVERIFY))
+    assert er(result) == dated("2026-10-16", "2026-10-15", outstanding=(thesis, condition, REVERIFY))
     assert er(result, "long_term") is None  # the unverified instrument's long-term candidate is insufficient_data
 
 
 async def test_named_cases() -> None:
-    """RA.10 (amended, with D2; plan §6): present per horizon iff a fired gate binds: S2 none; S5 and D2 none at
+    """RA.10 (amended, with D2; plan §6): with established thesis evidence, present per horizon iff a fired gate binds: S2 none; S5 and D2 none at
     mid term (avoid candidate) but dated at long term (buy -> wait); C2 dated at mid term only (long term
     hold_size_conservatively maps to wait, so its blackout is disclosed, not binding); S4 both. RF."""
     expected = {"S2_buy_clean": (None, None), "S5_earnings_gate_on_avoid": (None, D13),
                 "D2_quality_poor_chart_earnings_3d": (None, D13), "C2_headwind_earnings_gate": (D13, None),
                 "S4_earnings_gate_on_hold_or_add": (D13, D13)}
     for name, (mid, long) in expected.items():
-        result = await dm.run(name)
+        fund = dm.SCENARIOS[name].fundamentals
+        overrides = ({"fundamentals": {**fund, "financial_health": {"debt_to_equity": .5}}}
+                     if fund is dm.PROFITABLE or fund is dm.HEADWIND else {})
+        result = await dm.run(name, **overrides)
         assert (er(result), er(result, "long_term")) == (mid, long), name
     d2 = (await dm.run("D2_quality_poor_chart_earnings_3d"))["decision_card"]
     assert (d2["new_money"]["action"], [b["id"] for b in d2["new_money"]["blocked_by"]]) == (
@@ -284,7 +292,13 @@ PRESENT = {  # (scenario, horizon) with an object; every other matrix row is nul
             ("C_quality_knife_dislocation", "long_term"), ("E_poor_business_bullish_chart", "mid_term"),
             ("G_unsupported_currency_knife", "long_term"), ("ETF_strong", "mid_term"), ("GBp_strong", "mid_term"),
             ("GBp_strong", "long_term"), ("A7_near_52w_high_bullish", "mid_term"), ("T1_near_52w_high", "mid_term"),
-            ("H_burner_runway_2q", "mid_term"), ("H_burner_runway_2q", "long_term")},
+            ("H_burner_runway_2q", "mid_term"), ("H_burner_runway_2q", "long_term"),
+            # Sparse-thesis entries now have an undated evidence condition.
+            ("S1_hold_or_add_clean", "mid_term"), ("S1_hold_or_add_clean", "long_term"),
+            ("S2_buy_clean", "mid_term"), ("S2_buy_clean", "long_term"),
+            ("S3_plain_avoid", "long_term"), ("T3_plain_wait_weak_setup", "long_term"),
+            ("C1_headwind_hold_or_add", "mid_term"), ("V1_vendor_rich_plain_avoid", "long_term"),
+            ("A7_near_52w_high_bullish", "long_term")},
 }
 
 
@@ -356,7 +370,7 @@ def test_a_far_window_is_undatable(end: str, expected: tuple[date, date] | None,
 async def test_undatable(earnings: dict[str, Any]) -> None:
     """RA.13: a stub with days_until alone, or events whose run date (next_date - days_until) is not analyze's
     today, fires the blackout but is never dated: conditions_only with earnings_reverify. RF."""
-    result = await dm.run("S2_buy_clean", events={"earnings": earnings})
+    result = await dm.run("S2_buy_clean", events={"earnings": earnings}, fundamentals=EVIDENCED_PROFITABLE)
 
     assert dm.gate_ids(result) == ["earnings_blackout"]
     for horizon in ("mid_term", "long_term"):

@@ -176,7 +176,9 @@ class TestAnalyzeCaps:
                                                  for i, action in enumerate(entry)], "wait_for": []}}
 
         monkeypatch.setattr(orchestrator, "build_dip_assessment", buy_the_dip)
-        capped, control = await dm.run("S2_buy_clean", summary=summary), await dm.run("S2_buy_clean")
+        fundamentals = {**dm.PROFITABLE, "financial_health": {"debt_to_equity": 0.5}}
+        capped = await dm.run("S2_buy_clean", summary=summary, fundamentals=fundamentals)
+        control = await dm.run("S2_buy_clean", fundamentals=fundamentals)
 
         assessment = capped["dip_assessment"]["assessment"]
         assert capped["decision_card"]["new_money"]["action"] == "watch"
@@ -215,7 +217,10 @@ class TestAnalyzeCaps:
             assert result["decision_modes"][mode]["starter_position"] is None, mode
 
     async def test_r4_6_a_usd_adr_keeps_its_sizing(self) -> None:
-        result = await dm.run("S2_buy_clean", summary={**dm.EQUITY, "financial_currency": "TWD"}, account_size=5000.0)
+        result = await dm.run(
+            "S2_buy_clean", summary={**dm.EQUITY, "financial_currency": "TWD"}, account_size=5000.0,
+            fundamentals={**dm.PROFITABLE, "financial_health": {"debt_to_equity": 0.5}},
+        )
 
         assert (result["summary"]["support"]["currency"]["status"], result["decision_card"]["new_money"]["action"]) == (
             "supported", "buy")

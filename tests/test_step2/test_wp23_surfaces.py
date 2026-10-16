@@ -96,42 +96,53 @@ async def test_the_summary_opens_with_three_linted_horizon_segments(name: str) -
         assert not oc.advice(sentence), sentence
 
 
+THESIS_WAIT = ("wait for data; blocked by thesis_unverifiable; no reassessment date: re-run analyze after "
+               "applicability verified and required business and cash-runway checks evaluable.")
+
+
 @pytest.mark.parametrize(("name", "segments"), [
-    ("S2_buy_clean", ("Decision (mid-term, new money): buy; size ~2.5-8.0%.", "If held: insufficient data.",
-                      "Long-term (1-5y): buy.")),
-    ("S1_hold_or_add_clean", ("Decision (mid-term, new money): starter; size ~2.5%.", "If held: insufficient data.",
-                              "Long-term (1-5y): buy.")),
-    ("S3_plain_avoid", ("Decision (mid-term, new money): avoid.", "If held: insufficient data.", "Long-term (1-5y): buy.")),
+    ("S2_buy_clean", ("Decision (mid-term, new money): " + THESIS_WAIT, "If held: insufficient data.",
+                      "Long-term (1-5y): " + THESIS_WAIT)),
+    ("S1_hold_or_add_clean", ("Decision (mid-term, new money): " + THESIS_WAIT, "If held: insufficient data.",
+                              "Long-term (1-5y): " + THESIS_WAIT)),
+    ("S3_plain_avoid", ("Decision (mid-term, new money): avoid; blocked by thesis_unverifiable.",
+                       "If held: insufficient data.", "Long-term (1-5y): " + THESIS_WAIT)),
     ("S4_earnings_gate_on_hold_or_add", (
-        "Decision (mid-term, new money): wait; blocked by earnings_blackout; reassess on or after Tue Oct 13 "
-        "(not a buy date).", "If held: insufficient data.",
-        "Long-term (1-5y): wait; blocked by earnings_blackout; reassess on or after Tue Oct 13 (not a buy date).")),
+        "Decision (mid-term, new money): wait for data; blocked by thesis_unverifiable, earnings_blackout; "
+        "reassess on or after Tue Oct 13 (not a buy date).", "If held: insufficient data.",
+        "Long-term (1-5y): wait for data; blocked by thesis_unverifiable, earnings_blackout; "
+        "reassess on or after Tue Oct 13 (not a buy date).")),
     ("A7_near_52w_high_bullish", (
-        "Decision (mid-term, new money): wait; blocked by near_52w_high; no reassessment date: re-run analyze "
-        "after price leaves the near-52-week-high band.", "If held: insufficient data.", "Long-term (1-5y): buy.")),
+        "Decision (mid-term, new money): wait for data; blocked by thesis_unverifiable, near_52w_high; "
+        "no reassessment date: re-run analyze after applicability verified and required business and "
+        "cash-runway checks evaluable and price leaves the near-52-week-high band.", "If held: insufficient data.",
+        "Long-term (1-5y): " + THESIS_WAIT)),
     ("GBp_strong", (
-        "Decision (mid-term, new money): watch; blocked by unsupported_currency; outside supported scope: no "
-        "reassessment date.", "If held: insufficient data.",
-        "Long-term (1-5y): watch; blocked by unsupported_currency; outside supported scope: no reassessment "
-        "date.")),
+        "Decision (mid-term, new money): watch; blocked by thesis_unverifiable, unsupported_currency; "
+        "outside supported scope: no reassessment date.", "If held: insufficient data.",
+        "Long-term (1-5y): watch; blocked by thesis_unverifiable, unsupported_currency; "
+        "outside supported scope: no reassessment date.")),
     ("A_broken_bearish", ("Decision (mid-term, new money): avoid; blocked by thesis_broken.",
                           "If held: review exit.", "Long-term (1-5y): avoid; blocked by thesis_broken.")),
 ])
 async def test_named_segments(name: str, segments: tuple[str, str, str]) -> None:
-    """OC-RF8 / RA.15 (summary clauses): the three segments word for word on the named rows (buy with its band,
-    a starter with its starter pct only, a plain avoid, dated, conditions-only and unsupported reassessment).
-    PD D-9. Sparse business inputs now give holder uncertainty (WP2.5 C2), without changing new-money segments."""
+    """OC-RF8 / RA.15 (summary clauses): the three segments word for word on the named rows (thesis-blocked
+    buy/starter candidates, candidate avoid, dated, conditions-only and unsupported reassessment).
+    PD D-9. Sparse business inputs now give holder uncertainty (WP2.5 C2), and now block new money with a separate gate."""
     assert oc.segments((await dm.run(name))["executive_summary"])[:3] == list(segments)
 
 
 @pytest.mark.parametrize(("name", "mid", "held", "long"), [
     ("D_quality_attractive_poor_chart", "avoid", "hold", "buy"),
     ("E2_mixed_fcf_bullish_chart", "starter; size ~2.5%", "hold", "starter"),
-    ("C1_headwind_hold_or_add", "starter; size ~2.5%", "insufficient data", "wait")])
+    ("C1_headwind_hold_or_add", "starter; size ~2.5%", "hold", "wait")])
 async def test_the_summary_names_both_horizons(name: str, mid: str, held: str, long: str) -> None:
     """PH-RF20: the summary names the mid-term and the long-term decision, each labelled, so a disagreement reads
     as two horizons (D: avoid vs buy; C1: starter vs wait). PD D-3."""
-    summary = (await dm.run(name))["executive_summary"]
+    fund = dm.SCENARIOS[name].fundamentals
+    if name == "C1_headwind_hold_or_add":
+        fund = {**fund, "financial_health": {"debt_to_equity": 0.5}}
+    summary = (await dm.run(name, fundamentals=fund))["executive_summary"]
 
     assert summary.startswith(f"Decision (mid-term, new money): {mid}. If held: {held}. Long-term (1-5y): {long}.")
 
@@ -257,7 +268,10 @@ def test_speculative_maps_its_own_code_then_caps_it(own: str, new_money: str) ->
 async def test_balanced_follows_new_money_in_direction_2(name: str, long_term: str) -> None:
     """PH-RF17 (balanced clause): E2 and C1 give balanced starter == new_money with long_term_view == the
     long-term decision (E2 starter, C1 wait) and core wait. PD D-3."""
-    result = await dm.run(name)
+    fund = dm.SCENARIOS[name].fundamentals
+    if name == "C1_headwind_hold_or_add":
+        fund = {**fund, "financial_health": {"debt_to_equity": 0.5}}
+    result = await dm.run(name, fundamentals=fund)
     modes = result["decision_modes"]
 
     assert (result["decision_card"]["new_money"]["action"], modes["balanced"]["action"],
@@ -540,7 +554,7 @@ CODE = re.compile(r"[a-z][a-z0-9_]*")
 @pytest.mark.parametrize("name", ROWS)
 async def test_no_actionable_field_carries_a_sizing_word(name: str) -> None:
     """OC-RF9 (amended by plan §0 #8): no A code (a snake_case value of a registry A field) at any tier contains
-    size or sizing (gate reasons are blocker text, not codes); C1-C3 show the long-term wait, never
+    size or sizing (gate reasons are blocker text, not codes); C1-C3 show the long-term wait_for_data, never
     hold_size_conservatively, which survives only under diagnostics. PD D-9."""
     result = await dm.run(name)
     for tier, payload in dm.tiers(result).items():
@@ -550,7 +564,7 @@ async def test_no_actionable_field_carries_a_sizing_word(name: str) -> None:
         assert "horizon_fit" not in payload["decision_card"], tier
     if name[:2] in {"C1", "C2", "C3"}:
         assert (result["decision_card"]["long_term"]["new_money"]["action"],
-                result["decision_modes"]["balanced"]["long_term_view"]) == ("wait", "wait")
+                result["decision_modes"]["balanced"]["long_term_view"]) == ("wait_for_data", "wait_for_data")
 
 
 def test_no_canonical_code_carries_a_sizing_word() -> None:

@@ -276,9 +276,9 @@ class TestAnalyzeGateBefore:
         """GC-C3: full analyze on crashed, strong and unsupported charts (the dip is skipped for an ETF).
         The action column is new_money (WP2.2: D-2, D-5a); the policy column is the full tier's
         diagnostics.pre_gate_policy, support-capped, and no top-level policy_action remains (WP2.3, plan §0 #6).
-        PD D-9 (G from WP2.3)."""
+        PD D-9 (G from WP2.3). Known debt isolates these gates from thesis uncertainty."""
         scenario, action_now, expected_ids, (mid, long, support_gates), dip = ANALYZE_PIPELINE_ROWS[name]
-        result = await dm.run(scenario)
+        result = await dm.run(scenario, fundamentals={**dm.PROFITABLE, "financial_health": {"debt_to_equity": 0.5}})
         policy = result["diagnostics"]["pre_gate_policy"]
 
         assert "policy_action" not in result
@@ -311,7 +311,7 @@ class TestAnalyzeGateBefore:
         card = build_card(summary_data={}, tool_failures=[{"tool": "stock_summary", "error": "x"}])
 
         assert (result["decision_card"]["action_now"], dm.gate_ids(result)) == (
-            "watch", ["data_quality_critical", "unsupported_instrument", "unsupported_currency"])
+            "watch", ["data_quality_critical", "thesis_unverifiable", "unsupported_instrument", "unsupported_currency"])
         assert (card["action"], ids(card["blockers"])) == ("watch", ["unsupported_instrument", "unsupported_currency"])
 
     async def test_a_fresh_quote_no_longer_hides_a_stale_daily_frame(self) -> None:
@@ -319,7 +319,8 @@ class TestAnalyzeGateBefore:
         5m quote, but leg H reads technicals' own daily history (11 sessions behind) and fires stale_data with
         daily_history_stale; the card's build_freshness blocks the same legs as stale_daily. PD D-7.
         The action is decide()'s (FR-R-F2)."""
-        result = await dm.run(FRESH_QUOTE_STALE_DAILY)
+        result = await dm.run(FRESH_QUOTE_STALE_DAILY, fundamentals={
+            **dm.PROFITABLE, "financial_health": {"debt_to_equity": 0.5}})
         provenance = result["summary"]["price_provenance"]
         data_quality = result["data_quality"]
         daily = pd.DataFrame({"date": ["2026-02-19", "2026-02-20"], "close": [99.0, 99.0]})

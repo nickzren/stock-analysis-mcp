@@ -7,6 +7,7 @@ decide() through dm.decide_on; analyze runs go through tests/support/decision_ma
 """
 
 import inspect
+from dataclasses import replace
 from itertools import product
 from typing import Any
 
@@ -30,6 +31,9 @@ from stock_analysis.tools.analyze.gates import (
     clears_when_for,
 )
 from tests.support import decision_matrix as dm
+
+EVIDENCED_PROFITABLE = {**dm.PROFITABLE, "financial_health": {"debt_to_equity": .5}}
+EVIDENCED_HEADWIND = {**dm.HEADWIND, "financial_health": {"debt_to_equity": .5}}
 
 BB, RC = BUSINESS_BROKEN, RUNWAY_CRITICAL
 ENTRY = ("buy", "starter")
@@ -337,13 +341,14 @@ def test_if_held_reads_only_its_evidence() -> None:
 
 
 @pytest.mark.parametrize(("scenario", "long_term", "core", "holder"), [
-    (dm.SCENARIOS["A7_near_52w_high_bullish"], "buy", "buy", ("insufficient_data", "thesis_unknown")),
+    (replace(dm.SCENARIOS["A7_near_52w_high_bullish"], fundamentals=EVIDENCED_PROFITABLE),
+     "buy", "buy", ("hold", "candidate_admits_new_money")),
     (A7_CAUTION, "starter", "wait", ("hold", "candidate_admits_new_money"))], ids=["ok", "caution"])
 async def test_a7_caps_mid_term_new_money_only(
     scenario: dm.Scenario, long_term: str, core: str, holder: tuple[str, str],
 ) -> None:
     """PH-RF11: A7 caps only mid-term new money, leaving long-term/core and the evidence-based holder result
-    unchanged. The sparse ok-fit fixture's thesis is unknown; the caution fixture has sufficient evidence. PD D-4."""
+    unchanged. Both fixtures have sufficient thesis evidence to isolate the price-extension cap. PD D-4."""
     result = await dm.run(scenario)
     card = result["decision_card"]
     long = card["long_term"]["new_money"]
@@ -353,7 +358,7 @@ async def test_a7_caps_mid_term_new_money_only(
         "wait", ["near_52w_high"], "near_52w_high")
     assert card["if_held"] == {"action": holder[0], "add_allowed": False, "basis": holder[1]}
     assert (long["action"], long["blocked_by"], long["decided_by"]) == (long_term, [], None)
-    assert ids(long["unevaluated"]) == (["thesis_broken"] if holder[1] == "thesis_unknown" else [])
+    assert ids(long["unevaluated"]) == []
     assert result["decision_modes"]["core"]["action"] == core
 
 
@@ -575,7 +580,8 @@ async def test_core_follows_the_gated_long_term(name: str, long_term: str, gates
 async def test_core_direction_2(name: str, new_money: str, long_term: str) -> None:
     """PH-RF17 (core clauses; the balanced clause is test_wp23_surfaces'): E2 (caution fit) and C1 (headwind)
     keep mid new money starter and core wait; C1's long term is wait (neither horizon caps the other). PD D-3."""
-    result = await dm.run(name)
+    overrides = {"fundamentals": EVIDENCED_HEADWIND} if name == "C1_headwind_hold_or_add" else {}
+    result = await dm.run(name, **overrides)
     card = result["decision_card"]
 
     assert (card["new_money"]["action"], card["long_term"]["new_money"]["action"],
@@ -604,4 +610,5 @@ def test_core_own_cap() -> None:
 async def test_core_own_cap_through_the_pipeline(name: str, core: str) -> None:
     """PH-RF18 through analyze: F3 (neutral valuation), C1 (headwind) and T1 (caution fit) give core wait where
     0609fde gave build_position or not_core_yet. PD D-3."""
-    assert (await dm.run(name))["decision_modes"]["core"]["action"] == core
+    overrides = {"fundamentals": EVIDENCED_HEADWIND} if name == "C1_headwind_hold_or_add" else {}
+    assert (await dm.run(name, **overrides))["decision_modes"]["core"]["action"] == core

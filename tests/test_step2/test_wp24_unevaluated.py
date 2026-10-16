@@ -169,7 +169,8 @@ FAILURES: dict[str, tuple[str, dict[str, Any], dict[str, Any], list[str], list[s
                          ["+hard_gate: earnings_unverifiable", "+unevaluated_gate: earnings_blackout"],
                          ["earnings_blackout"]),
     "A_fundamentals_failed": ("A_broken_bearish", {}, {"fundamentals": None},
-                              ["+hard_gate: data_quality_critical", "+unevaluated_gate: missing_runway",
+                              ["+hard_gate: data_quality_critical", "+hard_gate: thesis_unverifiable",
+                               "+unevaluated_gate: missing_runway",
                                "+unevaluated_gate: thesis_broken"], ["thesis_broken"]),
     "C_technicals_failed": ("C_quality_knife_dislocation", {}, {"technicals": None},
                             ["+hard_gate: data_quality_critical", "+hard_gate: freshness_unverifiable",
@@ -226,15 +227,17 @@ async def test_the_earnings_case_reports_only_the_unevaluated_gate(detect: Detec
         ["+unevaluated_gate: earnings_blackout"], "ACME: Gate(s) not evaluated: earnings_blackout.", None)
     # S4's sparse fundamentals leave thesis_broken unevaluated on both sides; only earnings moves.
     assert [evaluated["watchlist_snapshot"]["hard_gate_ids"], failed["watchlist_snapshot"]["hard_gate_ids"],
-            failed["watchlist_snapshot"][FIELD]] == [["earnings_blackout", "earnings_unverifiable"],
-                                                     ["earnings_unverifiable"], ["earnings_blackout", "thesis_broken"]]
+            failed["watchlist_snapshot"][FIELD]] == [["earnings_blackout", "earnings_unverifiable", "thesis_unverifiable"],
+                                                     ["earnings_unverifiable", "thesis_unverifiable"],
+                                                     ["earnings_blackout", "thesis_broken"]]
 
 
 @pytest.mark.parametrize("case", FAILURES)
 async def test_a_recovered_input_evaluates_the_gate_again(detect: Detect, case: str) -> None:
     """SN-U4 (recovery, the reverse runs): a gate unevaluated before that fires again is +hard_gate; every
     unevaluated gate is -unevaluated_gate and "Gate(s) evaluated again", never "Cleared"; only the gates the failure
-    fired (data_quality_critical, freshness_unverifiable, earnings_unverifiable), now evaluated clear, are cleared.
+    fired (data_quality_critical, freshness_unverifiable, earnings_unverifiable, thesis_unverifiable),
+    now evaluated clear, are cleared.
     RF."""
     *_, lines, not_evaluated = FAILURES[case]
     evaluated, failed = await runs(case)
@@ -288,12 +291,15 @@ async def test_an_older_snapshot_s_gate_now_unevaluated_is_not_cleared(detect: D
     """SN-U7: a 2.0.0 (recorded) or 1.1.0 previous where earnings_blackout fired, against S4 with the events fetch
     failing: unevaluated_gate_ids is not_comparable and named as not compared, and the current side alone still
     reports the gate as not evaluated, never as cleared. RF."""
-    previous = OLDER[kind](await dm.run(S4))
+    previous = OLDER[kind](await dm.run(
+        S4, fundamentals={**dm.PROFITABLE, "financial_health": {"debt_to_equity": 0.5}},
+    ))
 
     response = await detect(previous, await dm.run(S4, events=None))
 
     assert previous["hard_gate_ids"] == ["earnings_blackout"] and FIELD not in previous
-    assert gate_lines(response) == ["+hard_gate: earnings_unverifiable", "+unevaluated_gate: earnings_blackout"]
+    assert gate_lines(response) == ["+hard_gate: earnings_unverifiable", "+hard_gate: thesis_unverifiable",
+                                    "+unevaluated_gate: earnings_blackout"]
     assert FIELD in response["not_comparable"] and "unevaluated_gates" not in response["changes"]
     assert response["changes"]["hard_gates"]["not_evaluated"] == ["earnings_blackout"]
     assert "Gate(s) not evaluated: earnings_blackout." in response["summary"] and "Cleared" not in response["summary"]

@@ -194,6 +194,48 @@ ROW_CHANGES: dict[str, dict[str, Any]] = {
 # Unknown holders have no add conditions, matching these original empty lists.
 for name in ("S4_earnings_gate_on_hold_or_add", "S9_weak_liquidity", "C2_headwind_earnings_gate"):
     ROW_CHANGES[name].pop("conditions.add_only_if")
+
+# Approved narrow thesis cap: keep the sparse scenario inputs and the frozen baseline.
+# These are expected final cells, not values read back from after.json or production.
+THESIS_DATA = "thesis_unverifiable"
+THESIS_CLEAR = "applicability verified and required business and cash-runway checks evaluable"
+CAP_MID = {"S1_hold_or_add_clean", "S2_buy_clean", "S4_earnings_gate_on_hold_or_add",
+           "C1_headwind_hold_or_add", "C2_headwind_earnings_gate", "T3_plain_wait_weak_setup"}
+CAP_LONG = set(WP25_UNKNOWN_THESIS) - {"S8_fundamentals_failed", "S9_weak_liquidity", "GBp_strong"}
+CAP_ENTRIES = {"S1_hold_or_add_clean", "S2_buy_clean", "C1_headwind_hold_or_add"}
+CAP_BUY_CONDITIONS = {
+    **dict.fromkeys(["S1_hold_or_add_clean", "S2_buy_clean", "C1_headwind_hold_or_add",
+                     "T3_plain_wait_weak_setup"], [THESIS_CLEAR]),
+    **dict.fromkeys(["S4_earnings_gate_on_hold_or_add", "C2_headwind_earnings_gate"], [THESIS_CLEAR, EARNINGS]),
+    "S9_weak_liquidity": [THESIS_CLEAR, LIQUIDITY],
+}
+for name in WP25_UNKNOWN_THESIS:
+    old_gates = BEFORE[name]["hard_gates"]
+    fired = ([*old_gates, THESIS_DATA] if name == "S8_fundamentals_failed" else [THESIS_DATA, *old_gates])
+    GATE_CHANGES[name] = (old_gates, sorted(fired))  # retained snapshot field, sorted by the snapshot contract
+    final_cells: dict[str, Any] = {"hard_gates": fired, "snapshot.hard_gate_ids": sorted(fired)}
+    if name in CAP_MID:
+        final_cells.update(dict.fromkeys(("action_now", "modes.balanced.action", "modes.speculative.action"),
+                                        "wait_for_data"))
+    if name in CAP_LONG:
+        final_cells.update(dict.fromkeys(("modes.core.action", "modes.balanced.long_term_view"), "wait_for_data"))
+    if name in CAP_ENTRIES:
+        final_cells.update({**dict.fromkeys((f"card_sizing.{k}" for k in SIZING_KEYS), None),
+                            **{f"sizing_present.{t}.card": False for t in dm.TIERS},
+                            **{f"sizing_present.{t}.range": False for t in ("standard", "full")},
+                            "dislocation.can_start_now": False, "dislocation.buy_now": None})
+    if name in CAP_BUY_CONDITIONS:
+        final_cells["conditions.buy_only_if"] = CAP_BUY_CONDITIONS[name]
+    if name == "S2_buy_clean":
+        final_cells.update({"dip.recommendation": "watch", "dip.entry_actions": ["watch"]})
+    for path, expected in final_cells.items():
+        original = BEFORE[name]
+        for key in path.split("."):
+            original = original[key]
+        if original != expected:
+            ROW_CHANGES[name][path] = (original, expected)
+        else:
+            ROW_CHANGES[name].pop(path, None)
 BASELINE_SHA256 = "167642b05e592bf77317f45025fc563c3ed203e5a86dedc8b5e8df4a569f7e4d"
 
 

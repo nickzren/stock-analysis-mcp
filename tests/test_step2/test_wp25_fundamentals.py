@@ -185,8 +185,9 @@ async def test_partial_business_rubric_cannot_clear_known_broken_thesis(monkeypa
     assert unknown["decision_context"]["thesis_checkpoints"]["hold_thesis"] == "unknown"
     assert unknown["decision_context"]["thesis_checkpoints"]["thesis_stop_triggers"] is None
     assert unknown["dislocation_framework"]["business_integrity"]["status"] == "unknown"
-    # This is a disclosure/holder fix, not a new cap on the candidate's entry action.
-    assert unknown["decision_card"]["new_money"]["action"] == "starter"
+    # The approved thesis-data cap now blocks the previously admitted starter.
+    assert unknown["decision_card"]["new_money"]["action"] == "wait_for_data"
+    assert "thesis_unverifiable" in dm.gate_ids(unknown)
     lost = await changes(monkeypatch, original, unknown)
     assert "thesis_broken" in lost["changes"]["hard_gates"]["not_evaluated"]
     assert "thesis_broken" not in lost["changes"]["hard_gates"]["cleared"]

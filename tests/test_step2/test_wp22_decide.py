@@ -7,6 +7,7 @@ tests/support/decision_matrix.py, which pins the clock; pure runs call decide() 
 """
 
 import importlib
+from dataclasses import replace
 from itertools import combinations, product
 from typing import Any
 
@@ -48,7 +49,7 @@ LONG_MAP = {"accumulate": "buy", "hold_or_add": "starter", "small_position_with_
 MAPS = {"mid_term": MID_MAP, "long_term": LONG_MAP}
 OUTCOME = {  # gate: (mid_term, long_term), the plan §4 registry's analyze columns [D-5a, D-5c]
     "stale_data": (WFD, WFD), "freshness_unverifiable": (WFD, WFD), "data_quality_critical": (WFD, WFD),
-    "missing_runway": (WFD, WFD), "liquidity_missing": (WFD, WFD), "falling_knife": ("avoid", "avoid"),
+    "missing_runway": (WFD, WFD), "thesis_unverifiable": (WFD, WFD), "liquidity_missing": (WFD, WFD), "falling_knife": ("avoid", "avoid"),
     "weak_liquidity": ("avoid", "avoid"), "thesis_broken": ("avoid", "avoid"),
     "unsupported_instrument": ("watch", "watch"), "unsupported_currency": ("watch", "watch"),
     "earnings_blackout": ("wait", "wait"), "earnings_unverifiable": ("wait", "wait"),
@@ -56,7 +57,7 @@ OUTCOME = {  # gate: (mid_term, long_term), the plan §4 registry's analyze colu
 }
 CLASS_EFFECT = {  # analyze class and effect; liquidity_missing is data in analyze (D-5c)
     "stale_data": ("data", "veto"), "freshness_unverifiable": ("data", "veto"), "data_quality_critical": ("data", "veto"),
-    "missing_runway": ("data", "veto"), "liquidity_missing": ("data", "veto"), "falling_knife": ("price_risk", "veto"),
+    "missing_runway": ("data", "veto"), "thesis_unverifiable": ("data", "veto"), "liquidity_missing": ("data", "veto"), "falling_knife": ("price_risk", "veto"),
     "weak_liquidity": ("liquidity", "veto"), "thesis_broken": ("thesis", "cap"),
     "unsupported_instrument": ("support", "cap"), "unsupported_currency": ("support", "cap"),
     "earnings_blackout": ("event", "cap"), "earnings_unverifiable": ("event", "cap"), "near_52w_high": ("zone", "cap"),
@@ -70,6 +71,8 @@ RESOLUTION = {  # (map(candidate), one gate's outcome) -> new_money, most-restri
 }
 STALE_HISTORY = {"last_row_date": "2026-10-08", "last_valid_date": "2026-10-08", "last_row_valid": True,
                  "completed_valid_date": "2026-10-08"}  # one session behind the matrix clock
+# Isolate non-thesis gates without changing valuation, signals, or candidate codes.
+EVIDENCED_PROFITABLE = {**dm.PROFITABLE, "financial_health": {"debt_to_equity": .5}}
 
 
 def blockers(*gate_ids: str) -> list[dict[str, Any]]:
@@ -168,7 +171,8 @@ PIPELINE_GATE_CASES: dict[str, tuple[dm.Scenario, tuple[str, str | None], tuple[
                               (WFD, "data_quality_critical"), (WFD, "data_quality_critical")),
     "missing_runway": (dm.Scenario("GC-R2", dm.WEAK, ph.UNKNOWN_RUNWAY_SNAPSHOT, dm.MODERATE),
                        (WFD, "missing_runway"), (WFD, "missing_runway")),
-    "liquidity_missing": (dm.Scenario("GC-R2", dm.STRONG, dm.PROFITABLE,
+    "thesis_unverifiable": (dm.SCENARIOS["S2_buy_clean"], (WFD, "thesis_unverifiable"), (WFD, "thesis_unverifiable")),
+    "liquidity_missing": (dm.Scenario("GC-R2", dm.STRONG, EVIDENCED_PROFITABLE,
                                       {**dm.CALM, "liquidity": {"avg_dollar_volume": None}}),
                           (WFD, "liquidity_missing"), (WFD, "liquidity_missing")),
     "falling_knife": (dm.SCENARIOS["C_quality_knife_dislocation"], ("avoid", None), ("avoid", "falling_knife")),
@@ -180,11 +184,11 @@ PIPELINE_GATE_CASES: dict[str, tuple[dm.Scenario, tuple[str, str | None], tuple[
                                ("watch", "unsupported_instrument")),
     "unsupported_currency": (dm.SCENARIOS["GBp_strong"], ("watch", "unsupported_currency"),
                              ("watch", "unsupported_currency")),
-    "earnings_blackout": (dm.SCENARIOS["S4_earnings_gate_on_hold_or_add"], ("wait", "earnings_blackout"),
+    "earnings_blackout": (replace(dm.SCENARIOS["S4_earnings_gate_on_hold_or_add"], fundamentals=EVIDENCED_PROFITABLE), ("wait", "earnings_blackout"),
                           ("wait", "earnings_blackout")),
-    "earnings_unverifiable": (dm.Scenario("GC-R2", dm.STRONG, dm.PROFITABLE, dm.CALM, events=sm.UNVERIFIABLE_EVENTS),
+    "earnings_unverifiable": (dm.Scenario("GC-R2", dm.STRONG, EVIDENCED_PROFITABLE, dm.CALM, events=sm.UNVERIFIABLE_EVENTS),
                               ("wait", "earnings_unverifiable"), ("wait", "earnings_unverifiable")),
-    "near_52w_high": (dm.SCENARIOS["A7_near_52w_high_bullish"], ("wait", "near_52w_high"), ("buy", None)),
+    "near_52w_high": (replace(dm.SCENARIOS["A7_near_52w_high_bullish"], fundamentals=EVIDENCED_PROFITABLE), ("wait", "near_52w_high"), ("buy", None)),
 }
 
 
@@ -376,7 +380,7 @@ async def test_summary_failure_outcomes() -> None:
     for decision in shown.values():
         assert (decision["action"], decision["decided_by"], ids(decision["blocked_by"])) == (
             "watch", "unsupported_instrument",
-            ["data_quality_critical", "unsupported_instrument", "unsupported_currency"])
+            ["data_quality_critical", "thesis_unverifiable", "unsupported_instrument", "unsupported_currency"])
     assert (card["action"], ids(card["blockers"])) == ("watch", ["unsupported_instrument", "unsupported_currency"])
 
 
@@ -399,7 +403,7 @@ async def test_case_g_is_avoid_at_both_horizons() -> None:
 async def test_r3_waits_for_data_at_both_horizons() -> None:
     """FR-R-F2 (action clause; the sizing clause is test_wp23_sizing's): R3 (fresh 5m, technicals 2 sessions
     behind) gives wait_for_data at both horizons, decided by stale_data [daily_history_stale]. PD D-7."""
-    result = await dm.run(fr.scenario(fr.TRUTH_TABLE["R3"], "R3"))
+    result = await dm.run(fr.scenario(fr.TRUTH_TABLE["R3"], "R3"), fundamentals=EVIDENCED_PROFITABLE)
 
     for decision in horizons(result).values():
         assert (decision["action"], decision["decided_by"]) == (WFD, "stale_data")
@@ -425,8 +429,8 @@ async def test_an_empty_latest_bar_waits_for_data(name: str, clean_action: str) 
     """FR-R-F14: an empty latest bar (avg_dollar_volume None) gives liquidity_missing, data class in analyze, so
     new money waits for data at both horizons, over a wait candidate too; the card keeps avoid. PD D-5c."""
     risk = await empty_latest_bar_risk()
-    clean = horizons(await dm.run(name))["mid_term"]
-    shown = horizons(await dm.run(name, risk=risk))
+    clean = horizons(await dm.run(name, fundamentals=EVIDENCED_PROFITABLE))["mid_term"]
+    shown = horizons(await dm.run(name, risk=risk, fundamentals=EVIDENCED_PROFITABLE))
     card = build_card(risk_data=risk)
 
     assert risk["liquidity"]["avg_dollar_volume"] is None
@@ -442,10 +446,10 @@ async def test_an_empty_latest_bar_waits_for_data(name: str, clean_action: str) 
 async def test_freshness_never_moves_scores_or_the_candidate(row: str, monkeypatch: pytest.MonkeyPatch) -> None:
     """FR-R-F18: the freshness gate changes new_money only: score, tilt and the pre-gate policy codes equal the
     run with the gate disabled (the Step 2 boundary). RF."""
-    gated = await dm.run(fr.scenario(fr.TRUTH_TABLE[row], row))
+    gated = await dm.run(fr.scenario(fr.TRUTH_TABLE[row], row), fundamentals=EVIDENCED_PROFITABLE)
     real = orchestrator.check_price_freshness
     monkeypatch.setattr(orchestrator, "check_price_freshness", lambda **kw: ([], real(**kw)[1]))
-    ungated = await dm.run(fr.scenario(fr.TRUTH_TABLE[row], row))
+    ungated = await dm.run(fr.scenario(fr.TRUTH_TABLE[row], row), fundamentals=EVIDENCED_PROFITABLE)
 
     def boundary(result: dict[str, Any]) -> tuple[Any, ...]:
         policy = result["diagnostics"]["pre_gate_policy"]
@@ -497,11 +501,11 @@ async def test_the_card_carries_one_decision(name: str) -> None:
 
 
 @pytest.mark.parametrize(("name", "trace"), [
-    ("S1_hold_or_add_clean", ["pre_gate_policy.mid_term=hold_or_add -> starter"]),
-    ("S4_earnings_gate_on_hold_or_add", ["pre_gate_policy.mid_term=hold_or_add -> wait", "decided_by=earnings_blackout"])])
+    ("S1_hold_or_add_clean", ["pre_gate_policy.mid_term=hold_or_add -> wait_for_data", "decided_by=thesis_unverifiable"]),
+    ("S4_earnings_gate_on_hold_or_add", ["pre_gate_policy.mid_term=hold_or_add -> wait_for_data", "decided_by=thesis_unverifiable"])])
 async def test_the_decision_trace_names_the_emitted_code_and_the_deciding_gate(name: str, trace: list[str]) -> None:
     """Card shape (C8): diagnostics.decision_trace (the card's rationale until WP2.3, plan §2) is the emitted mid code
-    and new_money's action, plus a decided_by line only when a gate decided (S1 none; S4 earnings_blackout); the
+    and new_money's action, plus the deciding gate (both sparse-thesis fixtures now name thesis_unverifiable); the
     card has no rationale. RF (plan §2)."""
     result = await dm.run(name)
 

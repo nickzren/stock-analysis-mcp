@@ -388,9 +388,10 @@ HOLD = dm.Scenario("RA C8 hold", dm.at_price(dm.STRONG, 85.0, above_sma200=False
 
 
 async def with_and_without_blackout(scenario: dm.Scenario) -> tuple[dict[str, Any], dict[str, Any]]:
-    """The scenario's decision card with a 3-day blackout, and with earnings 40 days out."""
-    gated = (await dm.run(scenario, events=dm.NEAR))["decision_card"]
-    clear = (await dm.run(scenario, events=dm.FAR))["decision_card"]
+    """Isolate the blackout with known debt: compare earnings 3 and 40 days out."""
+    fund = {**scenario.fundamentals, "financial_health": {"debt_to_equity": 0.5}}
+    gated = (await dm.run(scenario, fundamentals=fund, events=dm.NEAR))["decision_card"]
+    clear = (await dm.run(scenario, fundamentals=fund, events=dm.FAR))["decision_card"]
     return gated, clear
 
 
