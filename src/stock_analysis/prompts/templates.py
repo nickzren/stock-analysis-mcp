@@ -66,7 +66,7 @@ If you need detailed presentation rules, read:
 `stock-analysis://guides/analyze-rendering`
 
 When you present the result, lead with:
-1. `decision_card`: `decision_card.new_money` (mid-term), `decision_card.if_held` and `decision_card.long_term.new_money`, each action verbatim with its `blocked_by`
+1. `decision_card`: `decision_card.new_money` (mid-term) and `decision_card.long_term.new_money`, each action verbatim with its `blocked_by`, then `decision_card.if_held` action verbatim with its `basis`
 2. `executive_summary`, verbatim
 3. `decision_card.sizing`, mid-term new money only (when null: no entry size); never attach it to a long-term or holder answer
 4. `decision_modes.core`, `decision_modes.balanced` and `decision_modes.speculative`, with any `capped_by`

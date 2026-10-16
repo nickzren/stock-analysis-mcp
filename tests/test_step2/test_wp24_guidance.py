@@ -138,6 +138,9 @@ async def test_guidance_uses_the_canonical_vocabulary() -> None:
     for name in ("full_analysis", "growth_memo", "value_memo"):
         assert "Never upgrade past `blocked_by`." in prompt(name), name
     assert re.findall(r"(?m)^\d+\. `([a-z_.]+)`", prompt("full_analysis"))[0] == "decision_card"
+    lead = flat(prompt("full_analysis").split("\n2. ")[0])
+    assert "`decision_card.if_held` action verbatim with its `basis`" in lead
+    assert "`decision_card.if_held` and" not in lead  # if_held has a basis, never blocked_by (Codex review)
     described = [p.description or "" for p in await mcp.list_prompts()] + [p["description"] for p in list_prompts()]
     assert [d for d in described if re.search(r"(?i)\bsell\b", d)] == []
 
