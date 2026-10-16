@@ -128,6 +128,7 @@ def evaluate_gates(
         "thesis_broken": thesis_status == UNEVALUATED,
         "earnings_blackout": events_tool_failed(data_quality.get("tool_failures")),
         "near_52w_high": zone_status == UNEVALUATED,
+        "weak_liquidity": hard_gates["checks"]["liquidity_missing"],
     }
     return hard_gates, frozenset(gate for gate, missing in not_computed.items() if missing)
 

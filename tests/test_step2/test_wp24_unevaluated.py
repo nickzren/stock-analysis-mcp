@@ -32,6 +32,8 @@ S4 = "S4_earnings_gate_on_hold_or_add"
 UNVERIFIED_NEAR = {"earnings": {**dm.NEAR["earnings"], "verification": "unverifiable"}}
 # A7 without moving averages or a 52-week range: the price zone is undetermined, so near_52w_high is unevaluated.
 _A7 = dm.SCENARIOS["A7_near_52w_high_bullish"].technicals or {}
+# S9 without its dollar volume: liquidity_missing fires and weak_liquidity cannot be computed.
+NO_DOLLAR_VOLUME = {**dm.THIN, "liquidity": {"avg_dollar_volume": None}}
 A7_NO_ZONE = {**copy.deepcopy(_A7), "moving_averages": {"rules": copy.deepcopy(_A7["moving_averages"]["rules"])},
               "price_position": {}}
 
@@ -175,6 +177,12 @@ FAILURES: dict[str, tuple[str, dict[str, Any], dict[str, Any], list[str], list[s
                             ["falling_knife"]),
     "A7_zone_undetermined": ("A7_near_52w_high_bullish", {}, {"technicals": A7_NO_ZONE},
                              ["+unevaluated_gate: near_52w_high"], ["near_52w_high"]),
+    "S9_risk_failed": ("S9_weak_liquidity", {}, {"risk": None},
+                       ["+hard_gate: data_quality_critical", "+hard_gate: liquidity_missing",
+                        "+unevaluated_gate: weak_liquidity"], ["weak_liquidity"]),
+    "S9_dollar_volume_missing": ("S9_weak_liquidity", {}, {"risk": NO_DOLLAR_VOLUME},
+                                 ["+hard_gate: liquidity_missing", "+unevaluated_gate: weak_liquidity"],
+                                 ["weak_liquidity"]),
 }
 
 
@@ -303,3 +311,21 @@ async def test_a_3_0_0_previous_without_the_field_is_invalid(detect: Detect) -> 
     assert diff_module.validate_previous_snapshot({**snapshot, FIELD: None}, "ACME") == []
     assert diff_module.validate_previous_snapshot({**snapshot, FIELD: [GATE, 1]}, "ACME") == [
         f"{FIELD}: expected string list, got list"]
+
+
+@pytest.mark.parametrize("risk", [None, NO_DOLLAR_VOLUME], ids=["risk_failed", "dollar_volume_missing"])
+async def test_missing_liquidity_leaves_weak_liquidity_unevaluated(risk: dict[str, Any] | None) -> None:
+    """SN-U11: without a dollar volume for a supported stock, weak_liquidity is unevaluated at both horizons (with
+    its reason) while liquidity_missing still fires and decides wait_for_data, as before; for an unsupported ETF
+    neither liquidity gate applies, so nothing is unevaluated. RF."""
+    result = await dm.run("S9_weak_liquidity", risk=risk)
+    etf = await dm.run("ETF_strong", risk=risk)
+    card = result["decision_card"]
+
+    for decision in (card["new_money"], card["long_term"]["new_money"]):
+        assert decision["action"] == "wait_for_data"
+        assert "liquidity_missing" in [blocker["id"] for blocker in decision["blocked_by"]]
+        assert {"id": "weak_liquidity", "reason": "average daily dollar volume unavailable"} in decision["unevaluated"]
+    assert result["watchlist_snapshot"][FIELD] == ["weak_liquidity"]
+    assert "liquidity_missing" in result["watchlist_snapshot"]["hard_gate_ids"]
+    assert "weak_liquidity" not in etf["watchlist_snapshot"][FIELD]

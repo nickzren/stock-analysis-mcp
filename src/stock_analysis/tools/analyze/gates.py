@@ -476,6 +476,7 @@ _EVENT_CAP = _outcome("wait", "wait", "watch", _UE)
 _FUNDAMENTALS_MISSING = "fundamentals missing or failed"
 _TECHNICALS_MISSING = "technicals unavailable — falling-knife rubric not computed"
 _EVENTS_FAILED = "events calendar unavailable — earnings date not checked"
+_DOLLAR_VOLUME_MISSING = "average daily dollar volume unavailable"
 _QUOTE_LEG = "quote leg in the regular session: stage 1 reads no intraday quote"
 _SUPPORT_UNVERIFIED = "support status unverified (history attrs missing): a setup promotes"
 _MARKET_DATA_CURRENT = "current market data with a verifiable timestamp: a current price and a current daily history"
@@ -534,6 +535,7 @@ GATES: dict[str, Gate] = {
         "liquidity", "veto", _AVOID,
         predicate=f"check_liquidity: 1-year mean volume x last close < {_LIQUIDITY_FLOOR}",
         clears_when=f"1-year average daily dollar volume >= {_LIQUIDITY_FLOOR}",
+        unevaluated_when={"mid_term": _DOLLAR_VOLUME_MISSING, "long_term": _DOLLAR_VOLUME_MISSING},
         requires_supported=True),
     "liquidity_missing": Gate(
         "liquidity", "veto", _outcome("wait_for_data", "wait_for_data", "avoid", "avoid"),

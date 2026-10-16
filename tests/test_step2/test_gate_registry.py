@@ -62,6 +62,7 @@ UNEVALUATED_WHEN = {
     "falling_knife": set(SURFACES), "thesis_broken": {"mid_term", "long_term"},
     "unsupported_instrument": {"screen"}, "unsupported_currency": {"screen"},
     "earnings_blackout": {"mid_term", "long_term", "swing"}, "near_52w_high": {"mid_term"},
+    "weak_liquidity": {"mid_term", "long_term"},
 }
 SWING_ORDER = ("stale_data", "freshness_unverifiable", "data_quality_critical", "falling_knife", "weak_liquidity",
                "liquidity_missing", "unsupported_instrument", "unsupported_currency", "earnings_blackout",

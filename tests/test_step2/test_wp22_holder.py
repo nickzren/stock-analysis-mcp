@@ -41,7 +41,8 @@ MID_FITS = ("ok", "caution", "avoid", "unknown")
 TILTS = ("bullish", "neutral", "bearish", None)
 ZONES = ("accumulate", "hold_bullish", "reduce")
 THESES: tuple[tuple[str, ...], ...] = ((), (BB,), (RC,), (BB, RC))
-UNEVALUABLE = ("missing_runway", "falling_knife", "thesis_broken", "earnings_blackout", "near_52w_high")  # R2.6(f)
+UNEVALUABLE = ("missing_runway", "falling_knife", "weak_liquidity", "thesis_broken", "earnings_blackout",
+               "near_52w_high")  # R2.6(f)
 A7_CAUTION = dm.Scenario("PH A7 caution", dm.at_price(dm.STRONG, 118.0), dm.QUALITY, dm.EXTREME)
 E_INTACT = dm.Scenario("PH-RF12b intact twin", dm.STRONG,
                        {**dm.POOR_BUT_BULLISH, "cash_flow": {"rules": {"positive_fcf": {"triggered": True}}},
