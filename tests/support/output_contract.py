@@ -180,14 +180,10 @@ def leaves(node: Any, path: str = "") -> list[tuple[str, Any]]:
     return [(path, node)]
 
 
-def contract_leaves(payload: Mapping[str, Any]) -> list[tuple[str, Any]]:
-    return leaves(dict(payload))
-
-
 def classified(payload: Mapping[str, Any]) -> list[tuple[str, Any, Field]]:
     """(path, value, row) for every registered leaf; OC-RF1 reports the rest."""
     out = []
-    for path, value in contract_leaves(payload):
+    for path, value in leaves(dict(payload)):
         try:
             out.append((path, value, classify(path)))
         except LookupError:
@@ -198,7 +194,7 @@ def classified(payload: Mapping[str, Any]) -> list[tuple[str, Any, Field]]:
 def registry_violations(payload: Mapping[str, Any], tier: str) -> list[str]:
     """OC-RF1 for one projected payload: unregistered, ambiguous and wrong-tier leaves."""
     problems = []
-    for path, _ in contract_leaves(payload):
+    for path, _ in leaves(dict(payload)):
         try:
             field = classify(path)
         except LookupError as error:

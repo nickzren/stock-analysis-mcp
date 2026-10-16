@@ -439,9 +439,9 @@ async def what_changed(
     fields = SNAPSHOT_FIELDS[prev_version]
     if prev_version not in _RELIABLE_SIGNAL_VERSIONS:
         fields -= _LEGACY_AMBIGUOUS_FIELDS
-    retired = sorted((set(previous_snapshot) & fields) - set(current_snapshot))
     previous_snapshot = {k: v for k, v in previous_snapshot.items() if k in fields}
-    if prev_version and curr_version and prev_version != curr_version:
+    if curr_version and prev_version != curr_version:
+        retired = sorted(set(previous_snapshot) - set(current_snapshot))
         warning = (f"snapshot_version changed ({prev_version} -> {curr_version}); field semantics may differ; "
                    f"retired, not compared: {', '.join(retired) or 'none'}")
         if curr_version == "3.0.0":

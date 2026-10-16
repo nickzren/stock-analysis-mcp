@@ -346,8 +346,8 @@ async def test_stray_3_0_0_keys_on_a_2_0_0_snapshot_are_ignored(detect: Detect) 
 
 async def test_a_stray_key_is_not_listed_as_retired(detect: Detect) -> None:
     """Review fix (integrated plan §1.2): the warning's retired list is the previous version's own fields that the
-    current snapshot lacks, so a stray key on a 2.0.0 previous is not named. G (the mutant without "& fields"
-    fails it)."""
+    current snapshot lacks, so a stray key on a 2.0.0 previous is not named. G (the mutant that lists retired
+    keys before the field filter fails it)."""
     response = await detect({**recorded(CLEAN), "note": "hello"}, await clean())
 
     assert response["warnings"] == [version_warning("2.0.0", RETIRED_2_0_0)]

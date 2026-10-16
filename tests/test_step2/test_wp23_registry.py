@@ -117,7 +117,7 @@ async def test_every_row_is_exercised() -> None:
     UNEXERCISED_ROWS. RF."""
     results = [*[await dm.run(name) for name in dm.SCENARIOS], *[await make() for make in EXTRA.values()]]
     used = {oc.classify(path).glob for result in results for shown in dm.tiers(result).values()
-            for path, _ in oc.contract_leaves(shown)}
+            for path, _ in oc.leaves(shown)}
     assert {f.glob for f in oc.FIELD_REGISTRY} - used == set(oc.UNEXERCISED_ROWS)
 
 
