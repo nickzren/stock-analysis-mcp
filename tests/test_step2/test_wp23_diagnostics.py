@@ -2,8 +2,8 @@
 
 Top-level policy_action becomes the full-tier diagnostics.pre_gate_policy (support-capped, with role and
 superseded_by; no alias), decision_card.rationale becomes diagnostics.decision_trace, card.horizon_fit and
-entry.current_zone go, and nothing copies a pre-gate value into an A, N or C field. The 2.0.0 snapshot keeps its
-fields, read from the new places, until WP2.4 (§0 #22). Annex: output_contract.md §8, §10 RF11 and
+entry.current_zone go, and nothing copies a pre-gate value into an A, N or C field. WP2.4's snapshot 3.0.0 reads
+the decision, not the diagnostics (§0 #22, §8). Annex: output_contract.md §8, §10 RF11 and
 policy_holder.md §10 RF3, RF9, "Corrected proposal", as amended by plan §0.
 """
 
@@ -13,14 +13,19 @@ from typing import Any
 import pytest
 
 from stock_analysis.tools.analyze.decision import (
+    CANDIDATE_ACTIONS,
     ENTRY_ACTIONS,
     ENTRY_CANDIDATE_CODES,
     ENTRY_CODES,
     FULL_ENTRY_CODES,
+    IF_HELD_ACTIONS,
+    NEW_MONEY_ACTIONS,
 )
 from tests.support import decision_matrix as dm
 from tests.support import output_contract as oc
 
+PRE_GATE_ONLY_CODES = {code for table in CANDIDATE_ACTIONS.values() for code in table} - {
+    *NEW_MONEY_ACTIONS, *IF_HELD_ACTIONS}
 UNSUPPORTED = ["S7_etf_below_sma200", "ETF_strong", "ETF_bearish", "GBp_strong", "G_unsupported_currency_knife"]
 PRE_GATE_KEYS = ["mid_term", "long_term", "rationale", "conditions_to_upgrade", "conditions_to_downgrade", "inputs"]
 PRE_GATE_WORDS = ("hold or add", "hold or reduce", "wait for entry", "wait for a better entry",
@@ -35,11 +40,11 @@ def ids(blockers: list[dict[str, Any]]) -> list[str]:
 
 @pytest.mark.parametrize("name", list(dm.SCENARIOS))
 async def test_the_pre_gate_policy_is_a_full_tier_diagnostic(name: str) -> None:
-    """OC-RF11 (non-snapshot paths): the top-level policy_action is gone at every tier with no alias; only the
-    full tier carries diagnostics = {pre_gate_policy, decision_trace}; pre_gate_policy keeps the candidate
-    codes, trace and conditions, moves zone and the valuation fields under inputs, drops sizing_guidance, and
-    carries role and superseded_by equal to the card; the card keeps no copy (no rationale, no horizon_fit).
-    PD D-9."""
+    """OC-RF11 (non-snapshot paths; the snapshot clause is test_the_snapshot_reads_the_decision_not_the_diagnostics):
+    the top-level policy_action is gone at every tier with no alias; only the full tier carries diagnostics =
+    {pre_gate_policy, decision_trace}; pre_gate_policy keeps the candidate codes, trace and conditions, moves zone
+    and the valuation fields under inputs, drops sizing_guidance, and carries role and superseded_by equal to the
+    card; the card keeps no copy (no rationale, no horizon_fit). PD D-9."""
     result = await dm.run(name)
     card = result["decision_card"]
     shown = dm.tiers(result)
@@ -64,17 +69,20 @@ async def test_the_pre_gate_policy_is_a_full_tier_diagnostic(name: str) -> None:
 
 
 @pytest.mark.parametrize("name", list(dm.SCENARIOS))
-async def test_the_interim_snapshot_reads_the_diagnostics(name: str) -> None:
-    """§0 #22 pin (plan §7a, OC-G6): until WP2.4 the 2.0.0 snapshot keeps its fields: action_mid_term,
-    action_long_term and zone read diagnostics.pre_gate_policy (codes, inputs.zone); valuation_gate and
-    is_unprofitable read action_zones.valuation_assessment. PD D-9. CH: flipped by WP2.4 (snapshot 3.0.0)."""
+async def test_the_snapshot_reads_the_decision_not_the_diagnostics(name: str) -> None:
+    """§0 #22 pin (flipped by WP2.4) and OC-RF11 (snapshot clause): the 3.0.0 snapshot's actions are the card's
+    decision and its zone is action_zones.price_zone; no pre-gate code or key is copied into it; valuation_gate
+    and is_unprofitable read action_zones.valuation_assessment (OC-G6). PD D-9."""
     result = await dm.run(name)
-    pre_gate = result["diagnostics"]["pre_gate_policy"]
+    card = result["decision_card"]
     assessment = result["action_zones"]["valuation_assessment"]
     snapshot = result["watchlist_snapshot"]
 
-    assert (snapshot["action_mid_term"], snapshot["action_long_term"], snapshot["zone"]) == (
-        pre_gate["mid_term"], pre_gate["long_term"], pre_gate["inputs"]["zone"])
+    assert (snapshot["new_money_action"], snapshot["if_held_action"], snapshot["long_term_action"],
+            snapshot["price_zone"]) == (card["new_money"]["action"], card["if_held"]["action"],
+                                        card["long_term"]["new_money"]["action"], result["action_zones"]["price_zone"])
+    assert not {"action_mid_term", "action_long_term", "decision_action_now", "zone"} & set(snapshot)
+    assert not {v for v in snapshot.values() if isinstance(v, str)} & PRE_GATE_ONLY_CODES
     assert (snapshot["valuation_gate"], snapshot["is_unprofitable"]) == (
         assessment["gate"], assessment["is_unprofitable"] or None)
 
@@ -110,7 +118,7 @@ async def test_an_unsupported_instrument_emits_no_new_money_candidate(name: str)
 
 @pytest.mark.parametrize("name", list(dm.SCENARIOS))
 async def test_no_pre_gate_value_is_copied(name: str) -> None:
-    """OC-RF11 (no-copy clause, non-snapshot paths): nothing copies a pre-gate value into an A, N or C field:
+    """OC-RF11 (no-copy clause; the snapshot too from WP2.4): nothing copies a pre-gate value into an A, N or C field:
     balanced.why holds no pre-gate rationale line (no "zone=" / "tilt=" trace); the summary humanizes no pre-gate
     code and has no "Policy:" clause; at the decision and standard tiers an entry code appears only in a T path
     or in an A or S field whose horizon admits entry (a mid-term full-entry code only under buy). PD D-9."""

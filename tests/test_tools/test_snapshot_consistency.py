@@ -7,7 +7,11 @@ from typing import Any
 import pytest
 
 from stock_analysis.tools.analyze.projection import project_analyze_result
-from stock_analysis.utils.normalize import SNAPSHOT_VERSION, build_watchlist_snapshot
+from stock_analysis.utils.normalize import (
+    SNAPSHOT_FIELDS,
+    SNAPSHOT_VERSION,
+    build_watchlist_snapshot,
+)
 from tests.support.legacy_snapshot import (
     as_0609fde,
     legacy_compact_snapshot,
@@ -35,11 +39,14 @@ def raw_result(**changes: Any) -> dict[str, Any]:
                     "horizon_fit": {"mid_term": "good", "long_term": "fair"}},
         "diagnostics": {"pre_gate_policy": {"mid_term": "hold_or_add", "long_term": "accumulate",
                                             "inputs": {"zone": "accumulate"}}},
-        "decision_card": {"action_now": "buy", "hard_gates": {"blocking": [{"id": "earnings_blackout"}]}},
+        "decision_card": {"new_money": {"action": "buy"}, "if_held": {"action": "hold"},
+                          "long_term": {"new_money": {"action": "buy"}}, "action_now": "buy",
+                          "hard_gates": {"blocking": [{"id": "earnings_blackout"}]}},
         "risk_summary": {"risk_regime": {"classification": "medium"}, "annualized_volatility": 0.3},
         "events_summary": {"next_catalyst": {"type": "earnings", "status": "available", "date": "2026-10-30",
                                              "days_until": 18, "source": "calendar"}},
-        "action_zones": {"valuation_assessment": {"gate": "neutral", "is_unprofitable": False}},
+        "action_zones": {"price_zone": "below_sma200",
+                         "valuation_assessment": {"gate": "neutral", "is_unprofitable": False}},
         "signals": {"bullish": ["above_sma200", "golden_cross"], "bearish": ["high_put_call_ratio"],
                     "neutral": []},
         "data_quality": {"component_freshness": {"price": {"as_of": "2026-10-10T12:00:00Z", "stale": False}}},
@@ -76,11 +83,13 @@ def detect(monkeypatch: pytest.MonkeyPatch) -> Any:
 BASE = raw_result()["watchlist_snapshot"]
 
 R71_CHANGES = {
-    "action_now": ({"decision_card__action_now": "wait"}, "action_now: buy -> wait"),
+    "new_money_action": ({"decision_card__new_money__action": "wait"}, "new_money_action: buy -> wait"),
+    "if_held_action": ({"decision_card__if_held__action": "reduce"}, "if_held_action: hold -> reduce"),
+    "long_term_action": ({"decision_card__long_term__new_money__action": "wait"}, "long_term_action: buy -> wait"),
     "gate_added": ({"decision_card__hard_gates__blocking": [{"id": "earnings_blackout"}, {"id": "falling_knife"}]},
                    "+hard_gate: falling_knife"),
     "gate_removed": ({"decision_card__hard_gates__blocking": []}, "-hard_gate: earnings_blackout"),
-    "zone": ({"diagnostics__pre_gate_policy__inputs__zone": "hold_neutral"}, "zone: accumulate -> hold_neutral"),
+    "price_zone": ({"action_zones__price_zone": "near_52w_high"}, "price_zone: below_sma200 -> near_52w_high"),
     "horizon_fit": ({"verdict__horizon_fit__mid_term": "poor"}, "mid_term_fit: good -> poor"),
     "signal_added": ({"signals__bullish": ["above_sma200", "golden_cross", "insider_buying"]}, "+bullish: insider_buying"),
     "signal_removed": ({"signals__bearish": []}, "-bearish: high_put_call_ratio"),
@@ -254,6 +263,7 @@ class TestDiffEdges:
 
 # Fields only a 2.0.0 snapshot carries, and the legacy signal lists, which are ambiguous.
 NEW_FIELDS = ["as_of_kind", "price_as_of", "price_source", "price_stale", "support_currency", "support_instrument"]
+V3_FIELDS = ["if_held_action", "long_term_action", "new_money_action", "price_zone"]  # 3.0.0 only
 LEGACY_SIGNALS = ["bearish_signals", "bullish_signals"]
 
 
@@ -265,14 +275,14 @@ class TestR72LegacySnapshots:
 
         assert response["material_changes"] == []
         assert response["not_comparable"] == sorted(
-            [*LEGACY_SIGNALS, "long_term_fit", "mid_term_fit", "zone", *NEW_FIELDS])
+            [*LEGACY_SIGNALS, "long_term_fit", "mid_term_fit", *NEW_FIELDS, *V3_FIELDS])
         assert response["hash_changed"] is None
 
     async def test_an_old_enriched_snapshot_has_no_phantom_changes(self, detect: Any) -> None:
         response = await detect(legacy_enriched_snapshot(as_0609fde(raw_result())))
 
         assert response["material_changes"] == []
-        assert response["not_comparable"] == sorted([*LEGACY_SIGNALS, *NEW_FIELDS])
+        assert response["not_comparable"] == sorted([*LEGACY_SIGNALS, *NEW_FIELDS, *V3_FIELDS])
 
     async def test_a_failed_source_tool_does_not_turn_old_signal_lists_into_alerts(self, detect: Any) -> None:
         failed = {"tool_failures": [{"tool": "ownership_analysis", "error": "data_unavailable"}],
@@ -291,26 +301,39 @@ class TestR72LegacySnapshots:
         response = await detect({**old, "snapshot_version": "1.0.0"})
 
         assert response["material_changes"] == []
-        assert {"decision_action_now", "hard_gate_ids"} <= set(response["not_comparable"])
+        assert {"hard_gate_ids", "new_money_action"} <= set(response["not_comparable"])
 
-    async def test_real_changes_still_show_against_an_old_snapshot(self, detect: Any) -> None:
-        response = await detect(legacy_compact_snapshot(as_0609fde(raw_result())), decision_card__action_now="avoid")
-        assert response["material_changes"] == ["action_now: buy -> avoid"]
+    async def test_an_action_only_change_against_an_old_snapshot_is_disclosed_not_alerted(self, detect: Any) -> None:
+        """SN-R17 (PD D-10): 1.1.0 -> 3.0.0, new money buy -> avoid alone: no material change, and the summary
+        names new_money_action as not compared (v0.2.0 alerted "action_now: buy -> avoid")."""
+        response = await detect(legacy_compact_snapshot(as_0609fde(raw_result())),
+                                decision_card__new_money__action="avoid", decision_card__action_now="avoid")
+        assert response["material_changes"] == []
+        assert response["summary"].startswith("ACME: No material changes detected. Not compared with the previous "
+                                              "1.1.0 snapshot: ")
+        assert "new_money_action" in response["summary"]
+
+    async def test_a_gate_change_still_alerts_against_an_old_snapshot(self, detect: Any) -> None:
+        response = await detect(legacy_compact_snapshot(as_0609fde(raw_result())),
+                                decision_card__hard_gates__blocking=[{"id": "earnings_blackout"}, {"id": "falling_knife"}])
+        assert response["material_changes"] == ["+hard_gate: falling_knife"]
 
 
 class TestR73AbsentVersusNull:
     async def test_a_null_that_becomes_a_value_is_a_change(self, detect: Any) -> None:
-        previous = {**copy.deepcopy(BASE), "zone": None}
+        previous = {**copy.deepcopy(BASE), "price_zone": None}
         response = await detect(previous)
-        assert "zone: None -> accumulate" in response["material_changes"]
+        assert "price_zone: None -> below_sma200" in response["material_changes"]
 
-    async def test_an_absent_field_is_not_comparable(self, detect: Any) -> None:
-        previous = copy.deepcopy(BASE)
-        del previous["zone"]
-        response = await detect(previous)
+    async def test_an_absent_field_of_an_older_snapshot_is_not_comparable(self, detect: Any) -> None:
+        """R7.3, narrowed to older versions (annex SN §3): a 2.0.0 previous without tilt is not compared on
+        tilt; a 3.0.0 previous without a key is invalid (SN-R3)."""
+        previous = {**copy.deepcopy(BASE), "snapshot_version": "2.0.0"}
+        del previous["tilt"]
+        response = await detect(previous, verdict__tilt="bearish")
         assert response["material_changes"] == []
-        assert response["not_comparable"] == ["zone"]
-        assert "action_zone" not in response["changes"]
+        assert response["not_comparable"] == sorted(["tilt", *V3_FIELDS])
+        assert "tilt" not in response["changes"]
 
     async def test_a_null_signal_list_that_becomes_known_is_one_change_not_new_signals(self, detect: Any) -> None:
         previous = {**copy.deepcopy(BASE), "bullish_signals": None}
@@ -475,15 +498,17 @@ class TestOddSections:
     )
     def test_a_section_that_is_not_a_dict_reads_as_empty(self, changes: dict[str, Any]) -> None:
         snapshot = raw_result(**changes)["watchlist_snapshot"]
-        assert snapshot["snapshot_version"] == "2.0.0"
+        assert snapshot["snapshot_version"] == SNAPSHOT_VERSION
 
 
 class TestOneSnapshot:
     def test_the_snapshot_is_versioned_and_complete(self) -> None:
         snapshot = BASE
-        assert snapshot["snapshot_version"] == SNAPSHOT_VERSION == "2.0.0"
-        assert (snapshot["zone"], snapshot["mid_term_fit"], snapshot["long_term_fit"]) == (
-            "accumulate", "good", "fair")
+        assert snapshot["snapshot_version"] == SNAPSHOT_VERSION == "3.0.0"
+        assert set(snapshot) == SNAPSHOT_FIELDS["3.0.0"]
+        assert (snapshot["new_money_action"], snapshot["if_held_action"], snapshot["long_term_action"],
+                snapshot["price_zone"], snapshot["mid_term_fit"], snapshot["long_term_fit"]) == (
+            "buy", "hold", "buy", "below_sma200", "good", "fair")
         assert (snapshot["support_instrument"], snapshot["support_currency"]) == ("supported", "supported")
         assert (snapshot["price_source"], snapshot["price_as_of"], snapshot["as_of_kind"], snapshot["price_stale"]) == (
             "daily_close", "2026-10-09", "session_close", False)
@@ -518,4 +543,4 @@ class TestOneSnapshot:
         snapshots = [project_analyze_result(result, detail)["watchlist_snapshot"]
                      for detail in ("decision", "standard", "full")]
         assert snapshots[0] == snapshots[1] == snapshots[2] == result["watchlist_snapshot"]
-        assert snapshots[0]["snapshot_version"] == "2.0.0" and "zone" in snapshots[0]
+        assert snapshots[0]["snapshot_version"] == "3.0.0" and "price_zone" in snapshots[0]

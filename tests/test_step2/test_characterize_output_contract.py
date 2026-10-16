@@ -197,13 +197,14 @@ class TestEntrySizingUnderNonEntryActions:
         assert ("current_zone" in result["action_zones"], result["action_zones"]["price_zone"]) == (
             False, "below_sma200")
 
-    async def test_unsupported_etf_snapshot_zone_is_accumulate(self) -> None:
-        """OC-CH4 (snapshot half): S7's watchlist_snapshot.zone is accumulate.
-        Flipped by WP2.4 (snapshot 3.0.0 replaces zone with price_zone; until then it reads the
-        pre-gate zone, plan §0 #22)."""
-        snapshot = (await dm.run("S7_etf_below_sma200"))["watchlist_snapshot"]
+    async def test_unsupported_etf_snapshot_carries_the_neutral_price_zone(self) -> None:
+        """OC-CH4 (snapshot half, flipped by WP2.4): S7's watchlist_snapshot carries price_zone below_sma200 (the
+        action_zones diagnostic) and no zone code. G from WP2.4 (PD D-9, D-10; plan §8, §0 #10)."""
+        result = await dm.run("S7_etf_below_sma200")
+        snapshot = result["watchlist_snapshot"]
 
-        assert snapshot["zone"] == "accumulate"
+        assert (snapshot["price_zone"], "zone" in snapshot) == (result["action_zones"]["price_zone"], False)
+        assert snapshot["price_zone"] == "below_sma200"
 
 
 class TestConditionsUnderAdmittingActions:
@@ -234,13 +235,13 @@ class TestSizingWordsInCodesAndText:
             assert ("horizon_fit" in card, card["long_term"]["new_money"]["action"]) == (False, "wait"), tier
 
     @pytest.mark.parametrize("name", HEADWIND_ROWS)
-    async def test_headwind_rows_put_a_sizing_code_in_the_snapshot(self, name: str) -> None:
-        """OC-CH6 (snapshot half): C1-C3 carry hold_size_conservatively in watchlist_snapshot.action_long_term.
-        Flipped by WP2.4 (snapshot 3.0.0 replaces it with long_term_action; until then it reads the
-        pre-gate code, plan §0 #22)."""
+    async def test_headwind_rows_put_no_sizing_code_in_the_snapshot(self, name: str) -> None:
+        """OC-CH6 (snapshot half, flipped by WP2.4): C1-C3 record long_term_action wait (long_term.new_money.action,
+        plan §0 #8, #18), no action_long_term and no sizing word in any snapshot value. G from WP2.4 (PD D-9)."""
         snapshot = (await dm.run(name))["watchlist_snapshot"]
 
-        assert snapshot["action_long_term"] == "hold_size_conservatively"
+        assert (snapshot["long_term_action"], "action_long_term" in snapshot) == ("wait", False)
+        assert not [v for v in snapshot.values() if isinstance(v, str) and re.search(r"(?i)siz", v)]
 
     def test_mixed_fundamentals_reason_carries_no_sizing_advice(self) -> None:
         """OC-CH6 (flipped by WP2.3): the verdict's long-term reason for mixed fundamentals names the state, not a

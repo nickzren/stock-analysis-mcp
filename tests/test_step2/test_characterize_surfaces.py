@@ -308,11 +308,12 @@ class TestSavedRecords:
     async def test_the_snapshot_and_the_scan_state_disagree_for_one_symbol(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
-        """SC-CH16: for ACME on the S-C8 chart and business, analyze's watchlist_snapshot saves
-        decision_action_now=avoid [thesis_broken] (new_money, WP2.2: D-1c) while the scan state saves the trade
-        card's trade_now; the snapshot names no horizon. CH: flipped by WP2.4 (snapshot 3.0.0 replaces it with
-        new_money_action; docs label the snapshot mid-term and the scan state swing, with still no snapshot
-        horizon field, plan §8)."""
+        """SC-CH16 (flipped by WP2.4): for ACME on the S-C8 chart and business, analyze's 3.0.0 watchlist_snapshot
+        saves the mid-term new_money_action avoid, if_held_action review_exit and long_term_action avoid
+        [thesis_broken] (WP2.2: D-1c) while the scan state saves the swing card's trade_now; the snapshot still
+        names no horizon (plan §8). The docs clause (the snapshot is mid-term and long-term, the scan state swing)
+        is tests/test_docs.py::test_readme_and_agents_carry_the_decision_tables_and_horizons and the
+        detect_changes / scan_watchlist descriptions (S-C16.d). G from WP2.4."""
         snapshot = (await dm.run(PULLBACK_POOR_BUSINESS))["watchlist_snapshot"]
         card = pullback_card()
 
@@ -326,7 +327,9 @@ class TestSavedRecords:
         state, warnings = load_scan_state(tmp_path)
 
         assert (scan["full_cards"], warnings) == (1, [])
-        assert (snapshot["symbol"], snapshot["decision_action_now"], snapshot["hard_gate_ids"]) == (
-            "ACME", "avoid", ["thesis_broken"])
+        assert (snapshot["symbol"], snapshot["new_money_action"], snapshot["if_held_action"],
+                snapshot["long_term_action"], snapshot["hard_gate_ids"]) == (
+            "ACME", "avoid", "review_exit", "avoid", ["thesis_broken"])
+        assert "decision_action_now" not in snapshot
         assert state["symbols"]["ACME"]["action"] == "trade_now"
         assert "horizon" not in snapshot

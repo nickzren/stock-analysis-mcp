@@ -448,7 +448,7 @@ def test_the_starter_override_needs_a_starter() -> None:
 
 @pytest.mark.parametrize("name", ROWS)
 async def test_price_zone_is_the_uncapped_classification(name: str) -> None:
-    """OC-RF6 (non-snapshot): action_zones.price_zone is in the closed set and equals the uncapped zone
+    """OC-RF6 (snapshot clause: the §0 #22 pin, WP2.4): action_zones.price_zone is in the closed set and equals the uncapped zone
     classification of the run's own price, levels and SMAs; no zone field remains in action_zones or the card at
     any tier. PD D-9."""
     result = await dm.run(name)

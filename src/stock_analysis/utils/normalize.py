@@ -26,12 +26,41 @@ from datetime import datetime
 from typing import Any
 
 # Snapshot format version - bump when normalization logic changes.
-# 2.0.0 (WP7): one snapshot for analyze and detect_changes (enriched, decision,
-# support and price-provenance fields); unknown lists stay null; the hash covers
-# the full set except fetch-derived fields.
-SNAPSHOT_VERSION = "2.0.0"
-# Versions detect_changes accepts as a previous snapshot.
-COMPATIBLE_SNAPSHOT_VERSIONS = frozenset({"1.0.0", "1.1.0", SNAPSHOT_VERSION})
+# 3.0.0 (Step 2, plan §8): the canonical decision (new_money / if_held / long_term actions) and the neutral
+# price_zone replace the pre-gate action codes, decision_action_now and zone; hard_gate_ids lists every fired gate.
+SNAPSHOT_VERSION = "3.0.0"
+# Each version's field set, frozen: detect_changes validates and compares a previous snapshot on its own
+# version's fields and ignores any other key. 1.0.0 lists the enriched copy's fields (zone, fits, signals).
+SNAPSHOT_FIELDS: dict[str, frozenset[str]] = {
+    "1.0.0": frozenset({
+        "snapshot_version", "symbol", "snapshot_hash", "snapshot_as_of_date", "price", "market_cap", "sector",
+        "tilt", "confidence", "score", "action_mid_term", "action_long_term", "valuation_gate", "is_unprofitable",
+        "risk_regime", "volatility_ann", "next_catalyst", "zone", "mid_term_fit", "long_term_fit",
+        "bullish_signals", "bearish_signals",
+    }),
+    "1.1.0": frozenset({
+        "snapshot_version", "symbol", "snapshot_hash", "snapshot_as_of_date", "price", "market_cap", "sector",
+        "tilt", "confidence", "score", "action_mid_term", "action_long_term", "valuation_gate", "is_unprofitable",
+        "risk_regime", "volatility_ann", "next_catalyst", "zone", "mid_term_fit", "long_term_fit",
+        "bullish_signals", "bearish_signals", "decision_action_now", "hard_gate_ids",
+    }),
+    "2.0.0": frozenset({
+        "snapshot_version", "symbol", "snapshot_hash", "snapshot_as_of_date", "price", "market_cap", "sector",
+        "tilt", "confidence", "score", "action_mid_term", "action_long_term", "valuation_gate", "is_unprofitable",
+        "risk_regime", "volatility_ann", "next_catalyst", "zone", "mid_term_fit", "long_term_fit",
+        "bullish_signals", "bearish_signals", "decision_action_now", "hard_gate_ids", "support_instrument",
+        "support_currency", "price_source", "price_as_of", "as_of_kind", "price_stale",
+    }),
+    "3.0.0": frozenset({
+        "snapshot_version", "symbol", "snapshot_hash", "snapshot_as_of_date", "price", "market_cap", "sector",
+        "tilt", "confidence", "score", "new_money_action", "if_held_action", "long_term_action", "valuation_gate",
+        "is_unprofitable", "risk_regime", "volatility_ann", "next_catalyst", "price_zone", "mid_term_fit",
+        "long_term_fit", "bullish_signals", "bearish_signals", "hard_gate_ids", "support_instrument",
+        "support_currency", "price_source", "price_as_of", "as_of_kind", "price_stale",
+    }),
+}
+# Versions detect_changes accepts as a previous snapshot (a literal: never derived from SNAPSHOT_VERSION).
+COMPATIBLE_SNAPSHOT_VERSIONS = frozenset({"1.0.0", "1.1.0", "2.0.0", "3.0.0"})
 # Required in every snapshot; every other field is optional (older versions lack some).
 SNAPSHOT_IDENTITY_KEYS = ("snapshot_version", "symbol")
 # Left out of snapshot_hash because they move with the clock, not with market data:
@@ -487,8 +516,9 @@ def build_watchlist_snapshot(raw: dict[str, Any]) -> dict[str, Any]:
     - snapshot_version: Format version for compatibility checking
     - snapshot_hash: SHA-256 of the canonical snapshot, without fetch-derived fields
     - snapshot_as_of_date: Latest fetch date across all components (time anchor)
-    - decision fields (actions, gates, zone, horizon fit, signals, support,
-      price provenance); a list that is unknown is null, a known-empty list is []
+    - decision fields (the canonical actions, every fired gate, price_zone, horizon
+      fit, signals, support, price provenance); a list that is unknown is null, a
+      known-empty list is []
 
     Args:
         raw: Raw analyze_stock output
@@ -501,13 +531,13 @@ def build_watchlist_snapshot(raw: dict[str, Any]) -> dict[str, Any]:
     # Extract key fields for watchlist
     summary = _section(normalized.get("summary"))
     verdict = _section(normalized.get("verdict"))
-    # Interim 2.0.0 sources until snapshot 3.0.0 (plan §0 #22, §7a): the pre-gate codes and zone from
-    # diagnostics.pre_gate_policy, the valuation fields from the assessment (values unchanged, OC-G6).
-    policy = _section(_section(normalized.get("diagnostics")).get("pre_gate_policy"))
-    valuation = _section(_section(normalized.get("action_zones")).get("valuation_assessment"))
+    # The valuation fields come from the assessment (values unchanged, OC-G6).
+    zones = _section(normalized.get("action_zones"))
+    valuation = _section(zones.get("valuation_assessment"))
     events = _section(normalized.get("events_summary"))
     risk = _section(normalized.get("risk_summary"))
     decision_card = _section(normalized.get("decision_card"))
+    long_term = _section(_section(decision_card.get("long_term")).get("new_money"))
     horizon_fit = _section(verdict.get("horizon_fit"))
     support = _section(summary.get("support"))
     provenance = _section(summary.get("price_provenance"))
@@ -536,15 +566,16 @@ def build_watchlist_snapshot(raw: dict[str, Any]) -> dict[str, Any]:
         "score": verdict.get("score"),
         "mid_term_fit": horizon_fit.get("mid_term"),
         "long_term_fit": horizon_fit.get("long_term"),
-        # Pre-gate candidate codes (diagnostics; replaced by the canonical actions in 3.0.0)
-        "action_mid_term": policy.get("mid_term"),
-        "action_long_term": policy.get("long_term"),
+        # The canonical decision (plan §2, §8): mid-term new money, holder (mid-term), long-term new money
+        "new_money_action": _section(decision_card.get("new_money")).get("action"),
+        "if_held_action": _section(decision_card.get("if_held")).get("action"),
+        "long_term_action": long_term.get("action"),
         "valuation_gate": valuation.get("gate"),
         "is_unprofitable": valuation.get("is_unprofitable") or None,
-        # Decision card (compact action surface — diffs surface action / gate changes)
-        "decision_action_now": decision_card.get("action_now"),
+        # Every fired gate (decision_card.hard_gates.blocking), not only those that set an action
         "hard_gate_ids": _hard_gate_ids(raw.get("decision_card")),
-        "zone": _section(policy.get("inputs")).get("zone"),
+        # The neutral, uncapped price-zone diagnostic (plan §7b)
+        "price_zone": zones.get("price_zone"),
         "bullish_signals": _string_list(raw_signals.get("bullish")),
         "bearish_signals": _string_list(raw_signals.get("bearish")),
         # Key risk

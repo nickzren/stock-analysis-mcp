@@ -219,7 +219,10 @@ class TestBuildWatchlistSnapshot:
                 "score": 0.75,
             },
             "diagnostics": {"pre_gate_policy": {"mid_term": "hold_or_add", "long_term": "accumulate"}},
-            "action_zones": {"valuation_assessment": {"gate": "neutral", "is_unprofitable": None}},
+            "decision_card": {"new_money": {"action": "starter"}, "if_held": {"action": "hold"},
+                              "long_term": {"new_money": {"action": "buy"}}},
+            "action_zones": {"price_zone": "above_sma50",
+                             "valuation_assessment": {"gate": "neutral", "is_unprofitable": None}},
             "risk_summary": {
                 "risk_regime": {"classification": "medium"},
                 "annualized_volatility": 0.25,
@@ -246,8 +249,10 @@ class TestBuildWatchlistSnapshot:
         assert snapshot["tilt"] == "bullish"
         assert snapshot["confidence"] == "high"
         assert snapshot["score"] == 0.75
-        assert snapshot["action_mid_term"] == "hold_or_add"
-        assert snapshot["action_long_term"] == "accumulate"
+        assert (snapshot["new_money_action"], snapshot["if_held_action"], snapshot["long_term_action"]) == (
+            "starter", "hold", "buy")
+        assert snapshot["price_zone"] == "above_sma50"
+        assert not {"hold_or_add", "accumulate"} & {v for v in snapshot.values() if isinstance(v, str)}
         assert snapshot["valuation_gate"] == "neutral"
         assert snapshot["risk_regime"] == "medium"
         assert snapshot["volatility_ann"] == 0.25
@@ -289,6 +294,7 @@ class TestBuildWatchlistSnapshot:
             "symbol": "TEST",
             "decision_card": {
                 "action_now": "wait_for_data",
+                "new_money": {"action": "wait_for_data"},
                 "hard_gates": {
                     "any_blocking": True,
                     "blocking": [
@@ -299,7 +305,7 @@ class TestBuildWatchlistSnapshot:
             },
         }
         snapshot = build_watchlist_snapshot(raw)
-        assert snapshot["decision_action_now"] == "wait_for_data"
+        assert snapshot["new_money_action"] == "wait_for_data"
         assert snapshot["hard_gate_ids"] == ["earnings_blackout", "falling_knife"]
 
     def test_decision_card_change_changes_hash(self):
@@ -316,6 +322,7 @@ class TestBuildWatchlistSnapshot:
             "symbol": "TEST",
             "decision_card": {
                 "action_now": "wait_for_data",
+                "new_money": {"action": "wait_for_data"},
                 "hard_gates": {
                     "any_blocking": True,
                     "blocking": [{"id": "earnings_blackout", "reason": "x"}],
@@ -331,7 +338,8 @@ class TestBuildWatchlistSnapshot:
         sets the fields to None: the gates are unknown, not known-empty (WP7)."""
         raw = {"symbol": "TEST"}
         snapshot = build_watchlist_snapshot(raw)
-        assert snapshot["decision_action_now"] is None
+        assert (snapshot["new_money_action"], snapshot["if_held_action"], snapshot["long_term_action"]) == (
+            None, None, None)
         assert snapshot["hard_gate_ids"] is None
 
     def test_includes_snapshot_hash(self):

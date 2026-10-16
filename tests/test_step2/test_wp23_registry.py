@@ -2,7 +2,7 @@
 (§7c); BL-E3 (why, exit_triggers, data_flags); the restated freshness invariant; FR-R-F12; RA.11.
 
 Annex: docs/plans/step2-v2-research/output_contract.md §1-§2, §10 "Corrected proposal" as amended by plan §0
-(#8 long-term vocabulary, #22 interim snapshot: watchlist_snapshot is excluded until WP2.4). The registry and the
+(#8 long-term vocabulary, #22: WP2.4 registers watchlist_snapshot 3.0.0). The registry and the
 lints live in tests/support/output_contract.py.
 """
 
@@ -52,7 +52,7 @@ EXTRA = {"error": error_result, "R13": lambda: dm.run(fr.scenario(fr.TRUTH_TABLE
 
 def test_the_registry_is_well_formed() -> None:
     """G-REG1: unique globs, known classes and tiers, a horizon on every A and S row (optional on C), P only as
-    the full-tier diagnostics.**, no T row under decision_card, and the WP2.4 snapshot exclusion. G."""
+    the full-tier diagnostics.**, no T row under decision_card, and no excluded root (WP2.4). G."""
     globs = [f.glob for f in oc.FIELD_REGISTRY]
     assert len(globs) == len(set(globs))
     for f in oc.FIELD_REGISTRY:
@@ -62,7 +62,7 @@ def test_the_registry_is_well_formed() -> None:
     assert [f.glob for f in oc.FIELD_REGISTRY if f.cls == oc.P] == ["diagnostics.**"]
     assert all(f.tiers == oc.FULL for f in oc.FIELD_REGISTRY if f.cls == oc.P)
     assert not [f for f in oc.FIELD_REGISTRY if f.cls == oc.T and f.glob.startswith("decision_card")]
-    assert oc.INTERIM_EXCLUDED_ROOTS == ("watchlist_snapshot",)
+    assert not hasattr(oc, "INTERIM_EXCLUDED_ROOTS")  # WP2.4 registers watchlist_snapshot (plan §0 #22)
 
 
 def test_leaves_and_globs() -> None:
@@ -104,7 +104,7 @@ def test_the_code_sets() -> None:
 
 @pytest.mark.parametrize("name", [*dm.SCENARIOS, *EXTRA])
 async def test_every_leaf_matches_exactly_one_row(name: str) -> None:
-    """OC-RF1 (non-snapshot paths, plan §0 #22): every leaf of every matrix scenario (V1's vendor subtrees
+    """OC-RF1 (the snapshot too from WP2.4, plan §0 #22): every leaf of every matrix scenario (V1's vendor subtrees
     included), an error result and a failed-technicals run (R13) matches exactly one registry row, at a tier the
     row allows. RF."""
     result = await (EXTRA[name]() if name in EXTRA else dm.run(name))
@@ -203,7 +203,7 @@ def test_dip_text_is_diagnostic() -> None:
 
 @pytest.mark.parametrize("name", BLOCKING_ROWS)
 async def test_no_entry_wording_under_a_freshness_gate(name: str) -> None:
-    """FI (plan §10, non-snapshot paths): when stale_data or freshness_unverifiable fires, no A, S, N or C field at
+    """FI (plan §10; the snapshot too from WP2.4): when stale_data or freshness_unverifiable fires, no A, S, N or C field at
     any tier carries an entry code or advice phrase (S: no value at all); P and T are exempt. RF."""
     result = await dm.run(fr.scenario(fr.TRUTH_TABLE[name], name))
     assert {b["id"] for b in result["decision_card"]["new_money"]["blocked_by"]} & set(FRESHNESS_IDS)

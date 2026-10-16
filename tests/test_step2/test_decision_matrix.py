@@ -16,6 +16,7 @@ import pytest
 
 from stock_analysis.tools.analyze.gates import GATES, THESIS_CLEARS_WHEN
 from stock_analysis.tools.diff_analysis import validate_previous_snapshot
+from stock_analysis.utils.normalize import SNAPSHOT_FIELDS
 from tests.support import decision_matrix as dm
 
 BEFORE = json.loads((dm.FIXTURE_DIR / "before.json").read_text())
@@ -27,7 +28,7 @@ AFTER_ONLY = {"A7_near_52w_high_bullish", "H_burner_runway_2q",  # WP2.2: D-4 an
               "T1_near_52w_high", "T1_crash_risk"}
 
 # The cells each WP changes (before -> after), over before.json's paths; snapshot_hash follows the
-# snapshot fields (DM-CH2). WP2.2: D-2 mapping, D-5/D-5a combination and outcomes, D-1c thesis cap, D-3 core
+# snapshot fields (DM-CH2 until WP2.4). WP2.2: D-2 mapping, D-5/D-5a combination and outcomes, D-1c thesis cap, D-3 core
 # rule, and the knife override's removal (plan §1, B only).
 CORE_CHANGES = {
     **dict.fromkeys(["S1_hold_or_add_clean", "S2_buy_clean", "S3_plain_avoid", "T2_starter_weak_setup_quality",
@@ -164,7 +165,18 @@ def _wp23_cells(name: str) -> dict[str, Any]:
     }
 
 
-ROW_CHANGES: dict[str, dict[str, Any]] = {name: {**WP22_CHANGES.get(name, {}), **_wp23_cells(name)} for name in BEFORE}
+# WP2.4: snapshot 3.0.0 retires the 2.0.0 decision fields (plan §8); after.json's snapshot block carries the 3.0.0
+# fields instead (DM-RF1), so every retired cell ends at None.
+RETIRED_SNAPSHOT_FIELDS = ("action_mid_term", "action_long_term", "decision_action_now", "zone")
+
+
+def _wp24_cells(name: str) -> dict[str, Any]:
+    snapshot = BEFORE[name]["snapshot"]
+    return {f"snapshot.{k}": (snapshot[k], None) for k in RETIRED_SNAPSHOT_FIELDS if snapshot[k] is not None}
+
+
+ROW_CHANGES: dict[str, dict[str, Any]] = {
+    name: {**WP22_CHANGES.get(name, {}), **_wp23_cells(name), **_wp24_cells(name)} for name in BEFORE}
 BASELINE_SHA256 = "167642b05e592bf77317f45025fc563c3ed203e5a86dedc8b5e8df4a569f7e4d"
 
 
@@ -215,6 +227,7 @@ def one_row_build(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         return built["table"], built["snapshots"]
 
     monkeypatch.setattr(dm, "build", build)
+    monkeypatch.setattr(dm, "SNAPSHOT_VERSION", "2.0.0")  # the recorded rows are 2.0.0; the code is 3.0.0 (DM-G4)
     return built
 
 
@@ -239,21 +252,30 @@ class TestBeforeTable:
         for name, row in table.items():
             assert _normalized(row) == AFTER[name], name
 
-    async def test_the_recorded_snapshots_match_the_code(self) -> None:
-        """DM-CH2: each baseline scenario's watchlist_snapshot equals its recorded 2.0.0 fixture except for the
-        fields SNAPSHOT_CHANGES lists (decision_action_now follows new_money, hard_gate_ids gains thesis_broken,
-        B's action_mid_term loses the knife override, WP2.2), and the hash moves exactly on those rows.
-        CH: retired by WP2.4 (snapshot 3.0.0). The 2.0.0 fixtures stay as recorded (DM-G6)."""
+    async def test_the_recorded_snapshots_keep_their_retained_fields(self) -> None:
+        """DM-G10 (replaces DM-CH2, retired by WP2.4): each baseline scenario's 3.0.0 snapshot has the 3.0.0 field
+        set, and every field it keeps from 2.0.0 equals the recorded fixture except hard_gate_ids on the WP2.2
+        thesis rows (GATE_CHANGES). G from WP2.4; the 2.0.0 fixtures stay as recorded (DM-G6)."""
         _, snapshots = await dm.build()
         recorded = {p.stem: json.loads(p.read_text()) for p in dm.SNAPSHOT_DIR.glob("*.json")}
+        retained = (SNAPSHOT_FIELDS["2.0.0"] & SNAPSHOT_FIELDS["3.0.0"]) - {"snapshot_version", "snapshot_hash"}
 
         assert set(recorded) == set(BEFORE) <= set(snapshots)
         for name, old in recorded.items():
             new = _normalized(snapshots[name])
-            changed = {k: (old[k], new[k]) for k in old if k != "snapshot_hash" and new[k] != old[k]}
-            assert set(new) == set(old), name
-            assert changed == {k: tuple(v) for k, v in SNAPSHOT_CHANGES.get(name, {}).items()}, name
-            assert (new["snapshot_hash"] != old["snapshot_hash"]) is bool(changed), name
+            changed = {k: (old[k], new[k]) for k in retained if new[k] != old[k]}
+            assert set(new) == SNAPSHOT_FIELDS["3.0.0"], name
+            assert changed == ({"hard_gate_ids": GATE_CHANGES[name]} if name in GATE_CHANGES else {}), name
+
+    def test_the_after_table_snapshot_follows_the_decision(self) -> None:
+        """DM-RF1 (SN-R8 / OC-RF12, matrix clause): in after.json every row's snapshot block is its decision:
+        new_money, if_held and long-term actions, the sorted fired gates and price_zone (plan §8). RF (WP2.4)."""
+        for name, row in AFTER.items():
+            decision = row["decision"]
+            assert row["snapshot"] | {"snapshot_hash": None} == {
+                "new_money_action": decision["new_money"]["action"], "if_held_action": decision["if_held"]["action"],
+                "long_term_action": decision["long_term"]["action"], "hard_gate_ids": sorted(row["hard_gates"]),
+                "price_zone": row["price_zone"], "snapshot_hash": None}, name
 
     def test_the_after_table_changes_only_the_listed_cells(self) -> None:
         """DM-CH3: after.json differs from before.json, over before.json's paths, exactly in ROW_CHANGES;
@@ -290,14 +312,13 @@ class TestMatrixGuards:
         snapshot = json.loads(path.read_text())
 
         assert snapshot["snapshot_version"] == "2.0.0"
+        assert set(snapshot) == SNAPSHOT_FIELDS["2.0.0"]  # the frozen F20 literal is the genuine 0609fde field set
         assert validate_previous_snapshot(snapshot, "ACME") == []
 
-    def test_the_generator_refuses_to_record_from_another_snapshot_version(
-        self, monkeypatch: pytest.MonkeyPatch, one_row_build: dict[str, Any], tmp_path: Path
-    ) -> None:
-        """DM-G4: snapshots_2_0_0/ can only be written by 2.0.0 code. Holds throughout Step 2."""
-        monkeypatch.setattr(dm, "SNAPSHOT_VERSION", "3.0.0")
-
+    def test_the_generator_refuses_to_record_from_another_snapshot_version(self, tmp_path: Path) -> None:
+        """DM-G4: snapshots_2_0_0/ can only be written by 2.0.0 code; from WP2.4 the code is 3.0.0, so --baseline
+        always refuses before building anything. Holds throughout Step 2."""
+        assert dm.SNAPSHOT_VERSION == "3.0.0"
         with pytest.raises(SystemExit, match="^refusing to record 2.0.0 snapshots from SNAPSHOT_VERSION 3.0.0$"):
             dm.record_baseline(tmp_path)
         assert list(tmp_path.iterdir()) == []

@@ -415,24 +415,29 @@ async def detect_changes(
     """
     Detect material changes for a stock since a previous snapshot.
 
-    Runs fresh analysis and diffs its watchlist_snapshot (the same at every
-    analyze detail level) against previous_snapshot. Material changes: price
-    moves >5%, score changes >0.10, and any change in action, hard gates, zone,
-    horizon fit, tilt, confidence, risk regime, valuation gate, support or a
-    switch to or from the fallback price source, or a new or removed signal.
-    Fields absent from an older snapshot are listed in not_comparable, never
-    reported as changes; fetch times, cache hits, ages and staleness never count.
+    Runs fresh analysis and diffs its watchlist_snapshot (snapshot 3.0.0, the same at
+    every analyze detail level) against previous_snapshot. Material changes: price moves
+    >5%, score changes >0.10, and any change in new_money_action, if_held_action or
+    long_term_action, hard gates (a freshness gate, stale_data or
+    freshness_unverifiable, firing or clearing included), price_zone, horizon fit, tilt,
+    confidence, risk regime, valuation gate, support, a switch to or from the fallback
+    price source, or a new or removed signal. Fetch times, cache hits, ages, price_stale
+    and the reassessment date never count. A 1.0.0, 1.1.0 or 2.0.0 snapshot is compared
+    on the fields it shares with 3.0.0: its actions and zone are not compared (listed in
+    not_comparable and named in the summary), and a version warning lists the retired
+    fields and the 3.0.0 rule changes that can move a gate.
 
     Args:
         symbol: Stock ticker symbol
         previous_snapshot: A previous analyze watchlist_snapshot or detect_changes
             current_snapshot for the same symbol (optional - if omitted, returns
-            current snapshot only). A snapshot for another symbol, or with a
-            missing key or wrong type, returns an invalid_snapshot error.
+            current snapshot only). A snapshot for another symbol, a 3.0.0
+            snapshot missing a field, or a wrong-typed field returns an
+            invalid_snapshot error; keys outside the snapshot's version are ignored.
 
     Returns:
-        JSON with changes, material_changes, not_comparable, hash_changed and a
-        narrative summary
+        JSON with changes, material_changes, not_comparable, hash_changed,
+        warnings and a narrative summary
     """
     result = await what_changed(symbol=symbol, previous_snapshot=previous_snapshot)
     return _json_response(result)

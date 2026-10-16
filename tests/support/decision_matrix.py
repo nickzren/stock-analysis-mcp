@@ -526,8 +526,8 @@ def digest(result: dict[str, Any]) -> dict[str, Any]:
         "mode_sizing": {m: [k for k in ("starter_position", "max_position") if (modes.get(m) or {}).get(k)]
                         for m in ("core", "balanced", "speculative")},
         "summary_size": re.findall(r"size ~[\d.]+(?:-[\d.]+)?%", result.get("executive_summary") or ""),
-        "snapshot": {k: snapshot.get(k) for k in ("action_mid_term", "action_long_term", "decision_action_now",
-                                                  "hard_gate_ids", "zone", "snapshot_hash")},
+        "snapshot": {k: snapshot.get(k) for k in ("new_money_action", "if_held_action", "long_term_action",
+                                                  "hard_gate_ids", "price_zone", "snapshot_hash")},
         "decision": {"new_money": _horizon(card.get("new_money")),
                      "if_held": {k: (card.get("if_held") or {}).get(k) for k in ("action", "add_allowed", "basis")},
                      "long_term": _horizon((card.get("long_term") or {}).get("new_money"))},

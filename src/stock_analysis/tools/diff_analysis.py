@@ -9,13 +9,13 @@ from stock_analysis.tools.analyze import analyze_stock
 from stock_analysis.utils.helpers import safe_float, safe_round
 from stock_analysis.utils.normalize import (
     COMPATIBLE_SNAPSHOT_VERSIONS,
+    SNAPSHOT_FIELDS,
     SNAPSHOT_IDENTITY_KEYS,
-    SNAPSHOT_VERSION,
 )
 from stock_analysis.utils.provenance import build_meta
 
-# Type of every optional snapshot field a previous snapshot may carry (null is
-# always allowed: it is a known null).
+# Type of every snapshot field of any accepted version (null is always allowed: it
+# is a known null). A previous snapshot is checked only on its own version's fields.
 _FIELD_TYPES: dict[str, str] = {
     "price": "number", "market_cap": "number", "score": "number", "volatility_ann": "number",
     "is_unprofitable": "bool", "price_stale": "bool",
@@ -24,7 +24,8 @@ _FIELD_TYPES: dict[str, str] = {
     **dict.fromkeys(
         ("sector", "tilt", "confidence", "mid_term_fit", "long_term_fit", "action_mid_term", "action_long_term",
          "valuation_gate", "decision_action_now", "zone", "risk_regime", "support_instrument", "support_currency",
-         "price_source", "price_as_of", "as_of_kind", "snapshot_as_of_date", "snapshot_hash"),
+         "price_source", "price_as_of", "as_of_kind", "snapshot_as_of_date", "snapshot_hash",
+         "new_money_action", "if_held_action", "long_term_action", "price_zone"),
         "string",
     ),
 }
@@ -51,8 +52,20 @@ _CATALYST_FIELD_TYPES = {
     "type": "string", "status": "string", "date": "string", "source": "string", "reason": "string",
     "days_until": "number", "window": "object",
 }
-# Fields a pre-2.0.0 snapshot filled ambiguously (see what_changed).
+# Fields a pre-2.0.0 snapshot filled ambiguously (see what_changed), and the versions that fill them reliably.
 _LEGACY_AMBIGUOUS_FIELDS = frozenset({"bullish_signals", "bearish_signals"})
+_RELIABLE_SIGNAL_VERSIONS = frozenset({"2.0.0", "3.0.0"})
+# A previous snapshot of these versions must carry every field of its version (null allowed): the producer
+# always writes them all, so a missing key is truncation, not an older format.
+_COMPLETE_VERSIONS = frozenset({"3.0.0"})
+# The 3.0.0 rules that can move a retained field (gate ids) against an older snapshot (plan §8, D-10).
+_RULE_CHANGES_3_0_0 = (
+    "new analyze gates earnings_unverifiable, stale_data, freshness_unverifiable, thesis_broken and near_52w_high",
+    "falling_knife and weak_liquidity give avoid, earnings gates give wait, liquidity_missing is a data gate",
+    "falling_knife is evaluated for every instrument, unsupported ones included",
+    "a missing beta alone no longer fires data_quality_critical",
+    "zone is replaced by price_zone",
+)
 # Thresholds are crossed only by more than float error (1.40 -> 1.47 is exactly 5%).
 _THRESHOLD_TOLERANCE = 1e-9
 # Price sources a snapshot moves between with the time of day alone (a fresh bar
@@ -64,10 +77,10 @@ _SCALAR_FIELDS = (
     ("tilt", "tilt", "tilt"),
     ("confidence", "confidence", "confidence"),
     ("risk_regime", "risk_regime", "risk_regime"),
-    ("zone", "action_zone", "zone"),
-    ("decision_action_now", "decision_action_now", "action_now"),
-    ("action_mid_term", "action_mid_term", "action_mid_term"),
-    ("action_long_term", "action_long_term", "action_long_term"),
+    ("price_zone", "price_zone", "price_zone"),
+    ("new_money_action", "new_money_action", "new_money_action"),
+    ("if_held_action", "if_held_action", "if_held_action"),
+    ("long_term_action", "long_term_action", "long_term_action"),
     ("valuation_gate", "valuation_gate", "valuation_gate"),
     ("support_instrument", "support_instrument", "support_instrument"),
     ("support_currency", "support_currency", "support_currency"),
@@ -84,14 +97,20 @@ _DIFFED_FIELDS = (
 
 def validate_previous_snapshot(snapshot: Any, symbol: str | None) -> list[str]:
     """Problems that make ``snapshot`` unusable as the previous snapshot for ``symbol``
-    (empty when it is usable; ``symbol`` None skips the symbol match). Unknown extra
-    fields are ignored."""
+    (empty when it is usable; ``symbol`` None skips the symbol match). Only the fields of
+    the snapshot's own version are checked; any other key is ignored. A 3.0.0 snapshot
+    must carry every 3.0.0 field."""
     if not isinstance(snapshot, dict):
         return ["previous_snapshot must be an object"]
     problems = [f"missing required key: {key}" for key in SNAPSHOT_IDENTITY_KEYS if key not in snapshot]
     version = snapshot.get("snapshot_version")
-    if "snapshot_version" in snapshot and not (isinstance(version, str) and version in COMPATIBLE_SNAPSHOT_VERSIONS):
+    accepted = version if isinstance(version, str) and version in COMPATIBLE_SNAPSHOT_VERSIONS else None
+    if "snapshot_version" in snapshot and accepted is None:
         problems.append(f"unsupported snapshot_version: {version!r}")
+    fields = frozenset(_FIELD_TYPES) if accepted is None else SNAPSHOT_FIELDS[accepted]
+    if accepted in _COMPLETE_VERSIONS:
+        problems += [f"missing required key: {key}"
+                     for key in sorted(fields - set(snapshot) - set(SNAPSHOT_IDENTITY_KEYS))]
     snapshot_symbol = snapshot.get("symbol")
     if isinstance(snapshot_symbol, str):
         if symbol is not None and snapshot_symbol.upper().strip() != symbol:
@@ -99,7 +118,7 @@ def validate_previous_snapshot(snapshot: Any, symbol: str | None) -> list[str]:
     elif "symbol" in snapshot:
         problems.append(f"symbol: expected string, got {type(snapshot_symbol).__name__}")
     for key, kind in _FIELD_TYPES.items():
-        value = snapshot.get(key)
+        value = snapshot.get(key) if key in fields else None
         if value is not None and not _TYPE_CHECKS[kind](value):
             problems.append(f"{key}: expected {kind.replace('_', ' ')}, got {type(value).__name__}")
     catalyst = snapshot.get("next_catalyst")
@@ -298,15 +317,15 @@ def _build_summary(
     if risk.get("changed"):
         parts.append(f"Risk regime changed to {risk['current']}.")
 
-    zone = changes.get("action_zone", {})
+    zone = changes.get("price_zone", {})
     if zone.get("changed"):
-        parts.append(f"Zone moved from {zone['previous']} to {zone['current']}.")
+        parts.append(f"Price zone moved from {zone['previous']} to {zone['current']}.")
 
-    action_now = changes.get("decision_action_now", {})
-    if action_now.get("changed"):
-        parts.append(
-            f"Action now: {action_now['previous']} -> {action_now['current']}."
-        )
+    for key, label in (("new_money_action", "New money"), ("if_held_action", "If held"),
+                       ("long_term_action", "Long term")):
+        action = changes.get(key, {})
+        if action.get("changed"):
+            parts.append(f"{label}: {action['previous']} -> {action['current']}.")
 
     hard_gates = changes.get("hard_gates", {})
     if hard_gates.get("new"):
@@ -411,19 +430,24 @@ async def what_changed(
 
     warnings: list[str] = []
 
-    prev_version = previous_snapshot.get("snapshot_version")
+    prev_version: str = previous_snapshot["snapshot_version"]  # validated: an accepted version
     curr_version = current_snapshot.get("snapshot_version")
+    # Only the previous version's own fields count (validation ignored the rest). Before
+    # 2.0.0 a signal list read [] (or partial) when a tool feeding it had failed, so a
+    # legacy list can't be told apart from a known one: treat it as absent. Gate ids
+    # stay: analyze always built the gate list.
+    fields = SNAPSHOT_FIELDS[prev_version]
+    if prev_version not in _RELIABLE_SIGNAL_VERSIONS:
+        fields -= _LEGACY_AMBIGUOUS_FIELDS
+    retired = sorted((set(previous_snapshot) & fields) - set(current_snapshot))
+    previous_snapshot = {k: v for k, v in previous_snapshot.items() if k in fields}
     if prev_version and curr_version and prev_version != curr_version:
-        warnings.append(
-            f"snapshot_version changed ({prev_version} -> {curr_version}); "
-            "field semantics may differ"
-        )
-
-    # Before 2.0.0 a signal list read [] (or partial) when a tool feeding it had
-    # failed, so a legacy list can't be told apart from a known one: treat it as
-    # absent. Gate ids stay: analyze always built the gate list.
-    if prev_version != SNAPSHOT_VERSION:
-        previous_snapshot = {k: v for k, v in previous_snapshot.items() if k not in _LEGACY_AMBIGUOUS_FIELDS}
+        warning = (f"snapshot_version changed ({prev_version} -> {curr_version}); field semantics may differ; "
+                   f"retired, not compared: {', '.join(retired) or 'none'}")
+        if curr_version == "3.0.0":
+            warning += ("; 3.0.0 rule changes (a gate change may come from these, not from the data): "
+                        + "; ".join(_RULE_CHANGES_3_0_0))
+        warnings.append(warning)
 
     # Only fields both snapshots carry are compared (an absent field is unknown);
     # the rest are listed as not_comparable.
@@ -460,6 +484,10 @@ async def what_changed(
             material_changes.append(f"{field}: {previous_snapshot[field]} -> {current_snapshot[field]}")
     if any(comparable(field) for field in _DIFFED_FIELDS):
         summary = _build_summary(normalized_symbol, changes, material_changes)
+        uncompared = [field for field in sorted(_DIFFED_FIELDS)
+                      if field in current_snapshot and field not in previous_snapshot]
+        if uncompared:
+            summary += f" Not compared with the previous {prev_version} snapshot: {', '.join(uncompared)}."
     else:
         summary = f"{normalized_symbol}: Nothing to compare: the previous snapshot has none of the diffed fields."
 

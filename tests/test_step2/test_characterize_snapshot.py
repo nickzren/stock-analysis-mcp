@@ -145,19 +145,16 @@ MUTATIONS: dict[str, tuple[dict[str, Any], str]] = {
                          "support_currency: supported -> unverified"),
     "price_source": ({"summary__price_provenance__price_source": "info_quote_fallback"},
                      "price_source: daily_close -> info_quote_fallback"),
-    # Action and zone rows: WP2.4 swaps them for new_money/if_held/long_term_action and price_zone. Until then
-    # they read the pre-gate candidate in diagnostics (WP2.3, plan §0 #22).
-    "zone": ({"diagnostics__pre_gate_policy__inputs__zone": "hold_neutral"}, "zone: accumulate -> hold_neutral"),
-    "decision_action_now": ({"decision_card__action_now": "wait"}, "action_now: buy -> wait"),
-    "action_mid_term": ({"diagnostics__pre_gate_policy__mid_term": "wait_for_entry"},
-                        "action_mid_term: buy -> wait_for_entry"),
-    "action_long_term": ({"diagnostics__pre_gate_policy__long_term": "hold"}, "action_long_term: accumulate -> hold"),
+    # The canonical decision and the neutral price zone (snapshot 3.0.0, plan §8).
+    "price_zone": ({"action_zones__price_zone": "near_52w_high"}, "price_zone: below_sma200 -> near_52w_high"),
+    "new_money_action": ({"decision_card__new_money__action": "wait"}, "new_money_action: buy -> wait"),
+    "if_held_action": ({"decision_card__if_held__action": "reduce"}, "if_held_action: hold -> reduce"),
+    "long_term_action": ({"decision_card__long_term__new_money__action": "wait"}, "long_term_action: buy -> wait"),
 }
 
 
 def test_every_diffed_field_has_a_mutation_case() -> None:
-    """SN-C3: guard, set(MUTATIONS) == set(_DIFFED_FIELDS).
-    CH, flipped by WP2.4: the snapshot 3.0.0 field set changes _DIFFED_FIELDS (plan §8)."""
+    """SN-C3: guard, set(MUTATIONS) == set(_DIFFED_FIELDS). G from WP2.4 (snapshot 3.0.0 field set, plan §8)."""
     assert set(MUTATIONS) == set(diff_module._DIFFED_FIELDS)
 
 
@@ -165,9 +162,9 @@ def test_every_diffed_field_has_a_mutation_case() -> None:
 async def test_each_diffed_field_change_through_the_raw_is_material_and_moves_the_hash(
     detect: Detect, field: str,
 ) -> None:
-    """SN-C3: each mutation, made in the analyze result, is one material line and moves the hash; the action and
-    zone rows mutate diagnostics.pre_gate_policy and valuation_gate the valuation assessment (WP2.3, plan §0 #22,
-    §7a). CH, flipped by WP2.4 (rows)."""
+    """SN-C3: each mutation, made in the analyze result, is one material line and moves the hash; the action rows
+    mutate the decision card, price_zone action_zones.price_zone and valuation_gate the valuation assessment
+    (plan §7a, §8). G from WP2.4 (rows flipped by snapshot 3.0.0)."""
     changes, line = MUTATIONS[field]
     clean = await dm.run(CLEAN)
 
@@ -357,7 +354,7 @@ OLD_SNAPSHOT_ALERTS: dict[str, tuple[dict[str, Any], str]] = {
 )
 async def test_a_real_change_still_alerts_against_an_old_snapshot(detect: Detect, kind: str, change: str) -> None:
     """SN-C7: a gate, tilt, price or score change alerts against a 1.x snapshot (the gate half of
-    test_real_changes_still_show_against_an_old_snapshot). G: these fields stay compared (annex §4)."""
+    test_a_gate_change_still_alerts_against_an_old_snapshot). G: these fields stay compared (annex §4)."""
     changes, line = OLD_SNAPSHOT_ALERTS[change]
     clean = await dm.run(CLEAN)
 

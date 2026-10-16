@@ -99,14 +99,14 @@
       }
     },
     "snapshot": {
-      "action_long_term": "accumulate",
-      "action_mid_term": "hold_or_add",
-      "decision_action_now": "wait",
       "hard_gate_ids": [
         "near_52w_high"
       ],
-      "snapshot_hash": "603991eca64f97e6",
-      "zone": "reduce"
+      "if_held_action": "hold",
+      "long_term_action": "buy",
+      "new_money_action": "wait",
+      "price_zone": "near_52w_high",
+      "snapshot_hash": "6429e0860914b643"
     },
     "source": "PH A7 (D-4)",
     "summary_size": [],
@@ -220,14 +220,14 @@
       }
     },
     "snapshot": {
-      "action_long_term": "avoid_core_position",
-      "action_mid_term": "avoid",
-      "decision_action_now": "avoid",
       "hard_gate_ids": [
         "thesis_broken"
       ],
-      "snapshot_hash": "f21172a15f7b1cbc",
-      "zone": "accumulate"
+      "if_held_action": "review_exit",
+      "long_term_action": "avoid",
+      "new_money_action": "avoid",
+      "price_zone": "below_sma200",
+      "snapshot_hash": "cd9d62676bf0cd9c"
     },
     "source": "PH A",
     "summary_size": [],
@@ -346,15 +346,15 @@
       }
     },
     "snapshot": {
-      "action_long_term": "avoid_core_position",
-      "action_mid_term": "avoid",
-      "decision_action_now": "avoid",
       "hard_gate_ids": [
         "falling_knife",
         "thesis_broken"
       ],
-      "snapshot_hash": "b7327ee11e3edd15",
-      "zone": "hold_neutral"
+      "if_held_action": "review_exit",
+      "long_term_action": "avoid",
+      "new_money_action": "avoid",
+      "price_zone": "below_sma200",
+      "snapshot_hash": "6f90bfd78c85737f"
     },
     "source": "PH B",
     "summary_size": [],
@@ -465,12 +465,12 @@
       }
     },
     "snapshot": {
-      "action_long_term": "hold_size_conservatively",
-      "action_mid_term": "hold_or_add",
-      "decision_action_now": "starter",
       "hard_gate_ids": [],
-      "snapshot_hash": "af99cfc0fe516601",
-      "zone": "hold_bullish"
+      "if_held_action": "hold",
+      "long_term_action": "wait",
+      "new_money_action": "starter",
+      "price_zone": "above_sma50",
+      "snapshot_hash": "23646856402b6275"
     },
     "source": "OC C1",
     "summary_size": [
@@ -594,14 +594,14 @@
       }
     },
     "snapshot": {
-      "action_long_term": "hold_size_conservatively",
-      "action_mid_term": "hold_or_add",
-      "decision_action_now": "wait",
       "hard_gate_ids": [
         "earnings_blackout"
       ],
-      "snapshot_hash": "346c8d792870f434",
-      "zone": "hold_bullish"
+      "if_held_action": "hold",
+      "long_term_action": "wait",
+      "new_money_action": "wait",
+      "price_zone": "above_sma50",
+      "snapshot_hash": "965db6efb51b55f2"
     },
     "source": "OC C2",
     "summary_size": [],
@@ -711,12 +711,12 @@
       }
     },
     "snapshot": {
-      "action_long_term": "hold_size_conservatively",
-      "action_mid_term": "avoid",
-      "decision_action_now": "avoid",
       "hard_gate_ids": [],
-      "snapshot_hash": "77bfccda2ef4bd60",
-      "zone": "hold_neutral"
+      "if_held_action": "reduce",
+      "long_term_action": "wait",
+      "new_money_action": "avoid",
+      "price_zone": "below_sma200",
+      "snapshot_hash": "d889907d37a020d8"
     },
     "source": "OC C3",
     "summary_size": [],
@@ -834,14 +834,14 @@
       }
     },
     "snapshot": {
-      "action_long_term": "accumulate",
-      "action_mid_term": "avoid",
-      "decision_action_now": "avoid",
       "hard_gate_ids": [
         "falling_knife"
       ],
-      "snapshot_hash": "9587d6b154e2a42b",
-      "zone": "hold_neutral"
+      "if_held_action": "hold",
+      "long_term_action": "avoid",
+      "new_money_action": "avoid",
+      "price_zone": "below_sma200",
+      "snapshot_hash": "92c7802eb3e9094d"
     },
     "source": "PH C",
     "summary_size": [],
@@ -957,14 +957,14 @@
       }
     },
     "snapshot": {
-      "action_long_term": "accumulate",
-      "action_mid_term": "avoid",
-      "decision_action_now": "avoid",
       "hard_gate_ids": [
         "earnings_blackout"
       ],
-      "snapshot_hash": "009f7b56644b1f4c",
-      "zone": "accumulate"
+      "if_held_action": "hold",
+      "long_term_action": "wait",
+      "new_money_action": "avoid",
+      "price_zone": "below_sma200",
+      "snapshot_hash": "e2d89114c66aba9f"
     },
     "source": "PH D2",
     "summary_size": [],
@@ -1069,12 +1069,12 @@
       }
     },
     "snapshot": {
-      "action_long_term": "accumulate",
-      "action_mid_term": "avoid",
-      "decision_action_now": "avoid",
       "hard_gate_ids": [],
-      "snapshot_hash": "afbcd894cf17c711",
-      "zone": "accumulate"
+      "if_held_action": "hold",
+      "long_term_action": "buy",
+      "new_money_action": "avoid",
+      "price_zone": "below_sma200",
+      "snapshot_hash": "212d76aeea73fc38"
     },
     "source": "PH D",
     "summary_size": [],
@@ -1183,12 +1183,12 @@
       }
     },
     "snapshot": {
-      "action_long_term": "small_position_with_stops",
-      "action_mid_term": "hold_or_add",
-      "decision_action_now": "starter",
       "hard_gate_ids": [],
-      "snapshot_hash": "18f78bb19da06154",
-      "zone": "hold_bullish"
+      "if_held_action": "hold",
+      "long_term_action": "starter",
+      "new_money_action": "starter",
+      "price_zone": "above_sma50",
+      "snapshot_hash": "5460a160c5d18027"
     },
     "source": "PH E2",
     "summary_size": [
@@ -1301,14 +1301,14 @@
       }
     },
     "snapshot": {
-      "action_long_term": "insufficient_data",
-      "action_mid_term": "avoid",
-      "decision_action_now": "avoid",
       "hard_gate_ids": [
         "unsupported_instrument"
       ],
-      "snapshot_hash": "efa6ec5d6fcee089",
-      "zone": "accumulate"
+      "if_held_action": "reduce",
+      "long_term_action": "watch",
+      "new_money_action": "avoid",
+      "price_zone": "below_sma200",
+      "snapshot_hash": "c4c1e1974e3299e3"
     },
     "source": "PH ETF bearish",
     "summary_size": [],
@@ -1422,14 +1422,14 @@
       }
     },
     "snapshot": {
-      "action_long_term": "insufficient_data",
-      "action_mid_term": "watch",
-      "decision_action_now": "watch",
       "hard_gate_ids": [
         "unsupported_instrument"
       ],
-      "snapshot_hash": "1ca07169bd70a9c1",
-      "zone": "hold_bullish"
+      "if_held_action": "hold",
+      "long_term_action": "watch",
+      "new_money_action": "watch",
+      "price_zone": "above_sma50",
+      "snapshot_hash": "fc7cefb713e985fb"
     },
     "source": "PH ETF bullish",
     "summary_size": [],
@@ -1549,14 +1549,14 @@
       }
     },
     "snapshot": {
-      "action_long_term": "avoid_core_position",
-      "action_mid_term": "hold_or_add",
-      "decision_action_now": "avoid",
       "hard_gate_ids": [
         "thesis_broken"
       ],
-      "snapshot_hash": "1ff2e7d0a7e1fc5a",
-      "zone": "hold_bullish"
+      "if_held_action": "review_exit",
+      "long_term_action": "avoid",
+      "new_money_action": "avoid",
+      "price_zone": "above_sma50",
+      "snapshot_hash": "bf49adebac497174"
     },
     "source": "PH E",
     "summary_size": [],
@@ -1661,12 +1661,12 @@
       }
     },
     "snapshot": {
-      "action_long_term": "hold",
-      "action_mid_term": "avoid",
-      "decision_action_now": "avoid",
       "hard_gate_ids": [],
-      "snapshot_hash": "d1b789a927ebcc4a",
-      "zone": "accumulate"
+      "if_held_action": "hold",
+      "long_term_action": "wait",
+      "new_money_action": "avoid",
+      "price_zone": "below_sma200",
+      "snapshot_hash": "150d09d233638464"
     },
     "source": "PH F3",
     "summary_size": [],
@@ -1783,14 +1783,14 @@
       }
     },
     "snapshot": {
-      "action_long_term": "watch",
-      "action_mid_term": "watch",
-      "decision_action_now": "watch",
       "hard_gate_ids": [
         "unsupported_currency"
       ],
-      "snapshot_hash": "4ce65188c9665335",
-      "zone": "hold_bullish"
+      "if_held_action": "hold",
+      "long_term_action": "watch",
+      "new_money_action": "watch",
+      "price_zone": "above_sma50",
+      "snapshot_hash": "1e15babe4fc6d8e5"
     },
     "source": "WP4 GBp",
     "summary_size": [],
@@ -1909,15 +1909,15 @@
       }
     },
     "snapshot": {
-      "action_long_term": "watch",
-      "action_mid_term": "avoid",
-      "decision_action_now": "avoid",
       "hard_gate_ids": [
         "falling_knife",
         "unsupported_currency"
       ],
-      "snapshot_hash": "2cfd3950bea2f38c",
-      "zone": "hold_neutral"
+      "if_held_action": "hold",
+      "long_term_action": "avoid",
+      "new_money_action": "avoid",
+      "price_zone": "below_sma200",
+      "snapshot_hash": "ba0120e7c2a06b62"
     },
     "source": "PH G",
     "summary_size": [],
@@ -2042,14 +2042,14 @@
       }
     },
     "snapshot": {
-      "action_long_term": "speculative_only",
-      "action_mid_term": "speculative_small_position",
-      "decision_action_now": "avoid",
       "hard_gate_ids": [
         "thesis_broken"
       ],
-      "snapshot_hash": "efc270809e03e7f9",
-      "zone": "hold_bullish"
+      "if_held_action": "review_exit",
+      "long_term_action": "avoid",
+      "new_money_action": "avoid",
+      "price_zone": "above_sma50",
+      "snapshot_hash": "b8e8b186b6f05571"
     },
     "source": "PH CH7 burner (D-1c)",
     "summary_size": [],
@@ -2158,12 +2158,12 @@
       }
     },
     "snapshot": {
-      "action_long_term": "accumulate",
-      "action_mid_term": "hold_or_add",
-      "decision_action_now": "starter",
       "hard_gate_ids": [],
-      "snapshot_hash": "c0151eaa05cd4616",
-      "zone": "hold_bullish"
+      "if_held_action": "hold",
+      "long_term_action": "buy",
+      "new_money_action": "starter",
+      "price_zone": "above_sma50",
+      "snapshot_hash": "c032638d4ef2a9a0"
     },
     "source": "OC S1",
     "summary_size": [
@@ -2280,12 +2280,12 @@
       }
     },
     "snapshot": {
-      "action_long_term": "accumulate",
-      "action_mid_term": "buy",
-      "decision_action_now": "buy",
       "hard_gate_ids": [],
-      "snapshot_hash": "e580b84e63347579",
-      "zone": "accumulate"
+      "if_held_action": "hold",
+      "long_term_action": "buy",
+      "new_money_action": "buy",
+      "price_zone": "below_sma200",
+      "snapshot_hash": "7535692910db6058"
     },
     "source": "OC S2",
     "summary_size": [
@@ -2395,12 +2395,12 @@
       }
     },
     "snapshot": {
-      "action_long_term": "accumulate",
-      "action_mid_term": "avoid",
-      "decision_action_now": "avoid",
       "hard_gate_ids": [],
-      "snapshot_hash": "1710294645413686",
-      "zone": "accumulate"
+      "if_held_action": "reduce",
+      "long_term_action": "buy",
+      "new_money_action": "avoid",
+      "price_zone": "below_sma200",
+      "snapshot_hash": "814d4ae963d2edc8"
     },
     "source": "OC S3",
     "summary_size": [],
@@ -2523,14 +2523,14 @@
       }
     },
     "snapshot": {
-      "action_long_term": "accumulate",
-      "action_mid_term": "hold_or_add",
-      "decision_action_now": "wait",
       "hard_gate_ids": [
         "earnings_blackout"
       ],
-      "snapshot_hash": "93f9a12a1861b41d",
-      "zone": "hold_bullish"
+      "if_held_action": "hold",
+      "long_term_action": "wait",
+      "new_money_action": "wait",
+      "price_zone": "above_sma50",
+      "snapshot_hash": "3ebd859d492fe877"
     },
     "source": "OC S4",
     "summary_size": [],
@@ -2649,14 +2649,14 @@
       }
     },
     "snapshot": {
-      "action_long_term": "accumulate",
-      "action_mid_term": "avoid",
-      "decision_action_now": "avoid",
       "hard_gate_ids": [
         "earnings_blackout"
       ],
-      "snapshot_hash": "b24fb9a5582dea66",
-      "zone": "accumulate"
+      "if_held_action": "reduce",
+      "long_term_action": "wait",
+      "new_money_action": "avoid",
+      "price_zone": "below_sma200",
+      "snapshot_hash": "53eaf9f16d4648c2"
     },
     "source": "OC S5",
     "summary_size": [],
@@ -2776,14 +2776,14 @@
       }
     },
     "snapshot": {
-      "action_long_term": "accumulate",
-      "action_mid_term": "avoid",
-      "decision_action_now": "avoid",
       "hard_gate_ids": [
         "falling_knife"
       ],
-      "snapshot_hash": "17b596be83fb4612",
-      "zone": "hold_neutral"
+      "if_held_action": "hold",
+      "long_term_action": "avoid",
+      "new_money_action": "avoid",
+      "price_zone": "below_sma200",
+      "snapshot_hash": "b939ce67dd621f8a"
     },
     "source": "OC S6",
     "summary_size": [],
@@ -2894,14 +2894,14 @@
       }
     },
     "snapshot": {
-      "action_long_term": "insufficient_data",
-      "action_mid_term": "hold",
-      "decision_action_now": "watch",
       "hard_gate_ids": [
         "unsupported_instrument"
       ],
-      "snapshot_hash": "405288705264f99a",
-      "zone": "accumulate"
+      "if_held_action": "hold",
+      "long_term_action": "watch",
+      "new_money_action": "watch",
+      "price_zone": "below_sma200",
+      "snapshot_hash": "dce27da5eb3b4628"
     },
     "source": "OC S7",
     "summary_size": [],
@@ -3020,14 +3020,14 @@
       }
     },
     "snapshot": {
-      "action_long_term": "insufficient_data",
-      "action_mid_term": "insufficient_data",
-      "decision_action_now": "insufficient_data",
       "hard_gate_ids": [
         "data_quality_critical"
       ],
-      "snapshot_hash": "854315e83b00925b",
-      "zone": "hold_bullish"
+      "if_held_action": "insufficient_data",
+      "long_term_action": "insufficient_data",
+      "new_money_action": "insufficient_data",
+      "price_zone": "above_sma50",
+      "snapshot_hash": "27829f7d06eea3ba"
     },
     "source": "OC S8",
     "summary_size": [],
@@ -3150,14 +3150,14 @@
       }
     },
     "snapshot": {
-      "action_long_term": "accumulate",
-      "action_mid_term": "hold_or_add",
-      "decision_action_now": "avoid",
       "hard_gate_ids": [
         "weak_liquidity"
       ],
-      "snapshot_hash": "8835fb661ba1455a",
-      "zone": "hold_bullish"
+      "if_held_action": "hold",
+      "long_term_action": "avoid",
+      "new_money_action": "avoid",
+      "price_zone": "above_sma50",
+      "snapshot_hash": "6fafaccc94725b10"
     },
     "source": "OC S9",
     "summary_size": [],
@@ -3268,12 +3268,12 @@
       }
     },
     "snapshot": {
-      "action_long_term": "accumulate",
-      "action_mid_term": "hold_or_add",
-      "decision_action_now": "starter",
       "hard_gate_ids": [],
-      "snapshot_hash": "08fe741d03ea452f",
-      "zone": "hold_bullish"
+      "if_held_action": "hold",
+      "long_term_action": "buy",
+      "new_money_action": "starter",
+      "price_zone": "above_sma50",
+      "snapshot_hash": "e70c12811ace1d72"
     },
     "source": "OC RF7 mid starter, long buy",
     "summary_size": [
@@ -3386,12 +3386,12 @@
       }
     },
     "snapshot": {
-      "action_long_term": "small_position_with_stops",
-      "action_mid_term": "speculative_small_position",
-      "decision_action_now": "starter",
       "hard_gate_ids": [],
-      "snapshot_hash": "cfa00ae4c8d662e2",
-      "zone": "hold_bullish"
+      "if_held_action": "hold",
+      "long_term_action": "starter",
+      "new_money_action": "starter",
+      "price_zone": "above_sma50",
+      "snapshot_hash": "dc29865ecaadc2a8"
     },
     "source": "OC T1",
     "summary_size": [
@@ -3513,14 +3513,14 @@
       }
     },
     "snapshot": {
-      "action_long_term": "small_position_with_stops",
-      "action_mid_term": "speculative_small_position",
-      "decision_action_now": "wait",
       "hard_gate_ids": [
         "near_52w_high"
       ],
-      "snapshot_hash": "bf9f3f519cacd9f2",
-      "zone": "reduce"
+      "if_held_action": "hold",
+      "long_term_action": "starter",
+      "new_money_action": "wait",
+      "price_zone": "near_52w_high",
+      "snapshot_hash": "588df90052bbc39e"
     },
     "source": "OC RF7 mid wait, long starter",
     "summary_size": [],
@@ -3629,12 +3629,12 @@
       }
     },
     "snapshot": {
-      "action_long_term": "accumulate",
-      "action_mid_term": "speculative_small_position",
-      "decision_action_now": "starter",
       "hard_gate_ids": [],
-      "snapshot_hash": "9f2c87d2cd936e98",
-      "zone": "hold_bullish"
+      "if_held_action": "hold",
+      "long_term_action": "buy",
+      "new_money_action": "starter",
+      "price_zone": "above_sma50",
+      "snapshot_hash": "fa68a9a41a718d39"
     },
     "source": "OC T2",
     "summary_size": [
@@ -3741,12 +3741,12 @@
       }
     },
     "snapshot": {
-      "action_long_term": "accumulate",
-      "action_mid_term": "wait_for_entry",
-      "decision_action_now": "wait",
       "hard_gate_ids": [],
-      "snapshot_hash": "8e62af759b4873ef",
-      "zone": "hold_bullish"
+      "if_held_action": "hold",
+      "long_term_action": "buy",
+      "new_money_action": "wait",
+      "price_zone": "above_sma50",
+      "snapshot_hash": "3cbf61411f254c5a"
     },
     "source": "OC T3",
     "summary_size": [],
@@ -3858,12 +3858,12 @@
       }
     },
     "snapshot": {
-      "action_long_term": "accumulate",
-      "action_mid_term": "speculative_small_position",
-      "decision_action_now": "starter",
       "hard_gate_ids": [],
-      "snapshot_hash": "a2e4d55bdf4c2513",
-      "zone": "accumulate"
+      "if_held_action": "hold",
+      "long_term_action": "buy",
+      "new_money_action": "starter",
+      "price_zone": "below_sma200",
+      "snapshot_hash": "dde82e7e49dca604"
     },
     "source": "OC RF3 starter (D-9)",
     "summary_size": [
@@ -3978,12 +3978,12 @@
       }
     },
     "snapshot": {
-      "action_long_term": "small_position_with_stops",
-      "action_mid_term": "speculative_small_position",
-      "decision_action_now": "starter",
       "hard_gate_ids": [],
-      "snapshot_hash": "96a3f248c27e7902",
-      "zone": "hold_bullish"
+      "if_held_action": "hold",
+      "long_term_action": "starter",
+      "new_money_action": "starter",
+      "price_zone": "above_sma50",
+      "snapshot_hash": "a880c3c9be1c86e4"
     },
     "source": "OC M9 dislocation starter (D-9)",
     "summary_size": [
@@ -4100,12 +4100,12 @@
       }
     },
     "snapshot": {
-      "action_long_term": "accumulate",
-      "action_mid_term": "buy",
-      "decision_action_now": "buy",
       "hard_gate_ids": [],
-      "snapshot_hash": "d87e0ae4001becb4",
-      "zone": "accumulate"
+      "if_held_action": "hold",
+      "long_term_action": "buy",
+      "new_money_action": "buy",
+      "price_zone": "below_sma200",
+      "snapshot_hash": "7c96430ea5be0083"
     },
     "source": "OC M9 dislocation buy (D-9)",
     "summary_size": [
@@ -4222,12 +4222,12 @@
       }
     },
     "snapshot": {
-      "action_long_term": "small_position_with_stops",
-      "action_mid_term": "speculative_small_position",
-      "decision_action_now": "starter",
       "hard_gate_ids": [],
-      "snapshot_hash": "98104ca80419891c",
-      "zone": "hold_neutral"
+      "if_held_action": "hold",
+      "long_term_action": "starter",
+      "new_money_action": "starter",
+      "price_zone": "below_sma200",
+      "snapshot_hash": "3778fef30333bf83"
     },
     "source": "OC M9 dislocation starter, mid condition (D-9)",
     "summary_size": [
@@ -4337,12 +4337,12 @@
       }
     },
     "snapshot": {
-      "action_long_term": "accumulate",
-      "action_mid_term": "avoid",
-      "decision_action_now": "avoid",
       "hard_gate_ids": [],
-      "snapshot_hash": "aa5ea994a21be527",
-      "zone": "accumulate"
+      "if_held_action": "reduce",
+      "long_term_action": "buy",
+      "new_money_action": "avoid",
+      "price_zone": "below_sma200",
+      "snapshot_hash": "3e0b7889f88b77e9"
     },
     "source": "OC V1",
     "summary_size": [],

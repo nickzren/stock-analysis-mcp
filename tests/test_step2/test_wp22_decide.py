@@ -466,9 +466,10 @@ NEW_MONEY_KEYS = ["action", "blocked_by", "decided_by", "unevaluated", "earliest
 async def test_the_card_carries_one_decision(name: str) -> None:
     """Card shape: the decision_card at every tier: horizon, new_money, if_held, long_term in plan §2's
     vocabularies (long_term.new_money also carries its conditions, WP2.3 §7e); action_now aliases
-    new_money.action and the snapshot's decision_action_now follows it (D-13);
-    hard_gates lists every fired gate (blocking = new_money.blocked_by without class and effect; long term drops
-    the not_applicable near_52w_high) and checks every analyze gate in disclosure order. RF (plan §2)."""
+    new_money.action and the snapshot's new_money_action, if_held_action and long_term_action record the card
+    (D-13; snapshot 3.0.0); hard_gates lists every fired gate (blocking = new_money.blocked_by without class and
+    effect; long term drops the not_applicable near_52w_high) and checks every analyze gate in disclosure order.
+    RF (plan §2)."""
     result = await dm.run(name)
     card = result["decision_card"]
     mid, long = card["new_money"], card["long_term"]["new_money"]
@@ -481,7 +482,9 @@ async def test_the_card_carries_one_decision(name: str) -> None:
         assert decision["action"] in ORDER
         assert decision["decided_by"] is None or decision["decided_by"] in ids(decision["blocked_by"])
     assert list(card["if_held"]) == ["action", "add_allowed", "basis"]
-    assert card["action_now"] == mid["action"] == result["watchlist_snapshot"]["decision_action_now"]
+    snapshot = result["watchlist_snapshot"]
+    assert card["action_now"] == mid["action"] == snapshot["new_money_action"]
+    assert (snapshot["if_held_action"], snapshot["long_term_action"]) == (card["if_held"]["action"], long["action"])
     assert [{k: v for k, v in b.items() if k not in ("class", "effect")} for b in mid["blocked_by"]] == card[
         "hard_gates"]["blocking"]
     assert ids(long["blocked_by"]) == [g for g in ids(mid["blocked_by"]) if g != "near_52w_high"]
@@ -507,7 +510,7 @@ async def test_the_decision_trace_names_the_emitted_code_and_the_deciding_gate(n
 
 # --- Interim 2.2 surfaces (flipped by WP2.3) -----------------------------------------------------------------
 # Until WP2.3 the derived surfaces read the emitted, knife-free policy (WP2.2 integrated plan §5); WP2.3 derives
-# them from new_money. The snapshot keeps reading the pre-gate candidate until WP2.4 (plan §0 #22).
+# them from new_money. WP2.4's snapshot 3.0.0 records new_money too (plan §8, §0 #22).
 
 KNIFE_BOUNCE = {  # still a falling knife (below a falling SMA200, -25% over 3m, 52w high 200 days ago), bouncing
     "current_price": 80.0,
@@ -537,7 +540,7 @@ async def test_a_non_dislocation_knife_shows_no_admitting_surface() -> None:
     and no "small starter position"; dislocation can_start_now false / buy_now null; no card sizing, buy band or
     zone band; the knife's clears_when binds at both horizons (plan §7e). speculative_small_position survives only
     as the full tier's diagnostics.pre_gate_policy.mid_term, superseded by new_money. G from WP2.3 (PD D-9, D-3);
-    the snapshot clause is test_the_snapshot_keeps_the_knife_free_candidate_until_wp2_4."""
+    the snapshot clause is test_the_snapshot_records_the_gated_decision_not_the_candidate (WP2.4)."""
     result = await dm.run(KNIFE_NOT_DISLOCATION)
     card = result["decision_card"]
     dislocation = result["dislocation_framework"]
@@ -564,14 +567,16 @@ async def test_a_non_dislocation_knife_shows_no_admitting_surface() -> None:
             card["long_term"]["new_money"]["conditions"]["buy_only_if"]) == ([knife], [knife], [knife])
 
 
-async def test_the_snapshot_keeps_the_knife_free_candidate_until_wp2_4() -> None:
-    """IS-CH1b: the 2.0.0 snapshot's action_mid_term reads diagnostics.pre_gate_policy (plan §0 #22), so it shows
-    the knife-free speculative_small_position while new_money is avoid. CH: flipped by WP2.4 (snapshot 3.0.0
-    new_money_action). Keep the live MCP on v0.2.0 until then."""
+async def test_the_snapshot_records_the_gated_decision_not_the_candidate() -> None:
+    """IS-CH1b (flipped by WP2.4): the 3.0.0 snapshot records new_money avoid [falling_knife]; the knife-free
+    speculative_small_position stays in diagnostics only (plan §8, §0 #22). G from WP2.4."""
     result = await dm.run(KNIFE_NOT_DISLOCATION)
+    snapshot = result["watchlist_snapshot"]
 
-    assert result["decision_card"]["new_money"]["action"] == "avoid"
-    assert result["watchlist_snapshot"]["action_mid_term"] == "speculative_small_position"
+    assert result["diagnostics"]["pre_gate_policy"]["mid_term"] == "speculative_small_position"
+    assert (snapshot["new_money_action"], snapshot["if_held_action"], snapshot["long_term_action"],
+            snapshot["hard_gate_ids"]) == ("avoid", "hold", "avoid", ["falling_knife"])
+    assert "speculative_small_position" not in snapshot.values() and "action_mid_term" not in snapshot
 
 
 async def test_a_thesis_capped_row_offers_no_starter_and_no_add() -> None:

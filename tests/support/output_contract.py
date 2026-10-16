@@ -5,7 +5,7 @@ A actionable (from decide(); declares its horizon), S sizing (subset of A), C co
 N our narrative, P pre-gate (full tier only, under diagnostics), T third-party, E static config echo.
 Globs are root-anchored: `prefix.**` matches `prefix` itself (a null or empty leaf) and everything under
 it; `*` is one key; `[*]` is a list item. The most specific row wins: more literal segments, then an exact
-row over a `.**` row. watchlist_snapshot is excluded until WP2.4 registers snapshot 3.0.0 (plan §0 #22).
+row over a `.**` row. watchlist_snapshot (snapshot 3.0.0, plan §8) is registered like every other root.
 The WP2.5 live smoke calls registry_violations() on live payloads.
 """
 
@@ -115,12 +115,20 @@ FIELD_REGISTRY: tuple[Field, ...] = (
     R("risk_summary.**", D, tiers=SF), R("events_summary.**", D, tiers=SF), R("signals.**", D, tiers=FULL),
     R("market_context.**", D, tiers=FULL), R("relative_performance.**", D, tiers=SF),
     R("sector_comparison.**", D, tiers=SF), R("quality.**", D, tiers=FULL), R("valuation_context.**", D, tiers=FULL),
+    # watchlist_snapshot 3.0.0 (plan §8): closed key by key; the canonical actions and the fired gate ids are A
+    R("watchlist_snapshot.new_money_action", A, MID), R("watchlist_snapshot.if_held_action", A, HOLDER),
+    R("watchlist_snapshot.long_term_action", A, LONG), R("watchlist_snapshot.hard_gate_ids.**", A, MID),
+    *(R(f"watchlist_snapshot.{key}", D) for key in (
+        "snapshot_version", "symbol", "snapshot_hash", "snapshot_as_of_date", "price", "market_cap", "sector", "tilt",
+        "confidence", "score", "mid_term_fit", "long_term_fit", "valuation_gate", "is_unprofitable", "price_zone",
+        "risk_regime", "volatility_ann", "support_instrument", "support_currency", "price_source", "price_as_of",
+        "as_of_kind", "price_stale")),
+    *(R(f"watchlist_snapshot.{key}.**", D) for key in ("bullish_signals", "bearish_signals", "next_catalyst")),
     # third party (plan §10 WP2.3 carry-forward)
     R("analyst_coverage.**", T, tiers=SF), R("fundamentals_summary.analyst_estimates.**", T, tiers=SF),
     R("news_summary.**", T, tiers=SF), R("ownership.**", T, tiers=SF), R("short_interest.**", T, tiers=SF),
     R("governance.**", T, tiers=FULL), R("ownership_flow.**", T, tiers=FULL), R("options_signals.**", T, tiers=FULL),
 )
-INTERIM_EXCLUDED_ROOTS = ("watchlist_snapshot",)
 UNEXERCISED_ROWS: dict[str, str] = {}  # rows no matrix run reaches, with the reason (OC-RF1b asserts the set)
 
 
@@ -173,7 +181,7 @@ def leaves(node: Any, path: str = "") -> list[tuple[str, Any]]:
 
 
 def contract_leaves(payload: Mapping[str, Any]) -> list[tuple[str, Any]]:
-    return [(p, v) for p, v in leaves(dict(payload)) if re.split(r"[.\[]", p, maxsplit=1)[0] not in INTERIM_EXCLUDED_ROOTS]
+    return leaves(dict(payload))
 
 
 def classified(payload: Mapping[str, Any]) -> list[tuple[str, Any, Field]]:
