@@ -309,29 +309,22 @@ class TestBuildWatchlistSnapshot:
         assert snapshot["hard_gate_ids"] == ["earnings_blackout", "falling_knife"]
 
     def test_decision_card_change_changes_hash(self):
-        """Changing action_now or hard-gate ids must flip the snapshot hash so
+        """Changing new_money.action or hard-gate ids must flip the snapshot hash so
         detect_changes surfaces it."""
-        raw_a = {
-            "symbol": "TEST",
-            "decision_card": {
-                "action_now": "buy",
-                "hard_gates": {"any_blocking": False, "blocking": []},
-            },
-        }
-        raw_b = {
-            "symbol": "TEST",
-            "decision_card": {
-                "action_now": "wait_for_data",
-                "new_money": {"action": "wait_for_data"},
-                "hard_gates": {
-                    "any_blocking": True,
-                    "blocking": [{"id": "earnings_blackout", "reason": "x"}],
+
+        def snapshot_hash(action: str, blocking: list[dict[str, str]]) -> str:
+            raw = {
+                "symbol": "TEST",
+                "decision_card": {
+                    "new_money": {"action": action},
+                    "hard_gates": {"any_blocking": bool(blocking), "blocking": blocking},
                 },
-            },
-        }
-        snap_a = build_watchlist_snapshot(raw_a)
-        snap_b = build_watchlist_snapshot(raw_b)
-        assert snap_a["snapshot_hash"] != snap_b["snapshot_hash"]
+            }
+            return build_watchlist_snapshot(raw)["snapshot_hash"]
+
+        base = snapshot_hash("buy", [])
+        assert snapshot_hash("wait_for_data", []) != base
+        assert snapshot_hash("buy", [{"id": "earnings_blackout", "reason": "x"}]) != base
 
     def test_decision_card_missing_yields_none_fields(self):
         """When decision_card isn't present (e.g., partial result), snapshot

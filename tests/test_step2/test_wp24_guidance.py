@@ -83,12 +83,17 @@ def cls(path: str) -> str | None:
 def test_the_guide_sizes_only_from_the_card() -> None:
     """OC-RF13: sizing comes only from decision_card.sizing and null means no entry size; can_start_now is
     deprecated, never the source; price_zone and levels are diagnostics, the dip section is timing context,
-    diagnostics are pre-gate inputs and third-party content is attributed, none of them advice. RF."""
+    diagnostics are pre-gate inputs and third-party content is attributed, none of them advice. RF. Review fix
+    (G): a starter shows only the starter size, conditions are not sufficient, and nothing loosens an action."""
     guide = flat(GUIDE)
 
     assert "Size only from `decision_card.sizing`." in guide
     assert 'When it is null, say "no entry size: new_money is <action>".' in guide
     assert "Never derive a size from levels, zones, presets, modes, or ratings." in guide
+    assert "Under a mid-term `starter`, show the starter size only; the full-size fields are null." in guide
+    assert "They are necessary, not sufficient: meeting them never permits a buy by itself; re-run analyze." in guide
+    assert ("No narrative, zone, dip, mode, rating or news item makes it looser (`wait` is never shown as `starter`, "
+            "nor `starter` as `buy`).") in guide
     assert [s for s in spans(guide) if PATH.fullmatch(s) and cls(s) == oc.S
             and not s.startswith(("decision_card.sizing", "decision_card.entry"))] == []
     can_start = [x for x in re.split(r"(?<=\.)\s+", guide) if "can_start_now" in x]
@@ -120,7 +125,8 @@ async def test_the_guide_renders_the_reassessment_date() -> None:
 async def test_guidance_uses_the_canonical_vocabulary() -> None:
     """BL-F1 (S-C15 prompt-description clause): the guide names every new-money and holder action and exactly the
     price_zone vocabulary; the memos ask for decision_card.new_money.action in its vocabulary, not "Buy / Wait /
-    Pass"; full_analysis leads with decision_card; no prompt description says "sell". RF."""
+    Pass"; full_analysis leads with decision_card; no prompt description says "sell". RF. Review fix (G): the
+    memos and full_analysis say "Never upgrade past `blocked_by`.", and the memos no longer say "No hedging"."""
     assert set(NEW_MONEY_ACTIONS) | set(IF_HELD_ACTIONS) <= set(spans(GUIDE))
     zones = re.search(r"`action_zones\.price_zone` \(([^)]*)\)", flat(GUIDE))
     assert zones and set(re.findall(r"`([a-z0-9_]+)`", zones[1])) == set(PRICE_ZONES.values())
@@ -128,6 +134,9 @@ async def test_guidance_uses_the_canonical_vocabulary() -> None:
         text = prompt(name)
         assert "Buy / Wait / Pass" not in text and "`decision_card.new_money.action`" in text, name
         assert [a for a in NEW_MONEY_ACTIONS if not re.search(rf"\b{a}\b", text)] == [], name
+        assert "No hedging" not in text, name
+    for name in ("full_analysis", "growth_memo", "value_memo"):
+        assert "Never upgrade past `blocked_by`." in prompt(name), name
     assert re.findall(r"(?m)^\d+\. `([a-z_.]+)`", prompt("full_analysis"))[0] == "decision_card"
     described = [p.description or "" for p in await mcp.list_prompts()] + [p["description"] for p in list_prompts()]
     assert [d for d in described if re.search(r"(?i)\bsell\b", d)] == []
@@ -169,6 +178,32 @@ async def test_guidance_has_no_advice_phrase_or_reentry_wording(key: str) -> Non
     assert not REENTRY.search(text)
 
 
+SIZING_HORIZON = "never attach it to a long-term or holder answer"
+
+
+async def test_sizing_names_its_horizon() -> None:
+    """Review fix: decision_card.sizing and entry are mid-term new-money sizing (FIELD_REGISTRY S, mid-term; plan
+    §7: no long-term sizing in 2a), so every guidance text that names decision_card.sizing says "mid-term new money
+    only", and the guide, the instructions and full_analysis never attach it to a long-term or holder answer. RF."""
+    section = flat(next(s for s in re.split(r"(?m)^(?=\d+\. )", GUIDE) if s.startswith("6. ")))
+    s_row = re.search(r"(?m)^\| S \| ([^|]+) \|", GUIDE)
+    analyze_doc = flat((await descriptions())["analyze"])
+
+    assert section.startswith("6. Position sizing (mid-term new money only):")
+    assert ("There is no long-term or holder size: never attach `decision_card.sizing` or `decision_card.entry` to a "
+            "long-term or holder answer.") in section
+    assert "it is null unless mid-term new money is `buy` or `starter`." in section
+    assert s_row and s_row[1].startswith("Sizing, mid-term new money only:") and SIZING_HORIZON in s_row[1]
+    assert ("Size only from `decision_card.sizing`, mid-term new money only; there is no long-term or holder size, "
+            f"so {SIZING_HORIZON}.") in flat(mcp.instructions or "")
+    assert "`decision_card.sizing` (mid-term new money only, never long-term or holder; null: no entry size)" in (
+        analyze_doc)
+    assert (f"`decision_card.sizing`, mid-term new money only (when null: no entry size); {SIZING_HORIZON}"
+            in prompt("full_analysis"))
+    assert [k for k, t in (await texts()).items()
+            if "`decision_card.sizing`" in t and "mid-term new money only" not in flat(t)] == []
+
+
 # --- Server instructions and tool descriptions (BL-F2, plan §9, §3 [D-3]) --------------------------------------
 
 
@@ -176,7 +211,8 @@ def test_the_server_instructions_state_the_horizon_rule() -> None:
     """BL-F2 (PD D-3 for the horizon clauses): instructions= carries the disclaimer, the §3 horizon rule (a bare
     ticker never asks; mid-term is the labelled default; ask only for two horizons or a conflicting holding period),
     where each horizon's answer lives, never upgrading past blocked_by, card-only sizing, the reassessment date and
-    the guide's URI, within 2,000 characters. PD D-3."""
+    the guide's URI, within 2,000 characters. PD D-3. Review fix (G): nothing turns an action into a buy, and
+    diagnostics, price_zone, the dip and third-party data are context, not advice."""
     text = flat(mcp.instructions or "")
 
     for needle in ("Informational only, not financial advice", 'A bare ticker ("Analyze HOOD") never triggers a question',
@@ -187,7 +223,10 @@ def test_the_server_instructions_state_the_horizon_rule() -> None:
                    "new money, mid-term (the default): `decision_card.new_money`",
                    "an existing holding (mid-term): `decision_card.if_held`",
                    "long term, 1-5 years: `decision_card.long_term.new_money`",
-                   "never upgrade past `blocked_by`", "Size only from `decision_card.sizing`", "not a buy date",
+                   "never upgrade past `blocked_by`", "no narrative, zone, dip, rating or news turns it into a buy",
+                   "Size only from `decision_card.sizing`", "not a buy date",
+                   "`diagnostics`, `action_zones.price_zone`, the dip assessment and third-party data (analysts, "
+                   "news, ownership, options) are context, not advice.",
                    "stock-analysis://guides/analyze-rendering"):
         assert needle in text, needle
     assert len(mcp.instructions or "") <= 2000

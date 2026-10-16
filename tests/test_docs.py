@@ -19,6 +19,8 @@ ROOT = Path(__file__).resolve().parents[1]
 HORIZONS = ("In `watchlist_snapshot`, `new_money_action` and `if_held_action` are the mid-term decision and "
             "`long_term_action` the long-term one; `scan_watchlist` state holds swing-card actions.")
 SCHEMA_6 = '`meta.schema_version` goes from `"5"` to `"6"`'
+PRICE_ZONE_ALERTS = ("`price_zone` follows the uncapped bands, so a capped name (falling knife, extreme risk, valuation "
+                     "headwind) can now report zone moves the capped `zone` did not; they are context, not advice.")
 SCHEMA_6_NAMED = ("policy_action", "sizing_guidance", "decision_card.horizon_fit", "decision_card.rationale",
                   "decision_card.entry.current_zone", "action_zones.current_zone", "unavailable_reason",
                   "decision_card.action_now")
@@ -62,7 +64,7 @@ def test_docs_state_the_current_versions_and_the_release_pin() -> None:
     agents = _flat(_read("AGENTS.md"))
 
     assert f'`"{SCHEMA_VERSION}"`' in newest and f'`"{SNAPSHOT_VERSION}"`' in newest
-    assert set(re.findall(r"stock-analysis-mcp@(\S+) ", readme)) == {f"v{released}"}
+    assert set(re.findall(r"stock-analysis-mcp@([\w.\-]+)", readme)) == {f"v{released}"}
     assert (unreleased is not None) == newest_heading.startswith("Unreleased")
     assert f"schema **{SCHEMA_VERSION}**" in (unreleased or readme)
     assert f"**{SNAPSHOT_VERSION}**" in (unreleased or readme)
@@ -76,6 +78,12 @@ def test_the_schema_6_changelog_names_every_removal() -> None:
     snapshot_delta = sorted(SNAPSHOT_FIELDS["2.0.0"] ^ SNAPSHOT_FIELDS["3.0.0"])
 
     assert [key for key in (*SCHEMA_6_NAMED, *snapshot_delta) if f"`{key}`" not in section] == []
+
+
+def test_the_schema_6_changelog_says_price_zone_alerts_on_capped_names() -> None:
+    """Review fix (integrated plan §6 decision 9): the schema-6 section says `price_zone` can alert on a capped name
+    whose capped `zone` stayed still, and that those moves are context, not advice. RF."""
+    assert PRICE_ZONE_ALERTS in _flat(_schema_6_section())
 
 
 def test_readme_and_agents_carry_the_decision_tables_and_horizons() -> None:

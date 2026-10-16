@@ -24,7 +24,7 @@ SERVER_VERSION = get_server_version()
 # v5: Step 1 correctness (see CHANGELOG.md): fraction units and one forward dividend yield, valuation
 #     basis/applicability, instrument and currency support, session-based price provenance and staleness,
 #     period-paired statement values, earnings verification, explicit read failures, snapshot 2.0.0
-# v6: Step 2 one canonical decision (see CHANGELOG.md Unreleased): decision_card new_money / if_held /
+# v6: Step 2 one canonical decision (see CHANGELOG.md, Step 2): decision_card new_money / if_held /
 #     long_term, gates first; policy_action -> diagnostics.pre_gate_policy; sizing only for buy/starter;
 #     price_zone; freshness and earnings-verification gates in analyze; snapshot 3.0.0
 SCHEMA_VERSION = "6"

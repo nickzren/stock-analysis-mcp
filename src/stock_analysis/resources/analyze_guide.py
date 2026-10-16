@@ -61,14 +61,17 @@ present in the response. The decision card is present at every detail level.
    - If FCF is mentioned, include value and period from
      `fundamentals_summary.cash_flow.free_cash_flow_label`.
 
-6. Position sizing:
+6. Position sizing (mid-term new money only):
    - Size only from `decision_card.sizing`.
    - When it is null, say "no entry size: new_money is <action>".
-   - Under `starter`, show the starter size only; the full-size fields are null.
+   - Under a mid-term `starter`, show the starter size only; the full-size
+     fields are null.
+   - There is no long-term or holder size: never attach `decision_card.sizing`
+     or `decision_card.entry` to a long-term or holder answer.
    - Dollar and share amounts need `account_size`.
    - Never derive a size from levels, zones, presets, modes, or ratings.
    - `decision_card.entry` is the price band for a new entry; it is null unless
-     new money is `buy` or `starter`.
+     mid-term new money is `buy` or `starter`.
 
 7. Verdict summary:
    - Tilt and confidence.
@@ -173,7 +176,7 @@ present in the response. The decision card is present at every detail level.
 | Class | Meaning | Examples |
 |---|---|---|
 | A | Actionable: only from the decision, with its horizon | `decision_card.new_money.action`, `decision_card.if_held.action`, `decision_card.long_term.new_money.action` |
-| S | Sizing: present only when new money is `buy` or `starter` | `decision_card.sizing`, `decision_card.entry` |
+| S | Sizing, mid-term new money only: present only when it is `buy` or `starter`; never attach it to a long-term or holder answer | `decision_card.sizing`, `decision_card.entry` |
 | C | Conditional: predicates, necessary, not sufficient | `decision_card.conditions`, `decision_card.new_money.earliest_reassessment` |
 | D | Diagnostic: describes state, never advice | `action_zones.price_zone`, `dislocation_check.questions`, `verdict.score` |
 | N | Our narrative, three horizon segments first | `executive_summary` |

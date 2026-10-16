@@ -68,7 +68,7 @@ If you need detailed presentation rules, read:
 When you present the result, lead with:
 1. `decision_card`: `decision_card.new_money` (mid-term), `decision_card.if_held` and `decision_card.long_term.new_money`, each action verbatim with its `blocked_by`
 2. `executive_summary`, verbatim
-3. `decision_card.sizing` (when null: no entry size)
+3. `decision_card.sizing`, mid-term new money only (when null: no entry size); never attach it to a long-term or holder answer
 4. `decision_modes.core`, `decision_modes.balanced` and `decision_modes.speculative`, with any `capped_by`
 5. `dislocation_framework` (its `action` mirrors the card)
 6. `verdict`, `action_zones`, `dip_assessment` and the catalyst-rich `news_summary`, as diagnostics, timing and third-party context

@@ -61,7 +61,7 @@ SNAPSHOT_FIELDS: dict[str, frozenset[str]] = {
 }
 # Versions detect_changes accepts as a previous snapshot (a literal: never derived from SNAPSHOT_VERSION).
 COMPATIBLE_SNAPSHOT_VERSIONS = frozenset({"1.0.0", "1.1.0", "2.0.0", "3.0.0"})
-# Required in every snapshot; every other field is optional (older versions lack some).
+# Required in every snapshot; a 3.0.0 snapshot must also carry every 3.0.0 field, older versions may lack some.
 SNAPSHOT_IDENTITY_KEYS = ("snapshot_version", "symbol")
 # Left out of snapshot_hash because they move with the clock, not with market data:
 # fetch dates and staleness (an age past a threshold).

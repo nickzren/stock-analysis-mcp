@@ -5,7 +5,8 @@ tests/fixtures/decision_matrix/ are built from these scenarios. Their inputs com
 Step 2 research probes, ported here so the evidence lives in the repo.
 
 The baseline (before.json, README.md, snapshots_2_0_0/) records 0609fde. It is recorded once and
-never overwritten, so later WPs keep the original 2.0.0 snapshots for the 3.0.0 migration tests:
+never overwritten, so later WPs keep the original 2.0.0 snapshots for the 3.0.0 migration tests.
+It was recorded with the command below; from snapshot 3.0.0, --baseline always refuses (DM-G4):
 
     uv run --frozen --offline python -m tests.support.decision_matrix --baseline
 
@@ -580,7 +581,8 @@ def _markdown(table: dict[str, Any], name: str, flag: str) -> str:
 
 
 def record_baseline(fixture_dir: Path = FIXTURE_DIR) -> None:
-    """Write the baseline files that are missing. Refuses, writing nothing, if any existing one would change."""
+    """Write the baseline files that are missing. Refuses, writing nothing, if any existing one would change.
+    From snapshot 3.0.0 it always refuses (DM-G4): the frozen baseline is never re-recorded."""
     if SNAPSHOT_VERSION != "2.0.0":
         raise SystemExit(f"refusing to record 2.0.0 snapshots from SNAPSHOT_VERSION {SNAPSHOT_VERSION}")
     table, snapshots = asyncio.run(build())

@@ -121,7 +121,7 @@ def test_the_accepted_versions_are_a_literal() -> None:
 @pytest.mark.parametrize("kind", ["1.0.0", "1.1.0", "2.0.0", "3.0.0"])
 async def test_hashes_compare_only_within_3_0_0(detect: Detect, kind: str) -> None:
     """SN-R18: hash_changed is None against a 1.0.0, 1.1.0 or 2.0.0 previous and a bool against a 3.0.0 one.
-    RF (the 3.0.0 case; the older-version cases are G, mutation-checked by m0)."""
+    RF (the 2.0.0 case; 1.x and 3.0.0 are G; m0 kills the 2.0.0 case)."""
     result = await clean()
     previous = {"1.0.0": as_1_0_0(legacy_compact_snapshot(as_0609fde(result))),
                 "1.1.0": legacy_compact_snapshot(as_0609fde(result)), "2.0.0": recorded(CLEAN),
@@ -344,6 +344,24 @@ async def test_stray_3_0_0_keys_on_a_2_0_0_snapshot_are_ignored(detect: Detect) 
     assert not set(STRAY) & set(response["changes"])
 
 
+async def test_a_stray_key_is_not_listed_as_retired(detect: Detect) -> None:
+    """Review fix (integrated plan §1.2): the warning's retired list is the previous version's own fields that the
+    current snapshot lacks, so a stray key on a 2.0.0 previous is not named. G (the mutant without "& fields"
+    fails it)."""
+    response = await detect({**recorded(CLEAN), "note": "hello"}, await clean())
+
+    assert response["warnings"] == [version_warning("2.0.0", RETIRED_2_0_0)]
+
+
+def test_an_unknown_version_still_type_checks_every_key() -> None:
+    """Review fix (integrated plan §1.2): an unsupported version is reported, and every known key is still
+    type-checked. G (the mutant that checks no field for an unknown version fails it)."""
+    problems = diff_module.validate_previous_snapshot({"snapshot_version": "9.0.0", "symbol": "ACME", "price": "x"},
+                                                      "ACME")
+
+    assert problems == ["unsupported snapshot_version: '9.0.0'", "price: expected number, got str"]
+
+
 # --- 2 -> 3 (SN-R9-R12, R15, R22) [D-10] ------------------------------------------------------------------------
 
 
@@ -481,16 +499,19 @@ async def test_a_1_x_snapshot_migrates(detect: Detect, kind: str) -> None:
 
 async def test_an_action_only_change_against_1_1_0_is_disclosed(detect: Detect) -> None:
     """SN-R17: 1.1.0 -> 3.0.0 with only new money moving (buy -> avoid): no material change (v0.2.0 alerted
-    "action_now: buy -> avoid"), and the summary names new_money_action as not compared. PD D-10."""
+    "action_now: buy -> avoid"), and the summary names new_money_action as not compared. PD D-10. Review fix (G):
+    the not-compared list is exactly the diffed fields the 1.1.0 snapshot lacks (the mutant listing every current
+    field fails it)."""
     result = await clean()
     previous = legacy_compact_snapshot(as_0609fde(result))
 
     response = await detect(previous, edited(result, decision_card__new_money__action="avoid"))
 
     assert response["material_changes"] == []
-    assert response["summary"].startswith("ACME: No material changes detected. Not compared with the previous "
-                                          "1.1.0 snapshot: ")
-    assert "new_money_action" in response["summary"].split("Not compared")[1]
+    assert response["summary"] == (
+        "ACME: No material changes detected. Not compared with the previous 1.1.0 snapshot: bearish_signals, "
+        "bullish_signals, if_held_action, long_term_action, long_term_fit, mid_term_fit, new_money_action, "
+        "price_source, price_zone, support_currency, support_instrument.")
 
 
 # --- Freshness (FR-R-F15 inverted, SN-R21) [D-8] ----------------------------------------------------------------
