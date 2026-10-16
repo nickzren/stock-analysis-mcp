@@ -1,5 +1,171 @@
 # Changelog
 
+## Unreleased: Step 2, one canonical decision
+
+Not released yet. The README install commands still install v0.2.0; keep a live MCP client on v0.2.0 until the release (see [Running main before the release](#running-main-before-the-release)).
+
+Two versions change; the package version (`meta.server_version`) stays `0.2.0` until the release:
+
+- **Response schema:** `meta.schema_version` goes from `"5"` to `"6"`.
+- **Watchlist snapshot:** `watchlist_snapshot.snapshot_version` goes from `"2.0.0"` to `"3.0.0"`. `detect_changes` accepts 1.0.0, 1.1.0, 2.0.0 and 3.0.0 snapshots.
+
+### Read this first
+
+- **One decision, gates first.** `analyze` decides once, in `decision_card`:
+  - `new_money`: the mid-term (3–12 months) action for new money, the labelled default;
+  - `if_held`: mid-term guidance for an existing holder;
+  - `long_term.new_money`: the long-term (1–5 years) action for new money.
+
+  The executive summary, decision modes, dislocation, dip and snapshot now follow it.
+- **New-money actions** (loosest to tightest): `buy`, `starter`, `wait`, `wait_for_data`, `insufficient_data`, `watch`, `avoid`. `decision_card.action_now` mirrors `new_money.action` for one release.
+- **Holder actions:** `if_held.action` is `hold`, `reduce`, `review_exit` or `insufficient_data`, with a `basis`. Gates never change it.
+- **`policy_action` is removed**, with no alias. The pre-gate candidate is `diagnostics.pre_gate_policy` (`detail="full"` only), marked `role: "pre_gate_input_not_advice"`.
+- **Sizing only for an entry.** `decision_card.sizing` and `decision_card.entry` are null unless new money is `buy` or `starter`; a starter hides the full size.
+- **Snapshots:** the first `detect_changes` against a saved 2.0.0 snapshot compares no action fields and no zone, and can report one round of rule-driven gate changes ([One-time alerts](#one-time-alerts-after-upgrading)).
+- **Horizons:** In `watchlist_snapshot`, `new_money_action` and `if_held_action` are the mid-term decision and `long_term_action` the long-term one; `scan_watchlist` state holds swing-card actions. When the two disagree, they describe different horizons, not a contradiction.
+
+**Examples from the decision matrix (v0.2.0 → main):** a plain `hold_or_add` becomes `starter`; an earnings blackout on it goes from `wait_for_data` to `wait`; weak liquidity from `wait_for_data` to `avoid`; an ETF's `hold` becomes `watch`; a broken business with a bullish chart goes from `hold_or_add` to `avoid` (`thesis_broken`).
+
+### Decision rules
+
+- **Combination:** at each horizon, `new_money.action` = the most restrictive of the mapped candidate and the outcome of every fired gate, in the order avoid > watch > insufficient_data > wait_for_data > wait > starter > buy. A gate never loosens an action and can tighten one that already denied new money (a support gate turns `wait` into `watch`). v0.2.0 turned any gate on `buy`, `starter` or `hold_or_add` into `wait_for_data` (`watch` with a support gate) and passed every other action through.
+- **Candidate mapping:** mid-term `buy` → buy; `hold_or_add`, `speculative_small_position` → starter; `hold`, `hold_or_reduce`, `wait_for_entry` → wait; `avoid`, `insufficient_data` unchanged. Long-term `accumulate` → buy; `hold_or_add`, `small_position_with_stops`, `speculative_with_thesis`, `speculative_only` → starter; `hold`, `hold_size_conservatively`, `wait_or_avoid` → wait; `avoid_core_position` → avoid. An unknown code now raises. The candidate no longer carries the falling-knife override (`dip_type=falling_knife`); the knife is the `falling_knife` gate.
+- **Gates (analyze), in rank order:**
+
+  | Gate | Class (rank) | New money, mid / long term | Change |
+  |---|---|---|---|
+  | `stale_data`, `freshness_unverifiable` | data (1) | wait_for_data | New in analyze |
+  | `data_quality_critical` | data (1) | wait_for_data | A missing beta alone no longer fires it |
+  | `missing_runway` | data (1) | wait_for_data | |
+  | `liquidity_missing` | data (1), analyze only | wait_for_data | Data class in analyze; the card and scan keep avoid |
+  | `falling_knife` | price_risk (2) | avoid | Was `wait` (knife override) or `wait_for_data`; now read from the technicals rubric for every instrument, unsupported ones included |
+  | `weak_liquidity` | liquidity (2) | avoid | Was wait_for_data on an admitting candidate |
+  | `thesis_broken` | thesis (3) | avoid | New: business broken, or cash runway under 4 quarters |
+  | `unsupported_instrument`, `unsupported_currency` | support (4) | watch | |
+  | `earnings_blackout` | event (5) | wait | Was wait_for_data |
+  | `earnings_unverifiable` | event (5) | wait | New in analyze: the events tool failed or `verification` is `unverifiable` |
+  | `near_52w_high` | zone (6) | wait, mid-term only | New: `price_zone` is `near_52w_high` |
+
+  Every gate except `near_52w_high` also reaches `long_term.new_money` and the core mode.
+- **`decided_by`:** the highest-ranked fired gate whose outcome is the shown action and tighter than the mapped candidate; null when the candidate decided.
+- **`unevaluated`:** applicable gates that could not be computed, each `{id, reason}`: `falling_knife` (no technicals), `missing_runway` and `thesis_broken` (fundamentals missing), `earnings_blackout` (events tool failed), `near_52w_high` (`price_zone` null or undetermined).
+- **`if_held` (mid-term, first match):** runway under 4 quarters → `review_exit` (`runway_critical`); business broken → `review_exit` (`business_broken`); candidate admits new money → `hold`; dislocation candidate → `hold` (`price_broken_more_than_business`); tilt missing → `insufficient_data`; candidate `insufficient_data` → `insufficient_data`; tilt bearish → `reduce` (`tilt_bearish`); otherwise `hold` (`no_reduction_evidence`). `add_allowed` is true only when new money is `buy` or `starter`.
+- **Modes:** balanced = `new_money.action`, and `balanced.long_term_view` = `long_term.new_money.action`. Speculative = its own code (`starter_then_add`, `starter_position_only` → starter; `wait`, `watch` → wait) capped by new money. Core = the most restrictive of its long-term fit (`ok` buy, `caution` wait, `unknown` insufficient_data, `avoid` avoid) and `long_term.new_money.action`. A capped mode carries `capped_by` (`new_money_<action>` or `long_term_<action>`). The `profile` argument changes sizing only, never an action.
+- **Freshness gate:** two legs; a fresh quote never vouches for the history.
+  - Leg Q (the selected price) blocks on the info-quote fallback; in the regular session on any rejected intraday quote (unavailable, older than 15 min, future-dated); off-hours on a daily close at least one session behind the last completed session.
+  - Leg H (`technicals.daily_history`) blocks on missing or malformed history, an invalid latest row, a newest completed bar at least one session behind, a future-dated row, or a valid row after the last completed session other than today's forming row.
+  - `stale_data` codes: `intraday_quote_stale`, `daily_close_stale`, `daily_history_stale`. `freshness_unverifiable` codes: `intraday_quote_unavailable`, `intraday_future_timestamp`, `info_quote_fallback`, `daily_latest_bar_invalid`, `daily_history_unavailable`, `daily_future_bar`, `daily_bar_after_last_session`. No price at all stays `data_quality_critical`.
+  - Disclosure only: flags `includes_forming_bar` and `calendar_unverified`.
+  - `data_quality.component_freshness.price` now ages technicals' own last completed valid bar, so the warning and the gate agree, and `component_freshness.risk` ages risk_metrics' own history; both used to read the merged `price` provenance.
+- **`earliest_reassessment`** (per horizon, on `new_money` and `long_term.new_money`): `{date, basis, earnings_risk_through, session_method, outstanding: [{id, clears_when}]}`.
+  - Present only when a gate fired and the mapped candidate admits new money at that horizon; otherwise null.
+  - `basis`: `earnings_clear` (`date` is the first NYSE session no earnings window blacks out), `conditions_only` (date null), `unsupported` (date null; `clears_when` is "never: outside this tool's supported scope").
+  - `session_method`: `calendar_static`, or `clock_only_no_holidays_fallback` outside the vendored calendar; null without a date.
+  - `outstanding` lists the undated gates in rank order; any event gate adds one `earnings_reverify` entry, because the calendar goes stale after the event.
+  - It is a lower bound and a date to re-run analyze, never permission to buy; it never changes an action. Known limits: a second earnings-page row the page hides can block again after the date, and the union of info dates is conservative.
+- **Conditions:** only what binds, per horizon.
+  - `decision_card.conditions` is mid-term: `buy_only_if` lists each binding non-support gate's `clears_when`, then each candidate input whose change alone would admit new money (under `starter`: the inputs that would make it `buy`, i.e. for the full position); `add_only_if` is the same list while `if_held` is `hold`; `do_not_buy_if` lists the `blocked_by` reasons; `monitor` the remaining upgrade conditions. A permanent support gate empties both horizons.
+  - New `long_term.new_money.conditions.buy_only_if` is the long-term list; core's `required_before_full_size` mirrors it, and balanced, speculative, dislocation and dip conditionals mirror the mid-term lists.
+  - Conditions are necessary, not sufficient: meeting them never permits a buy by itself; re-run `analyze`.
+  - Text: valuation conditions quote the gate's own thresholds (`P/E <= 50x`, `PEG <= 3.0`, `EV/S <= 10x` or `P/S <= 10x`, each "(currently headwind)"; v0.2.0 said `P/E < 25x`, `EV/S < 6x`, `P/S < 6x`); risk conditions name their drivers (e.g. `risk_regime <= high (volatility < 60% and max_drawdown_1y > -50%)`); a poor business no longer lists `net_margin > 0%`; a negative-FCF long-term gate adds `free_cash_flow_ttm >= 0`.
+- **Earnings window:** one helper serves the blackout, the warning, the reassessment date and analyze's `next_review`.
+  - The blackout reason names an active window ("earnings window Oct 7–15 active") or "earnings today", else "earnings in N days (<= 5)", in analyze and on the trade card.
+  - `data_quality.warnings` now has `earnings_within_7_days` on earnings day (`days_until` 0), and `decision_context.next_catalyst` keeps `days_until: 0`.
+  - Analyze's `next_review` inside an active window is the first session after it (reason "after earnings (Oct 15)"), never today; an undatable window gives "default 30-day re-evaluation (earnings window undatable)". The trade card's `next_review` is unchanged.
+
+### Schema 6 migration
+
+**Added**
+
+- `decision_card.horizon` (`mid_term`), `new_money`, `if_held`, `long_term` (with `horizon: long_term`); `earliest_reassessment`, `unevaluated` and `decided_by` per horizon; `why` (the deciding gate and the mid-term evidence), `exit_triggers` (the thesis stop triggers) and `data_flags` (fundamentals status, staleness and zone warnings).
+- Blocker `class` and `effect` (`veto`, `cap` or `conditional`) on `new_money.blocked_by` and the trade card's `blockers`; `codes` on freshness and `thesis_broken` blockers (`business_broken`, `runway_critical`), also in `hard_gates.blocking`.
+- `decision_card.hard_gates.checks` grows from 8 to 13 keys (`stale_data`, `freshness_unverifiable`, `thesis_broken`, `earnings_unverifiable`, `near_52w_high`), in rank order; `blocking` is in rank order too.
+- `diagnostics` (`detail="full"` only): `pre_gate_policy` (`mid_term`, `long_term`, `rationale`, `conditions_to_upgrade`, `conditions_to_downgrade`, `inputs: {zone, valuation_gate, valuation_basis, is_unprofitable}`, `support_gates` when support capped it, `role`, `superseded_by: {new_money, if_held, long_term, blocked_by}`) and `decision_trace`.
+- `data_quality.freshness` at every detail level: `session`, `expected_session`, `price_source`, `daily_last_valid_date`, `daily_completed_session`, `daily_sessions_behind`, `codes`, `flags`.
+- `action_zones.price_zone`: `near_52w_low`, `below_sma200`, `above_sma50`, `at_or_below_sma50`, `near_52w_high`, `undetermined` or null, from the uncapped classification.
+- `dislocation_check.decision` (standard tier): `{new_money, blocked_by}`.
+- `capped_by` on capped `decision_modes.core` / `speculative`, `dislocation_framework.action.capped_by`, `dip_assessment.assessment` and dip `entry_timing.signals`.
+- `long_term.new_money.conditions.buy_only_if`.
+- `data_gaps` value `beta_unavailable`.
+- `get_technicals` `daily_history`: `last_row_date`, `last_valid_date`, `last_row_valid`, `completed_valid_date`.
+- Trade card: `horizon: "swing"`, `decided_by`, `unevaluated`. Scan rows: `horizon: "swing"`, `source` (`screen` or `card`), `unevaluated`; scan response and state: `rules_version`; warning `rules_changed`.
+- Snapshot 3.0.0: `new_money_action`, `if_held_action`, `long_term_action`, `price_zone`.
+
+**Removed or moved**
+
+- Top-level `policy_action`, including `sizing_guidance` → `diagnostics.pre_gate_policy` (no sizing), no alias. Its `valuation_gate`, `valuation_basis` and `is_unprofitable` → `diagnostics.pre_gate_policy.inputs`; the snapshot's `valuation_gate` and `is_unprofitable` now read `action_zones.valuation_assessment` (same values).
+- `decision_card.horizon_fit` (use `new_money` and `long_term.new_money`).
+- `decision_card.rationale` → `diagnostics.decision_trace` (`pre_gate_policy.mid_term=<code> -> <action>`, then `decided_by=<id>`).
+- `decision_card.entry.current_zone`, and `action_zones.current_zone` → `action_zones.price_zone` (a neutral, uncapped vocabulary; the capped label survives only as `diagnostics.pre_gate_policy.inputs.zone`).
+- `unavailable_reason` in `action_zones.position_sizing_range` and the decision modes' `starter_position` / `max_position`: those blocks are null whenever sizing is withheld. `decision_card.sizing.unavailable_reason` stays in the shape but is always null.
+- `data_quality.missing_critical` no longer lists `beta`.
+- Snapshot 3.0.0: `action_mid_term`, `action_long_term`, `decision_action_now`, `zone`.
+
+**Kept**
+
+- `decision_card.hard_gates`: `blocking` lists every fired gate (the source of snapshot `hard_gate_ids`, a superset of `blocked_by`), `checks` stays booleans.
+- `decision_card.exit`, `conditions`, `next_review`, `confidence`; `action_zones.levels` key names.
+
+**Vocabulary changes**
+
+- `decision_card.action_now`: `buy`, `starter`, `wait`, `wait_for_data`, `insufficient_data`, `watch`, `avoid` (no more `hold`, `hold_or_add`, `hold_or_reduce`).
+- `decision_modes.*.action`, `balanced.long_term_view` and `dislocation_framework.action.{core, balanced, speculative}`: the new-money set (v0.2.0 core: `build_position`, `not_core_yet`, `needs_more_data`; speculative: `starter_then_add`, `starter_position_only`).
+- `decision_modes.balanced.why` holds the card's `why` plus the `business_quality` and `risk_regime` facts (it held the pre-gate rationale); `balanced.suitability` is `starter_only` on a dislocation only when new money is `starter`; the modes' `add_on_only_if` mirror the mid-term `add_only_if` (they held the first three upgrade conditions and, for speculative, the dip `wait_for` signals).
+- `dislocation_framework.action.buy_now`: `buy` or `starter` (was `small_starter`); `can_start_now` is true under `buy` too and is deprecated (it equals new money being `buy` or `starter`).
+- `dip_assessment.assessment.recommendation` and `entry_timing.signals[*].action` follow new money: under `starter`, `strong_buy_the_dip`, `buy_the_dip` and `cautious_accumulation` become `starter_only`, and `accumulate` and `add_position` become `starter_position`; under a non-entry action every entry code becomes `watch` with the rationale "No new-money entry: new_money is <action>.". The dislocation override (`starter_only_wait_for_stabilization`, `scope`, `timing_only`, `add_only_if`) applies only under a `starter`, and its `add_only_if` is no longer cut to 4.
+- `action_zones.zone_warnings`: `extreme_risk_regime:prefer_small_position` → `extreme_risk_regime`, `high_risk_regime:size_conservatively` → `high_risk_regime`. `position_sizing_range.rationale`: `extreme_risk_requires_minimal_exposure` → `extreme_risk_regime`, `high_risk_warrants_conservative_sizing` → `high_risk_regime`, `moderate_risk_standard_sizing` → `medium_risk_regime`, `low_risk_allows_larger_positions` → `low_risk_regime`.
+- Diagnostic text no longer gives sizing advice: `verdict.horizon_fit.reasons` (e.g. "mid_term: extreme risk regime", "mid_term: setup favorable"), `decision_context.horizon_drivers[*].reason`, the dip type explanations and rationales.
+- `executive_summary` opens with three segments: "Decision (mid-term, new money): <action>[; blocked by <ids>][; size ~a-b%][; <reassessment>]. If held: <action>. Long-term (1-5y): <action>[; …]." The closing "Policy: …" clause is gone, and the long-term-avoid lead reads "<name>: long-term fit avoid (<gates>)." The reassessment reads "reassess on or after Tue Oct 13 (not a buy date)", "no reassessment date: re-run analyze after <conditions>" or "outside supported scope: no reassessment date".
+- Trade card and `get_technicals` `intraday.freshness`: `reason_code` gains `nonpositive_close`.
+- Scan row blockers: freshness ids carry their leg (`stale_data@daily`, `freshness_unverifiable@quote`).
+
+**Sizing presence**
+
+- `decision_card.sizing` and `entry`: only when new money is `buy` or `starter` (a starter nulls `full_pct_cap` and `full_dollars`). `action_zones.position_sizing_range`: only under `buy`. Mode `starter_position`: only when new money and the mode's action are `buy` or `starter`; `max_position`: only when both are `buy`, so speculative's is always null. `speculative.capital_at_risk` is null without a speculative starter. The summary's "size ~" part appears only in the new-money segment of an entry. The numbers themselves are unchanged.
+
+**Aliases**
+
+- `decision_card.action_now` (= `new_money.action`), for one release.
+
+### Snapshots and `detect_changes` (3.0.0)
+
+- **Fields:** 3.0.0 is 2.0.0 without `action_mid_term`, `action_long_term`, `decision_action_now` and `zone`, plus `new_money_action`, `if_held_action`, `long_term_action` (= `long_term.new_money.action`) and `price_zone`. They are hashed and diffed; any change is material. `hard_gate_ids` lists every fired gate. Reasons, the pre-gate candidate, `earliest_reassessment` and the clock stay out of the hash.
+- **Validation:** a 3.0.0 previous snapshot must carry every 3.0.0 key (null allowed), else `invalid_snapshot`. Older versions validate only their own keys and ignore stray ones.
+- **Across versions:** fields both versions carry compare as before, 2.0.0 signals included. The three action fields and `price_zone` are not compared, and the summary names them ("Not compared with the previous 2.0.0 snapshot: …"); a 1.1.0 snapshot therefore loses the `action_now` alert v0.2.0 gave it, for one cycle. A version warning names the retired fields and the 3.0.0 rule changes: new analyze gates `earnings_unverifiable`, `stale_data`, `freshness_unverifiable`, `thesis_broken` and `near_52w_high`; knife and weak liquidity → avoid; earnings → wait; `liquidity_missing` is data class; the knife is evaluated for every instrument; a missing beta alone no longer fires `data_quality_critical`; `zone` → `price_zone`. Rule-driven gate changes are reported, not suppressed. `hash_changed` is reported only between two 3.0.0 snapshots.
+- **Freshness:** a new-money change caused only by a freshness gate is material. A growing age alone is never an alert (`price_stale` and ages stay unhashed).
+- **Renamed in the response:** the `changes` keys `action_zone`, `decision_action_now`, `action_mid_term` and `action_long_term` become `price_zone`, `new_money_action`, `if_held_action` and `long_term_action`; the material lines read `price_zone: a -> b`, `new_money_action: a -> b` and so on; the summary says "Price zone moved from a to b." and "New money: a -> b.", "If held: a -> b.", "Long term: a -> b." (was "Zone moved …" and "Action now: …").
+
+### Agent guidance
+
+- **Server instructions:** the server now sends MCP `instructions`: start with `analyze`; a bare ticker never triggers a question and gets the mid-term decision, labelled as mid-term; ask for a horizon only when the request names two horizons, or a holding period that conflicts with mid-term; where each horizon's answer lives; never upgrade past `blocked_by`; size only from `decision_card.sizing`.
+- **Tool descriptions** start with "Use when …". `analyze_my_position` is described as P/L, holding period and tax, the hold/reduce decision being `analyze`'s `decision_card.if_held` (it was "hold/sell decision"); `compare` applies no decision gates; `analyze_trade_setup` and `scan_watchlist` are the swing horizon; `detect_changes` names its snapshot's horizons. The `profile` argument is documented as changing sizing only.
+- **Rendering guide** (`stock-analysis://guides/analyze-rendering`), rewritten for every detail level (it assumed `detail="full"`): the card first, in three horizon segments; never upgrade past `blocked_by`; sizing only from `decision_card.sizing` ("no entry size: new_money is <action>"); `price_zone`, levels, the dip assessment, `diagnostics` and third-party data are context, not advice; `can_start_now` is deprecated; the reassessment date is not a buy date; a field-class table.
+- **Prompts:** `full_analysis` leads with `decision_card` (`policy_action` is gone); `growth_memo` and `value_memo` ask for `decision_card.new_money.action` and `decision_card.long_term.new_money.action` instead of "Buy / Wait / Pass"; `position_decision` calls `analyze` for `decision_card.if_held` and `analyze_my_position` for P/L and tax, without `get_technicals` or HOLD / SELL / TRIM.
+
+### Trade card and scan
+
+- **Trade card (`analyze_trade_setup`):** `earnings_unverifiable` is disclosed on every outcome and still caps only a detected setup at `watch`. Duplicate blocker ids merge (reasons joined by "; "). A close that is not finite and positive is never the actionable price: in session a non-positive 5m close is `freshness_unverifiable` (`nonpositive_close`); a non-positive daily close fails the daily leg (`stale_data` in session, `freshness_unverifiable` off-hours). The resolution order is unchanged.
+- **Scan stage 1:** it evaluates every gate it can and resolves rank-first like the card. Data first: under 50 bars, no features, or off-session no valid close is `data_quality_critical`, and the card's daily freshness leg applies (both `wait_for_data`); then the knife and liquidity on the card's basis (1-year mean volume × last close; was a 20-bar dollar mean) give `avoid`. An unsupported instrument or currency with a setup is `watch` with the setup kept; unverified support is `unevaluated` and a setup promotes, so the card decides. Screen rows report the detector's `trigger_satisfied` (was always false).
+- **Scan diffs:** blockers compare as (id, leg) pairs that neither side left unevaluated; an entry saved before this change compares at id level. A state from other rules adds a `rules_changed` warning.
+
+### One-time alerts after upgrading
+
+- **`detect_changes` with a saved 2.0.0 (or 1.x) snapshot:** the version warning, the "not compared" summary for the action fields and `price_zone`, and `±hard_gate` lines for gates the new rules fire or clear: `+earnings_unverifiable`, `+stale_data` / `+freshness_unverifiable`, `+thesis_broken`, `+near_52w_high`, `+falling_knife` on ETFs and other unsupported instruments, `-data_quality_critical` where only beta was missing. On the decision matrix, 3 of 28 recorded snapshots alert (`+hard_gate: thesis_broken`). Save the new 3.0.0 snapshot to restore full comparison.
+- **First `scan_watchlist`:** a `rules_changed` warning, plus one round of `changes` from the new rules: `earnings_unverifiable` on non-setup cards, and rows whose stage-1 outcome or `trigger_satisfied` changed. Leg suffixes and merged duplicate ids alone are not reported.
+
+### Running main before the release
+
+- Keep a live MCP client on v0.2.0 (the README commands pin it). If you run main, give it its own `STOCK_ANALYSIS_DATA_DIR`.
+- **Rollback:** a v0.2.0 scan on a data dir last written by main reports one round of rule-driven changes with no warning (v0.2.0 has no `rules_version` check), and v0.2.0's `detect_changes` rejects a 3.0.0 snapshot as `invalid_snapshot` (`unsupported snapshot_version: '3.0.0'`). Keep the 2.0.0 snapshot until you upgrade.
+
+### Known limitations (main)
+
+- **Resolved from 0.2.0:** earnings verification in analyze (`earnings_unverifiable`); the earnings-day warning; the core profile mismatch (core follows `long_term.new_money`).
+- **Intraday price basis, narrowed:** a stale or missing in-session quote now blocks new money (`wait_for_data`). Zones and stops still use the last completed close while technicals include the forming bar (flag `includes_forming_bar`), and `if_held` is unchanged.
+- **`if_held` is stateless:** it does not know your cost, size or holding period, and there is no long-term holder read yet.
+- **Trade card and scan:** the card reads the raw last row where analyze walks back past an invalid bar; scan stage 1 detects on the daily close while the card can use an intraday price, so their setups can differ; the card's `next_review` and `market_closed` handling are unchanged.
+- **Reassessment date:** see its known limits above; the blackout is not yet anchored on the next fillable session.
+
 ## 0.2.0 (2026-10-12): Step 1, correctness foundation
 
 The package version (`meta.server_version`) goes from `0.1.0` to `0.2.0`. Two other versions change, each on its own scale:

@@ -31,7 +31,7 @@ No extra parameters needed. For more specific questions:
 | “Any swing setup on HOOD? Account $3,000, risk 1%, position cap 10%.” | Entry, stop, targets, and stop-based sizing when a setup is actionable. |
 | “Add AAPL and MSFT to my watchlist, then scan for setups.” | A saved watchlist and setup screen; later scans highlight changes. |
 
-**Real example:** shortened `analyze` output for RIVN, recorded after the close
+**Real example:** shortened v0.2.0 `analyze` output for RIVN, recorded after the close
 on **2026-10-12**. Historical output, not a current recommendation.
 
 ```text
@@ -91,8 +91,59 @@ data; unverifiable earnings cap the card at `watch`.
 guarantee that every suggestion fits the risk budget. Use `analyze_trade_setup`
 for stop-based risk sizing; `risk_per_trade_pct=1` means 1% of the account.
 
-Responses use schema **5**; snapshots use **2.0.0**.
+v0.2.0 responses use schema **5**; snapshots use **2.0.0**.
 [CHANGELOG.md](CHANGELOG.md) covers field meanings, migration, and known limitations.
+
+## Unreleased (main)
+
+Not released yet: the commands above install v0.2.0. On `main`, `analyze` returns
+schema **6** and snapshot **3.0.0**; see the [CHANGELOG](CHANGELOG.md#unreleased-step-2-one-canonical-decision).
+
+`decision_card` holds one decision, made after the hard gates:
+
+- `new_money`: what to do with new money over 3–12 months (the default horizon);
+- `if_held`: what to do if you already own it: `hold`, `reduce`, `review_exit` or `insufficient_data`;
+- `long_term.new_money`: new money over 1–5 years.
+
+For a holding, the decision is `analyze`'s `if_held`; `analyze_my_position` adds P/L,
+holding period and tax status.
+
+`blocked_by` lists the gates that fired and `decided_by` the one that set the action;
+never upgrade past them. Read sizing only from `decision_card.sizing`; it is null
+unless new money is `buy` or `starter`. `policy_action` moved to
+`diagnostics.pre_gate_policy` (`detail="full"`): pre-gate input, not advice.
+
+| `new_money.action` | Meaning |
+|---|---|
+| `buy` | Entry allowed, up to full size. |
+| `starter` | Entry allowed at starter size only. |
+| `wait` | No entry now: the evidence, earnings risk or the 52-week-high band says wait. |
+| `wait_for_data` | No entry: required data is missing or stale. |
+| `insufficient_data` | No entry: too little data to decide. |
+| `watch` | No entry: outside the supported instruments or currencies. |
+| `avoid` | No entry: a poor setup, falling knife, weak liquidity or broken thesis. |
+
+Gates, by rank: `stale_data`, `freshness_unverifiable`, `data_quality_critical`,
+`missing_runway`, `liquidity_missing` → `wait_for_data`; `falling_knife`,
+`weak_liquidity`, `thesis_broken` → `avoid`; `unsupported_instrument`,
+`unsupported_currency` → `watch`; `earnings_blackout`, `earnings_unverifiable` →
+`wait`; `near_52w_high` → `wait` (mid-term only). The `profile` argument (`core`,
+`balanced`, `speculative`) changes sizing only, never an action.
+
+| Class | Fields | Read as |
+|---|---|---|
+| A | `decision_card` actions, modes, dislocation and dip actions | The decision, per horizon. |
+| S | `decision_card.sizing`, `entry`, sizing ranges | Size, only for an entry. |
+| C | `conditions`, `earliest_reassessment`, `next_review` | Necessary, not sufficient; re-run `analyze`. |
+| D | `price_zone`, levels, verdict, data quality | Context, not advice. |
+| N | `executive_summary` | Our summary: new money, if held, long term. |
+| P | `diagnostics` | Pre-gate input, not advice. |
+| T | Analyst, news, ownership and options data | Third-party data, attributed. |
+| E | Mode labels and descriptions | Static configuration. |
+
+In `watchlist_snapshot`, `new_money_action` and `if_held_action` are the mid-term
+decision and `long_term_action` the long-term one; `scan_watchlist` state holds
+swing-card actions.
 
 ## Data and limits
 
@@ -107,9 +158,10 @@ Responses use schema **5**; snapshots use **2.0.0**.
   is a ratio (`1.2 = 120%`). Undefined or unverified ratios are null;
   `metric_status` marks ratios excluded from scoring. Read cash-flow period labels:
   a field named `*_ttm` can contain an annual fallback.
-- **Limits remain:** `analyze` does not apply all the swing card's freshness and
-  earnings-verification gates. Some statement reads become missing fields after
-  failure. Scores and sizing are rule-based estimates. See the [known limitations](CHANGELOG.md#known-limitations).
+- **Limits remain:** in v0.2.0, `analyze` does not apply all the swing card's
+  freshness and earnings-verification gates (main does). Some statement reads
+  become missing fields after failure. Scores and sizing are rule-based estimates.
+  See the [known limitations](CHANGELOG.md#known-limitations).
 - **Local state:** watchlist and scan state persist in `$STOCK_ANALYSIS_DATA_DIR`,
   otherwise `$XDG_DATA_HOME/stock-analysis`, otherwise `~/.local/share/stock-analysis`.
   Price-history `price://` resources last only in the server process that fetched
