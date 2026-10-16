@@ -218,6 +218,8 @@ def test_the_server_instructions_state_the_horizon_rule() -> None:
     the guide's URI, within 2,000 characters. PD D-3. Review fix (G): nothing turns an action into a buy, and
     diagnostics, price_zone, the dip and third-party data are context, not advice."""
     text = flat(mcp.instructions or "")
+    assert "`decision_card.if_held` action verbatim with its `basis`" in text  # if_held has no blocked_by
+    assert "Report each action verbatim with its `blocked_by`" not in text
 
     for needle in ("Informational only, not financial advice", 'A bare ticker ("Analyze HOOD") never triggers a question',
                    "lead with the mid-term decision (3-12 months), labelled as mid-term",

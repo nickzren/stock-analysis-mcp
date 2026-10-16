@@ -54,7 +54,7 @@ Start with `analyze` for any question about one stock. A bare ticker ("Analyze H
 - long term, 1-5 years: `decision_card.long_term.new_money`.
 The horizons are independent; a different action at another horizon is not a contradiction.
 
-Report each action verbatim with its `blocked_by`, and never upgrade past `blocked_by`: no narrative, zone, dip, rating or news turns it into a buy. Size only from `decision_card.sizing`, mid-term new money only; there is no long-term or holder size, so never attach it to a long-term or holder answer. When it is null, say "no entry size: new_money is <action>". `earliest_reassessment` is a date to re-run analyze, not a buy date. `diagnostics`, `action_zones.price_zone`, the dip assessment and third-party data (analysts, news, ownership, options) are context, not advice.
+Report each new-money action verbatim with its `blocked_by`, and `decision_card.if_held` action verbatim with its `basis`; never upgrade past `blocked_by`: no narrative, zone, dip, rating or news turns it into a buy. Size only from `decision_card.sizing`, mid-term new money only; there is no long-term or holder size, so never attach it to a long-term or holder answer. When it is null, say "no entry size: new_money is <action>". `earliest_reassessment` is a date to re-run analyze, not a buy date. `diagnostics`, `action_zones.price_zone`, the dip assessment and third-party data (analysts, news, ownership, options) are context, not advice.
 
 Rendering rules for `analyze`: the resource `stock-analysis://guides/analyze-rendering`."""
 
