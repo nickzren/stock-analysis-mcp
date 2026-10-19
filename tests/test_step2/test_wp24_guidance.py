@@ -255,7 +255,7 @@ async def test_every_tool_description_starts_with_use_when() -> None:
 async def test_the_descriptions_route_each_decision() -> None:
     """S-C15 (tool half) and BL-A3: analyze is the decision tool for a bare ticker, names the three horizons with
     blocked_by, card-only sizing and the reassessment date, and says profile changes sizing only;
-    analyze_my_position is P/L and tax, the hold/reduce decision being analyze's if_held; compare applies no gates.
+    analyze_my_position uses one canonical analysis with personal context (3a.2); compare applies no gates.
     RF."""
     tools = {name: flat(doc) for name, doc in (await descriptions()).items()}
 
@@ -264,7 +264,8 @@ async def test_the_descriptions_route_each_decision() -> None:
                    "never upgrade past `blocked_by`", "Size only from `decision_card.sizing`", "not a buy date",
                    "changes sizing only, never the decision"):
         assert needle in tools["analyze"], needle
-    assert "the hold/reduce decision is analyze's `decision_card.if_held`" in tools["analyze_my_position"]
+    assert "position_card.holder_assessment" in tools["analyze_my_position"]
+    assert 'label review_status "Allocation check"' in tools["analyze_my_position"]
     assert "hold/sell decision" not in tools["analyze_my_position"]
     assert "it applies no decision gates" in tools["compare"]
 

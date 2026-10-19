@@ -1,7 +1,7 @@
 {
   "analyze_clock": "2026-10-09T20:00:00-04:00",
   "baseline_code": "c9fba4ada95941a6e298f7380f70b3ec76d6d233",
-  "position_host_wall_clock": "2026-10-09T20:00:00",
+  "position_clock": "2026-10-09T20:00:00-04:00",
   "positions": {
     "broken_same_chart": {
       "arguments": {
@@ -11,16 +11,13 @@
         "symbol": "ACME"
       },
       "result": {
-        "current_signals": {
-          "bearish": [],
-          "bullish": [
-            "above_sma50",
-            "above_sma200",
-            "golden_cross",
-            "macd_bullish",
-            "positive_1m_momentum"
-          ]
-        },
+        "assumptions": [
+          "Personal amounts are user-reported USD; no brokerage account was verified.",
+          "Cost basis and shares describe the current split-adjusted position; no lot or corporate-action reconciliation was performed.",
+          "Portfolio value is the declared total including this holding, not cash or buying power.",
+          "Gain/loss is price-only and excludes dividends, fees, tax and realized transactions.",
+          "Allocation is checked only against the supplied ceiling; no add capacity or sale amount is calculated."
+        ],
         "data_provenance": {
           "price": {
             "as_of": "2026-10-10T00:00:00Z",
@@ -28,10 +25,87 @@
             "source": "yfinance"
           }
         },
+        "data_quality": {
+          "bar_validity": null,
+          "completeness": 1.0,
+          "component_freshness": {
+            "events": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "fundamentals": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "news": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "price": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            },
+            "risk": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            }
+          },
+          "data_gaps": [],
+          "freshness": {
+            "codes": [],
+            "daily_completed_session": "2026-10-09",
+            "daily_last_valid_date": "2026-10-09",
+            "daily_sessions_behind": 0,
+            "expected_session": "2026-10-09",
+            "flags": [],
+            "price_source": "daily_close",
+            "session": "closed"
+          },
+          "fundamentals_status": "available",
+          "fundamentals_status_reason": null,
+          "in_flight_jobs": 0,
+          "missing_critical": [],
+          "staleness_warnings": [],
+          "tool_failures": [],
+          "warnings": []
+        },
+        "diagnostics": {
+          "technicals": {
+            "current_signals": {
+              "bearish": [],
+              "bullish": [
+                "above_sma50",
+                "above_sma200",
+                "golden_cross",
+                "macd_bullish",
+                "positive_1m_momentum"
+              ]
+            },
+            "flags": {
+              "broke_sma200": false,
+              "broke_sma50": false,
+              "death_cross": false,
+              "macd_bearish": false,
+              "rsi_overbought": false
+            },
+            "note": "Unmonitored technical context, not holder stops or instructions to exit.",
+            "quote_currency": "USD",
+            "reference_levels": {
+              "atr_1x_below": 98.0,
+              "recent_low_1m": 85.0,
+              "sma_200": 90.0,
+              "sma_50": 95.0
+            }
+          }
+        },
         "holding": {
           "days_held": 38,
-          "days_to_long_term": 328,
-          "is_long_term": false,
           "purchase_date": "2026-09-01"
         },
         "meta": {
@@ -40,36 +114,106 @@
           "tool": "analyze_position"
         },
         "position": {
+          "calculation_reasons": {
+            "current_price": [],
+            "current_value": [],
+            "gain_loss": [],
+            "gain_loss_dollars": [],
+            "portfolio_weight_pct": [
+              "missing_portfolio_value"
+            ]
+          },
           "cost_basis": 80.0,
           "current_price": 100.0,
           "current_value": 2000.0,
           "gain_loss": 0.25,
           "gain_loss_dollars": 400.0,
+          "max_holding_pct": null,
+          "portfolio_value": null,
+          "portfolio_weight_pct": null,
+          "price_context": {
+            "as_of": "2026-10-09",
+            "qualification": "Price context as of 2026-10-09; not a live account valuation.",
+            "status": "current"
+          },
+          "price_provenance": {
+            "as_of_kind": "session_close",
+            "as_of_precision": "date",
+            "cache_hit": false,
+            "fallback_reason": null,
+            "fetched_at": "2026-10-10T00:00:00Z",
+            "price_as_of": "2026-10-09",
+            "price_source": "daily_close",
+            "staleness": {
+              "expected_session": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false,
+              "unit": "sessions"
+            }
+          },
           "shares": 20.0
         },
-        "sell_signals": {
-          "active_count": 0,
-          "broke_sma200": false,
-          "broke_sma50": false,
-          "death_cross": false,
-          "macd_bearish": false,
-          "rsi_overbought": false
+        "position_card": {
+          "addition_context": "Adding is not allowed by the stock model: avoid (thesis_broken).",
+          "concentration_check": {
+            "ceiling_pct": null,
+            "reasons": [],
+            "status": "not_requested",
+            "threshold_basis": null,
+            "weight_pct": null
+          },
+          "context_status": {
+            "reasons": [],
+            "status": "available"
+          },
+          "holder_assessment": {
+            "action": "review_exit",
+            "add_allowed": false,
+            "basis": "business_broken"
+          },
+          "horizon": "mid_term",
+          "new_money": {
+            "action": "avoid",
+            "blocked_by": [
+              {
+                "class": "thesis",
+                "codes": [
+                  "business_broken"
+                ],
+                "effect": "cap",
+                "id": "thesis_broken",
+                "reason": "thesis broken: business broken (business_status broken)"
+              }
+            ],
+            "decided_by": "thesis_broken",
+            "earliest_reassessment": null,
+            "unevaluated": []
+          },
+          "review_status": "not_requested"
         },
-        "support_levels": {
-          "atr_1x_below": 98.0,
-          "recent_low_1m": 85.0,
-          "sma_200": 90.0,
-          "sma_50": 95.0
+        "suitability": {
+          "fit": "ok",
+          "horizon": "mid_term",
+          "note": "Suitability is separate from the holder assessment; hold is not an endorsement.",
+          "reasons": [
+            "mid_term: setup favorable"
+          ]
         },
         "symbol": "ACME",
         "tax": {
-          "potential_savings": 68.0,
-          "rate_if_long_term": 0.2,
-          "rate_if_sold_now": 0.37,
-          "tax_if_waited": 80.0,
-          "tax_on_gain_now": 148.0,
-          "type": "short_term"
+          "reason": "Personal tax treatment and sale quantities are not assessed.",
+          "status": "not_assessed"
         }
+      },
+      "source_reads": {
+        "events_calendar": 1,
+        "fundamentals_snapshot": 1,
+        "options_signals": 1,
+        "ownership_analysis": 1,
+        "risk_metrics": 1,
+        "stock_news": 1,
+        "stock_summary": 1,
+        "technicals": 1
       },
       "technical_reads": 1,
       "technicals_input": {
@@ -163,16 +307,13 @@
         "symbol": "ACME"
       },
       "result": {
-        "current_signals": {
-          "bearish": [],
-          "bullish": [
-            "above_sma50",
-            "above_sma200",
-            "golden_cross",
-            "macd_bullish",
-            "positive_1m_momentum"
-          ]
-        },
+        "assumptions": [
+          "Personal amounts are user-reported USD; no brokerage account was verified.",
+          "Cost basis and shares describe the current split-adjusted position; no lot or corporate-action reconciliation was performed.",
+          "Portfolio value is the declared total including this holding, not cash or buying power.",
+          "Gain/loss is price-only and excludes dividends, fees, tax and realized transactions.",
+          "Allocation is checked only against the supplied ceiling; no add capacity or sale amount is calculated."
+        ],
         "data_provenance": {
           "price": {
             "as_of": "2026-10-10T00:00:00Z",
@@ -180,10 +321,87 @@
             "source": "yfinance"
           }
         },
+        "data_quality": {
+          "bar_validity": null,
+          "completeness": 1.0,
+          "component_freshness": {
+            "events": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "fundamentals": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "news": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "price": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            },
+            "risk": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            }
+          },
+          "data_gaps": [],
+          "freshness": {
+            "codes": [],
+            "daily_completed_session": "2026-10-09",
+            "daily_last_valid_date": "2026-10-09",
+            "daily_sessions_behind": 0,
+            "expected_session": "2026-10-09",
+            "flags": [],
+            "price_source": "daily_close",
+            "session": "closed"
+          },
+          "fundamentals_status": "available",
+          "fundamentals_status_reason": null,
+          "in_flight_jobs": 0,
+          "missing_critical": [],
+          "staleness_warnings": [],
+          "tool_failures": [],
+          "warnings": []
+        },
+        "diagnostics": {
+          "technicals": {
+            "current_signals": {
+              "bearish": [],
+              "bullish": [
+                "above_sma50",
+                "above_sma200",
+                "golden_cross",
+                "macd_bullish",
+                "positive_1m_momentum"
+              ]
+            },
+            "flags": {
+              "broke_sma200": false,
+              "broke_sma50": false,
+              "death_cross": false,
+              "macd_bearish": false,
+              "rsi_overbought": false
+            },
+            "note": "Unmonitored technical context, not holder stops or instructions to exit.",
+            "quote_currency": "USD",
+            "reference_levels": {
+              "atr_1x_below": 98.0,
+              "recent_low_1m": 85.0,
+              "sma_200": 90.0,
+              "sma_50": 95.0
+            }
+          }
+        },
         "holding": {
           "days_held": 38,
-          "days_to_long_term": 328,
-          "is_long_term": false,
           "purchase_date": "2026-09-01"
         },
         "meta": {
@@ -192,36 +410,96 @@
           "tool": "analyze_position"
         },
         "position": {
+          "calculation_reasons": {
+            "current_price": [],
+            "current_value": [],
+            "gain_loss": [],
+            "gain_loss_dollars": [],
+            "portfolio_weight_pct": [
+              "missing_portfolio_value"
+            ]
+          },
           "cost_basis": 80.0,
           "current_price": 100.0,
           "current_value": 2000.0,
           "gain_loss": 0.25,
           "gain_loss_dollars": 400.0,
+          "max_holding_pct": null,
+          "portfolio_value": null,
+          "portfolio_weight_pct": null,
+          "price_context": {
+            "as_of": "2026-10-09",
+            "qualification": "Price context as of 2026-10-09; not a live account valuation.",
+            "status": "current"
+          },
+          "price_provenance": {
+            "as_of_kind": "session_close",
+            "as_of_precision": "date",
+            "cache_hit": false,
+            "fallback_reason": null,
+            "fetched_at": "2026-10-10T00:00:00Z",
+            "price_as_of": "2026-10-09",
+            "price_source": "daily_close",
+            "staleness": {
+              "expected_session": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false,
+              "unit": "sessions"
+            }
+          },
           "shares": 20.0
         },
-        "sell_signals": {
-          "active_count": 0,
-          "broke_sma200": false,
-          "broke_sma50": false,
-          "death_cross": false,
-          "macd_bearish": false,
-          "rsi_overbought": false
+        "position_card": {
+          "addition_context": "The stock model permits considering new money; no remaining add capacity has been assessed.",
+          "concentration_check": {
+            "ceiling_pct": null,
+            "reasons": [],
+            "status": "not_requested",
+            "threshold_basis": null,
+            "weight_pct": null
+          },
+          "context_status": {
+            "reasons": [],
+            "status": "available"
+          },
+          "holder_assessment": {
+            "action": "hold",
+            "add_allowed": true,
+            "basis": "candidate_admits_new_money"
+          },
+          "horizon": "mid_term",
+          "new_money": {
+            "action": "starter",
+            "blocked_by": [],
+            "decided_by": null,
+            "earliest_reassessment": null,
+            "unevaluated": []
+          },
+          "review_status": "not_requested"
         },
-        "support_levels": {
-          "atr_1x_below": 98.0,
-          "recent_low_1m": 85.0,
-          "sma_200": 90.0,
-          "sma_50": 95.0
+        "suitability": {
+          "fit": "ok",
+          "horizon": "mid_term",
+          "note": "Suitability is separate from the holder assessment; hold is not an endorsement.",
+          "reasons": [
+            "mid_term: setup favorable"
+          ]
         },
         "symbol": "ACME",
         "tax": {
-          "potential_savings": 68.0,
-          "rate_if_long_term": 0.2,
-          "rate_if_sold_now": 0.37,
-          "tax_if_waited": 80.0,
-          "tax_on_gain_now": 148.0,
-          "type": "short_term"
+          "reason": "Personal tax treatment and sale quantities are not assessed.",
+          "status": "not_assessed"
         }
+      },
+      "source_reads": {
+        "events_calendar": 1,
+        "fundamentals_snapshot": 1,
+        "options_signals": 1,
+        "ownership_analysis": 1,
+        "risk_metrics": 1,
+        "stock_news": 1,
+        "stock_summary": 1,
+        "technicals": 1
       },
       "technical_reads": 1,
       "technicals_input": {
@@ -315,16 +593,13 @@
         "symbol": "ACME"
       },
       "result": {
-        "current_signals": {
-          "bearish": [],
-          "bullish": [
-            "above_sma50",
-            "above_sma200",
-            "golden_cross",
-            "macd_bullish",
-            "positive_1m_momentum"
-          ]
-        },
+        "assumptions": [
+          "Personal amounts are user-reported USD; no brokerage account was verified.",
+          "Cost basis and shares describe the current split-adjusted position; no lot or corporate-action reconciliation was performed.",
+          "Portfolio value is the declared total including this holding, not cash or buying power.",
+          "Gain/loss is price-only and excludes dividends, fees, tax and realized transactions.",
+          "Allocation is checked only against the supplied ceiling; no add capacity or sale amount is calculated."
+        ],
         "data_provenance": {
           "price": {
             "as_of": "2026-10-10T00:00:00Z",
@@ -332,10 +607,87 @@
             "source": "yfinance"
           }
         },
+        "data_quality": {
+          "bar_validity": null,
+          "completeness": 0.8,
+          "component_freshness": {
+            "events": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "fundamentals": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "news": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "price": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            },
+            "risk": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            }
+          },
+          "data_gaps": [],
+          "freshness": {
+            "codes": [],
+            "daily_completed_session": "2026-10-09",
+            "daily_last_valid_date": "2026-10-09",
+            "daily_sessions_behind": 0,
+            "expected_session": "2026-10-09",
+            "flags": [],
+            "price_source": "daily_close",
+            "session": "closed"
+          },
+          "fundamentals_status": "not_applicable",
+          "fundamentals_status_reason": "etf_not_supported",
+          "in_flight_jobs": 0,
+          "missing_critical": [],
+          "staleness_warnings": [],
+          "tool_failures": [],
+          "warnings": []
+        },
+        "diagnostics": {
+          "technicals": {
+            "current_signals": {
+              "bearish": [],
+              "bullish": [
+                "above_sma50",
+                "above_sma200",
+                "golden_cross",
+                "macd_bullish",
+                "positive_1m_momentum"
+              ]
+            },
+            "flags": {
+              "broke_sma200": false,
+              "broke_sma50": false,
+              "death_cross": false,
+              "macd_bearish": false,
+              "rsi_overbought": false
+            },
+            "note": "Unmonitored technical context, not holder stops or instructions to exit.",
+            "quote_currency": "USD",
+            "reference_levels": {
+              "atr_1x_below": 98.0,
+              "recent_low_1m": 85.0,
+              "sma_200": 90.0,
+              "sma_50": 95.0
+            }
+          }
+        },
         "holding": {
           "days_held": 38,
-          "days_to_long_term": 328,
-          "is_long_term": false,
           "purchase_date": "2026-09-01"
         },
         "meta": {
@@ -344,36 +696,114 @@
           "tool": "analyze_position"
         },
         "position": {
+          "calculation_reasons": {
+            "current_price": [],
+            "current_value": [],
+            "gain_loss": [],
+            "gain_loss_dollars": [],
+            "portfolio_weight_pct": [
+              "missing_portfolio_value"
+            ]
+          },
           "cost_basis": 80.0,
           "current_price": 100.0,
           "current_value": 2000.0,
           "gain_loss": 0.25,
           "gain_loss_dollars": 400.0,
+          "max_holding_pct": null,
+          "portfolio_value": null,
+          "portfolio_weight_pct": null,
+          "price_context": {
+            "as_of": "2026-10-09",
+            "qualification": "Price context as of 2026-10-09; not a live account valuation.",
+            "status": "current"
+          },
+          "price_provenance": {
+            "as_of_kind": "session_close",
+            "as_of_precision": "date",
+            "cache_hit": false,
+            "fallback_reason": null,
+            "fetched_at": "2026-10-10T00:00:00Z",
+            "price_as_of": "2026-10-09",
+            "price_source": "daily_close",
+            "staleness": {
+              "expected_session": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false,
+              "unit": "sessions"
+            }
+          },
           "shares": 20.0
         },
-        "sell_signals": {
-          "active_count": 0,
-          "broke_sma200": false,
-          "broke_sma50": false,
-          "death_cross": false,
-          "macd_bearish": false,
-          "rsi_overbought": false
+        "position_card": {
+          "addition_context": "Adding is not allowed by the stock model: watch (unsupported_instrument).",
+          "concentration_check": {
+            "ceiling_pct": null,
+            "reasons": [],
+            "status": "not_requested",
+            "threshold_basis": null,
+            "weight_pct": null
+          },
+          "context_status": {
+            "reasons": [],
+            "status": "available"
+          },
+          "holder_assessment": {
+            "action": "hold",
+            "add_allowed": false,
+            "basis": "candidate_admits_new_money"
+          },
+          "horizon": "mid_term",
+          "new_money": {
+            "action": "watch",
+            "blocked_by": [
+              {
+                "class": "support",
+                "effect": "cap",
+                "id": "unsupported_instrument",
+                "reason": "instrument not supported (etf_not_supported) \u2014 no new-money action"
+              }
+            ],
+            "decided_by": "unsupported_instrument",
+            "earliest_reassessment": {
+              "basis": "unsupported",
+              "date": null,
+              "earnings_risk_through": null,
+              "outstanding": [
+                {
+                  "clears_when": "never: outside this tool's supported scope",
+                  "id": "unsupported_instrument"
+                }
+              ],
+              "session_method": null
+            },
+            "unevaluated": []
+          },
+          "review_status": "not_requested"
         },
-        "support_levels": {
-          "atr_1x_below": 98.0,
-          "recent_low_1m": 85.0,
-          "sma_200": 90.0,
-          "sma_50": 95.0
+        "suitability": {
+          "fit": "ok",
+          "horizon": "mid_term",
+          "note": "Suitability is separate from the holder assessment; hold is not an endorsement.",
+          "reasons": [
+            "mid_term: setup favorable"
+          ]
         },
         "symbol": "ACME",
         "tax": {
-          "potential_savings": 68.0,
-          "rate_if_long_term": 0.2,
-          "rate_if_sold_now": 0.37,
-          "tax_if_waited": 80.0,
-          "tax_on_gain_now": 148.0,
-          "type": "short_term"
+          "reason": "Personal tax treatment and sale quantities are not assessed.",
+          "status": "not_assessed"
         }
+      },
+      "source_reads": {
+        "events_calendar": 1,
+        "fundamentals_snapshot": 1,
+        "options_signals": 1,
+        "ownership_analysis": 1,
+        "risk_metrics": 1,
+        "stock_news": 1,
+        "stock_summary": 1,
+        "technicals": 1
       },
       "technical_reads": 1,
       "technicals_input": {
@@ -467,16 +897,13 @@
         "symbol": "ACME"
       },
       "result": {
-        "current_signals": {
-          "bearish": [],
-          "bullish": [
-            "above_sma50",
-            "above_sma200",
-            "golden_cross",
-            "macd_bullish",
-            "positive_1m_momentum"
-          ]
-        },
+        "assumptions": [
+          "Personal amounts are user-reported USD; no brokerage account was verified.",
+          "Cost basis and shares describe the current split-adjusted position; no lot or corporate-action reconciliation was performed.",
+          "Portfolio value is the declared total including this holding, not cash or buying power.",
+          "Gain/loss is price-only and excludes dividends, fees, tax and realized transactions.",
+          "Allocation is checked only against the supplied ceiling; no add capacity or sale amount is calculated."
+        ],
         "data_provenance": {
           "price": {
             "as_of": "2026-10-10T00:00:00Z",
@@ -484,10 +911,87 @@
             "source": "yfinance"
           }
         },
+        "data_quality": {
+          "bar_validity": null,
+          "completeness": 1.0,
+          "component_freshness": {
+            "events": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "fundamentals": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "news": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "price": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            },
+            "risk": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            }
+          },
+          "data_gaps": [],
+          "freshness": {
+            "codes": [],
+            "daily_completed_session": "2026-10-09",
+            "daily_last_valid_date": "2026-10-09",
+            "daily_sessions_behind": 0,
+            "expected_session": "2026-10-09",
+            "flags": [],
+            "price_source": "daily_close",
+            "session": "closed"
+          },
+          "fundamentals_status": "available",
+          "fundamentals_status_reason": null,
+          "in_flight_jobs": 0,
+          "missing_critical": [],
+          "staleness_warnings": [],
+          "tool_failures": [],
+          "warnings": []
+        },
+        "diagnostics": {
+          "technicals": {
+            "current_signals": {
+              "bearish": [],
+              "bullish": [
+                "above_sma50",
+                "above_sma200",
+                "golden_cross",
+                "macd_bullish",
+                "positive_1m_momentum"
+              ]
+            },
+            "flags": {
+              "broke_sma200": false,
+              "broke_sma50": false,
+              "death_cross": false,
+              "macd_bearish": false,
+              "rsi_overbought": false
+            },
+            "note": "Unmonitored technical context, not holder stops or instructions to exit.",
+            "quote_currency": "EUR",
+            "reference_levels": {
+              "atr_1x_below": 98.0,
+              "recent_low_1m": 85.0,
+              "sma_200": 90.0,
+              "sma_50": 95.0
+            }
+          }
+        },
         "holding": {
           "days_held": 38,
-          "days_to_long_term": 328,
-          "is_long_term": false,
           "purchase_date": "2026-09-01"
         },
         "meta": {
@@ -496,36 +1000,125 @@
           "tool": "analyze_position"
         },
         "position": {
+          "calculation_reasons": {
+            "current_price": [
+              "usd_price_unverified"
+            ],
+            "current_value": [
+              "usd_price_unverified"
+            ],
+            "gain_loss": [
+              "usd_price_unverified"
+            ],
+            "gain_loss_dollars": [
+              "usd_price_unverified"
+            ],
+            "portfolio_weight_pct": [
+              "usd_price_unverified",
+              "missing_portfolio_value"
+            ]
+          },
           "cost_basis": 80.0,
-          "current_price": 100.0,
-          "current_value": 2000.0,
-          "gain_loss": 0.25,
-          "gain_loss_dollars": 400.0,
+          "current_price": null,
+          "current_value": null,
+          "gain_loss": null,
+          "gain_loss_dollars": null,
+          "max_holding_pct": null,
+          "portfolio_value": null,
+          "portfolio_weight_pct": null,
+          "price_context": {
+            "as_of": "2026-10-09",
+            "qualification": "A verified USD per-share price is unavailable.",
+            "status": "unavailable"
+          },
+          "price_provenance": {
+            "as_of_kind": "session_close",
+            "as_of_precision": "date",
+            "cache_hit": false,
+            "fallback_reason": null,
+            "fetched_at": "2026-10-10T00:00:00Z",
+            "price_as_of": "2026-10-09",
+            "price_source": "daily_close",
+            "staleness": {
+              "expected_session": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false,
+              "unit": "sessions"
+            }
+          },
           "shares": 20.0
         },
-        "sell_signals": {
-          "active_count": 0,
-          "broke_sma200": false,
-          "broke_sma50": false,
-          "death_cross": false,
-          "macd_bearish": false,
-          "rsi_overbought": false
+        "position_card": {
+          "addition_context": "Adding is not allowed by the stock model: watch (unsupported_currency).",
+          "concentration_check": {
+            "ceiling_pct": null,
+            "reasons": [],
+            "status": "not_requested",
+            "threshold_basis": null,
+            "weight_pct": null
+          },
+          "context_status": {
+            "reasons": [
+              "usd_price_unverified"
+            ],
+            "status": "partial"
+          },
+          "holder_assessment": {
+            "action": "hold",
+            "add_allowed": false,
+            "basis": "candidate_admits_new_money"
+          },
+          "horizon": "mid_term",
+          "new_money": {
+            "action": "watch",
+            "blocked_by": [
+              {
+                "class": "support",
+                "effect": "cap",
+                "id": "unsupported_currency",
+                "reason": "price currency not supported (non_usd_currency_not_supported) \u2014 no sizing, dollar-liquidity or new-money action"
+              }
+            ],
+            "decided_by": "unsupported_currency",
+            "earliest_reassessment": {
+              "basis": "unsupported",
+              "date": null,
+              "earnings_risk_through": null,
+              "outstanding": [
+                {
+                  "clears_when": "never: outside this tool's supported scope",
+                  "id": "unsupported_currency"
+                }
+              ],
+              "session_method": null
+            },
+            "unevaluated": []
+          },
+          "review_status": "not_requested"
         },
-        "support_levels": {
-          "atr_1x_below": 98.0,
-          "recent_low_1m": 85.0,
-          "sma_200": 90.0,
-          "sma_50": 95.0
+        "suitability": {
+          "fit": "ok",
+          "horizon": "mid_term",
+          "note": "Suitability is separate from the holder assessment; hold is not an endorsement.",
+          "reasons": [
+            "mid_term: setup favorable"
+          ]
         },
         "symbol": "ACME",
         "tax": {
-          "potential_savings": 68.0,
-          "rate_if_long_term": 0.2,
-          "rate_if_sold_now": 0.37,
-          "tax_if_waited": 80.0,
-          "tax_on_gain_now": 148.0,
-          "type": "short_term"
+          "reason": "Personal tax treatment and sale quantities are not assessed.",
+          "status": "not_assessed"
         }
+      },
+      "source_reads": {
+        "events_calendar": 1,
+        "fundamentals_snapshot": 1,
+        "options_signals": 1,
+        "ownership_analysis": 1,
+        "risk_metrics": 1,
+        "stock_news": 1,
+        "stock_summary": 1,
+        "technicals": 1
       },
       "technical_reads": 1,
       "technicals_input": {
@@ -619,16 +1212,13 @@
         "symbol": "ACME"
       },
       "result": {
-        "current_signals": {
-          "bearish": [],
-          "bullish": [
-            "above_sma50",
-            "above_sma200",
-            "golden_cross",
-            "macd_bullish",
-            "positive_1m_momentum"
-          ]
-        },
+        "assumptions": [
+          "Personal amounts are user-reported USD; no brokerage account was verified.",
+          "Cost basis and shares describe the current split-adjusted position; no lot or corporate-action reconciliation was performed.",
+          "Portfolio value is the declared total including this holding, not cash or buying power.",
+          "Gain/loss is price-only and excludes dividends, fees, tax and realized transactions.",
+          "Allocation is checked only against the supplied ceiling; no add capacity or sale amount is calculated."
+        ],
         "data_provenance": {
           "price": {
             "as_of": "2026-10-10T00:00:00Z",
@@ -636,10 +1226,87 @@
             "source": "yfinance"
           }
         },
+        "data_quality": {
+          "bar_validity": null,
+          "completeness": 1.0,
+          "component_freshness": {
+            "events": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "fundamentals": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "news": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "price": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            },
+            "risk": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            }
+          },
+          "data_gaps": [],
+          "freshness": {
+            "codes": [],
+            "daily_completed_session": "2026-10-09",
+            "daily_last_valid_date": "2026-10-09",
+            "daily_sessions_behind": 0,
+            "expected_session": "2026-10-09",
+            "flags": [],
+            "price_source": "daily_close",
+            "session": "closed"
+          },
+          "fundamentals_status": "available",
+          "fundamentals_status_reason": null,
+          "in_flight_jobs": 0,
+          "missing_critical": [],
+          "staleness_warnings": [],
+          "tool_failures": [],
+          "warnings": []
+        },
+        "diagnostics": {
+          "technicals": {
+            "current_signals": {
+              "bearish": [],
+              "bullish": [
+                "above_sma50",
+                "above_sma200",
+                "golden_cross",
+                "macd_bullish",
+                "positive_1m_momentum"
+              ]
+            },
+            "flags": {
+              "broke_sma200": false,
+              "broke_sma50": false,
+              "death_cross": false,
+              "macd_bearish": false,
+              "rsi_overbought": false
+            },
+            "note": "Unmonitored technical context, not holder stops or instructions to exit.",
+            "quote_currency": "USD",
+            "reference_levels": {
+              "atr_1x_below": 98.0,
+              "recent_low_1m": 85.0,
+              "sma_200": 90.0,
+              "sma_50": 95.0
+            }
+          }
+        },
         "holding": {
           "days_held": 365,
-          "days_to_long_term": 1,
-          "is_long_term": false,
           "purchase_date": "2025-10-09"
         },
         "meta": {
@@ -648,36 +1315,96 @@
           "tool": "analyze_position"
         },
         "position": {
+          "calculation_reasons": {
+            "current_price": [],
+            "current_value": [],
+            "gain_loss": [],
+            "gain_loss_dollars": [],
+            "portfolio_weight_pct": [
+              "missing_portfolio_value"
+            ]
+          },
           "cost_basis": 80.0,
           "current_price": 100.0,
           "current_value": 2000.0,
           "gain_loss": 0.25,
           "gain_loss_dollars": 400.0,
+          "max_holding_pct": null,
+          "portfolio_value": null,
+          "portfolio_weight_pct": null,
+          "price_context": {
+            "as_of": "2026-10-09",
+            "qualification": "Price context as of 2026-10-09; not a live account valuation.",
+            "status": "current"
+          },
+          "price_provenance": {
+            "as_of_kind": "session_close",
+            "as_of_precision": "date",
+            "cache_hit": false,
+            "fallback_reason": null,
+            "fetched_at": "2026-10-10T00:00:00Z",
+            "price_as_of": "2026-10-09",
+            "price_source": "daily_close",
+            "staleness": {
+              "expected_session": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false,
+              "unit": "sessions"
+            }
+          },
           "shares": 20.0
         },
-        "sell_signals": {
-          "active_count": 0,
-          "broke_sma200": false,
-          "broke_sma50": false,
-          "death_cross": false,
-          "macd_bearish": false,
-          "rsi_overbought": false
+        "position_card": {
+          "addition_context": "The stock model permits considering new money; no remaining add capacity has been assessed.",
+          "concentration_check": {
+            "ceiling_pct": null,
+            "reasons": [],
+            "status": "not_requested",
+            "threshold_basis": null,
+            "weight_pct": null
+          },
+          "context_status": {
+            "reasons": [],
+            "status": "available"
+          },
+          "holder_assessment": {
+            "action": "hold",
+            "add_allowed": true,
+            "basis": "candidate_admits_new_money"
+          },
+          "horizon": "mid_term",
+          "new_money": {
+            "action": "starter",
+            "blocked_by": [],
+            "decided_by": null,
+            "earliest_reassessment": null,
+            "unevaluated": []
+          },
+          "review_status": "not_requested"
         },
-        "support_levels": {
-          "atr_1x_below": 98.0,
-          "recent_low_1m": 85.0,
-          "sma_200": 90.0,
-          "sma_50": 95.0
+        "suitability": {
+          "fit": "ok",
+          "horizon": "mid_term",
+          "note": "Suitability is separate from the holder assessment; hold is not an endorsement.",
+          "reasons": [
+            "mid_term: setup favorable"
+          ]
         },
         "symbol": "ACME",
         "tax": {
-          "potential_savings": 68.0,
-          "rate_if_long_term": 0.2,
-          "rate_if_sold_now": 0.37,
-          "tax_if_waited": 80.0,
-          "tax_on_gain_now": 148.0,
-          "type": "short_term"
+          "reason": "Personal tax treatment and sale quantities are not assessed.",
+          "status": "not_assessed"
         }
+      },
+      "source_reads": {
+        "events_calendar": 1,
+        "fundamentals_snapshot": 1,
+        "options_signals": 1,
+        "ownership_analysis": 1,
+        "risk_metrics": 1,
+        "stock_news": 1,
+        "stock_summary": 1,
+        "technicals": 1
       },
       "technical_reads": 1,
       "technicals_input": {
@@ -771,16 +1498,13 @@
         "symbol": "ACME"
       },
       "result": {
-        "current_signals": {
-          "bearish": [],
-          "bullish": [
-            "above_sma50",
-            "above_sma200",
-            "golden_cross",
-            "macd_bullish",
-            "positive_1m_momentum"
-          ]
-        },
+        "assumptions": [
+          "Personal amounts are user-reported USD; no brokerage account was verified.",
+          "Cost basis and shares describe the current split-adjusted position; no lot or corporate-action reconciliation was performed.",
+          "Portfolio value is the declared total including this holding, not cash or buying power.",
+          "Gain/loss is price-only and excludes dividends, fees, tax and realized transactions.",
+          "Allocation is checked only against the supplied ceiling; no add capacity or sale amount is calculated."
+        ],
         "data_provenance": {
           "price": {
             "as_of": "2026-10-10T00:00:00Z",
@@ -788,10 +1512,87 @@
             "source": "yfinance"
           }
         },
+        "data_quality": {
+          "bar_validity": null,
+          "completeness": 1.0,
+          "component_freshness": {
+            "events": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "fundamentals": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "news": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "price": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            },
+            "risk": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            }
+          },
+          "data_gaps": [],
+          "freshness": {
+            "codes": [],
+            "daily_completed_session": "2026-10-09",
+            "daily_last_valid_date": "2026-10-09",
+            "daily_sessions_behind": 0,
+            "expected_session": "2026-10-09",
+            "flags": [],
+            "price_source": "daily_close",
+            "session": "closed"
+          },
+          "fundamentals_status": "available",
+          "fundamentals_status_reason": null,
+          "in_flight_jobs": 0,
+          "missing_critical": [],
+          "staleness_warnings": [],
+          "tool_failures": [],
+          "warnings": []
+        },
+        "diagnostics": {
+          "technicals": {
+            "current_signals": {
+              "bearish": [],
+              "bullish": [
+                "above_sma50",
+                "above_sma200",
+                "golden_cross",
+                "macd_bullish",
+                "positive_1m_momentum"
+              ]
+            },
+            "flags": {
+              "broke_sma200": false,
+              "broke_sma50": false,
+              "death_cross": false,
+              "macd_bearish": false,
+              "rsi_overbought": false
+            },
+            "note": "Unmonitored technical context, not holder stops or instructions to exit.",
+            "quote_currency": "USD",
+            "reference_levels": {
+              "atr_1x_below": 98.0,
+              "recent_low_1m": 85.0,
+              "sma_200": 90.0,
+              "sma_50": 95.0
+            }
+          }
+        },
         "holding": {
           "days_held": 366,
-          "days_to_long_term": null,
-          "is_long_term": true,
           "purchase_date": "2025-10-08"
         },
         "meta": {
@@ -800,36 +1601,96 @@
           "tool": "analyze_position"
         },
         "position": {
+          "calculation_reasons": {
+            "current_price": [],
+            "current_value": [],
+            "gain_loss": [],
+            "gain_loss_dollars": [],
+            "portfolio_weight_pct": [
+              "missing_portfolio_value"
+            ]
+          },
           "cost_basis": 80.0,
           "current_price": 100.0,
           "current_value": 2000.0,
           "gain_loss": 0.25,
           "gain_loss_dollars": 400.0,
+          "max_holding_pct": null,
+          "portfolio_value": null,
+          "portfolio_weight_pct": null,
+          "price_context": {
+            "as_of": "2026-10-09",
+            "qualification": "Price context as of 2026-10-09; not a live account valuation.",
+            "status": "current"
+          },
+          "price_provenance": {
+            "as_of_kind": "session_close",
+            "as_of_precision": "date",
+            "cache_hit": false,
+            "fallback_reason": null,
+            "fetched_at": "2026-10-10T00:00:00Z",
+            "price_as_of": "2026-10-09",
+            "price_source": "daily_close",
+            "staleness": {
+              "expected_session": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false,
+              "unit": "sessions"
+            }
+          },
           "shares": 20.0
         },
-        "sell_signals": {
-          "active_count": 0,
-          "broke_sma200": false,
-          "broke_sma50": false,
-          "death_cross": false,
-          "macd_bearish": false,
-          "rsi_overbought": false
+        "position_card": {
+          "addition_context": "The stock model permits considering new money; no remaining add capacity has been assessed.",
+          "concentration_check": {
+            "ceiling_pct": null,
+            "reasons": [],
+            "status": "not_requested",
+            "threshold_basis": null,
+            "weight_pct": null
+          },
+          "context_status": {
+            "reasons": [],
+            "status": "available"
+          },
+          "holder_assessment": {
+            "action": "hold",
+            "add_allowed": true,
+            "basis": "candidate_admits_new_money"
+          },
+          "horizon": "mid_term",
+          "new_money": {
+            "action": "starter",
+            "blocked_by": [],
+            "decided_by": null,
+            "earliest_reassessment": null,
+            "unevaluated": []
+          },
+          "review_status": "not_requested"
         },
-        "support_levels": {
-          "atr_1x_below": 98.0,
-          "recent_low_1m": 85.0,
-          "sma_200": 90.0,
-          "sma_50": 95.0
+        "suitability": {
+          "fit": "ok",
+          "horizon": "mid_term",
+          "note": "Suitability is separate from the holder assessment; hold is not an endorsement.",
+          "reasons": [
+            "mid_term: setup favorable"
+          ]
         },
         "symbol": "ACME",
         "tax": {
-          "potential_savings": 0,
-          "rate_if_long_term": 0.2,
-          "rate_if_sold_now": 0.2,
-          "tax_if_waited": 80.0,
-          "tax_on_gain_now": 80.0,
-          "type": "long_term"
+          "reason": "Personal tax treatment and sale quantities are not assessed.",
+          "status": "not_assessed"
         }
+      },
+      "source_reads": {
+        "events_calendar": 1,
+        "fundamentals_snapshot": 1,
+        "options_signals": 1,
+        "ownership_analysis": 1,
+        "risk_metrics": 1,
+        "stock_news": 1,
+        "stock_summary": 1,
+        "technicals": 1
       },
       "technical_reads": 1,
       "technicals_input": {
@@ -923,16 +1784,13 @@
         "symbol": "ACME"
       },
       "result": {
-        "current_signals": {
-          "bearish": [],
-          "bullish": [
-            "above_sma50",
-            "above_sma200",
-            "golden_cross",
-            "macd_bullish",
-            "positive_1m_momentum"
-          ]
-        },
+        "assumptions": [
+          "Personal amounts are user-reported USD; no brokerage account was verified.",
+          "Cost basis and shares describe the current split-adjusted position; no lot or corporate-action reconciliation was performed.",
+          "Portfolio value is the declared total including this holding, not cash or buying power.",
+          "Gain/loss is price-only and excludes dividends, fees, tax and realized transactions.",
+          "Allocation is checked only against the supplied ceiling; no add capacity or sale amount is calculated."
+        ],
         "data_provenance": {
           "price": {
             "as_of": "2026-10-10T00:00:00Z",
@@ -940,10 +1798,87 @@
             "source": "yfinance"
           }
         },
+        "data_quality": {
+          "bar_validity": null,
+          "completeness": 1.0,
+          "component_freshness": {
+            "events": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "fundamentals": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "news": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "price": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            },
+            "risk": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            }
+          },
+          "data_gaps": [],
+          "freshness": {
+            "codes": [],
+            "daily_completed_session": "2026-10-09",
+            "daily_last_valid_date": "2026-10-09",
+            "daily_sessions_behind": 0,
+            "expected_session": "2026-10-09",
+            "flags": [],
+            "price_source": "daily_close",
+            "session": "closed"
+          },
+          "fundamentals_status": "available",
+          "fundamentals_status_reason": null,
+          "in_flight_jobs": 0,
+          "missing_critical": [],
+          "staleness_warnings": [],
+          "tool_failures": [],
+          "warnings": []
+        },
+        "diagnostics": {
+          "technicals": {
+            "current_signals": {
+              "bearish": [],
+              "bullish": [
+                "above_sma50",
+                "above_sma200",
+                "golden_cross",
+                "macd_bullish",
+                "positive_1m_momentum"
+              ]
+            },
+            "flags": {
+              "broke_sma200": false,
+              "broke_sma50": false,
+              "death_cross": false,
+              "macd_bearish": false,
+              "rsi_overbought": false
+            },
+            "note": "Unmonitored technical context, not holder stops or instructions to exit.",
+            "quote_currency": "USD",
+            "reference_levels": {
+              "atr_1x_below": 98.0,
+              "recent_low_1m": 85.0,
+              "sma_200": 90.0,
+              "sma_50": 95.0
+            }
+          }
+        },
         "holding": {
           "days_held": 38,
-          "days_to_long_term": 328,
-          "is_long_term": false,
           "purchase_date": "2026-09-01"
         },
         "meta": {
@@ -952,36 +1887,96 @@
           "tool": "analyze_position"
         },
         "position": {
+          "calculation_reasons": {
+            "current_price": [],
+            "current_value": [],
+            "gain_loss": [],
+            "gain_loss_dollars": [],
+            "portfolio_weight_pct": [
+              "missing_portfolio_value"
+            ]
+          },
           "cost_basis": 80.0,
           "current_price": 100.0,
           "current_value": 50.0,
           "gain_loss": 0.25,
           "gain_loss_dollars": 10.0,
+          "max_holding_pct": null,
+          "portfolio_value": null,
+          "portfolio_weight_pct": null,
+          "price_context": {
+            "as_of": "2026-10-09",
+            "qualification": "Price context as of 2026-10-09; not a live account valuation.",
+            "status": "current"
+          },
+          "price_provenance": {
+            "as_of_kind": "session_close",
+            "as_of_precision": "date",
+            "cache_hit": false,
+            "fallback_reason": null,
+            "fetched_at": "2026-10-10T00:00:00Z",
+            "price_as_of": "2026-10-09",
+            "price_source": "daily_close",
+            "staleness": {
+              "expected_session": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false,
+              "unit": "sessions"
+            }
+          },
           "shares": 0.5
         },
-        "sell_signals": {
-          "active_count": 0,
-          "broke_sma200": false,
-          "broke_sma50": false,
-          "death_cross": false,
-          "macd_bearish": false,
-          "rsi_overbought": false
+        "position_card": {
+          "addition_context": "The stock model permits considering new money; no remaining add capacity has been assessed.",
+          "concentration_check": {
+            "ceiling_pct": null,
+            "reasons": [],
+            "status": "not_requested",
+            "threshold_basis": null,
+            "weight_pct": null
+          },
+          "context_status": {
+            "reasons": [],
+            "status": "available"
+          },
+          "holder_assessment": {
+            "action": "hold",
+            "add_allowed": true,
+            "basis": "candidate_admits_new_money"
+          },
+          "horizon": "mid_term",
+          "new_money": {
+            "action": "starter",
+            "blocked_by": [],
+            "decided_by": null,
+            "earliest_reassessment": null,
+            "unevaluated": []
+          },
+          "review_status": "not_requested"
         },
-        "support_levels": {
-          "atr_1x_below": 98.0,
-          "recent_low_1m": 85.0,
-          "sma_200": 90.0,
-          "sma_50": 95.0
+        "suitability": {
+          "fit": "ok",
+          "horizon": "mid_term",
+          "note": "Suitability is separate from the holder assessment; hold is not an endorsement.",
+          "reasons": [
+            "mid_term: setup favorable"
+          ]
         },
         "symbol": "ACME",
         "tax": {
-          "potential_savings": 1.7,
-          "rate_if_long_term": 0.2,
-          "rate_if_sold_now": 0.37,
-          "tax_if_waited": 2.0,
-          "tax_on_gain_now": 3.7,
-          "type": "short_term"
+          "reason": "Personal tax treatment and sale quantities are not assessed.",
+          "status": "not_assessed"
         }
+      },
+      "source_reads": {
+        "events_calendar": 1,
+        "fundamentals_snapshot": 1,
+        "options_signals": 1,
+        "ownership_analysis": 1,
+        "risk_metrics": 1,
+        "stock_news": 1,
+        "stock_summary": 1,
+        "technicals": 1
       },
       "technical_reads": 1,
       "technicals_input": {
@@ -1075,67 +2070,27 @@
         "symbol": "ACME"
       },
       "result": {
-        "current_signals": {
-          "bearish": [],
-          "bullish": [
-            "above_sma50",
-            "above_sma200",
-            "golden_cross",
-            "macd_bullish",
-            "positive_1m_momentum"
-          ]
-        },
-        "data_provenance": {
-          "price": {
-            "as_of": "2026-10-10T00:00:00Z",
-            "last_bar_date": "2026-10-09",
-            "source": "yfinance"
-          }
-        },
-        "holding": {
-          "days_held": -1,
-          "days_to_long_term": 367,
-          "is_long_term": false,
-          "purchase_date": "2026-10-10"
-        },
+        "error": true,
+        "error_type": "invalid_parameters",
+        "message": "purchase_date must be a real YYYY-MM-DD date no later than the request date",
         "meta": {
           "schema_version": "7",
           "server_version": "0.4.0",
-          "tool": "analyze_position"
+          "tool": "error"
         },
-        "position": {
-          "cost_basis": 80.0,
-          "current_price": 100.0,
-          "current_value": 2000.0,
-          "gain_loss": 0.25,
-          "gain_loss_dollars": 400.0,
-          "shares": 20.0
-        },
-        "sell_signals": {
-          "active_count": 0,
-          "broke_sma200": false,
-          "broke_sma50": false,
-          "death_cross": false,
-          "macd_bearish": false,
-          "rsi_overbought": false
-        },
-        "support_levels": {
-          "atr_1x_below": 98.0,
-          "recent_low_1m": 85.0,
-          "sma_200": 90.0,
-          "sma_50": 95.0
-        },
-        "symbol": "ACME",
-        "tax": {
-          "potential_savings": 68.0,
-          "rate_if_long_term": 0.2,
-          "rate_if_sold_now": 0.37,
-          "tax_if_waited": 80.0,
-          "tax_on_gain_now": 148.0,
-          "type": "short_term"
-        }
+        "symbol": "ACME"
       },
-      "technical_reads": 1,
+      "source_reads": {
+        "events_calendar": 0,
+        "fundamentals_snapshot": 0,
+        "options_signals": 0,
+        "ownership_analysis": 0,
+        "risk_metrics": 0,
+        "stock_news": 0,
+        "stock_summary": 0,
+        "technicals": 0
+      },
+      "technical_reads": 0,
       "technicals_input": {
         "atr": {
           "value": 2.0
@@ -1227,16 +2182,13 @@
         "symbol": "ACME"
       },
       "result": {
-        "current_signals": {
-          "bearish": [],
-          "bullish": [
-            "above_sma50",
-            "above_sma200",
-            "golden_cross",
-            "macd_bullish",
-            "positive_1m_momentum"
-          ]
-        },
+        "assumptions": [
+          "Personal amounts are user-reported USD; no brokerage account was verified.",
+          "Cost basis and shares describe the current split-adjusted position; no lot or corporate-action reconciliation was performed.",
+          "Portfolio value is the declared total including this holding, not cash or buying power.",
+          "Gain/loss is price-only and excludes dividends, fees, tax and realized transactions.",
+          "Allocation is checked only against the supplied ceiling; no add capacity or sale amount is calculated."
+        ],
         "data_provenance": {
           "price": {
             "as_of": "2026-10-10T00:00:00Z",
@@ -1244,10 +2196,87 @@
             "source": "yfinance"
           }
         },
+        "data_quality": {
+          "bar_validity": null,
+          "completeness": 1.0,
+          "component_freshness": {
+            "events": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "fundamentals": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "news": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "price": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            },
+            "risk": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            }
+          },
+          "data_gaps": [],
+          "freshness": {
+            "codes": [],
+            "daily_completed_session": "2026-10-09",
+            "daily_last_valid_date": "2026-10-09",
+            "daily_sessions_behind": 0,
+            "expected_session": "2026-10-09",
+            "flags": [],
+            "price_source": "daily_close",
+            "session": "closed"
+          },
+          "fundamentals_status": "available",
+          "fundamentals_status_reason": null,
+          "in_flight_jobs": 0,
+          "missing_critical": [],
+          "staleness_warnings": [],
+          "tool_failures": [],
+          "warnings": []
+        },
+        "diagnostics": {
+          "technicals": {
+            "current_signals": {
+              "bearish": [],
+              "bullish": [
+                "above_sma50",
+                "above_sma200",
+                "golden_cross",
+                "macd_bullish",
+                "positive_1m_momentum"
+              ]
+            },
+            "flags": {
+              "broke_sma200": false,
+              "broke_sma50": false,
+              "death_cross": false,
+              "macd_bearish": false,
+              "rsi_overbought": false
+            },
+            "note": "Unmonitored technical context, not holder stops or instructions to exit.",
+            "quote_currency": "USD",
+            "reference_levels": {
+              "atr_1x_below": 98.0,
+              "recent_low_1m": 85.0,
+              "sma_200": 90.0,
+              "sma_50": 95.0
+            }
+          }
+        },
         "holding": {
           "days_held": 38,
-          "days_to_long_term": 328,
-          "is_long_term": false,
           "purchase_date": "2026-09-01"
         },
         "meta": {
@@ -1256,36 +2285,96 @@
           "tool": "analyze_position"
         },
         "position": {
+          "calculation_reasons": {
+            "current_price": [],
+            "current_value": [],
+            "gain_loss": [],
+            "gain_loss_dollars": [],
+            "portfolio_weight_pct": [
+              "missing_portfolio_value"
+            ]
+          },
           "cost_basis": 80.0,
           "current_price": 100.0,
           "current_value": 2000.0,
           "gain_loss": 0.25,
           "gain_loss_dollars": 400.0,
+          "max_holding_pct": null,
+          "portfolio_value": null,
+          "portfolio_weight_pct": null,
+          "price_context": {
+            "as_of": "2026-10-09",
+            "qualification": "Price context as of 2026-10-09; not a live account valuation.",
+            "status": "current"
+          },
+          "price_provenance": {
+            "as_of_kind": "session_close",
+            "as_of_precision": "date",
+            "cache_hit": false,
+            "fallback_reason": null,
+            "fetched_at": "2026-10-10T00:00:00Z",
+            "price_as_of": "2026-10-09",
+            "price_source": "daily_close",
+            "staleness": {
+              "expected_session": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false,
+              "unit": "sessions"
+            }
+          },
           "shares": 20.0
         },
-        "sell_signals": {
-          "active_count": 0,
-          "broke_sma200": false,
-          "broke_sma50": false,
-          "death_cross": false,
-          "macd_bearish": false,
-          "rsi_overbought": false
+        "position_card": {
+          "addition_context": "The stock model permits considering new money; no remaining add capacity has been assessed.",
+          "concentration_check": {
+            "ceiling_pct": null,
+            "reasons": [],
+            "status": "not_requested",
+            "threshold_basis": null,
+            "weight_pct": null
+          },
+          "context_status": {
+            "reasons": [],
+            "status": "available"
+          },
+          "holder_assessment": {
+            "action": "hold",
+            "add_allowed": true,
+            "basis": "candidate_admits_new_money"
+          },
+          "horizon": "mid_term",
+          "new_money": {
+            "action": "starter",
+            "blocked_by": [],
+            "decided_by": null,
+            "earliest_reassessment": null,
+            "unevaluated": []
+          },
+          "review_status": "not_requested"
         },
-        "support_levels": {
-          "atr_1x_below": 98.0,
-          "recent_low_1m": 85.0,
-          "sma_200": 90.0,
-          "sma_50": 95.0
+        "suitability": {
+          "fit": "ok",
+          "horizon": "mid_term",
+          "note": "Suitability is separate from the holder assessment; hold is not an endorsement.",
+          "reasons": [
+            "mid_term: setup favorable"
+          ]
         },
         "symbol": "ACME",
         "tax": {
-          "potential_savings": 68.0,
-          "rate_if_long_term": 0.2,
-          "rate_if_sold_now": 0.37,
-          "tax_if_waited": 80.0,
-          "tax_on_gain_now": 148.0,
-          "type": "short_term"
+          "reason": "Personal tax treatment and sale quantities are not assessed.",
+          "status": "not_assessed"
         }
+      },
+      "source_reads": {
+        "events_calendar": 1,
+        "fundamentals_snapshot": 1,
+        "options_signals": 1,
+        "ownership_analysis": 1,
+        "risk_metrics": 1,
+        "stock_news": 1,
+        "stock_summary": 1,
+        "technicals": 1
       },
       "technical_reads": 1,
       "technicals_input": {
@@ -1381,13 +2470,23 @@
       "result": {
         "error": true,
         "error_type": "invalid_parameters",
-        "message": "Invalid purchase_date format: 2026-02-30. Expected YYYY-MM-DD",
+        "message": "purchase_date must be a real YYYY-MM-DD date no later than the request date",
         "meta": {
           "schema_version": "7",
           "server_version": "0.4.0",
           "tool": "error"
         },
         "symbol": "ACME"
+      },
+      "source_reads": {
+        "events_calendar": 0,
+        "fundamentals_snapshot": 0,
+        "options_signals": 0,
+        "ownership_analysis": 0,
+        "risk_metrics": 0,
+        "stock_news": 0,
+        "stock_summary": 0,
+        "technicals": 0
       },
       "technical_reads": 0,
       "technicals_input": {
@@ -1481,16 +2580,13 @@
         "symbol": "ACME"
       },
       "result": {
-        "current_signals": {
-          "bearish": [
-            "below_sma50",
-            "below_sma200",
-            "death_cross",
-            "macd_bearish",
-            "negative_1m_momentum"
-          ],
-          "bullish": []
-        },
+        "assumptions": [
+          "Personal amounts are user-reported USD; no brokerage account was verified.",
+          "Cost basis and shares describe the current split-adjusted position; no lot or corporate-action reconciliation was performed.",
+          "Portfolio value is the declared total including this holding, not cash or buying power.",
+          "Gain/loss is price-only and excludes dividends, fees, tax and realized transactions.",
+          "Allocation is checked only against the supplied ceiling; no add capacity or sale amount is calculated."
+        ],
         "data_provenance": {
           "price": {
             "as_of": "2026-10-10T00:00:00Z",
@@ -1498,10 +2594,87 @@
             "source": "yfinance"
           }
         },
+        "data_quality": {
+          "bar_validity": null,
+          "completeness": 1.0,
+          "component_freshness": {
+            "events": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "fundamentals": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "news": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "price": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            },
+            "risk": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            }
+          },
+          "data_gaps": [],
+          "freshness": {
+            "codes": [],
+            "daily_completed_session": "2026-10-09",
+            "daily_last_valid_date": "2026-10-09",
+            "daily_sessions_behind": 0,
+            "expected_session": "2026-10-09",
+            "flags": [],
+            "price_source": "daily_close",
+            "session": "closed"
+          },
+          "fundamentals_status": "available",
+          "fundamentals_status_reason": null,
+          "in_flight_jobs": 0,
+          "missing_critical": [],
+          "staleness_warnings": [],
+          "tool_failures": [],
+          "warnings": []
+        },
+        "diagnostics": {
+          "technicals": {
+            "current_signals": {
+              "bearish": [
+                "below_sma50",
+                "below_sma200",
+                "death_cross",
+                "macd_bearish",
+                "negative_1m_momentum"
+              ],
+              "bullish": []
+            },
+            "flags": {
+              "broke_sma200": true,
+              "broke_sma50": true,
+              "death_cross": true,
+              "macd_bearish": true,
+              "rsi_overbought": false
+            },
+            "note": "Unmonitored technical context, not holder stops or instructions to exit.",
+            "quote_currency": "USD",
+            "reference_levels": {
+              "atr_1x_below": 53.0,
+              "recent_low_1m": 85.0,
+              "sma_200": 80.0,
+              "sma_50": 65.0
+            }
+          }
+        },
         "holding": {
           "days_held": 38,
-          "days_to_long_term": 328,
-          "is_long_term": false,
           "purchase_date": "2026-09-01"
         },
         "meta": {
@@ -1510,36 +2683,103 @@
           "tool": "analyze_position"
         },
         "position": {
+          "calculation_reasons": {
+            "current_price": [],
+            "current_value": [],
+            "gain_loss": [],
+            "gain_loss_dollars": [],
+            "portfolio_weight_pct": [
+              "missing_portfolio_value"
+            ]
+          },
           "cost_basis": 80.0,
           "current_price": 55.0,
           "current_value": 1100.0,
           "gain_loss": -0.3125,
           "gain_loss_dollars": -500.0,
+          "max_holding_pct": null,
+          "portfolio_value": null,
+          "portfolio_weight_pct": null,
+          "price_context": {
+            "as_of": "2026-10-09",
+            "qualification": "Price context as of 2026-10-09; not a live account valuation.",
+            "status": "current"
+          },
+          "price_provenance": {
+            "as_of_kind": "session_close",
+            "as_of_precision": "date",
+            "cache_hit": false,
+            "fallback_reason": null,
+            "fetched_at": "2026-10-10T00:00:00Z",
+            "price_as_of": "2026-10-09",
+            "price_source": "daily_close",
+            "staleness": {
+              "expected_session": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false,
+              "unit": "sessions"
+            }
+          },
           "shares": 20.0
         },
-        "sell_signals": {
-          "active_count": 4,
-          "broke_sma200": true,
-          "broke_sma50": true,
-          "death_cross": true,
-          "macd_bearish": true,
-          "rsi_overbought": false
+        "position_card": {
+          "addition_context": "Adding is not allowed by the stock model: avoid (falling_knife).",
+          "concentration_check": {
+            "ceiling_pct": null,
+            "reasons": [],
+            "status": "not_requested",
+            "threshold_basis": null,
+            "weight_pct": null
+          },
+          "context_status": {
+            "reasons": [],
+            "status": "available"
+          },
+          "holder_assessment": {
+            "action": "hold",
+            "add_allowed": false,
+            "basis": "price_broken_more_than_business"
+          },
+          "horizon": "mid_term",
+          "new_money": {
+            "action": "avoid",
+            "blocked_by": [
+              {
+                "class": "price_risk",
+                "effect": "veto",
+                "id": "falling_knife",
+                "reason": "severe decline with broken trends \u2014 wait for stabilization"
+              }
+            ],
+            "decided_by": null,
+            "earliest_reassessment": null,
+            "unevaluated": []
+          },
+          "review_status": "not_requested"
         },
-        "support_levels": {
-          "atr_1x_below": 53.0,
-          "recent_low_1m": 85.0,
-          "sma_200": 80.0,
-          "sma_50": 65.0
+        "suitability": {
+          "fit": "avoid",
+          "horizon": "mid_term",
+          "note": "Suitability is separate from the holder assessment; hold is not an endorsement.",
+          "reasons": [
+            "mid_term: poor setup with negative technicals"
+          ]
         },
         "symbol": "ACME",
         "tax": {
-          "potential_savings": null,
-          "rate_if_long_term": 0.2,
-          "rate_if_sold_now": 0.37,
-          "tax_if_waited": null,
-          "tax_on_gain_now": null,
-          "type": "short_term"
+          "reason": "Personal tax treatment and sale quantities are not assessed.",
+          "status": "not_assessed"
         }
+      },
+      "source_reads": {
+        "events_calendar": 1,
+        "fundamentals_snapshot": 1,
+        "options_signals": 1,
+        "ownership_analysis": 1,
+        "risk_metrics": 1,
+        "stock_news": 1,
+        "stock_summary": 1,
+        "technicals": 1
       },
       "technical_reads": 1,
       "technicals_input": {
@@ -1637,16 +2877,13 @@
         "symbol": "ACME"
       },
       "result": {
-        "current_signals": {
-          "bearish": [],
-          "bullish": [
-            "above_sma50",
-            "above_sma200",
-            "golden_cross",
-            "macd_bullish",
-            "positive_1m_momentum"
-          ]
-        },
+        "assumptions": [
+          "Personal amounts are user-reported USD; no brokerage account was verified.",
+          "Cost basis and shares describe the current split-adjusted position; no lot or corporate-action reconciliation was performed.",
+          "Portfolio value is the declared total including this holding, not cash or buying power.",
+          "Gain/loss is price-only and excludes dividends, fees, tax and realized transactions.",
+          "Allocation is checked only against the supplied ceiling; no add capacity or sale amount is calculated."
+        ],
         "data_provenance": {
           "price": {
             "as_of": "2026-10-10T00:00:00Z",
@@ -1654,10 +2891,87 @@
             "source": "yfinance"
           }
         },
+        "data_quality": {
+          "bar_validity": null,
+          "completeness": 1.0,
+          "component_freshness": {
+            "events": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "fundamentals": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "news": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "price": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            },
+            "risk": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            }
+          },
+          "data_gaps": [],
+          "freshness": {
+            "codes": [],
+            "daily_completed_session": "2026-10-09",
+            "daily_last_valid_date": "2026-10-09",
+            "daily_sessions_behind": 0,
+            "expected_session": "2026-10-09",
+            "flags": [],
+            "price_source": "daily_close",
+            "session": "closed"
+          },
+          "fundamentals_status": "available",
+          "fundamentals_status_reason": null,
+          "in_flight_jobs": 0,
+          "missing_critical": [],
+          "staleness_warnings": [],
+          "tool_failures": [],
+          "warnings": []
+        },
+        "diagnostics": {
+          "technicals": {
+            "current_signals": {
+              "bearish": [],
+              "bullish": [
+                "above_sma50",
+                "above_sma200",
+                "golden_cross",
+                "macd_bullish",
+                "positive_1m_momentum"
+              ]
+            },
+            "flags": {
+              "broke_sma200": false,
+              "broke_sma50": false,
+              "death_cross": false,
+              "macd_bearish": false,
+              "rsi_overbought": false
+            },
+            "note": "Unmonitored technical context, not holder stops or instructions to exit.",
+            "quote_currency": "USD",
+            "reference_levels": {
+              "atr_1x_below": 98.0,
+              "recent_low_1m": 85.0,
+              "sma_200": 90.0,
+              "sma_50": 95.0
+            }
+          }
+        },
         "holding": {
           "days_held": 953,
-          "days_to_long_term": null,
-          "is_long_term": true,
           "purchase_date": "2024-02-29"
         },
         "meta": {
@@ -1666,36 +2980,96 @@
           "tool": "analyze_position"
         },
         "position": {
+          "calculation_reasons": {
+            "current_price": [],
+            "current_value": [],
+            "gain_loss": [],
+            "gain_loss_dollars": [],
+            "portfolio_weight_pct": [
+              "missing_portfolio_value"
+            ]
+          },
           "cost_basis": 80.0,
           "current_price": 100.0,
           "current_value": 2000.0,
           "gain_loss": 0.25,
           "gain_loss_dollars": 400.0,
+          "max_holding_pct": null,
+          "portfolio_value": null,
+          "portfolio_weight_pct": null,
+          "price_context": {
+            "as_of": "2026-10-09",
+            "qualification": "Price context as of 2026-10-09; not a live account valuation.",
+            "status": "current"
+          },
+          "price_provenance": {
+            "as_of_kind": "session_close",
+            "as_of_precision": "date",
+            "cache_hit": false,
+            "fallback_reason": null,
+            "fetched_at": "2026-10-10T00:00:00Z",
+            "price_as_of": "2026-10-09",
+            "price_source": "daily_close",
+            "staleness": {
+              "expected_session": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false,
+              "unit": "sessions"
+            }
+          },
           "shares": 20.0
         },
-        "sell_signals": {
-          "active_count": 0,
-          "broke_sma200": false,
-          "broke_sma50": false,
-          "death_cross": false,
-          "macd_bearish": false,
-          "rsi_overbought": false
+        "position_card": {
+          "addition_context": "The stock model permits considering new money; no remaining add capacity has been assessed.",
+          "concentration_check": {
+            "ceiling_pct": null,
+            "reasons": [],
+            "status": "not_requested",
+            "threshold_basis": null,
+            "weight_pct": null
+          },
+          "context_status": {
+            "reasons": [],
+            "status": "available"
+          },
+          "holder_assessment": {
+            "action": "hold",
+            "add_allowed": true,
+            "basis": "candidate_admits_new_money"
+          },
+          "horizon": "mid_term",
+          "new_money": {
+            "action": "starter",
+            "blocked_by": [],
+            "decided_by": null,
+            "earliest_reassessment": null,
+            "unevaluated": []
+          },
+          "review_status": "not_requested"
         },
-        "support_levels": {
-          "atr_1x_below": 98.0,
-          "recent_low_1m": 85.0,
-          "sma_200": 90.0,
-          "sma_50": 95.0
+        "suitability": {
+          "fit": "ok",
+          "horizon": "mid_term",
+          "note": "Suitability is separate from the holder assessment; hold is not an endorsement.",
+          "reasons": [
+            "mid_term: setup favorable"
+          ]
         },
         "symbol": "ACME",
         "tax": {
-          "potential_savings": 0,
-          "rate_if_long_term": 0.2,
-          "rate_if_sold_now": 0.2,
-          "tax_if_waited": 80.0,
-          "tax_on_gain_now": 80.0,
-          "type": "long_term"
+          "reason": "Personal tax treatment and sale quantities are not assessed.",
+          "status": "not_assessed"
         }
+      },
+      "source_reads": {
+        "events_calendar": 1,
+        "fundamentals_snapshot": 1,
+        "options_signals": 1,
+        "ownership_analysis": 1,
+        "risk_metrics": 1,
+        "stock_news": 1,
+        "stock_summary": 1,
+        "technicals": 1
       },
       "technical_reads": 1,
       "technicals_input": {
@@ -1789,16 +3163,13 @@
         "symbol": "ACME"
       },
       "result": {
-        "current_signals": {
-          "bearish": [],
-          "bullish": [
-            "above_sma50",
-            "above_sma200",
-            "golden_cross",
-            "macd_bullish",
-            "positive_1m_momentum"
-          ]
-        },
+        "assumptions": [
+          "Personal amounts are user-reported USD; no brokerage account was verified.",
+          "Cost basis and shares describe the current split-adjusted position; no lot or corporate-action reconciliation was performed.",
+          "Portfolio value is the declared total including this holding, not cash or buying power.",
+          "Gain/loss is price-only and excludes dividends, fees, tax and realized transactions.",
+          "Allocation is checked only against the supplied ceiling; no add capacity or sale amount is calculated."
+        ],
         "data_provenance": {
           "price": {
             "as_of": "2026-10-10T00:00:00Z",
@@ -1806,10 +3177,87 @@
             "source": "yfinance"
           }
         },
+        "data_quality": {
+          "bar_validity": null,
+          "completeness": 1.0,
+          "component_freshness": {
+            "events": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "fundamentals": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "news": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "price": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            },
+            "risk": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            }
+          },
+          "data_gaps": [],
+          "freshness": {
+            "codes": [],
+            "daily_completed_session": "2026-10-09",
+            "daily_last_valid_date": "2026-10-09",
+            "daily_sessions_behind": 0,
+            "expected_session": "2026-10-09",
+            "flags": [],
+            "price_source": "daily_close",
+            "session": "closed"
+          },
+          "fundamentals_status": "available",
+          "fundamentals_status_reason": null,
+          "in_flight_jobs": 0,
+          "missing_critical": [],
+          "staleness_warnings": [],
+          "tool_failures": [],
+          "warnings": []
+        },
+        "diagnostics": {
+          "technicals": {
+            "current_signals": {
+              "bearish": [],
+              "bullish": [
+                "above_sma50",
+                "above_sma200",
+                "golden_cross",
+                "macd_bullish",
+                "positive_1m_momentum"
+              ]
+            },
+            "flags": {
+              "broke_sma200": false,
+              "broke_sma50": false,
+              "death_cross": false,
+              "macd_bearish": false,
+              "rsi_overbought": false
+            },
+            "note": "Unmonitored technical context, not holder stops or instructions to exit.",
+            "quote_currency": "USD",
+            "reference_levels": {
+              "atr_1x_below": 98.0,
+              "recent_low_1m": 85.0,
+              "sma_200": 90.0,
+              "sma_50": 95.0
+            }
+          }
+        },
         "holding": {
           "days_held": 38,
-          "days_to_long_term": 328,
-          "is_long_term": false,
           "purchase_date": "2026-09-01"
         },
         "meta": {
@@ -1818,36 +3266,96 @@
           "tool": "analyze_position"
         },
         "position": {
+          "calculation_reasons": {
+            "current_price": [],
+            "current_value": [],
+            "gain_loss": [],
+            "gain_loss_dollars": [],
+            "portfolio_weight_pct": [
+              "missing_portfolio_value"
+            ]
+          },
           "cost_basis": 120.0,
           "current_price": 100.0,
           "current_value": 2000.0,
           "gain_loss": -0.1667,
           "gain_loss_dollars": -400.0,
+          "max_holding_pct": null,
+          "portfolio_value": null,
+          "portfolio_weight_pct": null,
+          "price_context": {
+            "as_of": "2026-10-09",
+            "qualification": "Price context as of 2026-10-09; not a live account valuation.",
+            "status": "current"
+          },
+          "price_provenance": {
+            "as_of_kind": "session_close",
+            "as_of_precision": "date",
+            "cache_hit": false,
+            "fallback_reason": null,
+            "fetched_at": "2026-10-10T00:00:00Z",
+            "price_as_of": "2026-10-09",
+            "price_source": "daily_close",
+            "staleness": {
+              "expected_session": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false,
+              "unit": "sessions"
+            }
+          },
           "shares": 20.0
         },
-        "sell_signals": {
-          "active_count": 0,
-          "broke_sma200": false,
-          "broke_sma50": false,
-          "death_cross": false,
-          "macd_bearish": false,
-          "rsi_overbought": false
+        "position_card": {
+          "addition_context": "The stock model permits considering new money; no remaining add capacity has been assessed.",
+          "concentration_check": {
+            "ceiling_pct": null,
+            "reasons": [],
+            "status": "not_requested",
+            "threshold_basis": null,
+            "weight_pct": null
+          },
+          "context_status": {
+            "reasons": [],
+            "status": "available"
+          },
+          "holder_assessment": {
+            "action": "hold",
+            "add_allowed": true,
+            "basis": "candidate_admits_new_money"
+          },
+          "horizon": "mid_term",
+          "new_money": {
+            "action": "starter",
+            "blocked_by": [],
+            "decided_by": null,
+            "earliest_reassessment": null,
+            "unevaluated": []
+          },
+          "review_status": "not_requested"
         },
-        "support_levels": {
-          "atr_1x_below": 98.0,
-          "recent_low_1m": 85.0,
-          "sma_200": 90.0,
-          "sma_50": 95.0
+        "suitability": {
+          "fit": "ok",
+          "horizon": "mid_term",
+          "note": "Suitability is separate from the holder assessment; hold is not an endorsement.",
+          "reasons": [
+            "mid_term: setup favorable"
+          ]
         },
         "symbol": "ACME",
         "tax": {
-          "potential_savings": null,
-          "rate_if_long_term": 0.2,
-          "rate_if_sold_now": 0.37,
-          "tax_if_waited": null,
-          "tax_on_gain_now": null,
-          "type": "short_term"
+          "reason": "Personal tax treatment and sale quantities are not assessed.",
+          "status": "not_assessed"
         }
+      },
+      "source_reads": {
+        "events_calendar": 1,
+        "fundamentals_snapshot": 1,
+        "options_signals": 1,
+        "ownership_analysis": 1,
+        "risk_metrics": 1,
+        "stock_news": 1,
+        "stock_summary": 1,
+        "technicals": 1
       },
       "technical_reads": 1,
       "technicals_input": {
@@ -1941,67 +3449,27 @@
         "symbol": "ACME"
       },
       "result": {
-        "current_signals": {
-          "bearish": [],
-          "bullish": [
-            "above_sma50",
-            "above_sma200",
-            "golden_cross",
-            "macd_bullish",
-            "positive_1m_momentum"
-          ]
-        },
-        "data_provenance": {
-          "price": {
-            "as_of": "2026-10-10T00:00:00Z",
-            "last_bar_date": "2026-10-09",
-            "source": "yfinance"
-          }
-        },
-        "holding": {
-          "days_held": 38,
-          "days_to_long_term": 328,
-          "is_long_term": false,
-          "purchase_date": "2026-09-01"
-        },
+        "error": true,
+        "error_type": "invalid_parameters",
+        "message": "cost_basis must be a finite nonnegative number; decimal numeric strings are accepted",
         "meta": {
           "schema_version": "7",
           "server_version": "0.4.0",
-          "tool": "analyze_position"
+          "tool": "error"
         },
-        "position": {
-          "cost_basis": -10.0,
-          "current_price": 100.0,
-          "current_value": 2000.0,
-          "gain_loss": -11.0,
-          "gain_loss_dollars": 2200.0,
-          "shares": 20.0
-        },
-        "sell_signals": {
-          "active_count": 0,
-          "broke_sma200": false,
-          "broke_sma50": false,
-          "death_cross": false,
-          "macd_bearish": false,
-          "rsi_overbought": false
-        },
-        "support_levels": {
-          "atr_1x_below": 98.0,
-          "recent_low_1m": 85.0,
-          "sma_200": 90.0,
-          "sma_50": 95.0
-        },
-        "symbol": "ACME",
-        "tax": {
-          "potential_savings": 374.0,
-          "rate_if_long_term": 0.2,
-          "rate_if_sold_now": 0.37,
-          "tax_if_waited": 440.0,
-          "tax_on_gain_now": 814.0,
-          "type": "short_term"
-        }
+        "symbol": "ACME"
       },
-      "technical_reads": 1,
+      "source_reads": {
+        "events_calendar": 0,
+        "fundamentals_snapshot": 0,
+        "options_signals": 0,
+        "ownership_analysis": 0,
+        "risk_metrics": 0,
+        "stock_news": 0,
+        "stock_summary": 0,
+        "technicals": 0
+      },
+      "technical_reads": 0,
       "technicals_input": {
         "atr": {
           "value": 2.0
@@ -2093,16 +3561,13 @@
         "symbol": "ACME"
       },
       "result": {
-        "current_signals": {
-          "bearish": [],
-          "bullish": [
-            "above_sma50",
-            "above_sma200",
-            "golden_cross",
-            "macd_bullish",
-            "positive_1m_momentum"
-          ]
-        },
+        "assumptions": [
+          "Personal amounts are user-reported USD; no brokerage account was verified.",
+          "Cost basis and shares describe the current split-adjusted position; no lot or corporate-action reconciliation was performed.",
+          "Portfolio value is the declared total including this holding, not cash or buying power.",
+          "Gain/loss is price-only and excludes dividends, fees, tax and realized transactions.",
+          "Allocation is checked only against the supplied ceiling; no add capacity or sale amount is calculated."
+        ],
         "data_provenance": {
           "price": {
             "as_of": "2026-10-10T00:00:00Z",
@@ -2110,10 +3575,89 @@
             "source": "yfinance"
           }
         },
+        "data_quality": {
+          "bar_validity": null,
+          "completeness": 0.8,
+          "component_freshness": {
+            "events": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "fundamentals": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "news": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "price": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            },
+            "risk": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            }
+          },
+          "data_gaps": [],
+          "freshness": {
+            "codes": [],
+            "daily_completed_session": "2026-10-09",
+            "daily_last_valid_date": "2026-10-09",
+            "daily_sessions_behind": 0,
+            "expected_session": "2026-10-09",
+            "flags": [],
+            "price_source": null,
+            "session": "closed"
+          },
+          "fundamentals_status": "available",
+          "fundamentals_status_reason": null,
+          "in_flight_jobs": 0,
+          "missing_critical": [
+            "current_price"
+          ],
+          "staleness_warnings": [],
+          "tool_failures": [],
+          "warnings": []
+        },
+        "diagnostics": {
+          "technicals": {
+            "current_signals": {
+              "bearish": [],
+              "bullish": [
+                "above_sma50",
+                "above_sma200",
+                "golden_cross",
+                "macd_bullish",
+                "positive_1m_momentum"
+              ]
+            },
+            "flags": {
+              "broke_sma200": false,
+              "broke_sma50": false,
+              "death_cross": false,
+              "macd_bearish": false,
+              "rsi_overbought": false
+            },
+            "note": "Unmonitored technical context, not holder stops or instructions to exit.",
+            "quote_currency": "USD",
+            "reference_levels": {
+              "atr_1x_below": null,
+              "recent_low_1m": 85.0,
+              "sma_200": 90.0,
+              "sma_50": 95.0
+            }
+          }
+        },
         "holding": {
           "days_held": 38,
-          "days_to_long_term": 328,
-          "is_long_term": false,
           "purchase_date": "2026-09-01"
         },
         "meta": {
@@ -2122,36 +3666,129 @@
           "tool": "analyze_position"
         },
         "position": {
+          "calculation_reasons": {
+            "current_price": [
+              "price_unavailable"
+            ],
+            "current_value": [
+              "price_unavailable"
+            ],
+            "gain_loss": [
+              "price_unavailable"
+            ],
+            "gain_loss_dollars": [
+              "price_unavailable"
+            ],
+            "portfolio_weight_pct": [
+              "price_unavailable",
+              "missing_portfolio_value"
+            ]
+          },
           "cost_basis": 80.0,
-          "current_price": -5.0,
-          "current_value": -100.0,
-          "gain_loss": -1.0625,
-          "gain_loss_dollars": -1700.0,
+          "current_price": null,
+          "current_value": null,
+          "gain_loss": null,
+          "gain_loss_dollars": null,
+          "max_holding_pct": null,
+          "portfolio_value": null,
+          "portfolio_weight_pct": null,
+          "price_context": {
+            "as_of": null,
+            "qualification": "A verified USD per-share price is unavailable.",
+            "status": "unavailable"
+          },
+          "price_provenance": {
+            "as_of_kind": null,
+            "as_of_precision": null,
+            "cache_hit": null,
+            "fallback_reason": "no_price",
+            "fetched_at": null,
+            "price_as_of": null,
+            "price_source": null,
+            "staleness": null
+          },
           "shares": 20.0
         },
-        "sell_signals": {
-          "active_count": 0,
-          "broke_sma200": false,
-          "broke_sma50": false,
-          "death_cross": false,
-          "macd_bearish": false,
-          "rsi_overbought": false
+        "position_card": {
+          "addition_context": "Adding is not allowed by the stock model: wait_for_data (data_quality_critical).",
+          "concentration_check": {
+            "ceiling_pct": null,
+            "reasons": [],
+            "status": "not_requested",
+            "threshold_basis": null,
+            "weight_pct": null
+          },
+          "context_status": {
+            "reasons": [
+              "price_unavailable"
+            ],
+            "status": "partial"
+          },
+          "holder_assessment": {
+            "action": "hold",
+            "add_allowed": false,
+            "basis": "candidate_admits_new_money"
+          },
+          "horizon": "mid_term",
+          "new_money": {
+            "action": "wait_for_data",
+            "blocked_by": [
+              {
+                "class": "data",
+                "effect": "veto",
+                "id": "data_quality_critical",
+                "reason": "critical data unavailable: missing_critical=current_price"
+              }
+            ],
+            "decided_by": "data_quality_critical",
+            "earliest_reassessment": {
+              "basis": "conditions_only",
+              "date": null,
+              "earnings_risk_through": null,
+              "outstanding": [
+                {
+                  "clears_when": "critical tools and fields available",
+                  "id": "data_quality_critical"
+                }
+              ],
+              "session_method": null
+            },
+            "unevaluated": [
+              {
+                "id": "stale_data",
+                "reason": "price or daily-history age unavailable"
+              },
+              {
+                "id": "near_52w_high",
+                "reason": "price_zone null or undetermined"
+              }
+            ]
+          },
+          "review_status": "not_requested"
         },
-        "support_levels": {
-          "atr_1x_below": -7.0,
-          "recent_low_1m": 85.0,
-          "sma_200": 90.0,
-          "sma_50": 95.0
+        "suitability": {
+          "fit": "ok",
+          "horizon": "mid_term",
+          "note": "Suitability is separate from the holder assessment; hold is not an endorsement.",
+          "reasons": [
+            "mid_term: setup favorable"
+          ]
         },
         "symbol": "ACME",
         "tax": {
-          "potential_savings": null,
-          "rate_if_long_term": 0.2,
-          "rate_if_sold_now": 0.37,
-          "tax_if_waited": null,
-          "tax_on_gain_now": null,
-          "type": "short_term"
+          "reason": "Personal tax treatment and sale quantities are not assessed.",
+          "status": "not_assessed"
         }
+      },
+      "source_reads": {
+        "events_calendar": 1,
+        "fundamentals_snapshot": 1,
+        "options_signals": 1,
+        "ownership_analysis": 1,
+        "risk_metrics": 1,
+        "stock_news": 1,
+        "stock_summary": 1,
+        "technicals": 1
       },
       "technical_reads": 1,
       "technicals_input": {
@@ -2240,67 +3877,27 @@
         "symbol": "ACME"
       },
       "result": {
-        "current_signals": {
-          "bearish": [],
-          "bullish": [
-            "above_sma50",
-            "above_sma200",
-            "golden_cross",
-            "macd_bullish",
-            "positive_1m_momentum"
-          ]
-        },
-        "data_provenance": {
-          "price": {
-            "as_of": "2026-10-10T00:00:00Z",
-            "last_bar_date": "2026-10-09",
-            "source": "yfinance"
-          }
-        },
-        "holding": {
-          "days_held": 38,
-          "days_to_long_term": 328,
-          "is_long_term": false,
-          "purchase_date": "2026-09-01"
-        },
+        "error": true,
+        "error_type": "invalid_parameters",
+        "message": "shares must be a finite positive number; decimal numeric strings are accepted",
         "meta": {
           "schema_version": "7",
           "server_version": "0.4.0",
-          "tool": "analyze_position"
+          "tool": "error"
         },
-        "position": {
-          "cost_basis": 80.0,
-          "current_price": 100.0,
-          "current_value": -200.0,
-          "gain_loss": 0.25,
-          "gain_loss_dollars": -40.0,
-          "shares": -2.0
-        },
-        "sell_signals": {
-          "active_count": 0,
-          "broke_sma200": false,
-          "broke_sma50": false,
-          "death_cross": false,
-          "macd_bearish": false,
-          "rsi_overbought": false
-        },
-        "support_levels": {
-          "atr_1x_below": 98.0,
-          "recent_low_1m": 85.0,
-          "sma_200": 90.0,
-          "sma_50": 95.0
-        },
-        "symbol": "ACME",
-        "tax": {
-          "potential_savings": null,
-          "rate_if_long_term": 0.2,
-          "rate_if_sold_now": 0.37,
-          "tax_if_waited": null,
-          "tax_on_gain_now": null,
-          "type": "short_term"
-        }
+        "symbol": "ACME"
       },
-      "technical_reads": 1,
+      "source_reads": {
+        "events_calendar": 0,
+        "fundamentals_snapshot": 0,
+        "options_signals": 0,
+        "ownership_analysis": 0,
+        "risk_metrics": 0,
+        "stock_news": 0,
+        "stock_summary": 0,
+        "technicals": 0
+      },
+      "technical_reads": 0,
       "technicals_input": {
         "atr": {
           "value": 2.0
@@ -2392,15 +3989,234 @@
         "symbol": "ACME"
       },
       "result": {
-        "error": true,
-        "error_type": "data_unavailable",
-        "message": "Could not get current price",
+        "assumptions": [
+          "Personal amounts are user-reported USD; no brokerage account was verified.",
+          "Cost basis and shares describe the current split-adjusted position; no lot or corporate-action reconciliation was performed.",
+          "Portfolio value is the declared total including this holding, not cash or buying power.",
+          "Gain/loss is price-only and excludes dividends, fees, tax and realized transactions.",
+          "Allocation is checked only against the supplied ceiling; no add capacity or sale amount is calculated."
+        ],
+        "data_provenance": {
+          "price": {
+            "as_of": "2026-10-10T00:00:00Z",
+            "last_bar_date": "2026-10-09",
+            "source": "yfinance"
+          }
+        },
+        "data_quality": {
+          "bar_validity": null,
+          "completeness": 0.8,
+          "component_freshness": {
+            "events": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "fundamentals": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "news": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "price": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            },
+            "risk": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            }
+          },
+          "data_gaps": [],
+          "freshness": {
+            "codes": [],
+            "daily_completed_session": "2026-10-09",
+            "daily_last_valid_date": "2026-10-09",
+            "daily_sessions_behind": 0,
+            "expected_session": "2026-10-09",
+            "flags": [],
+            "price_source": null,
+            "session": "closed"
+          },
+          "fundamentals_status": "available",
+          "fundamentals_status_reason": null,
+          "in_flight_jobs": 0,
+          "missing_critical": [
+            "current_price"
+          ],
+          "staleness_warnings": [],
+          "tool_failures": [],
+          "warnings": []
+        },
+        "diagnostics": {
+          "technicals": {
+            "current_signals": {
+              "bearish": [],
+              "bullish": [
+                "above_sma50",
+                "above_sma200",
+                "golden_cross",
+                "macd_bullish",
+                "positive_1m_momentum"
+              ]
+            },
+            "flags": {
+              "broke_sma200": false,
+              "broke_sma50": false,
+              "death_cross": false,
+              "macd_bearish": false,
+              "rsi_overbought": false
+            },
+            "note": "Unmonitored technical context, not holder stops or instructions to exit.",
+            "quote_currency": "USD",
+            "reference_levels": {
+              "atr_1x_below": null,
+              "recent_low_1m": 85.0,
+              "sma_200": 90.0,
+              "sma_50": 95.0
+            }
+          }
+        },
+        "holding": {
+          "days_held": 38,
+          "purchase_date": "2026-09-01"
+        },
         "meta": {
           "schema_version": "7",
           "server_version": "0.4.0",
-          "tool": "error"
+          "tool": "analyze_position"
         },
-        "symbol": "ACME"
+        "position": {
+          "calculation_reasons": {
+            "current_price": [
+              "price_unavailable"
+            ],
+            "current_value": [
+              "price_unavailable"
+            ],
+            "gain_loss": [
+              "price_unavailable"
+            ],
+            "gain_loss_dollars": [
+              "price_unavailable"
+            ],
+            "portfolio_weight_pct": [
+              "price_unavailable",
+              "missing_portfolio_value"
+            ]
+          },
+          "cost_basis": 80.0,
+          "current_price": null,
+          "current_value": null,
+          "gain_loss": null,
+          "gain_loss_dollars": null,
+          "max_holding_pct": null,
+          "portfolio_value": null,
+          "portfolio_weight_pct": null,
+          "price_context": {
+            "as_of": null,
+            "qualification": "A verified USD per-share price is unavailable.",
+            "status": "unavailable"
+          },
+          "price_provenance": {
+            "as_of_kind": null,
+            "as_of_precision": null,
+            "cache_hit": null,
+            "fallback_reason": "no_price",
+            "fetched_at": null,
+            "price_as_of": null,
+            "price_source": null,
+            "staleness": null
+          },
+          "shares": 20.0
+        },
+        "position_card": {
+          "addition_context": "Adding is not allowed by the stock model: wait_for_data (data_quality_critical).",
+          "concentration_check": {
+            "ceiling_pct": null,
+            "reasons": [],
+            "status": "not_requested",
+            "threshold_basis": null,
+            "weight_pct": null
+          },
+          "context_status": {
+            "reasons": [
+              "price_unavailable"
+            ],
+            "status": "partial"
+          },
+          "holder_assessment": {
+            "action": "hold",
+            "add_allowed": false,
+            "basis": "candidate_admits_new_money"
+          },
+          "horizon": "mid_term",
+          "new_money": {
+            "action": "wait_for_data",
+            "blocked_by": [
+              {
+                "class": "data",
+                "effect": "veto",
+                "id": "data_quality_critical",
+                "reason": "critical data unavailable: missing_critical=current_price"
+              }
+            ],
+            "decided_by": "data_quality_critical",
+            "earliest_reassessment": {
+              "basis": "conditions_only",
+              "date": null,
+              "earnings_risk_through": null,
+              "outstanding": [
+                {
+                  "clears_when": "critical tools and fields available",
+                  "id": "data_quality_critical"
+                }
+              ],
+              "session_method": null
+            },
+            "unevaluated": [
+              {
+                "id": "stale_data",
+                "reason": "price or daily-history age unavailable"
+              },
+              {
+                "id": "near_52w_high",
+                "reason": "price_zone null or undetermined"
+              }
+            ]
+          },
+          "review_status": "not_requested"
+        },
+        "suitability": {
+          "fit": "ok",
+          "horizon": "mid_term",
+          "note": "Suitability is separate from the holder assessment; hold is not an endorsement.",
+          "reasons": [
+            "mid_term: setup favorable"
+          ]
+        },
+        "symbol": "ACME",
+        "tax": {
+          "reason": "Personal tax treatment and sale quantities are not assessed.",
+          "status": "not_assessed"
+        }
+      },
+      "source_reads": {
+        "events_calendar": 1,
+        "fundamentals_snapshot": 1,
+        "options_signals": 1,
+        "ownership_analysis": 1,
+        "risk_metrics": 1,
+        "stock_news": 1,
+        "stock_summary": 1,
+        "technicals": 1
       },
       "technical_reads": 1,
       "technicals_input": {
@@ -2489,16 +4305,13 @@
         "symbol": "ACME"
       },
       "result": {
-        "current_signals": {
-          "bearish": [],
-          "bullish": [
-            "above_sma50",
-            "above_sma200",
-            "golden_cross",
-            "macd_bullish",
-            "positive_1m_momentum"
-          ]
-        },
+        "assumptions": [
+          "Personal amounts are user-reported USD; no brokerage account was verified.",
+          "Cost basis and shares describe the current split-adjusted position; no lot or corporate-action reconciliation was performed.",
+          "Portfolio value is the declared total including this holding, not cash or buying power.",
+          "Gain/loss is price-only and excludes dividends, fees, tax and realized transactions.",
+          "Allocation is checked only against the supplied ceiling; no add capacity or sale amount is calculated."
+        ],
         "data_provenance": {
           "price": {
             "as_of": "2026-10-10T00:00:00Z",
@@ -2506,10 +4319,87 @@
             "source": "yfinance"
           }
         },
+        "data_quality": {
+          "bar_validity": null,
+          "completeness": 1.0,
+          "component_freshness": {
+            "events": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "fundamentals": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "news": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "price": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            },
+            "risk": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            }
+          },
+          "data_gaps": [],
+          "freshness": {
+            "codes": [],
+            "daily_completed_session": "2026-10-09",
+            "daily_last_valid_date": "2026-10-09",
+            "daily_sessions_behind": 0,
+            "expected_session": "2026-10-09",
+            "flags": [],
+            "price_source": "daily_close",
+            "session": "closed"
+          },
+          "fundamentals_status": "available",
+          "fundamentals_status_reason": null,
+          "in_flight_jobs": 0,
+          "missing_critical": [],
+          "staleness_warnings": [],
+          "tool_failures": [],
+          "warnings": []
+        },
+        "diagnostics": {
+          "technicals": {
+            "current_signals": {
+              "bearish": [],
+              "bullish": [
+                "above_sma50",
+                "above_sma200",
+                "golden_cross",
+                "macd_bullish",
+                "positive_1m_momentum"
+              ]
+            },
+            "flags": {
+              "broke_sma200": false,
+              "broke_sma50": false,
+              "death_cross": false,
+              "macd_bearish": false,
+              "rsi_overbought": false
+            },
+            "note": "Unmonitored technical context, not holder stops or instructions to exit.",
+            "quote_currency": "USD",
+            "reference_levels": {
+              "atr_1x_below": 98.0,
+              "recent_low_1m": 85.0,
+              "sma_200": 90.0,
+              "sma_50": 95.0
+            }
+          }
+        },
         "holding": {
           "days_held": 38,
-          "days_to_long_term": 328,
-          "is_long_term": false,
           "purchase_date": "2026-09-01"
         },
         "meta": {
@@ -2518,36 +4408,101 @@
           "tool": "analyze_position"
         },
         "position": {
+          "calculation_reasons": {
+            "current_price": [],
+            "current_value": [
+              "missing_shares"
+            ],
+            "gain_loss": [],
+            "gain_loss_dollars": [
+              "missing_shares"
+            ],
+            "portfolio_weight_pct": [
+              "missing_shares",
+              "missing_portfolio_value"
+            ]
+          },
           "cost_basis": 80.0,
           "current_price": 100.0,
           "current_value": null,
           "gain_loss": 0.25,
           "gain_loss_dollars": null,
+          "max_holding_pct": null,
+          "portfolio_value": null,
+          "portfolio_weight_pct": null,
+          "price_context": {
+            "as_of": "2026-10-09",
+            "qualification": "Price context as of 2026-10-09; not a live account valuation.",
+            "status": "current"
+          },
+          "price_provenance": {
+            "as_of_kind": "session_close",
+            "as_of_precision": "date",
+            "cache_hit": false,
+            "fallback_reason": null,
+            "fetched_at": "2026-10-10T00:00:00Z",
+            "price_as_of": "2026-10-09",
+            "price_source": "daily_close",
+            "staleness": {
+              "expected_session": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false,
+              "unit": "sessions"
+            }
+          },
           "shares": null
         },
-        "sell_signals": {
-          "active_count": 0,
-          "broke_sma200": false,
-          "broke_sma50": false,
-          "death_cross": false,
-          "macd_bearish": false,
-          "rsi_overbought": false
+        "position_card": {
+          "addition_context": "The stock model permits considering new money; no remaining add capacity has been assessed.",
+          "concentration_check": {
+            "ceiling_pct": null,
+            "reasons": [],
+            "status": "not_requested",
+            "threshold_basis": null,
+            "weight_pct": null
+          },
+          "context_status": {
+            "reasons": [],
+            "status": "available"
+          },
+          "holder_assessment": {
+            "action": "hold",
+            "add_allowed": true,
+            "basis": "candidate_admits_new_money"
+          },
+          "horizon": "mid_term",
+          "new_money": {
+            "action": "starter",
+            "blocked_by": [],
+            "decided_by": null,
+            "earliest_reassessment": null,
+            "unevaluated": []
+          },
+          "review_status": "not_requested"
         },
-        "support_levels": {
-          "atr_1x_below": 98.0,
-          "recent_low_1m": 85.0,
-          "sma_200": 90.0,
-          "sma_50": 95.0
+        "suitability": {
+          "fit": "ok",
+          "horizon": "mid_term",
+          "note": "Suitability is separate from the holder assessment; hold is not an endorsement.",
+          "reasons": [
+            "mid_term: setup favorable"
+          ]
         },
         "symbol": "ACME",
         "tax": {
-          "potential_savings": null,
-          "rate_if_long_term": 0.2,
-          "rate_if_sold_now": 0.37,
-          "tax_if_waited": null,
-          "tax_on_gain_now": null,
-          "type": "short_term"
+          "reason": "Personal tax treatment and sale quantities are not assessed.",
+          "status": "not_assessed"
         }
+      },
+      "source_reads": {
+        "events_calendar": 1,
+        "fundamentals_snapshot": 1,
+        "options_signals": 1,
+        "ownership_analysis": 1,
+        "risk_metrics": 1,
+        "stock_news": 1,
+        "stock_summary": 1,
+        "technicals": 1
       },
       "technical_reads": 1,
       "technicals_input": {
@@ -2641,16 +4596,13 @@
         "symbol": "ACME"
       },
       "result": {
-        "current_signals": {
-          "bearish": [],
-          "bullish": [
-            "above_sma50",
-            "above_sma200",
-            "golden_cross",
-            "macd_bullish",
-            "positive_1m_momentum"
-          ]
-        },
+        "assumptions": [
+          "Personal amounts are user-reported USD; no brokerage account was verified.",
+          "Cost basis and shares describe the current split-adjusted position; no lot or corporate-action reconciliation was performed.",
+          "Portfolio value is the declared total including this holding, not cash or buying power.",
+          "Gain/loss is price-only and excludes dividends, fees, tax and realized transactions.",
+          "Allocation is checked only against the supplied ceiling; no add capacity or sale amount is calculated."
+        ],
         "data_provenance": {
           "price": {
             "as_of": "2026-10-10T00:00:00Z",
@@ -2658,10 +4610,87 @@
             "source": "yfinance"
           }
         },
+        "data_quality": {
+          "bar_validity": null,
+          "completeness": 0.8,
+          "component_freshness": {
+            "events": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "fundamentals": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "news": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "price": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            },
+            "risk": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            }
+          },
+          "data_gaps": [],
+          "freshness": {
+            "codes": [],
+            "daily_completed_session": "2026-10-09",
+            "daily_last_valid_date": "2026-10-09",
+            "daily_sessions_behind": 0,
+            "expected_session": "2026-10-09",
+            "flags": [],
+            "price_source": "daily_close",
+            "session": "closed"
+          },
+          "fundamentals_status": "not_applicable",
+          "fundamentals_status_reason": "preferred_not_supported",
+          "in_flight_jobs": 0,
+          "missing_critical": [],
+          "staleness_warnings": [],
+          "tool_failures": [],
+          "warnings": []
+        },
+        "diagnostics": {
+          "technicals": {
+            "current_signals": {
+              "bearish": [],
+              "bullish": [
+                "above_sma50",
+                "above_sma200",
+                "golden_cross",
+                "macd_bullish",
+                "positive_1m_momentum"
+              ]
+            },
+            "flags": {
+              "broke_sma200": false,
+              "broke_sma50": false,
+              "death_cross": false,
+              "macd_bearish": false,
+              "rsi_overbought": false
+            },
+            "note": "Unmonitored technical context, not holder stops or instructions to exit.",
+            "quote_currency": "USD",
+            "reference_levels": {
+              "atr_1x_below": 98.0,
+              "recent_low_1m": 85.0,
+              "sma_200": 90.0,
+              "sma_50": 95.0
+            }
+          }
+        },
         "holding": {
           "days_held": 38,
-          "days_to_long_term": 328,
-          "is_long_term": false,
           "purchase_date": "2026-09-01"
         },
         "meta": {
@@ -2670,36 +4699,114 @@
           "tool": "analyze_position"
         },
         "position": {
+          "calculation_reasons": {
+            "current_price": [],
+            "current_value": [],
+            "gain_loss": [],
+            "gain_loss_dollars": [],
+            "portfolio_weight_pct": [
+              "missing_portfolio_value"
+            ]
+          },
           "cost_basis": 80.0,
           "current_price": 100.0,
           "current_value": 2000.0,
           "gain_loss": 0.25,
           "gain_loss_dollars": 400.0,
+          "max_holding_pct": null,
+          "portfolio_value": null,
+          "portfolio_weight_pct": null,
+          "price_context": {
+            "as_of": "2026-10-09",
+            "qualification": "Price context as of 2026-10-09; not a live account valuation.",
+            "status": "current"
+          },
+          "price_provenance": {
+            "as_of_kind": "session_close",
+            "as_of_precision": "date",
+            "cache_hit": false,
+            "fallback_reason": null,
+            "fetched_at": "2026-10-10T00:00:00Z",
+            "price_as_of": "2026-10-09",
+            "price_source": "daily_close",
+            "staleness": {
+              "expected_session": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false,
+              "unit": "sessions"
+            }
+          },
           "shares": 20.0
         },
-        "sell_signals": {
-          "active_count": 0,
-          "broke_sma200": false,
-          "broke_sma50": false,
-          "death_cross": false,
-          "macd_bearish": false,
-          "rsi_overbought": false
+        "position_card": {
+          "addition_context": "Adding is not allowed by the stock model: watch (unsupported_instrument).",
+          "concentration_check": {
+            "ceiling_pct": null,
+            "reasons": [],
+            "status": "not_requested",
+            "threshold_basis": null,
+            "weight_pct": null
+          },
+          "context_status": {
+            "reasons": [],
+            "status": "available"
+          },
+          "holder_assessment": {
+            "action": "hold",
+            "add_allowed": false,
+            "basis": "candidate_admits_new_money"
+          },
+          "horizon": "mid_term",
+          "new_money": {
+            "action": "watch",
+            "blocked_by": [
+              {
+                "class": "support",
+                "effect": "cap",
+                "id": "unsupported_instrument",
+                "reason": "instrument not supported (preferred_not_supported) \u2014 no new-money action"
+              }
+            ],
+            "decided_by": "unsupported_instrument",
+            "earliest_reassessment": {
+              "basis": "unsupported",
+              "date": null,
+              "earnings_risk_through": null,
+              "outstanding": [
+                {
+                  "clears_when": "never: outside this tool's supported scope",
+                  "id": "unsupported_instrument"
+                }
+              ],
+              "session_method": null
+            },
+            "unevaluated": []
+          },
+          "review_status": "not_requested"
         },
-        "support_levels": {
-          "atr_1x_below": 98.0,
-          "recent_low_1m": 85.0,
-          "sma_200": 90.0,
-          "sma_50": 95.0
+        "suitability": {
+          "fit": "ok",
+          "horizon": "mid_term",
+          "note": "Suitability is separate from the holder assessment; hold is not an endorsement.",
+          "reasons": [
+            "mid_term: setup favorable"
+          ]
         },
         "symbol": "ACME",
         "tax": {
-          "potential_savings": 68.0,
-          "rate_if_long_term": 0.2,
-          "rate_if_sold_now": 0.37,
-          "tax_if_waited": 80.0,
-          "tax_on_gain_now": 148.0,
-          "type": "short_term"
+          "reason": "Personal tax treatment and sale quantities are not assessed.",
+          "status": "not_assessed"
         }
+      },
+      "source_reads": {
+        "events_calendar": 1,
+        "fundamentals_snapshot": 1,
+        "options_signals": 1,
+        "ownership_analysis": 1,
+        "risk_metrics": 1,
+        "stock_news": 1,
+        "stock_summary": 1,
+        "technicals": 1
       },
       "technical_reads": 1,
       "technicals_input": {
@@ -2793,16 +4900,13 @@
         "symbol": "ACME"
       },
       "result": {
-        "current_signals": {
-          "bearish": [],
-          "bullish": [
-            "above_sma50",
-            "above_sma200",
-            "golden_cross",
-            "macd_bullish",
-            "positive_1m_momentum"
-          ]
-        },
+        "assumptions": [
+          "Personal amounts are user-reported USD; no brokerage account was verified.",
+          "Cost basis and shares describe the current split-adjusted position; no lot or corporate-action reconciliation was performed.",
+          "Portfolio value is the declared total including this holding, not cash or buying power.",
+          "Gain/loss is price-only and excludes dividends, fees, tax and realized transactions.",
+          "Allocation is checked only against the supplied ceiling; no add capacity or sale amount is calculated."
+        ],
         "data_provenance": {
           "price": {
             "as_of": "2026-10-10T00:00:00Z",
@@ -2810,10 +4914,87 @@
             "source": "yfinance"
           }
         },
+        "data_quality": {
+          "bar_validity": null,
+          "completeness": 1.0,
+          "component_freshness": {
+            "events": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "fundamentals": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "news": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "price": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            },
+            "risk": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            }
+          },
+          "data_gaps": [],
+          "freshness": {
+            "codes": [],
+            "daily_completed_session": "2026-10-09",
+            "daily_last_valid_date": "2026-10-09",
+            "daily_sessions_behind": 0,
+            "expected_session": "2026-10-09",
+            "flags": [],
+            "price_source": "daily_close",
+            "session": "closed"
+          },
+          "fundamentals_status": "available",
+          "fundamentals_status_reason": null,
+          "in_flight_jobs": 0,
+          "missing_critical": [],
+          "staleness_warnings": [],
+          "tool_failures": [],
+          "warnings": []
+        },
+        "diagnostics": {
+          "technicals": {
+            "current_signals": {
+              "bearish": [],
+              "bullish": [
+                "above_sma50",
+                "above_sma200",
+                "golden_cross",
+                "macd_bullish",
+                "positive_1m_momentum"
+              ]
+            },
+            "flags": {
+              "broke_sma200": false,
+              "broke_sma50": false,
+              "death_cross": false,
+              "macd_bearish": false,
+              "rsi_overbought": false
+            },
+            "note": "Unmonitored technical context, not holder stops or instructions to exit.",
+            "quote_currency": "USD",
+            "reference_levels": {
+              "atr_1x_below": 98.0,
+              "recent_low_1m": 85.0,
+              "sma_200": 90.0,
+              "sma_50": 95.0
+            }
+          }
+        },
         "holding": {
           "days_held": 38,
-          "days_to_long_term": 328,
-          "is_long_term": false,
           "purchase_date": "2026-09-01"
         },
         "meta": {
@@ -2822,36 +5003,96 @@
           "tool": "analyze_position"
         },
         "position": {
+          "calculation_reasons": {
+            "current_price": [],
+            "current_value": [],
+            "gain_loss": [],
+            "gain_loss_dollars": [],
+            "portfolio_weight_pct": [
+              "missing_portfolio_value"
+            ]
+          },
           "cost_basis": 80.0,
-          "current_price": 105.0,
-          "current_value": 2100.0,
-          "gain_loss": 0.3125,
-          "gain_loss_dollars": 500.0,
+          "current_price": 100.0,
+          "current_value": 2000.0,
+          "gain_loss": 0.25,
+          "gain_loss_dollars": 400.0,
+          "max_holding_pct": null,
+          "portfolio_value": null,
+          "portfolio_weight_pct": null,
+          "price_context": {
+            "as_of": "2026-10-09",
+            "qualification": "Price context as of 2026-10-09; not a live account valuation.",
+            "status": "current"
+          },
+          "price_provenance": {
+            "as_of_kind": "session_close",
+            "as_of_precision": "date",
+            "cache_hit": false,
+            "fallback_reason": null,
+            "fetched_at": "2026-10-10T00:00:00Z",
+            "price_as_of": "2026-10-09",
+            "price_source": "daily_close",
+            "staleness": {
+              "expected_session": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false,
+              "unit": "sessions"
+            }
+          },
           "shares": 20.0
         },
-        "sell_signals": {
-          "active_count": 0,
-          "broke_sma200": false,
-          "broke_sma50": false,
-          "death_cross": false,
-          "macd_bearish": false,
-          "rsi_overbought": false
+        "position_card": {
+          "addition_context": "The stock model permits considering new money; no remaining add capacity has been assessed.",
+          "concentration_check": {
+            "ceiling_pct": null,
+            "reasons": [],
+            "status": "not_requested",
+            "threshold_basis": null,
+            "weight_pct": null
+          },
+          "context_status": {
+            "reasons": [],
+            "status": "available"
+          },
+          "holder_assessment": {
+            "action": "hold",
+            "add_allowed": true,
+            "basis": "candidate_admits_new_money"
+          },
+          "horizon": "mid_term",
+          "new_money": {
+            "action": "starter",
+            "blocked_by": [],
+            "decided_by": null,
+            "earliest_reassessment": null,
+            "unevaluated": []
+          },
+          "review_status": "not_requested"
         },
-        "support_levels": {
-          "atr_1x_below": 103.0,
-          "recent_low_1m": 85.0,
-          "sma_200": 90.0,
-          "sma_50": 95.0
+        "suitability": {
+          "fit": "ok",
+          "horizon": "mid_term",
+          "note": "Suitability is separate from the holder assessment; hold is not an endorsement.",
+          "reasons": [
+            "mid_term: setup favorable"
+          ]
         },
         "symbol": "ACME",
         "tax": {
-          "potential_savings": 85.0,
-          "rate_if_long_term": 0.2,
-          "rate_if_sold_now": 0.37,
-          "tax_if_waited": 100.0,
-          "tax_on_gain_now": 185.0,
-          "type": "short_term"
+          "reason": "Personal tax treatment and sale quantities are not assessed.",
+          "status": "not_assessed"
         }
+      },
+      "source_reads": {
+        "events_calendar": 1,
+        "fundamentals_snapshot": 1,
+        "options_signals": 1,
+        "ownership_analysis": 1,
+        "risk_metrics": 1,
+        "stock_news": 1,
+        "stock_summary": 1,
+        "technicals": 1
       },
       "technical_reads": 1,
       "technicals_input": {
@@ -2945,16 +5186,13 @@
         "symbol": "ACME"
       },
       "result": {
-        "current_signals": {
-          "bearish": [],
-          "bullish": [
-            "above_sma50",
-            "above_sma200",
-            "golden_cross",
-            "macd_bullish",
-            "positive_1m_momentum"
-          ]
-        },
+        "assumptions": [
+          "Personal amounts are user-reported USD; no brokerage account was verified.",
+          "Cost basis and shares describe the current split-adjusted position; no lot or corporate-action reconciliation was performed.",
+          "Portfolio value is the declared total including this holding, not cash or buying power.",
+          "Gain/loss is price-only and excludes dividends, fees, tax and realized transactions.",
+          "Allocation is checked only against the supplied ceiling; no add capacity or sale amount is calculated."
+        ],
         "data_provenance": {
           "price": {
             "as_of": "2026-10-10T00:00:00Z",
@@ -2962,10 +5200,92 @@
             "source": "yfinance"
           }
         },
+        "data_quality": {
+          "bar_validity": null,
+          "completeness": 1.0,
+          "component_freshness": {
+            "events": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "fundamentals": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "news": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "price": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-07",
+              "sessions_behind": 2,
+              "stale": true
+            },
+            "risk": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            }
+          },
+          "data_gaps": [],
+          "freshness": {
+            "codes": [
+              "daily_close_stale",
+              "daily_history_stale"
+            ],
+            "daily_completed_session": "2026-10-07",
+            "daily_last_valid_date": "2026-10-07",
+            "daily_sessions_behind": 2,
+            "expected_session": "2026-10-09",
+            "flags": [],
+            "price_source": "daily_close",
+            "session": "closed"
+          },
+          "fundamentals_status": "available",
+          "fundamentals_status_reason": null,
+          "in_flight_jobs": 0,
+          "missing_critical": [],
+          "staleness_warnings": [
+            "price_stale_2_sessions"
+          ],
+          "tool_failures": [],
+          "warnings": []
+        },
+        "diagnostics": {
+          "technicals": {
+            "current_signals": {
+              "bearish": [],
+              "bullish": [
+                "above_sma50",
+                "above_sma200",
+                "golden_cross",
+                "macd_bullish",
+                "positive_1m_momentum"
+              ]
+            },
+            "flags": {
+              "broke_sma200": false,
+              "broke_sma50": false,
+              "death_cross": false,
+              "macd_bearish": false,
+              "rsi_overbought": false
+            },
+            "note": "Unmonitored technical context, not holder stops or instructions to exit.",
+            "quote_currency": "USD",
+            "reference_levels": {
+              "atr_1x_below": 98.0,
+              "recent_low_1m": 85.0,
+              "sma_200": 90.0,
+              "sma_50": 95.0
+            }
+          }
+        },
         "holding": {
           "days_held": 38,
-          "days_to_long_term": 328,
-          "is_long_term": false,
           "purchase_date": "2026-09-01"
         },
         "meta": {
@@ -2974,36 +5294,120 @@
           "tool": "analyze_position"
         },
         "position": {
+          "calculation_reasons": {
+            "current_price": [],
+            "current_value": [],
+            "gain_loss": [],
+            "gain_loss_dollars": [],
+            "portfolio_weight_pct": [
+              "missing_portfolio_value"
+            ]
+          },
           "cost_basis": 80.0,
           "current_price": 100.0,
           "current_value": 2000.0,
           "gain_loss": 0.25,
           "gain_loss_dollars": 400.0,
+          "max_holding_pct": null,
+          "portfolio_value": null,
+          "portfolio_weight_pct": null,
+          "price_context": {
+            "as_of": "2026-10-07",
+            "qualification": "Historical price context as of 2026-10-07; allocation cannot be verified.",
+            "status": "historical"
+          },
+          "price_provenance": {
+            "as_of_kind": "session_close",
+            "as_of_precision": "date",
+            "cache_hit": false,
+            "fallback_reason": null,
+            "fetched_at": "2026-10-10T00:00:00Z",
+            "price_as_of": "2026-10-07",
+            "price_source": "daily_close",
+            "staleness": {
+              "expected_session": "2026-10-09",
+              "sessions_behind": 2,
+              "stale": true,
+              "unit": "sessions"
+            }
+          },
           "shares": 20.0
         },
-        "sell_signals": {
-          "active_count": 0,
-          "broke_sma200": false,
-          "broke_sma50": false,
-          "death_cross": false,
-          "macd_bearish": false,
-          "rsi_overbought": false
+        "position_card": {
+          "addition_context": "Adding is not allowed by the stock model: wait_for_data (stale_data).",
+          "concentration_check": {
+            "ceiling_pct": null,
+            "reasons": [],
+            "status": "not_requested",
+            "threshold_basis": null,
+            "weight_pct": null
+          },
+          "context_status": {
+            "reasons": [
+              "price_not_current"
+            ],
+            "status": "partial"
+          },
+          "holder_assessment": {
+            "action": "hold",
+            "add_allowed": false,
+            "basis": "candidate_admits_new_money"
+          },
+          "horizon": "mid_term",
+          "new_money": {
+            "action": "wait_for_data",
+            "blocked_by": [
+              {
+                "class": "data",
+                "codes": [
+                  "daily_close_stale",
+                  "daily_history_stale"
+                ],
+                "effect": "veto",
+                "id": "stale_data",
+                "reason": "last close 2026-10-07 is 2 sessions behind (expected 2026-10-09); daily history 2 sessions behind (last completed bar 2026-10-07, expected 2026-10-09)"
+              }
+            ],
+            "decided_by": "stale_data",
+            "earliest_reassessment": {
+              "basis": "conditions_only",
+              "date": null,
+              "earnings_risk_through": null,
+              "outstanding": [
+                {
+                  "clears_when": "current market data with a verifiable timestamp: a current price and a current daily history",
+                  "id": "stale_data"
+                }
+              ],
+              "session_method": null
+            },
+            "unevaluated": []
+          },
+          "review_status": "not_requested"
         },
-        "support_levels": {
-          "atr_1x_below": 98.0,
-          "recent_low_1m": 85.0,
-          "sma_200": 90.0,
-          "sma_50": 95.0
+        "suitability": {
+          "fit": "ok",
+          "horizon": "mid_term",
+          "note": "Suitability is separate from the holder assessment; hold is not an endorsement.",
+          "reasons": [
+            "mid_term: setup favorable"
+          ]
         },
         "symbol": "ACME",
         "tax": {
-          "potential_savings": 68.0,
-          "rate_if_long_term": 0.2,
-          "rate_if_sold_now": 0.37,
-          "tax_if_waited": 80.0,
-          "tax_on_gain_now": 148.0,
-          "type": "short_term"
+          "reason": "Personal tax treatment and sale quantities are not assessed.",
+          "status": "not_assessed"
         }
+      },
+      "source_reads": {
+        "events_calendar": 1,
+        "fundamentals_snapshot": 1,
+        "options_signals": 1,
+        "ownership_analysis": 1,
+        "risk_metrics": 1,
+        "stock_news": 1,
+        "stock_summary": 1,
+        "technicals": 1
       },
       "technical_reads": 1,
       "technicals_input": {
@@ -3097,16 +5501,13 @@
         "symbol": "ACME"
       },
       "result": {
-        "atr": {
-          "value": 2.0
-        },
-        "current_price": 100.0,
-        "daily_history": {
-          "completed_valid_date": "2026-10-09",
-          "last_row_date": "2026-10-09",
-          "last_row_valid": true,
-          "last_valid_date": "2026-10-09"
-        },
+        "assumptions": [
+          "Personal amounts are user-reported USD; no brokerage account was verified.",
+          "Cost basis and shares describe the current split-adjusted position; no lot or corporate-action reconciliation was performed.",
+          "Portfolio value is the declared total including this holding, not cash or buying power.",
+          "Gain/loss is price-only and excludes dividends, fees, tax and realized transactions.",
+          "Allocation is checked only against the supplied ceiling; no add capacity or sale amount is calculated."
+        ],
         "data_provenance": {
           "price": {
             "as_of": "2026-10-10T00:00:00Z",
@@ -3114,72 +5515,218 @@
             "source": "yfinance"
           }
         },
-        "error": true,
-        "error_type": "data_unavailable",
-        "macd": {
-          "rules": {
-            "bearish_cross": {
-              "triggered": false
+        "data_quality": {
+          "bar_validity": null,
+          "completeness": 0.6,
+          "component_freshness": {
+            "events": {
+              "as_of": null,
+              "status": "unavailable"
             },
-            "bullish_cross": {
-              "triggered": true
+            "fundamentals": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "news": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "price": {
+              "as_of": null,
+              "last_bar_date": null,
+              "status": "unavailable"
+            },
+            "risk": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            }
+          },
+          "data_gaps": [],
+          "freshness": {
+            "codes": [
+              "info_quote_fallback",
+              "daily_history_unavailable"
+            ],
+            "daily_completed_session": null,
+            "daily_last_valid_date": null,
+            "daily_sessions_behind": null,
+            "expected_session": "2026-10-09",
+            "flags": [],
+            "price_source": "info_quote_fallback",
+            "session": "closed"
+          },
+          "fundamentals_status": "available",
+          "fundamentals_status_reason": null,
+          "in_flight_jobs": 0,
+          "missing_critical": [],
+          "staleness_warnings": [],
+          "tool_failures": [
+            {
+              "error": "data_unavailable",
+              "message": "synthetic technicals failure",
+              "tool": "technicals"
+            }
+          ],
+          "warnings": []
+        },
+        "diagnostics": {
+          "technicals": {
+            "current_signals": {
+              "bearish": [],
+              "bullish": []
+            },
+            "flags": {
+              "broke_sma200": null,
+              "broke_sma50": null,
+              "death_cross": null,
+              "macd_bearish": null,
+              "rsi_overbought": null
+            },
+            "note": "Unmonitored technical context, not holder stops or instructions to exit.",
+            "quote_currency": "USD",
+            "reference_levels": {
+              "atr_1x_below": null,
+              "recent_low_1m": null,
+              "sma_200": null,
+              "sma_50": null
             }
           }
         },
-        "message": "synthetic technicals failure",
-        "moving_averages": {
-          "rules": {
-            "above_sma20": {
-              "triggered": true
-            },
-            "above_sma200": {
-              "triggered": true
-            },
-            "above_sma50": {
-              "triggered": true
-            },
-            "death_cross": {
-              "triggered": false
-            },
-            "golden_cross": {
-              "triggered": true
+        "holding": {
+          "days_held": 38,
+          "purchase_date": "2026-09-01"
+        },
+        "meta": {
+          "schema_version": "7",
+          "server_version": "0.4.0",
+          "tool": "analyze_position"
+        },
+        "position": {
+          "calculation_reasons": {
+            "current_price": [],
+            "current_value": [],
+            "gain_loss": [],
+            "gain_loss_dollars": [],
+            "portfolio_weight_pct": [
+              "missing_portfolio_value"
+            ]
+          },
+          "cost_basis": 80.0,
+          "current_price": 100.0,
+          "current_value": 2000.0,
+          "gain_loss": 0.25,
+          "gain_loss_dollars": 400.0,
+          "max_holding_pct": null,
+          "portfolio_value": null,
+          "portfolio_weight_pct": null,
+          "price_context": {
+            "as_of": null,
+            "qualification": "Historical price context; price time is unverified and allocation cannot be verified.",
+            "status": "historical"
+          },
+          "price_provenance": {
+            "as_of_kind": null,
+            "as_of_precision": null,
+            "cache_hit": null,
+            "fallback_reason": "no_valid_daily_close",
+            "fetched_at": null,
+            "price_as_of": null,
+            "price_source": "info_quote_fallback",
+            "staleness": {
+              "age_hours": null,
+              "reason": "no_quote_time",
+              "stale": true,
+              "unit": "hours"
             }
           },
-          "sma_20": 98.0,
-          "sma_200": 90.0,
-          "sma_50": 95.0
+          "shares": 20.0
         },
-        "price_position": {
-          "from_52w_high": -0.17,
-          "low_1m": 85.0,
-          "position_in_range": 0.7,
-          "week_52_high": 120.0,
-          "week_52_low": 70.0
-        },
-        "returns": {
-          "return_1m": 0.12,
-          "return_1w": 0.02,
-          "return_1w_zscore": 0.4,
-          "return_1y": 0.4,
-          "return_3m": 0.18
-        },
-        "rsi": {
-          "rules": {
-            "overbought": {
-              "triggered": false
-            },
-            "oversold": {
-              "triggered": false
-            }
+        "position_card": {
+          "addition_context": "Adding is not allowed by the stock model: insufficient_data (freshness_unverifiable, data_quality_critical).",
+          "concentration_check": {
+            "ceiling_pct": null,
+            "reasons": [],
+            "status": "not_requested",
+            "threshold_basis": null,
+            "weight_pct": null
           },
-          "value": 55.0
+          "context_status": {
+            "reasons": [
+              "price_not_current"
+            ],
+            "status": "partial"
+          },
+          "holder_assessment": {
+            "action": "hold",
+            "add_allowed": false,
+            "basis": "price_broken_more_than_business"
+          },
+          "horizon": "mid_term",
+          "new_money": {
+            "action": "insufficient_data",
+            "blocked_by": [
+              {
+                "class": "data",
+                "codes": [
+                  "info_quote_fallback",
+                  "daily_history_unavailable"
+                ],
+                "effect": "veto",
+                "id": "freshness_unverifiable",
+                "reason": "price from the info quote fallback (quoted at an unknown time); daily history unavailable or malformed"
+              },
+              {
+                "class": "data",
+                "effect": "veto",
+                "id": "data_quality_critical",
+                "reason": "critical data unavailable: critical_tool_failed=technicals"
+              }
+            ],
+            "decided_by": null,
+            "earliest_reassessment": null,
+            "unevaluated": [
+              {
+                "id": "stale_data",
+                "reason": "price or daily-history age unavailable"
+              },
+              {
+                "id": "falling_knife",
+                "reason": "falling-knife inputs incomplete \u2014 clearance not established"
+              },
+              {
+                "id": "near_52w_high",
+                "reason": "price_zone null or undetermined"
+              }
+            ]
+          },
+          "review_status": "not_requested"
         },
-        "session_close": {
-          "cache_hit": false,
-          "close": 100.0,
-          "fetched_at": "2026-10-10T00:00:00Z",
-          "session_date": "2026-10-09"
+        "suitability": {
+          "fit": "unknown",
+          "horizon": "mid_term",
+          "note": "Suitability is separate from the holder assessment; hold is not an endorsement.",
+          "reasons": [
+            "mid_term: insufficient technical data"
+          ]
+        },
+        "symbol": "ACME",
+        "tax": {
+          "reason": "Personal tax treatment and sale quantities are not assessed.",
+          "status": "not_assessed"
         }
+      },
+      "source_reads": {
+        "events_calendar": 1,
+        "fundamentals_snapshot": 1,
+        "options_signals": 1,
+        "ownership_analysis": 1,
+        "risk_metrics": 1,
+        "stock_news": 1,
+        "stock_summary": 1,
+        "technicals": 1
       },
       "technical_reads": 1,
       "technicals_input": {
@@ -3276,16 +5823,13 @@
         "symbol": "ACME"
       },
       "result": {
-        "current_signals": {
-          "bearish": [],
-          "bullish": [
-            "above_sma50",
-            "above_sma200",
-            "golden_cross",
-            "macd_bullish",
-            "positive_1m_momentum"
-          ]
-        },
+        "assumptions": [
+          "Personal amounts are user-reported USD; no brokerage account was verified.",
+          "Cost basis and shares describe the current split-adjusted position; no lot or corporate-action reconciliation was performed.",
+          "Portfolio value is the declared total including this holding, not cash or buying power.",
+          "Gain/loss is price-only and excludes dividends, fees, tax and realized transactions.",
+          "Allocation is checked only against the supplied ceiling; no add capacity or sale amount is calculated."
+        ],
         "data_provenance": {
           "price": {
             "as_of": "2026-10-10T00:00:00Z",
@@ -3293,10 +5837,87 @@
             "source": "yfinance"
           }
         },
+        "data_quality": {
+          "bar_validity": null,
+          "completeness": 1.0,
+          "component_freshness": {
+            "events": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "fundamentals": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "news": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "price": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            },
+            "risk": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            }
+          },
+          "data_gaps": [],
+          "freshness": {
+            "codes": [],
+            "daily_completed_session": "2026-10-09",
+            "daily_last_valid_date": "2026-10-09",
+            "daily_sessions_behind": 0,
+            "expected_session": "2026-10-09",
+            "flags": [],
+            "price_source": "daily_close",
+            "session": "closed"
+          },
+          "fundamentals_status": "available",
+          "fundamentals_status_reason": null,
+          "in_flight_jobs": 0,
+          "missing_critical": [],
+          "staleness_warnings": [],
+          "tool_failures": [],
+          "warnings": []
+        },
+        "diagnostics": {
+          "technicals": {
+            "current_signals": {
+              "bearish": [],
+              "bullish": [
+                "above_sma50",
+                "above_sma200",
+                "golden_cross",
+                "macd_bullish",
+                "positive_1m_momentum"
+              ]
+            },
+            "flags": {
+              "broke_sma200": false,
+              "broke_sma50": false,
+              "death_cross": false,
+              "macd_bearish": false,
+              "rsi_overbought": false
+            },
+            "note": "Unmonitored technical context, not holder stops or instructions to exit.",
+            "quote_currency": "USD",
+            "reference_levels": {
+              "atr_1x_below": 98.0,
+              "recent_low_1m": 85.0,
+              "sma_200": 90.0,
+              "sma_50": 95.0
+            }
+          }
+        },
         "holding": {
           "days_held": 38,
-          "days_to_long_term": 328,
-          "is_long_term": false,
           "purchase_date": "2026-09-01"
         },
         "meta": {
@@ -3305,36 +5926,100 @@
           "tool": "analyze_position"
         },
         "position": {
+          "calculation_reasons": {
+            "current_price": [],
+            "current_value": [],
+            "gain_loss": [
+              "zero_cost_basis"
+            ],
+            "gain_loss_dollars": [],
+            "portfolio_weight_pct": [
+              "missing_portfolio_value"
+            ]
+          },
           "cost_basis": 0.0,
           "current_price": 100.0,
           "current_value": 2000.0,
           "gain_loss": null,
           "gain_loss_dollars": 2000.0,
+          "max_holding_pct": null,
+          "portfolio_value": null,
+          "portfolio_weight_pct": null,
+          "price_context": {
+            "as_of": "2026-10-09",
+            "qualification": "Price context as of 2026-10-09; not a live account valuation.",
+            "status": "current"
+          },
+          "price_provenance": {
+            "as_of_kind": "session_close",
+            "as_of_precision": "date",
+            "cache_hit": false,
+            "fallback_reason": null,
+            "fetched_at": "2026-10-10T00:00:00Z",
+            "price_as_of": "2026-10-09",
+            "price_source": "daily_close",
+            "staleness": {
+              "expected_session": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false,
+              "unit": "sessions"
+            }
+          },
           "shares": 20.0
         },
-        "sell_signals": {
-          "active_count": 0,
-          "broke_sma200": false,
-          "broke_sma50": false,
-          "death_cross": false,
-          "macd_bearish": false,
-          "rsi_overbought": false
+        "position_card": {
+          "addition_context": "The stock model permits considering new money; no remaining add capacity has been assessed.",
+          "concentration_check": {
+            "ceiling_pct": null,
+            "reasons": [],
+            "status": "not_requested",
+            "threshold_basis": null,
+            "weight_pct": null
+          },
+          "context_status": {
+            "reasons": [
+              "zero_cost_basis"
+            ],
+            "status": "partial"
+          },
+          "holder_assessment": {
+            "action": "hold",
+            "add_allowed": true,
+            "basis": "candidate_admits_new_money"
+          },
+          "horizon": "mid_term",
+          "new_money": {
+            "action": "starter",
+            "blocked_by": [],
+            "decided_by": null,
+            "earliest_reassessment": null,
+            "unevaluated": []
+          },
+          "review_status": "not_requested"
         },
-        "support_levels": {
-          "atr_1x_below": 98.0,
-          "recent_low_1m": 85.0,
-          "sma_200": 90.0,
-          "sma_50": 95.0
+        "suitability": {
+          "fit": "ok",
+          "horizon": "mid_term",
+          "note": "Suitability is separate from the holder assessment; hold is not an endorsement.",
+          "reasons": [
+            "mid_term: setup favorable"
+          ]
         },
         "symbol": "ACME",
         "tax": {
-          "potential_savings": 340.0,
-          "rate_if_long_term": 0.2,
-          "rate_if_sold_now": 0.37,
-          "tax_if_waited": 400.0,
-          "tax_on_gain_now": 740.0,
-          "type": "short_term"
+          "reason": "Personal tax treatment and sale quantities are not assessed.",
+          "status": "not_assessed"
         }
+      },
+      "source_reads": {
+        "events_calendar": 1,
+        "fundamentals_snapshot": 1,
+        "options_signals": 1,
+        "ownership_analysis": 1,
+        "risk_metrics": 1,
+        "stock_news": 1,
+        "stock_summary": 1,
+        "technicals": 1
       },
       "technical_reads": 1,
       "technicals_input": {
@@ -3428,15 +6113,234 @@
         "symbol": "ACME"
       },
       "result": {
-        "error": true,
-        "error_type": "data_unavailable",
-        "message": "Could not get current price",
+        "assumptions": [
+          "Personal amounts are user-reported USD; no brokerage account was verified.",
+          "Cost basis and shares describe the current split-adjusted position; no lot or corporate-action reconciliation was performed.",
+          "Portfolio value is the declared total including this holding, not cash or buying power.",
+          "Gain/loss is price-only and excludes dividends, fees, tax and realized transactions.",
+          "Allocation is checked only against the supplied ceiling; no add capacity or sale amount is calculated."
+        ],
+        "data_provenance": {
+          "price": {
+            "as_of": "2026-10-10T00:00:00Z",
+            "last_bar_date": "2026-10-09",
+            "source": "yfinance"
+          }
+        },
+        "data_quality": {
+          "bar_validity": null,
+          "completeness": 0.8,
+          "component_freshness": {
+            "events": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "fundamentals": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "news": {
+              "as_of": null,
+              "status": "unavailable"
+            },
+            "price": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            },
+            "risk": {
+              "as_of": "2026-10-10T00:00:00Z",
+              "expected_session": "2026-10-09",
+              "last_bar_date": "2026-10-09",
+              "sessions_behind": 0,
+              "stale": false
+            }
+          },
+          "data_gaps": [],
+          "freshness": {
+            "codes": [],
+            "daily_completed_session": "2026-10-09",
+            "daily_last_valid_date": "2026-10-09",
+            "daily_sessions_behind": 0,
+            "expected_session": "2026-10-09",
+            "flags": [],
+            "price_source": null,
+            "session": "closed"
+          },
+          "fundamentals_status": "available",
+          "fundamentals_status_reason": null,
+          "in_flight_jobs": 0,
+          "missing_critical": [
+            "current_price"
+          ],
+          "staleness_warnings": [],
+          "tool_failures": [],
+          "warnings": []
+        },
+        "diagnostics": {
+          "technicals": {
+            "current_signals": {
+              "bearish": [],
+              "bullish": [
+                "above_sma50",
+                "above_sma200",
+                "golden_cross",
+                "macd_bullish",
+                "positive_1m_momentum"
+              ]
+            },
+            "flags": {
+              "broke_sma200": false,
+              "broke_sma50": false,
+              "death_cross": false,
+              "macd_bearish": false,
+              "rsi_overbought": false
+            },
+            "note": "Unmonitored technical context, not holder stops or instructions to exit.",
+            "quote_currency": "USD",
+            "reference_levels": {
+              "atr_1x_below": null,
+              "recent_low_1m": 85.0,
+              "sma_200": 90.0,
+              "sma_50": 95.0
+            }
+          }
+        },
+        "holding": {
+          "days_held": 38,
+          "purchase_date": "2026-09-01"
+        },
         "meta": {
           "schema_version": "7",
           "server_version": "0.4.0",
-          "tool": "error"
+          "tool": "analyze_position"
         },
-        "symbol": "ACME"
+        "position": {
+          "calculation_reasons": {
+            "current_price": [
+              "price_unavailable"
+            ],
+            "current_value": [
+              "price_unavailable"
+            ],
+            "gain_loss": [
+              "price_unavailable"
+            ],
+            "gain_loss_dollars": [
+              "price_unavailable"
+            ],
+            "portfolio_weight_pct": [
+              "price_unavailable",
+              "missing_portfolio_value"
+            ]
+          },
+          "cost_basis": 80.0,
+          "current_price": null,
+          "current_value": null,
+          "gain_loss": null,
+          "gain_loss_dollars": null,
+          "max_holding_pct": null,
+          "portfolio_value": null,
+          "portfolio_weight_pct": null,
+          "price_context": {
+            "as_of": null,
+            "qualification": "A verified USD per-share price is unavailable.",
+            "status": "unavailable"
+          },
+          "price_provenance": {
+            "as_of_kind": null,
+            "as_of_precision": null,
+            "cache_hit": null,
+            "fallback_reason": "no_price",
+            "fetched_at": null,
+            "price_as_of": null,
+            "price_source": null,
+            "staleness": null
+          },
+          "shares": 20.0
+        },
+        "position_card": {
+          "addition_context": "Adding is not allowed by the stock model: wait_for_data (data_quality_critical).",
+          "concentration_check": {
+            "ceiling_pct": null,
+            "reasons": [],
+            "status": "not_requested",
+            "threshold_basis": null,
+            "weight_pct": null
+          },
+          "context_status": {
+            "reasons": [
+              "price_unavailable"
+            ],
+            "status": "partial"
+          },
+          "holder_assessment": {
+            "action": "hold",
+            "add_allowed": false,
+            "basis": "candidate_admits_new_money"
+          },
+          "horizon": "mid_term",
+          "new_money": {
+            "action": "wait_for_data",
+            "blocked_by": [
+              {
+                "class": "data",
+                "effect": "veto",
+                "id": "data_quality_critical",
+                "reason": "critical data unavailable: missing_critical=current_price"
+              }
+            ],
+            "decided_by": "data_quality_critical",
+            "earliest_reassessment": {
+              "basis": "conditions_only",
+              "date": null,
+              "earnings_risk_through": null,
+              "outstanding": [
+                {
+                  "clears_when": "critical tools and fields available",
+                  "id": "data_quality_critical"
+                }
+              ],
+              "session_method": null
+            },
+            "unevaluated": [
+              {
+                "id": "stale_data",
+                "reason": "price or daily-history age unavailable"
+              },
+              {
+                "id": "near_52w_high",
+                "reason": "price_zone null or undetermined"
+              }
+            ]
+          },
+          "review_status": "not_requested"
+        },
+        "suitability": {
+          "fit": "ok",
+          "horizon": "mid_term",
+          "note": "Suitability is separate from the holder assessment; hold is not an endorsement.",
+          "reasons": [
+            "mid_term: setup favorable"
+          ]
+        },
+        "symbol": "ACME",
+        "tax": {
+          "reason": "Personal tax treatment and sale quantities are not assessed.",
+          "status": "not_assessed"
+        }
+      },
+      "source_reads": {
+        "events_calendar": 1,
+        "fundamentals_snapshot": 1,
+        "options_signals": 1,
+        "ownership_analysis": 1,
+        "risk_metrics": 1,
+        "stock_news": 1,
+        "stock_summary": 1,
+        "technicals": 1
       },
       "technical_reads": 1,
       "technicals_input": {
@@ -3525,67 +6429,27 @@
         "symbol": "ACME"
       },
       "result": {
-        "current_signals": {
-          "bearish": [],
-          "bullish": [
-            "above_sma50",
-            "above_sma200",
-            "golden_cross",
-            "macd_bullish",
-            "positive_1m_momentum"
-          ]
-        },
-        "data_provenance": {
-          "price": {
-            "as_of": "2026-10-10T00:00:00Z",
-            "last_bar_date": "2026-10-09",
-            "source": "yfinance"
-          }
-        },
-        "holding": {
-          "days_held": 38,
-          "days_to_long_term": 328,
-          "is_long_term": false,
-          "purchase_date": "2026-09-01"
-        },
+        "error": true,
+        "error_type": "invalid_parameters",
+        "message": "shares must be a finite positive number; decimal numeric strings are accepted",
         "meta": {
           "schema_version": "7",
           "server_version": "0.4.0",
-          "tool": "analyze_position"
+          "tool": "error"
         },
-        "position": {
-          "cost_basis": 80.0,
-          "current_price": 100.0,
-          "current_value": 0.0,
-          "gain_loss": 0.25,
-          "gain_loss_dollars": 0.0,
-          "shares": 0.0
-        },
-        "sell_signals": {
-          "active_count": 0,
-          "broke_sma200": false,
-          "broke_sma50": false,
-          "death_cross": false,
-          "macd_bearish": false,
-          "rsi_overbought": false
-        },
-        "support_levels": {
-          "atr_1x_below": 98.0,
-          "recent_low_1m": 85.0,
-          "sma_200": 90.0,
-          "sma_50": 95.0
-        },
-        "symbol": "ACME",
-        "tax": {
-          "potential_savings": null,
-          "rate_if_long_term": 0.2,
-          "rate_if_sold_now": 0.37,
-          "tax_if_waited": null,
-          "tax_on_gain_now": null,
-          "type": "short_term"
-        }
+        "symbol": "ACME"
       },
-      "technical_reads": 1,
+      "source_reads": {
+        "events_calendar": 0,
+        "fundamentals_snapshot": 0,
+        "options_signals": 0,
+        "ownership_analysis": 0,
+        "risk_metrics": 0,
+        "stock_news": 0,
+        "stock_summary": 0,
+        "technicals": 0
+      },
+      "technical_reads": 0,
       "technicals_input": {
         "atr": {
           "value": 2.0

@@ -2,11 +2,9 @@
 
 import hashlib
 import json
-from unittest.mock import patch
 
 import pytest
 
-from stock_analysis.tools import position
 from tests.support import decision_matrix as dm
 from tests.support import holder_matrix as hm
 
@@ -36,32 +34,47 @@ async def test_stock_observation_includes_inputs_decisions_sizing_and_complete_s
     assert "long_term_if_held_action" not in result["watchlist_snapshot"]
 
 
+INVALID_POSITIONS = {"negative_cost", "zero_shares", "negative_shares", "future_date", "invalid_date"}
+
+
 @pytest.mark.parametrize("name", hm.POSITION_CASES)
-async def test_position_observation_preserves_all_output_except_duration(name):
+async def test_position_migration_preserves_inputs_but_replaces_legacy_decision_and_tax(name):
     row = await hm.run_position(name)
-    assert row == BEFORE["positions"][name]
+    assert row["arguments"] == BEFORE["positions"][name]["arguments"]
+    assert row["technicals_input"] == BEFORE["positions"][name]["technicals_input"]
     result = row["result"]
-    assert not {"position_card", "holder_assessment", "review_status", "concentration_check"}.intersection(result)
-    assert row["technical_reads"] == (0 if name == "invalid_date" else 1)
+    expected_reads = 0 if name in INVALID_POSITIONS else 1
+    assert row["source_reads"] == dict.fromkeys(dm.TOOLS, expected_reads)
+    if name in INVALID_POSITIONS:
+        assert result["error_type"] == "invalid_parameters"
+        return
+    assert result["position_card"]["horizon"] == "mid_term"
+    assert result["position_card"]["review_status"] == "not_requested"
+    assert result["tax"]["status"] == "not_assessed"
+    assert set(result["tax"]) == {"status", "reason"}
+    assert set(result["holding"]) == {"purchase_date", "days_held"}
+    assert not {"current_signals", "sell_signals", "support_levels"}.intersection(result)
+    assert "active_count" not in result["diagnostics"]["technicals"]["flags"]
 
 
-async def test_same_chart_hides_broken_business_from_legacy_position_tool():
-    sound = await hm.run_stock("sound_bullish")
-    broken = await hm.run_stock("broken_bullish")
-    assert sound["decision_card"]["if_held"]["action"] == "hold"
-    assert broken["decision_card"]["if_held"]["action"] == "review_exit"
-    assert await hm.run_position("gain") == await hm.run_position("broken_same_chart")
+async def test_same_chart_no_longer_hides_broken_business_from_position_tool():
+    sound = (await hm.run_position("gain"))["result"]
+    broken = (await hm.run_position("broken_same_chart"))["result"]
+    assert sound["position_card"]["holder_assessment"]["action"] == "hold"
+    assert broken["position_card"]["holder_assessment"]["action"] == "review_exit"
+    assert sound["diagnostics"]["technicals"] == broken["diagnostics"]["technicals"]
 
 
-async def test_current_midterm_etf_answer_is_not_a_longterm_holder_assessment():
-    strong = await hm.run_stock("etf_spy")
-    weak = await hm.run_stock("etf_bearish")
-    assert strong["decision_card"]["if_held"]["action"] == "hold"
-    assert weak["decision_card"]["if_held"]["action"] == "reduce"
-    for result in (strong, weak):
-        assert result["summary"]["support"]["instrument"]["status"] == "unsupported"
-        assert result["decision_card"]["long_term"]["if_held"]["action"] == "not_assessed"
-    assert (await hm.run_position("etf"))["result"] == (await hm.run_position("gain"))["result"]
+async def test_etf_has_separate_longterm_coverage_and_personal_money_context():
+    analyzed = await hm.run_stock("etf_spy")
+    mid = (await hm.run_position("etf"))["result"]
+    long = (await hm.run_position("etf", horizon="long_term", portfolio_value=10_000,
+                                  max_holding_pct=10))["result"]
+    assert mid["position_card"]["holder_assessment"] == analyzed["decision_card"]["if_held"]
+    assert long["position_card"]["holder_assessment"] == analyzed["decision_card"]["long_term"]["if_held"]
+    assert long["position_card"]["holder_assessment"]["action"] == "not_assessed"
+    assert long["position_card"]["review_status"] == "review_allocation"
+    assert long["position"]["current_value"] == mid["position"]["current_value"] == 2000
 
 
 async def test_unknown_thesis_is_distinct_from_confirmed_negative_fcf_and_nonburner():
@@ -88,51 +101,49 @@ async def test_watch_balance_factors_are_not_critical_runway():
     assert critical["fundamentals_summary"]["burn_metrics"]["cash_runway_quarters"] == 2.0
 
 
-async def test_legacy_position_does_not_enforce_currency_or_use_analyze_selected_close():
+async def test_position_uses_analyze_selected_price_and_applies_currency_boundary():
     gain = (await hm.run_position("gain"))["result"]
-    assert (await hm.run_position("eur"))["result"] == gain
-    assert (await hm.run_stock("eur_stock"))["summary"]["currency"] == "EUR"
+    eur = (await hm.run_position("eur"))["result"]
+    assert eur["position"]["current_value"] is None
+    assert eur["position"]["gain_loss_dollars"] is None
+    assert eur["position_card"]["holder_assessment"]["action"] == "hold"
     position_result = (await hm.run_position("price_disagreement"))["result"]
     analyzed = await hm.run_stock("price_disagreement")
-    assert analyzed["summary"]["current_price"] == 100
-    assert analyzed["summary"]["price_provenance"]["price_source"] == "daily_close"
-    assert position_result["position"]["current_price"] == 105
-    assert (await hm.run_position("stale_close"))["result"]["position"]["current_value"] == 2000
-    assert (await hm.run_stock("stale_daily"))["summary"]["price_provenance"]["staleness"]["stale"] is True
-    assert gain["support_levels"]["atr_1x_below"] == 98
-    assert position_result["support_levels"]["atr_1x_below"] == 103  # recomputed, not anchored
+    assert position_result["position"]["current_price"] == analyzed["summary"]["current_price"] == 100
+    assert gain["diagnostics"]["technicals"]["reference_levels"]["atr_1x_below"] == 98
+    assert position_result["diagnostics"]["technicals"]["reference_levels"]["atr_1x_below"] == 98
+    stale = (await hm.run_position("stale_close", portfolio_value=10_000, max_holding_pct=10))["result"]
+    assert stale["position"]["current_value"] == 2000
+    assert stale["position_card"]["review_status"] == "not_evaluated"
 
 
-async def test_personal_inputs_only_change_legacy_position_amounts_and_tax_not_signals():
+async def test_personal_inputs_change_only_context_and_never_create_tax_or_exit_guidance():
     rows = [(await hm.run_position(name))["result"] for name in (
         "gain", "loss", "fractional_shares", "no_shares", "exactly_366_days")]
     for row in rows:
-        assert row["current_signals"] == rows[0]["current_signals"]
-        assert row["sell_signals"] == rows[0]["sell_signals"]
+        assert row["diagnostics"]["technicals"] == rows[0]["diagnostics"]["technicals"]
+        assert row["position_card"]["holder_assessment"] == rows[0]["position_card"]["holder_assessment"]
+        assert row["position_card"]["new_money"] == rows[0]["position_card"]["new_money"]
         assert "watchlist_snapshot" not in row
-    gain = rows[0]
-    assert gain["position"]["current_value"] == 2000
-    assert gain["position"]["gain_loss_dollars"] == 400
-    assert gain["tax"]["rate_if_sold_now"] == .37
-    assert gain["tax"]["potential_savings"] == 68
-    assert rows[-1]["tax"]["rate_if_sold_now"] == .20
-    assert (await hm.run_position("exactly_365_days"))["result"]["holding"]["is_long_term"] is False
-    assert (await hm.run_position("exactly_366_days"))["result"]["holding"]["is_long_term"] is True
+        assert row["tax"]["status"] == "not_assessed"
+        assert set(row["holding"]) == {"purchase_date", "days_held"}
+    assert rows[0]["position"]["current_value"] == 2000
+    assert rows[0]["position"]["gain_loss_dollars"] == 400
+    assert (await hm.run_position("exactly_365_days"))["result"]["holding"]["days_held"] == 365
+    assert rows[-1]["holding"]["days_held"] == 366
 
 
-async def test_source_inventory_is_one_technicals_read_and_no_analyze(monkeypatch):
-    async def forbidden(*args, **kwargs):
-        raise AssertionError("legacy position started full analysis")
-    monkeypatch.setattr(dm.orchestrator, "analyze_stock", forbidden)
+async def test_source_inventory_changes_from_technicals_only_to_one_full_analysis():
     row = await hm.run_position("gain")
-    assert row["technical_reads"] == 1
+    assert BEFORE["positions"]["gain"]["technical_reads"] == 1
+    assert row["source_reads"] == dict.fromkeys(dm.TOOLS, 1)
     assert row["result"]["meta"]["schema_version"] == "7"
 
 
-def test_clock_is_explicit_host_local_and_not_wall_clock_dependent():
-    with patch.object(position, "datetime", hm.PositionClock):
-        result = position._build_holding(purchase_date="2024-02-29", purchase_dt=hm.PositionClock(2024, 2, 29))
-    assert result["days_held"] == 953
+async def test_position_clock_is_explicit_et_not_host_wall_time():
+    result = (await hm.run_position("leap_purchase"))["result"]
+    assert hm.POSITION_CLOCK.isoformat() == "2026-10-09T20:00:00-04:00"
+    assert result["holding"]["days_held"] == 953
 
 
 @pytest.mark.parametrize("filename,expected", [

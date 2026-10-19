@@ -1,51 +1,38 @@
-"""Boundary tests for the long-term capital-gains holding period.
+"""Elapsed holding days are descriptive calendar arithmetic, never a tax category."""
 
-IRS rule (26 USC §1222): long-term capital gains require the asset to be held
-**more than** one year. A position held for exactly 365 days is still
-short-term; only at 366+ days does it qualify as long-term.
-"""
+from datetime import UTC, datetime, timedelta
 
-from datetime import datetime, timedelta
-from unittest.mock import patch
+import pytest
 
-from stock_analysis.tools.position import _build_holding
+from stock_analysis.tools import position
+from tests.support import decision_matrix as dm
+from tests.support import holder_matrix as hm
 
 
-def _holding_for_days_ago(days: int) -> dict:
-    """Build a holding dict for a position purchased exactly `days` ago."""
-    # Use a fixed "now" so the test is deterministic regardless of clock.
-    fixed_now = datetime(2026, 5, 12)
-    purchase_dt = fixed_now - timedelta(days=days)
-    purchase_date = purchase_dt.strftime("%Y-%m-%d")
-    with patch("stock_analysis.tools.position.datetime") as mock_dt:
-        mock_dt.now.return_value = fixed_now
-        return _build_holding(purchase_date=purchase_date, purchase_dt=purchase_dt)
+@pytest.mark.parametrize("days", [364, 365, 366, 500])
+async def test_holding_days_do_not_generate_a_tax_classification(days):
+    now = hm.POSITION_CLOCK
+    purchased = (now.date() - timedelta(days=days)).isoformat()
+    with dm.stubbed(hm.SOUND):
+        result = await position.analyze_position("ACME", purchase_date=purchased, _now=now)
+    assert result["holding"] == {"purchase_date": purchased, "days_held": days}
+    assert result["tax"]["status"] == "not_assessed"
+    assert set(result["tax"]) == {"status", "reason"}
 
 
-class TestHoldingPeriodBoundary:
-    """The 365/366 day boundary for short-term vs long-term capital gains."""
+@pytest.mark.parametrize("now,expected", [
+    (datetime(2026, 10, 10, 3, 59, tzinfo=UTC), 0),
+    (datetime(2026, 10, 10, 4, 1, tzinfo=UTC), 1),
+])
+async def test_elapsed_days_switch_at_et_midnight_not_utc(now, expected):
+    with dm.stubbed(hm.SOUND):
+        result = await position.analyze_position("ACME", purchase_date="2026-10-09", _now=now)
+    assert result["holding"] == {"purchase_date": "2026-10-09", "days_held": expected}
 
-    def test_364_days_is_short_term(self) -> None:
-        h = _holding_for_days_ago(364)
-        assert h["days_held"] == 364
-        assert h["is_long_term"] is False
-        assert h["days_to_long_term"] == 2  # 366 - 364 = 2
 
-    def test_365_days_is_short_term(self) -> None:
-        """Exactly 365 days is still short-term (must hold >365)."""
-        h = _holding_for_days_ago(365)
-        assert h["days_held"] == 365
-        assert h["is_long_term"] is False
-        assert h["days_to_long_term"] == 1
-
-    def test_366_days_is_long_term(self) -> None:
-        """At 366 days the holding crosses into long-term."""
-        h = _holding_for_days_ago(366)
-        assert h["days_held"] == 366
-        assert h["is_long_term"] is True
-        assert h["days_to_long_term"] is None
-
-    def test_500_days_is_long_term(self) -> None:
-        h = _holding_for_days_ago(500)
-        assert h["is_long_term"] is True
-        assert h["days_to_long_term"] is None
+async def test_leap_date_counts_elapsed_days_without_one_year_tax_shortcut():
+    now = datetime(2025, 2, 28, 17, tzinfo=UTC)
+    with dm.stubbed(hm.SOUND):
+        result = await position.analyze_position("ACME", purchase_date="2024-02-29", _now=now)
+    assert result["holding"] == {"purchase_date": "2024-02-29", "days_held": 365}
+    assert result["tax"]["status"] == "not_assessed"

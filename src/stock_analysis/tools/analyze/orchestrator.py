@@ -396,16 +396,22 @@ async def analyze_stock(
     max_position_pct: float | str | None = None,
     _now: datetime | None = None,
 ) -> dict[str, Any]:
-    """
-    Aggregate analysis from multiple tools with parallel execution.
+    """Aggregate stock analysis; private fetched inputs never enter the response."""
+    result, _ = await _analyze_with_context(
+        symbol, profile, account_size, risk_per_trade_pct, max_position_pct, _now,
+    )
+    return result
 
-    Args:
-        symbol: Stock ticker symbol
-        _now: Test seam for the current ET time; production uses the clock
 
-    Returns:
-        Comprehensive analysis with data from all tools
-    """
+async def _analyze_with_context(
+    symbol: str,
+    profile: str = "balanced",
+    account_size: float | str | None = None,
+    risk_per_trade_pct: float | str | None = None,
+    max_position_pct: float | str | None = None,
+    _now: datetime | None = None,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Analyze once and retain already-fetched inputs for internal composers."""
     start_time = perf_counter()
     now = _now or datetime.now(_ET)
     investor_profile = resolve_investor_profile(
@@ -1303,4 +1309,4 @@ async def analyze_stock(
 
     raw_result["watchlist_snapshot"] = build_watchlist_snapshot(raw_result)
 
-    return raw_result
+    return raw_result, {"technicals": tech_data, "quote_type": summary_data.get("quote_type")}

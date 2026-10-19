@@ -1,165 +1,113 @@
-"""Analyze position tool."""
+"""Canonical holder assessment with optional, stateless personal context."""
 
 from datetime import datetime
 from time import perf_counter
 from typing import Any, cast
+from zoneinfo import ZoneInfo
 
-from stock_analysis.tools.technicals import technicals
-from stock_analysis.utils.helpers import safe_round
+from stock_analysis.tools.analyze.orchestrator import _analyze_with_context
+from stock_analysis.tools.position_context import build_position_context
+from stock_analysis.utils.helpers import safe_round, valid_price
+from stock_analysis.utils.position_inputs import normalize_position_inputs
 from stock_analysis.utils.provenance import build_error_response, build_meta
+
+_ET = ZoneInfo("America/New_York")
 
 
 async def analyze_position(
     symbol: str,
-    cost_basis: float,
-    purchase_date: str,
-    shares: float | None = None,
+    cost_basis: float | str | None = None,
+    purchase_date: str | None = None,
+    shares: float | str | None = None,
+    horizon: str = "mid_term",
+    portfolio_value: float | str | None = None,
+    max_holding_pct: float | str | None = None,
+    *,
+    _now: datetime | None = None,
 ) -> dict[str, Any]:
-    """
-    Analyze an existing position for hold/sell decision.
-
-    Args:
-        symbol: Stock ticker symbol
-        cost_basis: Cost basis per share
-        purchase_date: Purchase date (YYYY-MM-DD)
-        shares: Number of shares (optional)
-
-    Returns:
-        Dict with position details, holding info, tax implications, signals
-    """
-    start_time = perf_counter()
-    normalized_symbol = symbol.upper().strip()
-
-    # Parse purchase date
+    """One stock analysis, with personal calculations kept outside its decision."""
+    started = perf_counter()
+    now = (_now or datetime.now(_ET)).astimezone(_ET)
+    today = now.astimezone(_ET).date()
     try:
-        purchase_dt = datetime.strptime(purchase_date, "%Y-%m-%d")
-    except ValueError:
-        return build_error_response(
-            error_type="invalid_parameters",
-            message=f"Invalid purchase_date format: {purchase_date}. Expected YYYY-MM-DD",
-            symbol=symbol,
+        inputs = normalize_position_inputs(
+            cost_basis, purchase_date, shares, horizon, portfolio_value, max_holding_pct,
+            today=today,
         )
+    except ValueError as exc:
+        return build_error_response("invalid_parameters", str(exc), symbol=symbol)
 
-    # Get current technicals
-    tech_result = await technicals(normalized_symbol)
-
-    if tech_result.get("error"):
-        return tech_result
-
-    # An empty latest session leaves no current price; use the latest valid close.
-    current_price = tech_result.get("current_price") or (tech_result.get("session_close") or {}).get("close")
-    if current_price is None:
-        return build_error_response(
-            error_type="data_unavailable",
-            message="Could not get current price",
-            symbol=symbol,
-        )
-
-    position = _build_position(
-        current_price=current_price,
-        cost_basis=cost_basis,
-        shares=shares,
+    try:
+        analysis, fetched = await _analyze_with_context(symbol, _now=now)
+    except ValueError as exc:
+        return build_error_response("invalid_symbol", str(exc), symbol=symbol)
+    decision = analysis["decision_card"]
+    chosen = decision if inputs.horizon == "mid_term" else decision["long_term"]
+    personal = build_position_context(
+        inputs=inputs, summary=analysis["summary"], quote_type=fetched["quote_type"], today=today,
     )
-    holding = _build_holding(purchase_date=purchase_date, purchase_dt=purchase_dt)
-    tax = _build_tax(
-        gain_loss_dollars=position["gain_loss_dollars"],
-        is_long_term=holding["is_long_term"],
-    )
-
-    # Extract current signals from technicals
-    ma = tech_result.get("moving_averages", {})
-    rsi = tech_result.get("rsi", {})
-    macd = tech_result.get("macd", {})
-    returns = tech_result.get("returns", {})
-
-    current_signals = _build_current_signals(ma=ma, rsi=rsi, macd=macd, returns=returns)
-    sell_signals = _build_sell_signals(ma=ma, rsi=rsi, macd=macd)
-    support_levels = _build_support_levels(
-        current_price=current_price,
-        tech_result=tech_result,
-    )
-
-    duration_ms = (perf_counter() - start_time) * 1000
-
-    return {
-        "meta": build_meta("analyze_position", duration_ms),
-        "data_provenance": tech_result.get("data_provenance", {}),
-        "symbol": normalized_symbol,
-        "position": position,
-        "holding": holding,
-        "tax": tax,
-        "current_signals": current_signals,
-        "sell_signals": sell_signals,
-        "support_levels": support_levels,
+    holder = chosen["if_held"]
+    concentration = personal["concentration_check"]
+    addition = _addition_context(holder, chosen["new_money"], concentration["status"])
+    card = {
+        "horizon": inputs.horizon,
+        "holder_assessment": holder,
+        "new_money": chosen["new_money"],
+        "context_status": personal["context_status"],
+        "review_status": personal["review_status"],
+        "concentration_check": concentration,
+        "addition_context": addition,
     }
-
-
-def _build_position(
-    current_price: float,
-    cost_basis: float,
-    shares: float | None,
-) -> dict[str, Any]:
-    """Build position value and gain/loss fields."""
-    gain_loss = (current_price - cost_basis) / cost_basis if cost_basis != 0 else None
-    gain_loss_dollars = (
-        (current_price - cost_basis) * shares if shares is not None else None
-    )
-    current_value = current_price * shares if shares is not None else None
-
-    return {
-        "cost_basis": cost_basis,
-        "current_price": current_price,
-        "shares": shares,
-        "current_value": safe_round(current_value, 2),
-        "gain_loss": safe_round(gain_loss, 4),
-        "gain_loss_dollars": safe_round(gain_loss_dollars, 2),
+    fit = analysis["verdict"]["horizon_fit"]
+    suitability = {
+        "horizon": inputs.horizon,
+        "fit": fit[inputs.horizon],
+        "reasons": [reason for reason in fit["reasons"] if reason.startswith(inputs.horizon + ":")],
+        "note": "Suitability is separate from the holder assessment; hold is not an endorsement.",
     }
-
-
-def _build_holding(purchase_date: str, purchase_dt: datetime) -> dict[str, Any]:
-    """Build holding-period fields.
-
-    IRS rule (26 USC §1222): long-term capital gains require holding the asset
-    for **more than** one year. A position held exactly 365 days is still
-    short-term; it qualifies as long-term at 366+ days.
-    """
-    days_held = (datetime.now() - purchase_dt).days
-    is_long_term = days_held > 365
-    days_to_long_term = None if is_long_term else 366 - days_held
-
-    return {
-        "purchase_date": purchase_date,
-        "days_held": days_held,
-        "is_long_term": is_long_term,
-        "days_to_long_term": days_to_long_term,
+    technical = fetched["technicals"]
+    ma, rsi, macd = (technical.get(key) or {} for key in ("moving_averages", "rsi", "macd"))
+    result = {
+        "meta": build_meta("analyze_position", (perf_counter() - started) * 1000),
+        "data_provenance": analysis["data_provenance"],
+        "data_quality": analysis["data_quality"],
+        "symbol": analysis["symbol"],
+        "position_card": card,
+        "position": personal["position"],
+        "holding": personal["holding"],
+        "assumptions": personal["assumptions"],
+        "suitability": suitability,
+        "tax": {"status": "not_assessed", "reason": "Personal tax treatment and sale quantities are not assessed."},
+        "diagnostics": {"technicals": {
+            "quote_currency": analysis["summary"].get("currency"),
+            "current_signals": _build_current_signals(ma, rsi, macd, technical.get("returns") or {}),
+            "flags": _build_technical_flags(ma, rsi, macd),
+            "reference_levels": _build_reference_levels(valid_price(analysis["summary"]["current_price"]), technical),
+            "note": "Unmonitored technical context, not holder stops or instructions to exit.",
+        }},
     }
+    for key in ("error", "error_type", "message"):
+        if key in analysis:
+            result[key] = analysis[key]
+    return result
 
 
-def _build_tax(gain_loss_dollars: float | None, is_long_term: bool) -> dict[str, Any]:
-    """Build simplified tax fields."""
-    short_term_rate = 0.37
-    long_term_rate = 0.20
-
-    tax_type = "long_term" if is_long_term else "short_term"
-    rate_now = long_term_rate if is_long_term else short_term_rate
-
-    tax_on_gain_now = None
-    tax_if_waited = None
-    potential_savings = None
-
-    if gain_loss_dollars is not None and gain_loss_dollars > 0:
-        tax_on_gain_now = gain_loss_dollars * rate_now
-        tax_if_waited = gain_loss_dollars * long_term_rate
-        potential_savings = tax_on_gain_now - tax_if_waited if not is_long_term else 0
-
-    return {
-        "type": tax_type,
-        "rate_if_sold_now": rate_now,
-        "rate_if_long_term": long_term_rate,
-        "tax_on_gain_now": safe_round(tax_on_gain_now, 2),
-        "tax_if_waited": safe_round(tax_if_waited, 2),
-        "potential_savings": safe_round(potential_savings, 2),
-    }
+def _addition_context(holder: dict[str, Any], new_money: dict[str, Any], allocation: str) -> str:
+    if holder["add_allowed"]:
+        if allocation == "above_limit":
+            return ("The stock model permits considering new money, but this holding already exceeds your own "
+                    "ceiling; no remaining add capacity has been assessed.")
+        if allocation == "not_evaluated":
+            return "The stock model permits considering new money, but the requested allocation and add capacity have not been checked."
+        return "The stock model permits considering new money; no remaining add capacity has been assessed."
+    blockers = ", ".join(gate["id"] for gate in new_money["blocked_by"])
+    concern = {
+        "above_limit": " The holding also exceeds your own allocation ceiling.",
+        "not_evaluated": " The requested allocation and add capacity have not been checked.",
+    }.get(allocation, "")
+    blocker_text = f" ({blockers})" if blockers else ""
+    message = f"Adding is not allowed by the stock model: {new_money['action']}"
+    return message + blocker_text + "." + concern
 
 
 def _build_current_signals(
@@ -204,20 +152,17 @@ def _build_current_signals(
     return {"bullish": bullish, "bearish": bearish}
 
 
-def _build_sell_signals(
+def _build_technical_flags(
     ma: dict[str, Any],
     rsi: dict[str, Any],
     macd: dict[str, Any],
-) -> dict[str, bool | int | None]:
-    """Build specific sell-signal flags and active count."""
+) -> dict[str, bool | None]:
+    """Retain raw technical flags as diagnostics, never an exit assessment."""
     broke_sma50 = _invert_nullable(_get_rule_triggered(ma, "above_sma50"))
     broke_sma200 = _invert_nullable(_get_rule_triggered(ma, "above_sma200"))
     death_cross = _get_rule_triggered(ma, "death_cross")
     rsi_overbought = _get_rule_triggered(rsi, "overbought")
     macd_bearish = _get_rule_triggered(macd, "bearish_cross")
-
-    sell_signal_values = [broke_sma50, broke_sma200, death_cross, rsi_overbought, macd_bearish]
-    active_count = sum(1 for value in sell_signal_values if value is True)
 
     return {
         "broke_sma50": broke_sma50,
@@ -225,21 +170,20 @@ def _build_sell_signals(
         "death_cross": death_cross,
         "rsi_overbought": rsi_overbought,
         "macd_bearish": macd_bearish,
-        "active_count": active_count,
     }
 
 
-def _build_support_levels(
-    current_price: float,
+def _build_reference_levels(
+    current_price: float | None,
     tech_result: dict[str, Any],
 ) -> dict[str, float | None]:
-    """Build support levels from technical data."""
+    """Unmonitored technical reference levels, not holder stops."""
     ma = tech_result.get("moving_averages", {})
     atr = tech_result.get("atr", {})
     price_pos = tech_result.get("price_position", {})
 
     atr_val = atr.get("value")
-    atr_1x_below = current_price - atr_val if atr_val else None
+    atr_1x_below = current_price - atr_val if current_price is not None and atr_val else None
 
     return {
         "sma_50": ma.get("sma_50"),

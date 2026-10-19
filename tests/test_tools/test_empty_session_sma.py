@@ -150,13 +150,20 @@ class TestFallingKnifeSurvivesEmptySessions:
         assert result["decision_card"]["hard_gates"]["checks"]["falling_knife"] is True
 
     @pytest.mark.parametrize("empty", GAPS, ids=GAP_IDS)
-    async def test_position(self, prices: Any, empty: tuple[int, ...]) -> None:
+    async def test_position(self, monkeypatch: pytest.MonkeyPatch, prices: Any, empty: tuple[int, ...]) -> None:
         prices(knife_frame(empty))
 
-        result = await position_mod.analyze_position("KNIFE", cost_basis=100.0, purchase_date="2025-01-02", shares=10)
-
-        sell = result["sell_signals"]
-        assert (sell["broke_sma200"], sell["death_cross"], sell["active_count"]) == (True, True, 3)
+        from tests.support import decision_matrix as dm
+        from tests.support.holder_matrix import SOUND
+        with dm.stubbed(SOUND), monkeypatch.context() as scoped:
+            scoped.setattr(orchestrator, "technicals", tech_mod.technicals)
+            result = await position_mod.analyze_position(
+                "KNIFE", cost_basis=100.0, purchase_date="2025-01-02", shares=10, _now=SATURDAY,
+            )
+        flags = result["diagnostics"]["technicals"]["flags"]
+        assert (flags["broke_sma200"], flags["death_cross"]) == (True, True)
+        assert sum(value is True for value in flags.values()) == 3
+        assert "active_count" not in flags
 
     async def test_an_empty_3m_start_bar_leaves_the_signals_unknown(
         self, monkeypatch: pytest.MonkeyPatch, prices: Any

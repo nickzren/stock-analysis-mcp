@@ -3,12 +3,13 @@
 Frozen synthetic observations from v0.4.0 production code at `c9fba4a` (MCP SDK
 1.30.0, schema 7, snapshot 3.0.0). The baseline package changed tests only. It does not
 endorse the legacy tax assumptions or claim that investment recommendations work.
-The separate current capture now includes the unreleased long-term holder core.
+The separate current capture includes the unreleased long-term holder core and
+stateless position context.
 
 - `before.md`: frozen stock/position table.
-- `after.json` / `after.md`: current outputs with the new long-term holder object.
-  Every old output value is compared with the baseline after removing only
-  `decision_card.long_term.if_held`; snapshots remain exactly 3.0.0.
+- `after.json` / `after.md`: current stock and position outputs. Stock values
+  match the baseline after removing only `decision_card.long_term.if_held`;
+  snapshots remain exactly 3.0.0. Position output deliberately changes as below.
 - `before.json`: source inputs, source-call counts, selected price/provenance,
   full decision cards/sizing, verdict and business evidence, modes/zones,
   summaries and **complete** stock snapshots; position responses omit only
@@ -17,7 +18,28 @@ The separate current capture now includes the unreleased long-term holder core.
 - `tests/test_step3a/`: observations, immutable hashes, recorder safeguards and
   real in-process MCP-client input tests.
 
-## Coverage and limits
+## Current position migration
+
+Position inputs are optional and validated before reads. One full analysis supplies
+its canonical holder/new-money assessment, selected price and raw diagnostics.
+Valid calls now invoke each of the eight source tools once; invalid personal
+inputs invoke none. Cost/date/shares/account/ceiling never change stock decisions,
+entry sizes or complete stock snapshots. The position request clock is Eastern
+Time (`2026-10-09T20:00:00-04:00` for these rows).
+
+USD share-priced positions have descriptive P&L and an allocation check against
+only an explicit ceiling. Missing/foreign-currency context stays unavailable;
+stale/fallback prices are labelled historical and cannot verify allocation. ETFs
+can have personal numbers while long-term ownership is `not_assessed`. Known
+broken businesses now differ from sound businesses even on an identical chart.
+Tax estimates and the 365-day tax category are removed. Raw technical flags and
+unmonitored reference levels move under `diagnostics.technicals`, without an
+active sell-signal count. Current captures omit execution duration and per-source
+timings (including failed reads); separate evidence records offline timing, not live network performance.
+
+The scenarios below describe the **frozen baseline**, not the new handler.
+
+## Baseline coverage and limits
 
 There are 32 stock cases and 25 position cases. All prices, companies, accounts
 and holdings are synthetic. Even rows named `etf_spy` / `etf_vti` use `ACME` as
@@ -45,7 +67,7 @@ claims about provider payloads or observed investment performance.
 Position cases record gains/losses, optional/fractional/zero/negative inputs,
 365/366-day and leap-date boundaries, future/invalid dates, missing/nonpositive
 prices, stale or fallback closes, technical errors and a changing ATR reference.
-The tool currently reads only technicals, so identical charts give identical
+The baseline tool reads only technicals, so identical charts give identical
 position results for a broken business, a stock, an ETF and a non-USD holding.
 One paired case gives analyze a selected daily close of $100 while the position
 tool uses the same technical input's $105 current price.
@@ -67,7 +89,7 @@ negative values, future dates and text `nan`/`inf`/overflow are accepted.
 Nonfinite outputs become null. Python NaN/Inf supplied to this client instead
 arrive as null, so they do not prove server-side nonfinite rejection. Missing
 cost/date and future context fields (`horizon`, `portfolio_value`,
-`max_holding_pct`) are rejected before data reads. These are current observations,
+`max_holding_pct`) are rejected before data reads. These are baseline observations,
 not the new input contract.
 
 ## Approved changes, kept separate from observations

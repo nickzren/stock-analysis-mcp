@@ -25,7 +25,7 @@ def test_baseline_cli_is_disabled_before_any_work(monkeypatch, tmp_path, capsys,
     assert list(tmp_path.iterdir()) == []
 
 
-async def test_capture_is_deterministic_and_matches_before_without_claiming_recorded_head(tmp_path):
+async def test_capture_is_deterministic_and_accounts_for_the_approved_position_migration(tmp_path):
     recording = await hm.build()
     assert recording == await hm.build()
     before = json.loads((hm.FIXTURE_DIR / "before.json").read_text())
@@ -33,12 +33,22 @@ async def test_capture_is_deterministic_and_matches_before_without_claiming_reco
     previous_fields = copy.deepcopy(recording)
     for row in previous_fields["stocks"].values():
         assert isinstance(row["result"]["decision_card"]["long_term"].pop("if_held"), dict)
-    assert previous_fields == {"baseline_code": hm.BASE_COMMIT, **before}
+    assert previous_fields["stocks"] == before["stocks"]
+    assert previous_fields["analyze_clock"] == before["analyze_clock"]
+    assert previous_fields["baseline_code"] == hm.BASE_COMMIT
+    assert previous_fields["position_clock"] == hm.POSITION_CLOCK.isoformat()
+    assert set(previous_fields["positions"]) == set(before["positions"])
+    for name, row in previous_fields["positions"].items():
+        assert row["arguments"] == before["positions"][name]["arguments"]
+        assert row["technicals_input"] == before["positions"][name]["technicals_input"]
+        assert "source_reads" in row
     hm.write_recording(recording, tmp_path)
     assert json.loads((tmp_path / "after.json").read_text()) == recording
     current_table = (tmp_path / "after.md").read_text()
     assert "current output table" in current_table
     assert "Long-term held / basis" in current_table
+    assert "Current position observations" in current_table
+    assert "tool calls, not network requests" in current_table
     for row in recording["stocks"].values():
         holder = row["result"]["decision_card"]["long_term"]["if_held"]
         assert f"{holder['action']} / {holder['basis']}" in current_table

@@ -4,7 +4,7 @@ import json
 import logging
 import math
 import os
-from typing import Any
+from typing import Any, Literal
 
 from fastmcp import FastMCP
 
@@ -39,6 +39,12 @@ from stock_analysis.tools import (
     scan_watchlist as watchlist_scan,
 )
 from stock_analysis.tools.analyze.projection import normalize_analyze_detail, project_analyze_result
+from stock_analysis.utils.position_inputs import (
+    CostBasis,
+    HoldingPercent,
+    OwnedShares,
+    PortfolioValue,
+)
 from stock_analysis.utils.provenance import build_error_response
 from stock_analysis.utils.sizing_inputs import (
     AccountSize,
@@ -345,32 +351,31 @@ async def analyze_trade_setup(
 @mcp.tool
 async def analyze_my_position(
     symbol: str,
-    cost_basis: float,
-    purchase_date: str,
-    shares: float | None = None,
+    cost_basis: CostBasis | None = None,
+    purchase_date: str | None = None,
+    shares: OwnedShares | None = None,
+    horizon: Literal["mid_term", "long_term"] = "mid_term",
+    portfolio_value: PortfolioValue | None = None,
+    max_holding_pct: HoldingPercent | None = None,
 ) -> str:
-    """
-    Use when the user gives a holding's cost basis and purchase date and wants P/L,
-    holding period and tax status. It reads technicals only; the hold/reduce decision is
-    analyze's `decision_card.if_held`.
-
-    Calculates P/L, tax implications (short vs long-term),
-    technical sell signals, and support levels.
+    """Use when reviewing a holding, optionally with personal USD context. One analysis
+    supplies the selected horizon's canonical holder assessment and price. Lead with
+    position_card.holder_assessment; label review_status "Allocation check", not a stock decision.
+    Report a breached ceiling beside addition eligibility; no remaining add capacity is assessed.
+    No tax estimate, holder stop or sale quantity. Numeric decimal strings are accepted; booleans rejected.
 
     Args:
-        symbol: Stock ticker symbol
-        cost_basis: Your cost basis per share in dollars
-        purchase_date: When you bought it (YYYY-MM-DD format)
-        shares: Number of shares owned (optional, for dollar calculations)
-
-    Returns:
-        JSON with position analysis, tax info, and sell signals
+        symbol: Stock or ETF ticker
+        cost_basis: Optional user-reported USD cost per current split-adjusted share, >=0
+        purchase_date: Optional YYYY-MM-DD, no later than today in Eastern Time; elapsed days only
+        shares: Optional positive existing shares; fractional shares allowed
+        horizon: mid_term (default, 3-12 months) or long_term (1-5 years)
+        portfolio_value: Optional positive total portfolio USD value including this holding, not buying power
+        max_holding_pct: Optional user ceiling in (0,100] percentage points; no default
     """
     result = await analyze_position(
-        symbol=symbol,
-        cost_basis=cost_basis,
-        purchase_date=purchase_date,
-        shares=shares,
+        symbol=symbol, cost_basis=cost_basis, purchase_date=purchase_date, shares=shares,
+        horizon=horizon, portfolio_value=portfolio_value, max_holding_pct=max_holding_pct,
     )
     return _json_response(result)
 

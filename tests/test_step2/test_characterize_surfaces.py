@@ -25,9 +25,8 @@ tests/support/swing_matrix.py; every run pins its clock.
 
 import copy
 import re
-from datetime import datetime, tzinfo
 from pathlib import Path
-from typing import Any, Self
+from typing import Any
 
 import pytest
 
@@ -255,14 +254,6 @@ class TestPortfolioThreshold:
         assert exposure["liquidity"]["illiquid_positions"] == []
 
 
-class _FridayEvening(datetime):
-    """analyze_position's holding period reads datetime.now(); pin it to the matrix clock's date."""
-
-    @classmethod
-    def now(cls, tz: tzinfo | None = None) -> Self:
-        return cls(2026, 10, 9, 20, 0)
-
-
 POSITION_DECISION_ARGS = {"symbol": "ACME", "cost_basis": "80", "purchase_date": "2025-01-02"}
 
 
@@ -288,35 +279,28 @@ class TestPositionDecisionPrompt:
     async def test_the_prompt_decision_tool_tells_a_broken_business_from_a_quality_one(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """SC-CH15 (flipped by WP2.4): A (broken business) and D (quality business) share the BEARISH chart.
-        analyze_my_position reads technicals only and returns the same signals for both, so the prompt takes the
-        decision from analyze's if_held, which tells them apart (review_exit business_broken vs hold
-        no_reduction_evidence). G from WP2.4 (plan §9)."""
-        def technicals(body: dict[str, Any] | None) -> Any:
-            async def fake(symbol: str, **kwargs: Any) -> dict[str, Any]:
-                return {"symbol": symbol, **copy.deepcopy(body or {})}
-            return fake
-
-        monkeypatch.setattr(position_module, "datetime", _FridayEvening)
-        reads: dict[str, dict[str, Any]] = {}
-        analyzed: dict[str, tuple[str, str]] = {}
+        """3a.2: the position tool now returns the canonical business assessment itself."""
+        reads = {}
         for name in ("A_broken_bearish", "D_quality_attractive_poor_chart"):
             scenario = dm.SCENARIOS[name]
-            monkeypatch.setattr(position_module, "technicals", technicals(scenario.payloads()["technicals"]))
-            read = await position_module.analyze_position("ACME", cost_basis=80.0, purchase_date="2025-01-02")
-            reads[name] = {key: value for key, value in read.items() if key != "meta"}
-            result = await dm.run(scenario)
-            analyzed[name] = (result["decision_card"]["if_held"]["action"], result["decision_card"]["if_held"]["basis"])
-
+            with dm.stubbed(scenario):
+                reads[name] = await position_module.analyze_position(
+                    "ACME", cost_basis=80.0, purchase_date="2025-01-02", _now=scenario.now,
+                )
+        # Prompt routing changes in 3a.3; keep its existing first call for this package.
         assert re.findall(r"^\d+\. (\w+)\(", position_decision_text(), flags=re.MULTILINE)[0] == "analyze"
-        assert analyzed == {"A_broken_bearish": ("review_exit", "business_broken"),
-                            "D_quality_attractive_poor_chart": ("hold", "no_reduction_evidence")}
-        assert reads["A_broken_bearish"] == reads["D_quality_attractive_poor_chart"]
-        assert reads["A_broken_bearish"]["sell_signals"] == {
-            "broke_sma50": True, "broke_sma200": True, "death_cross": False, "rsi_overbought": False,
-            "macd_bearish": True, "active_count": 3}
-        assert set(reads["A_broken_bearish"]) == {"data_provenance", "symbol", "position", "holding", "tax",
-                                                  "current_signals", "sell_signals", "support_levels"}
+        assert {name: (result["position_card"]["holder_assessment"]["action"],
+                       result["position_card"]["holder_assessment"]["basis"])
+                for name, result in reads.items()} == {
+            "A_broken_bearish": ("review_exit", "business_broken"),
+            "D_quality_attractive_poor_chart": ("hold", "no_reduction_evidence"),
+        }
+        flags = reads["A_broken_bearish"]["diagnostics"]["technicals"]["flags"]
+        assert flags == reads["D_quality_attractive_poor_chart"]["diagnostics"]["technicals"]["flags"]
+        assert flags == {"broke_sma50": True, "broke_sma200": True, "death_cross": False,
+                         "rsi_overbought": False, "macd_bearish": True}
+        assert "sell_signals" not in reads["A_broken_bearish"]
+
 
 
 class TestSavedRecords:

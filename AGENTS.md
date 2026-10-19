@@ -56,9 +56,58 @@
   capacity or sizing implication. Existing mid-term/new-money/sizing output and
   all snapshot 3.0.0 fields remain unchanged. The holder snapshot field and 4.0.0
   version first ship together in the later snapshot package.
-- This intermediate branch adds the card object only. Position routing/context,
-  summary and agent guidance are subsequent packages; schema stays 7 and the
-  package/install pin stays 0.4.0 until the coordinated release work.
+- The intermediate branch includes the holder core and position context below.
+  Shared summary/agent guidance and the coordinated schema/snapshot migration
+  remain in the next package; schema stays 7, snapshot 3.0.0 and the package/install
+  pin stays 0.4.0 until that work and the separately approved release.
+
+## Unreleased Position Context
+- `analyze_my_position` defaults to `mid_term`, accepts `long_term`, and makes
+  cost basis, purchase date and shares optional. Portfolio value and holding
+  ceiling are optional. Numeric decimal/scientific strings are accepted; booleans
+  are rejected before MCP coercion. Cost is finite/nonnegative (genuine zero);
+  shares and portfolio value positive; ceiling in `(0,100]`. Validate before
+  symbol/source/storage access. Dates are exact YYYY-MM-DD, no later than the
+  request date in Eastern Time. Elapsed calendar days are descriptive only.
+- Both wrappers use private `_analyze_with_context`: one existing eight-tool
+  analysis, with raw technicals and quote type retained internally. Personal
+  inputs never enter that analysis, its entry sizing, or its stock snapshot.
+  This adds source work compared with the former technicals-only position call;
+  it does not promise unchanged latency. Do not expose the private context as a
+  client argument or raw response block, or fetch technicals again.
+- `position_card.holder_assessment` and `.new_money` are verbatim from the chosen
+  canonical horizon. `suitability` retains that horizon's fit and actual reasons;
+  hold is not endorsement. `context_status` describes supplied personal data
+  only. `review_status` maps only `concentration_check.status`: above_limit to
+  review_allocation, within_limit to no_allocation_trigger, otherwise the same
+  not_evaluated/not_requested value. Label this “Allocation check”, never a stock
+  all-clear. No user ceiling means no check/default. Addition prose retains an
+  exceeded ceiling or unevaluated requested check without altering add_allowed.
+- Personal arithmetic requires a known USD per-share EQUITY/ETF quote, separately
+  from stock-rubric applicability. Preferred shares and USD ADRs can have numbers
+  without a company-rubric assessment or verified statement ratios. Non-USD or
+  unknown units suppress dependent calculated values; no FX conversion. Inputs
+  are user-reported, current split-adjusted positions; portfolio total includes
+  this holding and is not buying power. No reconciliation or remaining add
+  capacity is claimed.
+- P&L uses analyze's selected price/provenance. A stale/fallback/unverified-time
+  price is labelled historical and cannot evaluate allocation. Missing inputs
+  null only dependent values with `calculation_reasons`. Genuine zero cost
+  permits dollar P&L but no return fraction. Use unrounded amounts for allocation
+  comparisons; equality meets the ceiling. Holding value above portfolio is
+  inconsistent and never clamped. Unrepresentable products/ratios are null with
+  numeric_range_unavailable; overflow is not evidence of an excessive holding.
+- Position `tax` is `{status: not_assessed, reason}`. Remove fixed rates/savings
+  and holding tax-category fields. `diagnostics.technicals.current_signals`,
+  `.flags` and `.reference_levels` retain raw technical context with its
+  `quote_currency`; there is no
+  top-level sell_signals/active_count or actionable stop alias. Use actual bearish
+  MACD evidence, not inverted bullish evidence. ATR references are unmonitored,
+  not holder exits. Shared prompt/guide routing is deliberately migrated next.
+- Frozen holder `before.json`/`before.md` remain unchanged. Generate current after
+  files using `python -m tests.support.holder_matrix --after --output-dir <new-dir>`.
+  Current position rows retain all output except execution duration/source timings,
+  and count source tool calls, not Yahoo requests. No position storage is written.
 
 ## Sizing Inputs and Output (schema 7)
 - `analyze`, `analyze_trade_setup` and `scan_watchlist` validate sizing inputs

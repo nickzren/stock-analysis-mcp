@@ -40,36 +40,36 @@ Complete inputs, decision/sizing surfaces and snapshots are in the matching JSON
 | currency_unknown | watch | hold / candidate_admits_new_money | watch | ok | hold / no_demonstrated_thesis_failure |
 | usd_adr | starter | hold / candidate_admits_new_money | buy | ok | hold / no_demonstrated_thesis_failure |
 
-## Legacy position observations
+## Current position observations
 
-Tax rates/classification and chart sell flags below describe the old implementation only.
-The position tool reads technicals alone; it does not receive business or currency inputs.
-The simulated host-local date is pinned independently of analyze's timezone-aware clock.
+Each valid request runs one analysis: the eight stubbed source tools are each called once.
+Counts below are tool calls, not network requests. Invalid inputs make no source calls.
+Elapsed days use the injected America/New_York request date. Tax is not assessed.
 
-| Case | Reads | Price | P/L dollars | Days held | Tax type / rate | Sell flags | Error |
-|---|---|---|---|---|---|---|---|
-| gain | 1 | 100.0 | 400.0 | 38 | short_term / 0.37 | 0 | — |
-| loss | 1 | 100.0 | -400.0 | 38 | short_term / 0.37 | 0 | — |
-| no_shares | 1 | 100.0 | None | 38 | short_term / 0.37 | 0 | — |
-| fractional_shares | 1 | 100.0 | 10.0 | 38 | short_term / 0.37 | 0 | — |
-| zero_cost | 1 | 100.0 | 2000.0 | 38 | short_term / 0.37 | 0 | — |
-| negative_cost | 1 | 100.0 | 2200.0 | 38 | short_term / 0.37 | 0 | — |
-| zero_shares | 1 | 100.0 | 0.0 | 38 | short_term / 0.37 | 0 | — |
-| negative_shares | 1 | 100.0 | -40.0 | 38 | short_term / 0.37 | 0 | — |
-| exactly_365_days | 1 | 100.0 | 400.0 | 365 | short_term / 0.37 | 0 | — |
-| exactly_366_days | 1 | 100.0 | 400.0 | 366 | long_term / 0.2 | 0 | — |
-| leap_purchase | 1 | 100.0 | 400.0 | 953 | long_term / 0.2 | 0 | — |
-| future_date | 1 | 100.0 | 400.0 | -1 | short_term / 0.37 | 0 | — |
-| invalid_date | 0 | None | None | None | None / None | None | invalid_parameters |
-| empty_latest | 1 | 100.0 | 400.0 | 38 | short_term / 0.37 | 0 | — |
-| no_price | 1 | None | None | None | None / None | None | data_unavailable |
-| zero_price | 1 | None | None | None | None / None | None | data_unavailable |
-| negative_price | 1 | -5.0 | -1700.0 | 38 | short_term / 0.37 | 0 | — |
-| price_disagreement | 1 | 105.0 | 500.0 | 38 | short_term / 0.37 | 0 | — |
-| stale_close | 1 | 100.0 | 400.0 | 38 | short_term / 0.37 | 0 | — |
-| knife | 1 | 55.0 | -500.0 | 38 | short_term / 0.37 | 4 | — |
-| broken_same_chart | 1 | 100.0 | 400.0 | 38 | short_term / 0.37 | 0 | — |
-| etf | 1 | 100.0 | 400.0 | 38 | short_term / 0.37 | 0 | — |
-| preferred | 1 | 100.0 | 400.0 | 38 | short_term / 0.37 | 0 | — |
-| eur | 1 | 100.0 | 400.0 | 38 | short_term / 0.37 | 0 | — |
-| technical_error | 1 | None | None | None | None / None | None | data_unavailable |
+| Case | Source calls | Holder / basis | Price | P/L dollars | Days held | Context | Allocation | Error |
+|---|---|---|---|---|---|---|---|---|
+| gain | 8 | hold / candidate_admits_new_money | 100.0 | 400.0 | 38 | available | not_requested | — |
+| loss | 8 | hold / candidate_admits_new_money | 100.0 | -400.0 | 38 | available | not_requested | — |
+| no_shares | 8 | hold / candidate_admits_new_money | 100.0 | None | 38 | available | not_requested | — |
+| fractional_shares | 8 | hold / candidate_admits_new_money | 100.0 | 10.0 | 38 | available | not_requested | — |
+| zero_cost | 8 | hold / candidate_admits_new_money | 100.0 | 2000.0 | 38 | partial | not_requested | — |
+| negative_cost | 0 | None / None | None | None | None | None | None | invalid_parameters |
+| zero_shares | 0 | None / None | None | None | None | None | None | invalid_parameters |
+| negative_shares | 0 | None / None | None | None | None | None | None | invalid_parameters |
+| exactly_365_days | 8 | hold / candidate_admits_new_money | 100.0 | 400.0 | 365 | available | not_requested | — |
+| exactly_366_days | 8 | hold / candidate_admits_new_money | 100.0 | 400.0 | 366 | available | not_requested | — |
+| leap_purchase | 8 | hold / candidate_admits_new_money | 100.0 | 400.0 | 953 | available | not_requested | — |
+| future_date | 0 | None / None | None | None | None | None | None | invalid_parameters |
+| invalid_date | 0 | None / None | None | None | None | None | None | invalid_parameters |
+| empty_latest | 8 | hold / candidate_admits_new_money | 100.0 | 400.0 | 38 | available | not_requested | — |
+| no_price | 8 | hold / candidate_admits_new_money | None | None | 38 | partial | not_requested | — |
+| zero_price | 8 | hold / candidate_admits_new_money | None | None | 38 | partial | not_requested | — |
+| negative_price | 8 | hold / candidate_admits_new_money | None | None | 38 | partial | not_requested | — |
+| price_disagreement | 8 | hold / candidate_admits_new_money | 100.0 | 400.0 | 38 | available | not_requested | — |
+| stale_close | 8 | hold / candidate_admits_new_money | 100.0 | 400.0 | 38 | partial | not_requested | — |
+| knife | 8 | hold / price_broken_more_than_business | 55.0 | -500.0 | 38 | available | not_requested | — |
+| broken_same_chart | 8 | review_exit / business_broken | 100.0 | 400.0 | 38 | available | not_requested | — |
+| etf | 8 | hold / candidate_admits_new_money | 100.0 | 400.0 | 38 | available | not_requested | — |
+| preferred | 8 | hold / candidate_admits_new_money | 100.0 | 400.0 | 38 | available | not_requested | — |
+| eur | 8 | hold / candidate_admits_new_money | None | None | 38 | partial | not_requested | — |
+| technical_error | 8 | hold / price_broken_more_than_business | 100.0 | 400.0 | 38 | partial | not_requested | — |

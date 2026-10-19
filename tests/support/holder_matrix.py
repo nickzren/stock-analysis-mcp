@@ -26,16 +26,8 @@ from tests.support.network_guard import blocked_request, violation_report
 
 BASE_COMMIT = "c9fba4ada95941a6e298f7380f70b3ec76d6d233"
 FIXTURE_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "holder_matrix"
-CLOCK = datetime(2026, 10, 9, 20)
-
-
-class PositionClock(datetime):
-    """Simulated host-local clock for the legacy position tool (not ET conversion)."""
-
-    @classmethod
-    def now(cls, tz=None):
-        assert tz is None, "legacy position clock semantics changed; review the fixture"
-        return CLOCK
+CLOCK = datetime(2026, 10, 9, 20)  # Retained only for the frozen baseline metadata.
+POSITION_CLOCK = dm.FRIDAY_EVENING
 
 
 def fundamentals(base=dm.QUALITY, **blocks):
@@ -153,17 +145,27 @@ def position_inputs(name):
     return args, tech
 
 
-async def run_position(name):
+async def run_position(name, **overrides):
     args, tech = position_inputs(name)
-    read = AsyncMock(return_value=tech)
-    with patch.object(position, "technicals", read), patch.object(position, "datetime", PositionClock):
-        result = await position.analyze_position(**args)
-    # Only execution duration is removed; all business output and provenance stay.
+    args.update(overrides)
+    spec = POSITION_CASES[name]
+    case = replace(STOCK_CASES[spec.get("stock", "sound_bullish")], technicals=tech,
+                   now=POSITION_CLOCK)
+    with dm.stubbed(case), ExitStack() as stack:
+        spies = {name: stack.enter_context(patch.object(
+            dm.orchestrator, name, AsyncMock(wraps=getattr(dm.orchestrator, name)))) for name in dm.TOOLS}
+        result = await position.analyze_position(**args, _now=POSITION_CLOCK)
     result = copy.deepcopy(result)
     if "meta" in result:
         result["meta"].pop("duration_ms", None)
-    return {"arguments": args, "technicals_input": tech, "technical_reads": read.await_count,
-            "result": result}
+    # Source timing is measured separately; it is not deterministic business output.
+    if "data_quality" in result:
+        result["data_quality"].pop("tool_timings", None)
+        for failure in result["data_quality"].get("tool_failures", []):
+            failure.pop("duration_ms", None)
+    reads = {name: spy.await_count for name, spy in spies.items()}
+    return {"arguments": args, "technicals_input": tech,
+            "technical_reads": reads["technicals"], "source_reads": reads, "result": result}
 
 
 async def build():
@@ -181,7 +183,7 @@ async def build():
     if violations:
         raise AssertionError(violation_report(violations))
     return {"baseline_code": BASE_COMMIT, "analyze_clock": dm.FRIDAY_EVENING.isoformat(),
-            "position_host_wall_clock": CLOCK.isoformat(), "stocks": stocks, "positions": positions}
+            "position_clock": POSITION_CLOCK.isoformat(), "stocks": stocks, "positions": positions}
 
 
 def markdown(recording):
@@ -209,19 +211,36 @@ def markdown(recording):
             holder_suffix = f" {long_held['action']} / {long_held['basis']} |"
         lines.append(f"| {name} | {card['new_money']['action']} | {held['action']} / {held['basis']} | "
                      f"{card['long_term']['new_money']['action']} | {fit} |{holder_suffix}")
-    lines += ["", "## Legacy position observations", "",
-              "Tax rates/classification and chart sell flags below describe the old implementation only.",
-              "The position tool reads technicals alone; it does not receive business or currency inputs.",
-              "The simulated host-local date is pinned independently of analyze's timezone-aware clock.", "",
-              "| Case | Reads | Price | P/L dollars | Days held | Tax type / rate | Sell flags | Error |",
-              "|---|---|---|---|---|---|---|---|"]
-    for name, row in recording["positions"].items():
-        result = row["result"]
-        pos, tax, holding = (result.get(key, {}) for key in ("position", "tax", "holding"))
-        lines.append(f"| {name} | {row['technical_reads']} | {pos.get('current_price')} | "
-                     f"{pos.get('gain_loss_dollars')} | {holding.get('days_held')} | "
-                     f"{tax.get('type')} / {tax.get('rate_if_sold_now')} | "
-                     f"{result.get('sell_signals', {}).get('active_count')} | {result.get('error_type', '—')} |")
+    if frozen:
+        lines += ["", "## Legacy position observations", "",
+                  "Tax rates/classification and chart sell flags below describe the old implementation only.",
+                  "The position tool reads technicals alone; it does not receive business or currency inputs.",
+                  "The simulated host-local date is pinned independently of analyze's timezone-aware clock.", "",
+                  "| Case | Reads | Price | P/L dollars | Days held | Tax type / rate | Sell flags | Error |",
+                  "|---|---|---|---|---|---|---|---|"]
+        for name, row in recording["positions"].items():
+            result = row["result"]
+            pos, tax, holding = (result.get(key, {}) for key in ("position", "tax", "holding"))
+            lines.append(f"| {name} | {row['technical_reads']} | {pos.get('current_price')} | "
+                         f"{pos.get('gain_loss_dollars')} | {holding.get('days_held')} | "
+                         f"{tax.get('type')} / {tax.get('rate_if_sold_now')} | "
+                         f"{result.get('sell_signals', {}).get('active_count')} | {result.get('error_type', '—')} |")
+    else:
+        lines += ["", "## Current position observations", "",
+                  "Each valid request runs one analysis: the eight stubbed source tools are each called once.",
+                  "Counts below are tool calls, not network requests. Invalid inputs make no source calls.",
+                  "Elapsed days use the injected America/New_York request date. Tax is not assessed.", "",
+                  "| Case | Source calls | Holder / basis | Price | P/L dollars | Days held | Context | Allocation | Error |",
+                  "|---|---|---|---|---|---|---|---|---|"]
+        for name, row in recording["positions"].items():
+            result = row["result"]
+            pos, holding, card = (result.get(key, {}) for key in ("position", "holding", "position_card"))
+            holder = card.get("holder_assessment", {})
+            lines.append(f"| {name} | {sum(row['source_reads'].values())} | "
+                         f"{holder.get('action')} / {holder.get('basis')} | {pos.get('current_price')} | "
+                         f"{pos.get('gain_loss_dollars')} | {holding.get('days_held')} | "
+                         f"{card.get('context_status', {}).get('status')} | {card.get('review_status')} | "
+                         f"{result.get('error_type', '—')} |")
     return "\n".join(lines) + "\n"
 
 

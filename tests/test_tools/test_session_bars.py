@@ -305,11 +305,17 @@ class TestEmptyLatestRowConsumers:
             return df
 
         monkeypatch.setattr(tech_mod, "fetch_history", fake_history)
-        result = await position_mod.analyze_position("PIN", cost_basis=100.0, purchase_date="2025-01-02", shares=10)
+        from tests.support import decision_matrix as dm
+        from tests.support.holder_matrix import SOUND
+        with dm.stubbed(SOUND), monkeypatch.context() as scoped:
+            scoped.setattr(dm.orchestrator, "technicals", tech_mod.technicals)
+            result = await position_mod.analyze_position(
+                "PIN", cost_basis=100.0, purchase_date="2025-01-02", shares=10, _now=SATURDAY,
+            )
 
         assert "error" not in result
         assert result["position"]["current_price"] == pytest.approx(df["close"].iloc[38])
-        assert result["data_provenance"]["price"]["last_bar_date"] == "2026-03-05"
+        assert result["position"]["price_provenance"]["price_as_of"] == "2026-03-05"
 
 
 class TestR56MissingVolume:
