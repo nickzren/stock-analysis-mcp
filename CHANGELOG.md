@@ -1,11 +1,11 @@
 # Changelog
 
-## Unreleased: sizing and caps
+## 0.4.0 (2026-10-19): sizing and caps
 
+The package version (`meta.server_version`) goes from `0.3.0` to `0.4.0`.
 **Response schema:** `meta.schema_version` goes from `"6"` to `"7"`.
-Package version (`meta.server_version`) remains `0.3.0`; snapshot version remains
-`"3.0.0"`. Install pins remain v0.3.0. This section describes development code;
-the released 0.3.0 history below still describes schema 6.
+Snapshot version remains `"3.0.0"`; install pins target v0.4.0. The 0.3.0 history
+below still describes schema 6.
 
 ### Behavior and inputs
 

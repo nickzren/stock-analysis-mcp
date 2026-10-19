@@ -51,7 +51,7 @@ def test_schema_version_is_7() -> None:
 
 def test_docs_state_the_current_versions_and_the_release_pin() -> None:
     """T2 (docs pin): the newest CHANGELOG section, the README and AGENTS.md state the code's schema and snapshot
-    versions; the README installs the newest released tag and labels unreleased content iff the CHANGELOG's newest
+    versions; the README targets the newest versioned release and labels unreleased content iff the CHANGELOG's newest
     section is Unreleased. Holds before WP2.4's versions, after them and after the release. G."""
     changelog = _sections(_read("CHANGELOG.md"), "##")
     newest_heading, newest = next(iter(changelog.items()))
@@ -120,15 +120,16 @@ def test_schema_7_migration_names_canonical_fields_and_legacy_adapters() -> None
     assert "percentage_only" in newest
 
 
-def test_unreleased_guidance_explains_null_sizing_without_changing_the_install_pin() -> None:
-    """A buy can lack a size; current guidance must not infer availability from the action."""
-    readme_sections = _sections(_read("README.md"), "##")
-    unreleased = next(text for heading, text in readme_sections.items() if heading.startswith("Unreleased"))
-    for text in (unreleased, _read("AGENTS.md")):
+def test_current_guidance_explains_null_sizing_and_conditional_loss() -> None:
+    """A buy can lack a size; availability and planning loss stay distinct from the action."""
+    readme = _read("README.md")
+    for text in (readme, _read("AGENTS.md")):
         assert "decision_card.sizing_status" in text
         assert "its reason" in text
         assert "percentage_only" in text
         assert "below_one_whole_share" in text
-    assert "v0.3.0" in unreleased
-    assert "Analyze HOOD" in _read("README.md")
+    assert "Analyze HOOD" in readme
+    assert "not a guarantee that every suggestion fits the risk budget" not in _flat(readme)
+    assert "The planning stop is not monitored" in _flat(readme)
+    assert "gaps and slippage can increase the loss" in _flat(readme)
     assert "pending the next" not in _read("AGENTS.md")

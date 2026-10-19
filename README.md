@@ -52,16 +52,16 @@ Choose your client:
 **Claude Code**
 
 ```bash
-claude mcp add -s user stock-analysis -- uvx --from git+https://github.com/nickzren/stock-analysis-mcp@v0.3.0 stock-analysis
+claude mcp add -s user stock-analysis -- uvx --from git+https://github.com/nickzren/stock-analysis-mcp@v0.4.0 stock-analysis
 ```
 
 **Codex**
 
 ```bash
-codex mcp add stock-analysis -- uvx --from git+https://github.com/nickzren/stock-analysis-mcp@v0.3.0 stock-analysis
+codex mcp add stock-analysis -- uvx --from git+https://github.com/nickzren/stock-analysis-mcp@v0.4.0 stock-analysis
 ```
 
-These commands are pinned to **v0.3.0**. Other MCP clients can use the same `uvx`
+These commands are pinned to **v0.4.0**. Other MCP clients can use the same `uvx`
 command as a stdio server.
 
 ## For agents
@@ -87,12 +87,19 @@ For swing cards, preserve `action` and `blockers`. Show the returned `plan` only
 for `trade_now` or `enter_on_trigger`. `trade_now` requires fresh regular-session
 data; unverifiable earnings cap the card at `watch`.
 
-`account_size` enables dollar/share sizing. `analyze` sizes are estimates, not a
-guarantee that every suggestion fits the risk budget. Use `analyze_trade_setup`
-for stop-based risk sizing; `risk_per_trade_pct=1` means 1% of the account.
+Sizing uses whole shares within caller or profile/default risk and allocation
+caps; `risk_per_trade_pct=1` means 1% of the account. `account_size` enables dollar
+amounts; a valid estimate without it is `percentage_only`. A scenario can fit
+zero shares (`below_one_whole_share`), even when an entry is allowed.
 
-Released v0.3.0 responses use schema **6**; snapshots use **3.0.0**.
-[CHANGELOG.md](CHANGELOG.md) covers field meanings, migration, and known limitations.
+Read `decision_card.sizing_status` and its reason when sizing is null; a `buy` or
+`starter` can lack a valid size. Allocation and estimated loss at the planning
+stop are separate. The planning stop is not monitored or a holder exit instruction;
+gaps and slippage can increase the loss. Existing holdings and buying power are unknown.
+
+Version 0.4.0 responses use schema **7**; snapshots remain **3.0.0**. Research
+decisions are unchanged. See the [schema 6 → 7 migration](CHANGELOG.md#040-2026-10-19-sizing-and-caps)
+for field meanings, defaults, and compatibility aliases.
 
 ## Decision
 
@@ -107,8 +114,9 @@ holding period and tax status. There is no long-term holder decision.
 
 `blocked_by` lists the gates that fired and `decided_by` the one that set the action;
 never upgrade past them. Read sizing only from `decision_card.sizing`: mid-term new
-money only (no long-term or holder size), null unless new money is `buy` or `starter`. `policy_action` moved to
-`diagnostics.pre_gate_policy` (`detail="full"`): pre-gate input, not advice.
+money only (no long-term or holder size). It is null when entry is blocked or
+sizing inputs are unusable; a starter hides the full size. `policy_action` moved
+to `diagnostics.pre_gate_policy` (`detail="full"`): pre-gate input, not advice.
 
 | `new_money.action` | Meaning |
 |---|---|
@@ -181,18 +189,3 @@ uv run --frozen ruff check src tests
 ## Disclaimer
 
 This tool is for **informational purposes only**. It is not financial advice. Always do your own research and consult a qualified financial advisor before making investment decisions. The authors are not responsible for any financial losses incurred from using this tool.
-
-## Unreleased sizing work
-
-Development responses use schema **7**; snapshots remain **3.0.0**. Package
-version and install pins remain v0.3.0. The released behavior above is unchanged.
-
-Sizing now enforces caller or profile/default risk and position caps, using whole
-shares. Read `decision_card.sizing_status` and its reason when sizing is null;
-a `buy` or `starter` can lack a valid size. `percentage_only` means no account was
-provided; `below_one_whole_share` applies separately to each scenario. Allocation
-and estimated loss at the planning stop are separate. The stop is not monitored
-or a holder exit instruction; gaps and slippage can increase the loss.
-
-Research decisions are unchanged. See the [schema 6 → 7 migration](CHANGELOG.md#unreleased-sizing-and-caps)
-for inputs, defaults, fields and compatibility aliases.

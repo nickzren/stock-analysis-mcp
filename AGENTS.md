@@ -33,7 +33,7 @@
 - `scripts/record_provider_fixtures.py` records real responses (manual, networked) to the gitignored `tests/fixtures/_recorded/`; never commit recordings.
 - Keep the suite fast enough for routine local validation.
 
-## Sizing Inputs and Output (unreleased schema 7)
+## Sizing Inputs and Output (schema 7)
 - `analyze`, `analyze_trade_setup` and `scan_watchlist` validate sizing inputs
   before symbol lookup, provider reads or watchlist access. Account size must be
   finite and positive; risk and position limits use percentage points in
@@ -93,10 +93,10 @@
   final full cap and whole-share dollars. Stop warnings use the unrounded
   distance; fallback labels are `52w_low_plus_2pct_fallback` and
   `52w_high_minus_2pct_fallback`, never an invented stop.
-- Response schema 7 and the coordinated guide/prompt migration are unreleased.
-  Package version 0.3.0, snapshot 3.0.0 and v0.3.0 install pins are unchanged.
-  CHANGELOG.md contains the schema 6 → 7 canonical fields and one-release legacy
-  adapter inventory; the historical 0.3.0 section still describes schema 6.
+- Package version 0.4.0 uses response schema 7; snapshot 3.0.0 is unchanged.
+  Install pins target v0.4.0. CHANGELOG.md contains the schema 6 → 7 canonical
+  fields and one-release legacy adapter inventory; the historical 0.3.0 section
+  still describes schema 6.
 - Keep `tests/fixtures/sizing_matrix/before.json` and `before.md` byte-for-byte.
   Current offline evidence uses `python -m tests.support.sizing_matrix --after
   --output-dir <temporary-directory>`. Baseline regeneration is disabled.
@@ -229,13 +229,13 @@
 
 ## Common Schema Gotchas
 - Two versions move independently: `meta.schema_version` (response schema,
-  `SCHEMA_VERSION` in `src/stock_analysis/__init__.py`, now "7" unreleased;
+  `SCHEMA_VERSION` in `src/stock_analysis/__init__.py`, now "7";
   v0.3.0 shipped "6", v0.2.0 shipped "5") and `watchlist_snapshot.snapshot_version`
   (`normalize.SNAPSHOT_VERSION`,
   now "3.0.0"; v0.2.0 shipped "2.0.0"). CHANGELOG.md lists every field that
   changed meaning or units since schema 4; the 0.3.0 section covers schema 6
-  and snapshot 3.0.0. The Unreleased section covers schema 7 sizing. Record
-  future output changes under "Unreleased".
+  and snapshot 3.0.0. The 0.4.0 section covers schema 7 sizing. Record future
+  output changes under "Unreleased".
 - `technicals` returns `current_price` at the top level, not under a `summary` object.
 - `analyze` returns price, name, sector, market cap, and currency under `summary`, not as duplicated top-level fields.
 - Support boundaries (WP4, D5): `summary.support` (and the trade card's
