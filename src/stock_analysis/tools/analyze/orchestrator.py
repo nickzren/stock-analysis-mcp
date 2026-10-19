@@ -13,6 +13,7 @@ from stock_analysis.tools.analyze.action_zones import (
     PRICE_ZONES,
     apply_dip_gates_to_action_zones,
     build_action_zones,
+    build_position_sizing_range,
 )
 from stock_analysis.tools.analyze.conditions import CandidateInputs, candidate_factors
 from stock_analysis.tools.analyze.constants import CRITICAL_ANALYZE_TOOLS
@@ -53,6 +54,7 @@ from stock_analysis.tools.analyze.signals import (
     generate_signals,
     get_rule_triggered,
 )
+from stock_analysis.tools.analyze.sizing import build_analysis_sizing
 from stock_analysis.tools.analyze.summaries import (
     build_analyst_summary_text,
     build_dip_summary_text,
@@ -1137,7 +1139,16 @@ async def analyze_stock(
     new_money_action = decision["new_money"]["action"]
     why = build_why(decision, verdict, action_zones["price_zone"])
 
+    sizing_result = build_analysis_sizing(
+        summary=summary, action_zones=action_zones, investor_profile=investor_profile,
+        risk_data=risk_data, risk_regime=risk_regime, decision=decision,
+    )
+    action_zones["position_sizing_range"] = (
+        build_position_sizing_range(sizing_result["sizing"], risk_regime.get("classification"))
+        if new_money_action == "buy" else None
+    )
     decision_modes = build_decision_modes(
+        canonical_sizing=sizing_result["sizing"],
         summary=summary,
         verdict=verdict,
         action_zones=action_zones,
@@ -1178,6 +1189,7 @@ async def analyze_stock(
     section_summaries["dislocation"] = dislocation_framework.get("summary")
 
     decision_card = build_decision_card(
+        sizing_result=sizing_result,
         summary=summary,
         verdict=verdict,
         action_zones=action_zones,

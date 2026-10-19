@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from stock_analysis.tools.analyze.action_zones import build_position_sizing_range
 from stock_analysis.tools.analyze.decision import (
     CORE,
     LONG_TERM,
@@ -16,9 +15,8 @@ from stock_analysis.tools.analyze.decision import (
 from stock_analysis.tools.analyze.dislocation_framework import (
     classify_dislocation_opportunity,
 )
-from stock_analysis.utils.helpers import format_compact_number
 from stock_analysis.utils.sizing_inputs import normalize_positive_number
-from stock_analysis.utils.valuation_basis import sizing_unavailable_reason
+from stock_analysis.utils.sizing_output import cap_sizing_scenario
 
 _PROFILE_PRESETS: dict[str, dict[str, Any]] = {
     "core": {
@@ -139,11 +137,12 @@ def build_decision_modes(
     decision: dict[str, Any],
     conditions: dict[str, Any],
     why: list[str],
+    canonical_sizing: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build default Core / Balanced / Speculative decision blocks in the new-money vocabulary (plan §3 [D-3]):
     balanced is new_money; speculative its own code capped by new_money; core CORE[long_term_fit] capped by
-    long_term.new_money. Sizing only under an entry (plan §7 [D-9]); the conditionals mirror the card's lists
-    of their horizon (plan §7e): core long-term, balanced and speculative mid-term."""
+    long_term.new_money. Mid-term sizes derive from the card's budget; core has no long-term allocation.
+    The conditionals mirror the card's lists: core long-term, balanced and speculative mid-term."""
     horizon_fit = verdict.get("horizon_fit", {})
     long_term_fit = horizon_fit.get("long_term")
     long_term_gates = horizon_fit.get("long_term_gates") or []
@@ -165,39 +164,22 @@ def build_decision_modes(
     def _format_tag(tag: str) -> str:
         return tag.replace("_", " ")
 
-    support = summary.get("support")
-    unavailable_reason = sizing_unavailable_reason(support) if support is not None else None
+    def _position_block(mode: str, scenario: str) -> dict[str, Any] | None:
+        if canonical_sizing is None:
+            return None
+        field = "starter_position_pct" if scenario == "starter" else "max_position_pct"
+        capped = cap_sizing_scenario(
+            canonical_sizing, scenario, _PROFILE_PRESETS[mode][field], f"{mode}_{scenario}_cap")
+        if capped is None:
+            return None
+        return {
+            **capped,
+            "horizon": MID_TERM,
+            "pct": capped["allocation_cap_pct"],
+            "dollars": capped["position_dollars"],
+            "shares": capped["whole_shares"],
+        }
 
-    def _position_block(sizing: dict[str, Any], field: str) -> dict[str, Any]:
-        use_pct = sizing.get(field)
-        block: dict[str, Any] = {"pct": use_pct}
-        if unavailable_reason:
-            block["unavailable_reason"] = unavailable_reason
-        elif account_size is not None and use_pct is not None:
-            dollars = round(account_size * use_pct / 100, 2)
-            block["dollars"] = dollars
-            block["shares"] = None
-            price = summary.get("current_price")
-            if price is not None and price > 0:
-                block["shares"] = int(dollars / price)
-        return block
-
-    normalized_risk_label = "medium" if risk_label == "moderate" else risk_label
-    stop_calculation = action_zones.get("stop_calculation")
-    mode_profiles = {
-        name: resolve_investor_profile(profile=name, account_size=account_size)
-        for name in ("core", "balanced", "speculative")
-    }
-    mode_sizing = {
-        name: build_position_sizing_range(
-            current_price=summary.get("current_price"),
-            stop_calculation=stop_calculation,
-            regime_classification=normalized_risk_label,
-            investor_profile=profile,
-            unavailable_reason=unavailable_reason,
-        )
-        for name, profile in mode_profiles.items()
-    }
     dislocation_signals = classify_dislocation_opportunity(
         verdict=verdict,
         action_zones=action_zones,
@@ -271,8 +253,8 @@ def build_decision_modes(
         """starter_position iff entry and the mode's action admits it; max_position only under buy (§0 #21)."""
         starter = entry and entry_allowed(action)
         full = action == "buy" and new_money_action == "buy"
-        return {"starter_position": _position_block(mode_sizing[mode], "starter_pct") if starter else None,
-                "max_position": _position_block(mode_sizing[mode], "max_pct") if full else None}
+        return {"starter_position": _position_block(mode, "starter") if starter else None,
+                "max_position": _position_block(mode, "full") if full else None}
 
     speculative_sizes = _sizes("speculative", speculative["action"])
 
@@ -303,7 +285,8 @@ def build_decision_modes(
             "suitability": core_suitability,
             **core,
             "why": core_why or None,
-            **_sizes("core", core["action"]),
+            "starter_position": None,
+            "max_position": None,
             "required_before_full_size": list(conditions[LONG_TERM]["buy_only_if"]),
         },
         "balanced": {
@@ -327,10 +310,7 @@ def build_decision_modes(
             "failure_case": ", ".join(failure_case_parts) if failure_case_parts else None,
             "next_90d_catalysts": [_format_tag(tag) for tag in bullish_catalysts[:3]],
             "risk_flags": [_format_tag(tag) for tag in bearish_catalysts[:3]] or None,
-            "capital_at_risk": (
-                None if speculative_sizes["starter_position"] is None
-                else format_compact_number(account_size) if account_size is not None else "account_size_not_provided"
-            ),
+            "capital_at_risk": None,
         },
     }
 
@@ -349,6 +329,7 @@ def build_investor_views(
     decision: dict[str, Any],
     conditions: dict[str, Any],
     why: list[str],
+    canonical_sizing: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Backward-compatible wrapper for older internal callsites."""
     return build_decision_modes(
@@ -364,4 +345,5 @@ def build_investor_views(
         decision=decision,
         conditions=conditions,
         why=why,
+        canonical_sizing=canonical_sizing,
     )

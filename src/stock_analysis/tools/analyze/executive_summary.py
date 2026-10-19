@@ -55,14 +55,63 @@ def _horizon_segment(label: str, new_money: dict[str, Any], size: str | None = N
     return f"{label}: " + "; ".join(parts) + "."
 
 
-def size_text(new_money_action: str, sizing: dict[str, Any] | None) -> str | None:
-    """The new-money segment's size phrase (plan §7): the starter-to-full band under buy, the starter pct alone
-    under starter, none otherwise. Read from decision_card.sizing only."""
-    if not entry_allowed(new_money_action) or not sizing or sizing.get("starter_pct") is None:
+def _number(value: int | float) -> str:
+    """Preserve the canonical ceiling and positive tiny values without display rounding."""
+    text = str(value)
+    return text[:-2] if text.endswith(".0") else text
+
+
+def _size_unavailable(status: dict[str, Any] | None) -> str | None:
+    if status is None:
         return None
-    if sizing.get("full_pct_cap") is None:
-        return f"size ~{sizing['starter_pct']:.1f}%"
-    return f"size ~{sizing['starter_pct']:.1f}-{sizing['full_pct_cap']:.1f}%"
+    reason = status.get("reason") or "required sizing inputs are unavailable"
+    if reason.startswith("stop_price_"):
+        reason = "a valid planning stop is unavailable"
+    elif reason == "stop_not_below_entry":
+        reason = "the planning stop must be below the entry price"
+    elif reason.startswith("entry_price_"):
+        reason = "a valid entry price is unavailable"
+    elif reason.startswith("atr_"):
+        reason = "a valid ATR is unavailable for the planning stop"
+    elif reason == "numeric_range_unavailable":
+        reason = "the estimate cannot be represented without losing numerical precision"
+    else:
+        reason = _words(reason)
+    return "No size estimate: " + reason.rstrip(".")
+
+
+def size_text(
+    new_money_action: str,
+    sizing: dict[str, Any] | None,
+    sizing_status: dict[str, Any] | None = None,
+) -> str | None:
+    """Mid-term allocation and sale-at-stop loss, adapted only from the canonical card."""
+    if not entry_allowed(new_money_action) or not sizing:
+        return _size_unavailable(sizing_status)
+    assumptions, limits = sizing["assumptions"], sizing["limits"]
+    stop = _number(assumptions["stop_price"])
+    parts: list[str] = []
+    for name in ("starter", "full"):
+        scenario = sizing.get(name)
+        if scenario is None or name == "full" and new_money_action != "buy":
+            continue
+        label = name.title()
+        if scenario["quantity_status"] == "below_one_whole_share":
+            parts.append(f"{label}: no whole-share position fits this budget")
+        elif scenario["quantity_status"] == "percentage_only":
+            parts.append(
+                f"{label} allocation ceiling: {_number(scenario['allocation_cap_pct'])}% of the account; "
+                f"estimated loss ceiling: {_number(scenario['ceiling_risk_pct'])}% if sold at ${stop}")
+        else:
+            parts.append(
+                f"{label} — Position: ${_number(scenario['position_dollars'])} "
+                f"({_number(scenario['position_pct'])}% of the account); estimated loss: "
+                f"{_number(scenario['effective_risk_pct'])}% of the account if sold at ${stop}")
+    if assumptions["account_size"] is None:
+        parts.append("account size not provided")
+    parts.append(f"risk budget: {_number(limits['risk_per_trade_pct'])}% ({limits['risk_origin']}); "
+                 f"position cap: {_number(limits['max_position_pct'])}% ({limits['max_position_origin']})")
+    return "; ".join(parts)
 
 
 def _humanize_gates_with_numbers(
@@ -143,7 +192,8 @@ def horizon_segments(decision_card: dict[str, Any]) -> tuple[str, str, str]:
     new_money = decision_card["new_money"]
     return (
         _horizon_segment("Decision (mid-term, new money)", new_money,
-                         size_text(new_money["action"], decision_card.get("sizing"))),
+                         size_text(new_money["action"], decision_card.get("sizing"),
+                                   decision_card.get("sizing_status"))),
         f"If held: {_words(decision_card['if_held']['action'])}.",
         _horizon_segment("Long-term (1-5y)", decision_card["long_term"]["new_money"]),
     )
@@ -288,6 +338,9 @@ def build_executive_summary(
 
     # === BUILD SENTENCES: the three horizon segments, then the lead topic ===
     sentences: list[str] = list(horizon_segments(decision_card))
+    if decision_card.get("sizing") is not None:
+        sentences.append("Mid-term sizing only: This planning stop is not monitored or an exit instruction.")
+        sentences.append("Gaps and slippage can make the actual loss larger.")
 
     if lead_topic == "policy":
         # Lead: Why it's avoid (use humanized gates with numeric anchors)

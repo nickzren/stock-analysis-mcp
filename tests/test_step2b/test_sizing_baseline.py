@@ -1,7 +1,7 @@
 """Preserve the v0.3.0 recording and identify each approved sizing change.
 
-The calculator is not connected to public sizing until 2b.2. For now only input
-precision and internal limit-origin metadata change these recorded scenarios.
+The shared calculator now governs public sizing; decisions and snapshots remain
+identical to the frozen before evidence.
 """
 
 import copy
@@ -18,54 +18,49 @@ from tests.support import sizing_matrix as sm
 BEFORE = json.loads((sm.FIXTURE_DIR / "before.json").read_text())
 
 
-def expected_after_inputs(name):
-    expected = copy.deepcopy(BEFORE["analyze"][name])
-    expected["resolved_profile"]["limit_origins"] = expected["limit_origins"]
-    if name == "tiny_risk":
-        expected["resolved_profile"].update(risk_per_trade_pct=0.001, risk_per_trade_decimal=0.00001)
-        sizing = expected["zones"]["position_sizing_range"]
-        # Input precision is fixed; legacy display rounding remains for 2b.2.
-        sizing["risk_per_trade_pct"] = 0.0
-        sizing["stop_implied_max"].update(risk_per_trade_pct=0.0, pct=0.0, dollars_for_account=0.0)
-    return expected
-
-
 @pytest.mark.parametrize("name", sm.CASES)
-async def test_current_sizing_surfaces_only_change_approved_input_details(name):
+async def test_current_sizing_matches_after_and_preserves_decisions_and_snapshots(name):
     result = await sm.run_case(name)
-    assert sm.digest(name, result) == expected_after_inputs(name)
+    row = sm.digest(name, result)
+    after = json.loads((sm.FIXTURE_DIR / "after.json").read_text())["analyze"][name]
+    assert row == after
+    assert row["decision"] == BEFORE["analyze"][name]["decision"]
+    assert row["snapshot"] == BEFORE["analyze"][name]["snapshot"]
     for tier, payload in dm.tiers(result).items():
         assert payload["watchlist_snapshot"] == result["watchlist_snapshot"], tier
+        assert payload["decision_card"]["sizing"] == result["decision_card"]["sizing"], tier
+        assert payload["decision_card"]["sizing_status"] == result["decision_card"]["sizing_status"], tier
 
 
 @pytest.mark.parametrize(("name", "starter", "full", "whole"), [
-    ("balanced_wide", 250.0, 800.0, 2),
-    ("risk_only", 250.0, 800.0, 2),  # .25% risk is shown but not enforced
+    ("balanced_wide", 200.0, 500.0, 2),
+    ("risk_only", 100.0, 100.0, 1),
     ("cap_only_tight", 200.0, 200.0, 2),
-    ("cap_only_wide", 250.0, 800.0, 2),
-    ("both_overrides", 50.0, 50.0, 0),
-    ("tiny_cap", 10.0, 10.0, 0),  # .06% silently rises to .1%
-    ("small_account", 25.0, 80.0, 0),  # dollars still imply fractional shares
+    ("cap_only_wide", 200.0, 500.0, 2),
+    ("both_overrides", 0.0, 0.0, 0),
+    ("tiny_cap", 0.0, 0.0, 0),
+    ("small_account", 0.0, 50.0, 0),
 ])
-async def test_current_amounts_independently_pin_default_and_override_defects(name, starter, full, whole):
+async def test_whole_share_amounts_enforce_default_and_override_limits(name, starter, full, whole):
     result = await sm.run_case(name)
     size = result["decision_card"]["sizing"]
     assert (size["starter_dollars"], size["full_dollars"], size["whole_shares"]) == (starter, full, whole)
     assert result["decision_card"]["new_money"]["action"] == "buy"
+    for scenario in (size['starter'], size['full']):
+        assert scenario['planned_loss_at_stop'] <= size['limits']['risk_budget_dollars']
+        assert scenario['position_dollars'] <= scenario['allocation_cap_dollars']
 
 
-async def test_stop_budget_remains_diagnostic_but_tiny_risk_no_longer_falls_back():
-    result = await sm.run_case("risk_only")
-    size = result["action_zones"]["position_sizing_range"]
-    assert size["stop_implied_max"]["pct"] == 1.2  # rounded 1.25; not applied
-    assert size["max_pct"] == 8.0
-    assert result["decision_card"]["exit"]["stop_or_invalidation"] == 80.0
-    card = result["decision_card"]
-    implied_loss = card["sizing"]["full_dollars"] / card["sizing"]["at_price"] * (
-        card["sizing"]["at_price"] - card["exit"]["stop_or_invalidation"])
-    assert implied_loss == 160 > 25
-    tiny = await sm.run_case("tiny_risk")
-    assert tiny["action_zones"]["position_sizing_range"]["risk_per_trade_pct"] == 0.0
+async def test_stop_budget_and_tiny_limits_are_enforced_without_rounding():
+    card = (await sm.run_case("risk_only"))["decision_card"]
+    assert card['sizing']['full']['allocation_cap_pct'] == 1.25
+    assert card['sizing']['full']['planned_loss_at_stop'] == 20
+    assert card['sizing']['limits']['risk_budget_dollars'] == 25
+    tiny = (await sm.run_case("tiny_risk"))['decision_card']['sizing']
+    assert tiny['limits']['risk_per_trade_pct'] == .001
+    assert tiny['full']['allocation_cap_pct'] == .005
+    cap = (await sm.run_case("tiny_cap"))['decision_card']['sizing']
+    assert cap['full']['allocation_cap_pct'] == .06
 
 
 async def test_sizing_inputs_do_not_change_decisions_or_any_snapshot_field():
@@ -78,31 +73,35 @@ async def test_sizing_inputs_do_not_change_decisions_or_any_snapshot_field():
         assert dm.digest(result)["decision"] == dm.digest(reference)["decision"], name
 
 
-async def test_missing_stop_negative_stop_and_inverted_band_currently_survive():
+async def test_missing_invalid_stop_and_inverted_band_suppress_only_unavailable_estimates():
     missing = await sm.run_case("no_atr")
     assert missing["decision_card"]["new_money"]["action"] == "buy"
     assert missing["decision_card"]["exit"]["stop_or_invalidation"] is None
-    assert missing["decision_card"]["sizing"]["starter_dollars"] == 250
+    assert missing["decision_card"]["sizing"] is None
+    assert missing["decision_card"]["sizing_status"]["reason"] == "stop_price_missing"
     assert "atr_unavailable_using_default" in missing["action_zones"]["zone_warnings"]
-    assert missing["action_zones"]["basis"]["strong_buy_below"] == "52w_low_plus_1atr"
+    assert missing["action_zones"]["basis"]["strong_buy_below"] == "52w_low_plus_2pct_fallback"
     negative = await sm.run_case("negative_stop")
     assert negative["decision_card"]["new_money"]["action"] == "starter"
     assert negative["decision_card"]["exit"]["stop_or_invalidation"] == -0.5
-    assert negative["decision_card"]["sizing"]["starter_dollars"] == 50
+    assert negative["decision_card"]["sizing"] is None
+    assert negative["decision_card"]["sizing_status"]["reason"] == "stop_price_invalid"
     inverted = await sm.run_case("inverted_band")
     entry = inverted["decision_card"]["entry"]
-    assert (entry["buy_zone_low"], entry["buy_zone_high"]) == (115.5, 101.0)
+    assert (entry["buy_zone_low"], entry["buy_zone_high"]) == (None, None)
+    assert entry["entry_band_unavailable"]["reason"] == "inverted"
     assert inverted["decision_card"]["new_money"]["action"] == "buy"
 
 
-async def test_modes_ignore_explicit_limits_and_capital_at_risk_is_the_account():
+async def test_modes_obey_explicit_limits_and_account_is_not_risk():
     result = await sm.run_case("speculative_mode_override")
     assert result["decision_card"]["sizing"]["starter_pct"] == 0.5
     mode = result["decision_modes"]["speculative"]
-    assert mode["starter_position"]["pct"] == 1.0
-    assert mode["capital_at_risk"] == "10.0K"
+    assert mode["starter_position"]["pct"] == 0.5
+    assert mode["capital_at_risk"] is None
+    assert result["decision_card"]["sizing"]["assumptions"]["account_size"] == 10_000
     ordinary = await sm.run_case("both_overrides")
-    assert ordinary["decision_modes"]["balanced"]["max_position"]["pct"] == 8.0
+    assert ordinary["decision_modes"]["balanced"]["max_position"]["pct"] == 0.5
     assert ordinary["decision_card"]["sizing"]["full_pct_cap"] == 0.5
 
 
@@ -112,22 +111,21 @@ async def test_missing_account_starter_and_blocked_visibility_controls():
     assert all(no_account[k] is None for k in ("whole_shares", "starter_dollars", "full_dollars", "fractional_shares"))
     starter = (await sm.run_case("starter"))["decision_card"]
     assert starter["new_money"]["action"] == "starter"
-    assert starter["sizing"]["starter_dollars"] == 250
+    assert starter["sizing"]["starter_dollars"] == 200
     assert starter["sizing"]["full_dollars"] is None
     blocked = (await sm.run_case("earnings_blocked"))["decision_card"]
     assert blocked["new_money"]["action"] == "wait"
     assert blocked["sizing"] is None
 
 
-def test_swing_amounts_follow_fractional_not_whole_quantity():
+def test_swing_amounts_follow_one_whole_quantity():
     rows = sm.swing_cases()
-    assert rows == BEFORE["swing"]
     size = rows["fractional_amounts"]["plan"]
     assert (size["shares"], size["fractional_shares"], size["position_dollars"], size["max_loss_dollars"]) == (
-        8, 8.25, 825.0, 24.75)
+        8, None, 800.0, 24.0)
     zero = rows["zero_whole_shares"]["plan"]
-    assert (zero["shares"], zero["position_dollars"], zero["max_loss_dollars"]) == (0, 80.0, 2.4)
-    assert zero["entry"]["condition_text"] == "Trigger already satisfied — enter at market"
+    assert (zero["shares"], zero["position_dollars"], zero["max_loss_dollars"]) == (0, 0.0, 0.0)
+    assert zero["entry"]["condition_text"] == "The setup qualifies, but no whole-share position fits this budget."
 
 
 def test_frozen_recording_can_be_copied_but_not_replaced(tmp_path):
@@ -164,23 +162,23 @@ async def test_generator_detects_swallowed_network_attempt_outside_pytest_guard(
 
 
 @pytest.mark.parametrize(("name", "regime", "starter", "full", "stop"), [
-    ("balanced_low_wide", "low", 2.5, 10.0, 80.0),
-    ("balanced_wide", "medium", 2.5, 8.0, 80.0),
-    ("balanced_high_wide", "high", 2.0, 6.0, 80.0),
+    ("balanced_low_wide", "low", 2.5, 5.0, 80.0),
+    ("balanced_wide", "medium", 2.5, 5.0, 80.0),
+    ("balanced_high_wide", "high", 2.0, 5.0, 80.0),
 ])
-async def test_default_budget_can_be_exceeded_in_full_size_regimes(name, regime, starter, full, stop):
+async def test_default_budget_is_enforced_in_all_full_size_regimes(name, regime, starter, full, stop):
     row = await sm.run_case(name)
     size = row["decision_card"]["sizing"]
     zones = row["action_zones"]
     assert zones["position_sizing_range"]["rationale"] == f"{regime}_risk_regime"
     assert (size["starter_pct"], size["full_pct_cap"]) == (starter, full)
     assert row["decision_card"]["exit"]["stop_or_invalidation"] == stop
-    assert size["full_dollars"] / 100 * (100 - stop) > 100
+    assert size["full_dollars"] / 100 * (100 - stop) == 100
 
 
 async def test_rounded_distance_and_missing_atr_percentage_warning_branches():
     rounded = (await sm.run_case("rounded_stop_warning"))["action_zones"]
-    assert "stop_too_tight" in rounded["zone_warnings"]
+    assert "stop_too_tight" not in rounded["zone_warnings"]
     assert rounded["stop_calculation"]["stop_distance_pct"] == 0.0404
     # The tool stub supplies an unrounded percentage. The stop meets the raw
     # 2x ATR boundary, but its display-rounded distance falls below that input.
@@ -206,7 +204,7 @@ async def test_extreme_regime_preserves_starter_only_visibility():
     card = row["decision_card"]
     assert card["new_money"]["action"] == "starter"
     assert card["sizing"]["starter_pct"] == 0.5
-    assert card["sizing"]["starter_dollars"] == 50.0
+    assert card["sizing"]["starter_dollars"] == 0.0
     assert card["sizing"]["full_pct_cap"] is None
     assert card["sizing"]["full_dollars"] is None
     assert card["exit"]["stop_or_invalidation"] == 62.5

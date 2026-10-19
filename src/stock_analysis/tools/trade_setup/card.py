@@ -28,6 +28,7 @@ from stock_analysis.tools.trade_setup.setup_rules import (
 )
 from stock_analysis.tools.trade_setup.setups import detect_setup
 from stock_analysis.utils.market_calendar import add_trading_days
+from stock_analysis.utils.position_sizing import LimitOrigin
 from stock_analysis.utils.valuation_basis import (
     sizing_unavailable_reason,
     summary_support,
@@ -63,6 +64,7 @@ def build_trade_setup_card(
     account_size: float | None = None,
     risk_per_trade_pct: float = 1.0,
     max_position_pct: float = 10.0,
+    limit_origins: dict[str, LimitOrigin] | None = None,
     tool_failures: list[dict[str, Any]] | None = None,
     expected_move: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -161,6 +163,7 @@ def build_trade_setup_card(
                 account_size=account_size,
                 risk_per_trade_pct=risk_per_trade_pct,
                 max_position_pct=max_position_pct,
+                limit_origins=limit_origins,
                 now=now,
                 actionable_price=actionable_price,  # type: ignore[arg-type]
             )

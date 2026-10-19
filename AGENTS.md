@@ -33,7 +33,7 @@
 - `scripts/record_provider_fixtures.py` records real responses (manual, networked) to the gitignored `tests/fixtures/_recorded/`; never commit recordings.
 - Keep the suite fast enough for routine local validation.
 
-## Sizing Inputs and Calculator (work in progress)
+## Sizing Inputs and Output (unreleased)
 - `analyze`, `analyze_trade_setup` and `scan_watchlist` validate sizing inputs
   before symbol lookup, provider reads or watchlist access. Account size must be
   finite and positive; risk and position limits use percentage points in
@@ -46,11 +46,33 @@
   Internal `limit_origins` distinguishes caller and profile values. Swing/scan
   retain their defaults (1% risk, 10% position cap) and reject explicit null
   limits; all three allow an omitted/null account.
-- `utils/position_sizing.py` is a pure, currently unwired calculator. It uses exact
-  internal `Fraction` values, whole-share counts and independent starter/full
-  availability. It does not choose an action, price or stop. Public adapters and
-  JSON/display precision belong to the next sizing package; current output sizes
-  are not yet governed by this calculator.
+- `utils/position_sizing.py` calculates exact internal fractions, then
+  `utils/sizing_output.py` produces numeric JSON without rounding ceilings upward.
+  Unrepresentable positive values or monetary products that cannot round-trip as
+  numeric JSON produce `numeric_range_unavailable`, never zero risk or a rounded
+  share-product amount. Analyze computes once after its decision; card, zone and mode
+  fields derive from it. Swing uses the same arithmetic with its existing anchor
+  and the stop price actually returned. Limits include profile/default budgets.
+- `decision_card.sizing_status` explains blocked or missing estimates at every
+  tier. `sizing` is null for blocked actions or unusable entry/stop/ATR; otherwise
+  it contains assumptions (including price provenance), effective limits and
+  separate `starter`/`full` scenarios. `full` is null under starter. Each scenario
+  exposes allocation ceilings, whole shares, position dollars, conditional
+  `planned_loss_at_stop`, effective risk and binding constraints. With no account,
+  amounts and quantities are null (`percentage_only`). A zero-share scenario is
+  `below_one_whole_share`, independently of the other scenario.
+- Legacy flat fields project the same whole-share quantities; fractional shares
+  and speculative `capital_at_risk` are null. Core mode carries no size because
+  its horizon is long term. Other mode ceilings can only reduce the card's size.
+  The planning stop is neither monitored nor a holder exit instruction. Swing's
+  `max_loss_dollars` is an equal-value deprecated alias for `planned_loss_at_stop`;
+  zero-share plans keep their setup action but explain that no whole share fits.
+- Entry bands with missing, invalid or inverted bounds have both bounds null and
+  `entry_band_unavailable`; the reference price and research decisions remain.
+  Existing stop-distance fields retain their original units. Stop warnings use
+  the unrounded distance; a fallback 2% band is labelled as such.
+- Schema 7 and the coordinated guide/prompt migration are still pending the next
+  package. This branch is unreleased; the installed v0.3.0 is unchanged.
 - Keep `tests/fixtures/sizing_matrix/before.json` and `before.md` byte-for-byte.
   Current offline evidence uses `python -m tests.support.sizing_matrix --after
   --output-dir <temporary-directory>`. Baseline regeneration is disabled.
@@ -76,8 +98,9 @@
   hard_gates: {any_blocking, blocking: [every fired gate], checks: {id: bool}}
   action_now                                               # = new_money.action, one release
   why, exit_triggers, data_flags
-  sizing | null       # mid-term new money only: buy or starter; a starter nulls full_pct_cap and full_dollars
-  entry | null        # {current_price, buy_zone_low, buy_zone_high}, same predicate
+  sizing_status       # not_allowed, available, percentage_only or unavailable; reason
+  sizing | null       # valid mid-term entry sizing only; starter hides all full-size fields
+  entry | null        # current price, validated band and entry_band_unavailable; buy/starter only
   exit, conditions (mid-term), next_review, confidence
   ```
   `diagnostics` (full tier only) holds `pre_gate_policy` (the support-capped

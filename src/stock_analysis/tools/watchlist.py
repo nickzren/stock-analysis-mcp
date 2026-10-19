@@ -14,9 +14,10 @@ from stock_analysis.data.yfinance_client import fetch_history
 from stock_analysis.tools.trade_setup.card import SWING_HORIZON
 from stock_analysis.tools.trade_setup.orchestrator import analyze_trade_setup
 from stock_analysis.utils.freshness import FRESHNESS_GATE_IDS, freshness_leg
+from stock_analysis.utils.position_sizing import LimitOrigin
 from stock_analysis.utils.provenance import build_error_response
 from stock_analysis.utils.scan_screen import DAILY_LEG, screen_symbol
-from stock_analysis.utils.sizing_inputs import normalize_sizing_params
+from stock_analysis.utils.sizing_inputs import SwingSizingDefault, normalize_sizing_params
 from stock_analysis.utils.validators import FetchParams
 from stock_analysis.utils.watch_store import (
     MAX_WATCHLIST,
@@ -93,11 +94,15 @@ async def manage_watchlist(
 
 async def scan_watchlist(
     account_size: float | str | None = None,
-    risk_per_trade_pct: float | str = 1.0,
-    max_position_pct: float | str = 10.0,
+    risk_per_trade_pct: float | str = SwingSizingDefault.RISK,
+    max_position_pct: float | str = SwingSizingDefault.POSITION,
     _now: datetime | None = None,
     data_dir: Path | None = None,
 ) -> dict[str, Any]:
+    limit_origins: dict[str, LimitOrigin] = {
+        "risk_per_trade_pct": "default" if isinstance(risk_per_trade_pct, SwingSizingDefault) else "caller",
+        "max_position_pct": "default" if isinstance(max_position_pct, SwingSizingDefault) else "caller",
+    }
     try:
         account_size, risk_per_trade_pct, max_position_pct = normalize_sizing_params(
             account_size, risk_per_trade_pct, max_position_pct
@@ -164,6 +169,7 @@ async def scan_watchlist(
                 risk_per_trade_pct=risk_per_trade_pct,
                 max_position_pct=max_position_pct,
                 _now=now,
+                _limit_origins=limit_origins,
             )
             if card.get("error"):
                 errors.append({

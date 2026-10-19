@@ -11,13 +11,15 @@ from typing import Any
 import pytest
 
 from stock_analysis.tools.analyze.decision import ENTRY_ACTIONS, FULL_ENTRY_CODES, NEW_MONEY_ACTIONS
-from stock_analysis.tools.analyze.decision_card import build_entry_sizing
+from stock_analysis.tools.analyze.decision_card import adapt_card_sizing
 from stock_analysis.tools.analyze.executive_summary import size_text
+from stock_analysis.utils.position_sizing import calculate_position_sizing
+from stock_analysis.utils.sizing_output import public_sizing
 from tests.support import decision_matrix as dm
 from tests.support import freshness_frames as fr
 
 BEFORE = json.loads((dm.FIXTURE_DIR / "before.json").read_text())
-SIZE_TEXT = re.compile(r"size ~([\d.]+)(?:-([\d.]+))?%")
+SIZE_TEXT = re.compile(r"risk budget: ([\d.e+-]+)%")
 UNSUPPORTED = ["S7_etf_below_sma200", "ETF_strong", "ETF_bearish", "GBp_strong", "G_unsupported_currency_knife"]
 STARTER_ROWS = ["S1_hold_or_add_clean", "T1_extreme_risk_bullish", "T2_starter_weak_setup_quality",
                 "C1_headwind_hold_or_add", "E2_mixed_fcf_bullish_chart", "T4_starter_buy_the_dip"]
@@ -29,32 +31,33 @@ def assert_sizing_presence(result: dict[str, Any]) -> None:
     card = result["decision_card"]
     action = card["new_money"]["action"]
     entry, buy = action in ENTRY_ACTIONS, action == "buy"
+    available = entry and card["sizing"] is not None
     for tier, payload in dm.tiers(result).items():
         shown = payload["decision_card"]
         assert {"sizing", "entry"} <= shown.keys(), tier
-        assert (shown["sizing"] is not None, shown["entry"] is not None) == (entry, entry), tier
-        if entry:
+        assert (shown["sizing"] is not None, shown["entry"] is not None) == (available, entry), tier
+        if available:
             assert (shown["sizing"]["full_pct_cap"] is None, shown["sizing"]["full_dollars"] is None) == (
                 not buy, not buy), tier
-            assert set(shown["entry"]) == {"current_price", "buy_zone_low", "buy_zone_high"}, tier
+            assert set(shown["entry"]) == {"current_price", "buy_zone_low", "buy_zone_high", "entry_band_unavailable"}, tier
         if tier == "decision":
             assert "action_zones" not in payload and "executive_summary" not in payload
             continue
         assert "position_sizing_range" in payload["action_zones"], tier
-        assert (payload["action_zones"]["position_sizing_range"] is not None) is buy, tier
+        assert (payload["action_zones"]["position_sizing_range"] is not None) is (buy and available), tier
         sizes = SIZE_TEXT.findall(payload["executive_summary"])
-        assert len(sizes) == int(entry), tier
-        if entry:
-            expected = f"size ~{shown['sizing']['starter_pct']:.1f}" + (
-                f"-{shown['sizing']['full_pct_cap']:.1f}%" if buy else "%")
-            assert expected in payload["executive_summary"], tier
+        assert len(sizes) == int(available), tier
+        if available:
+            assert "estimated loss" in payload["executive_summary"] or "no whole-share position" in payload["executive_summary"]
+        else:
+            assert "No size estimate:" in payload["executive_summary"]
     assert "policy_action" not in result
     for name in MODES:
         mode = result["decision_modes"][name]
-        assert (mode["starter_position"] is not None) is (entry and mode["action"] in ENTRY_ACTIONS), name
-        assert (mode["max_position"] is not None) is (entry and mode["action"] == "buy" and buy), name
+        assert (mode["starter_position"] is not None) is (available and name != "core" and mode["action"] in ENTRY_ACTIONS), name
+        assert (mode["max_position"] is not None) is (available and name != "core" and mode["action"] == "buy" and buy), name
     speculative = result["decision_modes"]["speculative"]
-    assert (speculative["capital_at_risk"] is not None) is (speculative["starter_position"] is not None)
+    assert speculative["capital_at_risk"] is None
     dislocation = result["dislocation_framework"]["action"]
     assert dislocation["can_start_now"] is entry
     assert dislocation.get("buy_now") == (action if entry else None)
@@ -101,13 +104,12 @@ async def test_a_starter_hides_the_full_size_everywhere(name: str) -> None:
     for tier, payload in dm.tiers(result).items():
         sizing = payload["decision_card"]["sizing"]
         assert (sizing["full_pct_cap"], sizing["full_dollars"]) == (None, None), tier
-        if name in BEFORE:
-            before = BEFORE[name]["card_sizing"]
-            assert {k: sizing[k] for k in ("starter_pct", "starter_dollars", "whole_shares")} == {
-                k: before[k] for k in ("starter_pct", "starter_dollars", "whole_shares")}, tier
+        assert sizing["starter_dollars"] == sizing["whole_shares"] * sizing["at_price"], tier
+        assert sizing["full"] is None, tier
         if tier != "decision":
             assert payload["action_zones"]["position_sizing_range"] is None, tier
-            assert SIZE_TEXT.findall(payload["executive_summary"]) == [(f"{sizing['starter_pct']:.1f}", "")], tier
+            assert len(SIZE_TEXT.findall(payload["executive_summary"])) == 1, tier
+            assert "Full — Position:" not in payload["executive_summary"], tier
     assert [result["decision_modes"][m]["max_position"] for m in MODES] == [None, None, None]
     assert result["dislocation_framework"]["action"]["buy_now"] == "starter"
 
@@ -149,12 +151,13 @@ async def test_the_starter_scenario_caps_its_full_entry_dip_codes() -> None:
     for tier, payload in dm.tiers(result).items():
         sizing = payload["decision_card"]["sizing"]
         assert (sizing["starter_pct"], sizing["starter_dollars"], sizing["whole_shares"], sizing["full_pct_cap"],
-                sizing["full_dollars"]) == (2.5, 250.0, 2, None, None), tier
-    assert "size ~2.5%." in result["executive_summary"]
-    assert (modes["balanced"]["action"], modes["balanced"]["starter_position"], modes["balanced"]["max_position"]) == (
-        "starter", {"pct": 2.5, "dollars": 250.0, "shares": 2}, None)
-    assert (modes["core"]["action"], modes["core"]["starter_position"]["pct"], modes["core"]["max_position"]) == (
-        "buy", 2.0, None)
+                sizing["full_dollars"]) == (2.5, 178.0, 2, None, None), tier
+    assert "Starter — Position: $178 (1.78% of the account)" in result["executive_summary"]
+    assert (modes["balanced"]["action"], modes["balanced"]["max_position"]) == ("starter", None)
+    assert {key: modes["balanced"]["starter_position"][key] for key in ("pct", "dollars", "shares")} == {
+        "pct": 2.5, "dollars": 178.0, "shares": 2}
+    assert (modes["core"]["action"], modes["core"]["starter_position"], modes["core"]["max_position"]) == (
+        "buy", None, None)
 
 
 async def test_a_freshness_gate_hides_every_size() -> None:
@@ -174,17 +177,20 @@ def test_entry_sizing_by_action(action: str, full: bool) -> None:
     """OC-RF2/RF3 (unit): build_entry_sizing gives the card sizing only for buy and starter, and a starter's
     full_pct_cap and full_dollars are null; size_text gives the band under buy, the starter pct alone under a
     starter, and nothing under a non-entry action whatever sizing it is handed. PD D-9."""
-    zones = {"position_sizing_range": {"starter_pct": 3.0, "max_pct": 8.0, "dollars_for_account": {
-        "min": 150.0, "max": 400.0}, "shares_range": {"min": 1, "max": 4, "at_price": 100.0}}}
-    sizing = build_entry_sizing(zones, {"current_price": 100.0}, action)
-
+    result = public_sizing(calculate_position_sizing(
+        entry_price=100.0, stop_price=80.0, risk_per_trade_pct=1.0, max_position_pct=10.0,
+        regime_max_pct=8.0, regime_starter_pct=3.0, preset_starter_pct=3.0, account_size=5000.0))
+    card = adapt_card_sizing(result, {"action": action, "blocked_by": []})
+    sizing = card["sizing"]
     if action not in ENTRY_ACTIONS:
-        assert (sizing, size_text(action, sizing)) == (None, None)
-        assert size_text(action, build_entry_sizing(zones, {"current_price": 100.0}, "buy")) is None
+        assert sizing is None and card["sizing_status"]["status"] == "not_allowed"
+        assert "No size estimate:" in size_text(action, sizing, card["sizing_status"])
         return
-    assert (sizing["starter_pct"], sizing["starter_dollars"], sizing["whole_shares"]) == (3.0, 150.0, 1)
-    assert (sizing["full_pct_cap"], sizing["full_dollars"]) == ((8.0, 400.0) if full else (None, None))
-    assert size_text(action, sizing) == ("size ~3.0-8.0%" if full else "size ~3.0%")
+    assert (sizing["starter_pct"], sizing["starter_dollars"], sizing["whole_shares"]) == (3.0, 100.0, 1)
+    assert (sizing["full_pct_cap"], sizing["full_dollars"]) == ((5.0, 200.0) if full else (None, None))
+    assert ("Full — Position:" in size_text(action, sizing)) is full
+    assert "Starter — Position: $100 (2% of the account)" in size_text(action, sizing)
+
 
 
 @pytest.mark.parametrize("name", list(dm.SCENARIOS))
@@ -196,7 +202,7 @@ async def test_the_buy_band_needs_entry(name: str) -> None:
     levels = result["action_zones"]["levels"]
     entry = result["decision_card"]["new_money"]["action"] in ENTRY_ACTIONS
     expected = {"current_price": result["summary"]["current_price"], "buy_zone_low": levels.get("strong_buy_below"),
-                "buy_zone_high": levels.get("accumulate_near")} if entry else None
+                "buy_zone_high": levels.get("accumulate_near"), "entry_band_unavailable": None} if entry else None
     for tier, payload in dm.tiers(result).items():
         card = payload["decision_card"]
         assert "entry" in card and card["entry"] == expected, tier

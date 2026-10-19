@@ -1161,7 +1161,7 @@
     "card_sizing": {
       "full_dollars": null,
       "full_pct_cap": null,
-      "starter_dollars": 250.0,
+      "starter_dollars": 200.0,
       "starter_pct": 2.5,
       "whole_shares": 2
     },
@@ -1258,9 +1258,7 @@
       "unevaluated_gate_ids": []
     },
     "source": "PH E2",
-    "summary_size": [
-      "size ~2.5%"
-    ],
+    "summary_size": [],
     "valuation_gate": "neutral",
     "verdict": {
       "business_quality": "mixed",
@@ -3417,9 +3415,7 @@
       "balanced": [
         "starter_position"
       ],
-      "core": [
-        "starter_position"
-      ],
+      "core": [],
       "speculative": []
     },
     "modes": {
@@ -3465,9 +3461,7 @@
       "unevaluated_gate_ids": []
     },
     "source": "OC RF7 mid starter, long buy",
-    "summary_size": [
-      "size ~2.0%"
-    ],
+    "summary_size": [],
     "valuation_gate": "attractive",
     "verdict": {
       "business_quality": "strong",
@@ -3485,7 +3479,7 @@
     "card_sizing": {
       "full_dollars": null,
       "full_pct_cap": null,
-      "starter_dollars": 50.0,
+      "starter_dollars": 0.0,
       "starter_pct": 0.5,
       "whole_shares": 0
     },
@@ -3584,9 +3578,7 @@
       "unevaluated_gate_ids": []
     },
     "source": "OC T1",
-    "summary_size": [
-      "size ~0.5%"
-    ],
+    "summary_size": [],
     "valuation_gate": "attractive",
     "verdict": {
       "business_quality": "strong",
@@ -3732,7 +3724,7 @@
     "card_sizing": {
       "full_dollars": null,
       "full_pct_cap": null,
-      "starter_dollars": 250.0,
+      "starter_dollars": 200.0,
       "starter_pct": 2.5,
       "whole_shares": 2
     },
@@ -3781,9 +3773,7 @@
       "balanced": [
         "starter_position"
       ],
-      "core": [
-        "starter_position"
-      ],
+      "core": [],
       "speculative": []
     },
     "modes": {
@@ -3829,9 +3819,7 @@
       "unevaluated_gate_ids": []
     },
     "source": "OC T2",
-    "summary_size": [
-      "size ~2.5%"
-    ],
+    "summary_size": [],
     "valuation_gate": "attractive",
     "verdict": {
       "business_quality": "strong",
@@ -3981,7 +3969,7 @@
     "card_sizing": {
       "full_dollars": null,
       "full_pct_cap": null,
-      "starter_dollars": 250.0,
+      "starter_dollars": 178.0,
       "starter_pct": 2.5,
       "whole_shares": 2
     },
@@ -4033,9 +4021,7 @@
       "balanced": [
         "starter_position"
       ],
-      "core": [
-        "starter_position"
-      ],
+      "core": [],
       "speculative": []
     },
     "modes": {
@@ -4081,9 +4067,7 @@
       "unevaluated_gate_ids": []
     },
     "source": "OC RF3 starter (D-9)",
-    "summary_size": [
-      "size ~2.5%"
-    ],
+    "summary_size": [],
     "valuation_gate": "attractive",
     "verdict": {
       "business_quality": "strong",
@@ -4101,7 +4085,7 @@
     "card_sizing": {
       "full_dollars": null,
       "full_pct_cap": null,
-      "starter_dollars": 50.0,
+      "starter_dollars": 0.0,
       "starter_pct": 0.5,
       "whole_shares": 0
     },
@@ -4202,9 +4186,7 @@
       "unevaluated_gate_ids": []
     },
     "source": "OC M9 dislocation starter (D-9)",
-    "summary_size": [
-      "size ~0.5%"
-    ],
+    "summary_size": [],
     "valuation_gate": "attractive",
     "verdict": {
       "business_quality": "strong",
@@ -4220,9 +4202,9 @@
   "T6_dislocation_buy": {
     "action_now": "buy",
     "card_sizing": {
-      "full_dollars": 800.0,
+      "full_dollars": 780.0,
       "full_pct_cap": 8.0,
-      "starter_dollars": 250.0,
+      "starter_dollars": 240.0,
       "starter_pct": 2.5,
       "whole_shares": 4
     },
@@ -4278,10 +4260,7 @@
         "starter_position",
         "max_position"
       ],
-      "core": [
-        "starter_position",
-        "max_position"
-      ],
+      "core": [],
       "speculative": [
         "starter_position"
       ]
@@ -4331,9 +4310,7 @@
       ]
     },
     "source": "OC M9 dislocation buy (D-9)",
-    "summary_size": [
-      "size ~2.5-8.0%"
-    ],
+    "summary_size": [],
     "valuation_gate": "attractive",
     "verdict": {
       "business_quality": "strong",
@@ -4351,7 +4328,7 @@
     "card_sizing": {
       "full_dollars": null,
       "full_pct_cap": null,
-      "starter_dollars": 50.0,
+      "starter_dollars": 0.0,
       "starter_pct": 0.5,
       "whole_shares": 0
     },
@@ -4460,9 +4437,7 @@
       ]
     },
     "source": "OC M9 dislocation starter, mid condition (D-9)",
-    "summary_size": [
-      "size ~0.5%"
-    ],
+    "summary_size": [],
     "valuation_gate": "attractive",
     "verdict": {
       "business_quality": "strong",

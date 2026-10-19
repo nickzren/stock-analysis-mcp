@@ -79,18 +79,19 @@ async def test_the_summary_opens_with_three_linted_horizon_segments(name: str) -
     assert [s[:len(p)] for s, p in zip(sentences, PREFIXES, strict=False)] == list(PREFIXES)
     assert first.startswith(PREFIXES[0] + words(new_money["action"]))
     assert (("blocked by " + ", ".join(ids(new_money["blocked_by"]))) in first) is bool(new_money["blocked_by"])
-    sizing = card["sizing"] or {}
-    size = (f"size ~{sizing['starter_pct']:.1f}-{sizing['full_pct_cap']:.1f}%" if new_money["action"] == "buy"
-            else f"size ~{sizing.get('starter_pct') or 0:.1f}%")
-    assert ("size ~" in first) is entry_allowed(new_money["action"])
-    if entry_allowed(new_money["action"]):
-        assert f"; {size}" in first and first.count("size ~") == 1
+    sizing = card["sizing"]
+    assert ("risk budget:" in first) is (sizing is not None)
+    if sizing is not None:
+        assert "Position:" in first or "no whole-share position" in first or "allocation ceiling:" in first
+        assert first.count("risk budget:") == 1
+    else:
+        assert "No size estimate:" in first
     assert second == f"If held: {words(held['action'])}."
     assert third.startswith(PREFIXES[2] + words(long["action"]))
-    assert result["executive_summary"].count("size ~") == first.count("size ~")
+    assert result["executive_summary"].count("risk budget:") == first.count("risk budget:")
     assert not oc.advice(first) or entry_allowed(new_money["action"]), first
     assert not oc.advice(third) or long["action"] in ENTRY_ACTIONS, third
-    assert "size ~" not in third
+    assert "Position:" not in third and "risk budget:" not in third
     assert not re.search(r"(?i)\badd\b|hold or add", second) or held["add_allowed"]
     for sentence in body:
         assert not oc.advice(sentence), sentence
@@ -129,13 +130,17 @@ async def test_named_segments(name: str, segments: tuple[str, str, str]) -> None
     """OC-RF8 / RA.15 (summary clauses): the three segments word for word on the named rows (thesis-blocked
     buy/starter candidates, candidate avoid, dated, conditions-only and unsupported reassessment).
     PD D-9. Sparse business inputs now give holder uncertainty (WP2.5 C2), and now block new money with a separate gate."""
-    assert oc.segments((await dm.run(name))["executive_summary"])[:3] == list(segments)
+    actual = oc.segments((await dm.run(name))["executive_summary"])[:3]
+    assert "No size estimate:" in actual[0]
+    # The independently pinned decision and reassessment text is unchanged by the sizing disclosure.
+    actual[0] = re.sub(r"; No size estimate: new money is [^;.]+(?:; blocked by: [^;.]+)?", "", actual[0])
+    assert actual == list(segments)
 
 
 @pytest.mark.parametrize(("name", "mid", "held", "long"), [
     ("D_quality_attractive_poor_chart", "avoid", "hold", "buy"),
-    ("E2_mixed_fcf_bullish_chart", "starter; size ~2.5%", "hold", "starter"),
-    ("C1_headwind_hold_or_add", "starter; size ~2.5%", "hold", "wait")])
+    ("E2_mixed_fcf_bullish_chart", "starter", "hold", "starter"),
+    ("C1_headwind_hold_or_add", "starter", "hold", "wait")])
 async def test_the_summary_names_both_horizons(name: str, mid: str, held: str, long: str) -> None:
     """PH-RF20: the summary names the mid-term and the long-term decision, each labelled, so a disagreement reads
     as two horizons (D: avoid vs buy; C1: starter vs wait). PD D-3."""
@@ -144,7 +149,10 @@ async def test_the_summary_names_both_horizons(name: str, mid: str, held: str, l
         fund = {**fund, "financial_health": {"debt_to_equity": 0.5}}
     summary = (await dm.run(name, fundamentals=fund))["executive_summary"]
 
-    assert summary.startswith(f"Decision (mid-term, new money): {mid}. If held: {held}. Long-term (1-5y): {long}.")
+    first, second, third = oc.segments(summary)[:3]
+    assert first.startswith(f"Decision (mid-term, new money): {mid};")
+    assert second == f"If held: {held}."
+    assert third == f"Long-term (1-5y): {long}."
 
 
 def _card(earliest: dict[str, Any] | None, action: str = "wait") -> dict[str, Any]:
@@ -478,7 +486,7 @@ async def test_price_zone_is_the_uncapped_classification(name: str) -> None:
     for tier, payload in dm.tiers(result).items():
         assert "current_zone" not in (payload.get("action_zones") or {}), tier
         entry = payload["decision_card"]["entry"]
-        assert entry is None or set(entry) == {"current_price", "buy_zone_low", "buy_zone_high"}, tier
+        assert entry is None or set(entry) == {"current_price", "buy_zone_low", "buy_zone_high", "entry_band_unavailable"}, tier
     assert dm.tiers(result)["standard"]["action_zones"]["price_zone"] == expected
 
 

@@ -40,7 +40,7 @@ PROFILES_AND_CAPS: list[dict[str, Any]] = [
     {"profile": "balanced", "max_position_pct": 2.0, "risk_per_trade_pct": 0.25},
 ]
 
-SIZE_TEXT = re.compile(r"size ~([\d.]+)(?:-([\d.]+))?%")
+SIZE_TEXT = re.compile(r"risk budget: ([\d.e+-]+)%")
 CONDITIONAL_PATH = re.compile(r"(^|\.)(\w+_if|monitor|wait_for|required_before_full_size)(\[\*\])?(\.|$)")
 ENTRY_TOKEN = re.compile(r"(?i)(?<![a-z])(buy|add|accumulate|starter)(?![a-z])")
 IMPERATIVE = re.compile(
@@ -164,10 +164,11 @@ class TestEntrySizingUnderNonEntryActions:
         for tier, payload in shown.items():
             sizing = payload["decision_card"]["sizing"]
             assert (sizing["starter_pct"], sizing["starter_dollars"], sizing["full_pct_cap"],
-                    sizing["full_dollars"]) == (2.5, 250.0, None, None), tier
+                    sizing["full_dollars"]) == (2.5, 200.0, None, None), tier
         for tier in ("standard", "full"):
             assert shown[tier]["action_zones"]["position_sizing_range"] is None, tier
-            assert SIZE_TEXT.findall(shown[tier]["executive_summary"]) == [("2.5", "")], tier
+            assert SIZE_TEXT.findall(shown[tier]["executive_summary"]) == ["1"], tier
+            assert "Full — Position:" not in shown[tier]["executive_summary"], tier
         assert [name for name, mode in result["decision_modes"].items() if mode["max_position"] is not None] == []
 
     async def test_knife_avoid_offers_no_starter(self) -> None:
@@ -303,14 +304,13 @@ class TestZoneCapsLeavePriceZoneUncapped:
                 assert payload["action_zones"]["price_zone"] == "near_52w_low", tier
 
 
-class TestModesIgnoreUserCaps:
-    async def test_balanced_max_position_ignores_max_position_pct(self) -> None:
-        """OC-CH-2b: S2 with max_position_pct=2 caps the card at 2%, but modes.balanced.max_position stays 8%.
-        Flips only in 2b (sizing arithmetic); 2a changes presence, never numbers."""
+class TestModesRespectUserCaps:
+    async def test_balanced_max_position_respects_max_position_pct(self) -> None:
+        """2b.2 flips OC-CH-2b: a 2% caller maximum caps both the card and balanced mode."""
         result = await analyze("S2_buy_clean", known_debt=True, max_position_pct=2.0)
 
         assert result["decision_card"]["sizing"]["full_pct_cap"] == 2.0
-        assert result["decision_modes"]["balanced"]["max_position"]["pct"] == 8.0
+        assert result["decision_modes"]["balanced"]["max_position"]["pct"] == 2.0
 
 
 class TestConditionalValues:
@@ -366,36 +366,31 @@ class TestProfileInvariance:
 
 class TestSizingNumbers:
     @pytest.mark.parametrize("name", ENTRY_ROWS)
-    async def test_present_sizing_numbers_equal_the_before_table(self, name: str) -> None:
-        """OC-G3: on the entry rows (S2 with known debt, T1 and T2 starter) every sizing number still shown, on the card,
-        the zone band and the summary text at every tier, equals the 2.0 before table, and each mode size
-        still shown equals its 0609fde value. Holds throughout 2a, which changes presence only (2b owns
-        the arithmetic)."""
+    async def test_present_sizing_numbers_use_the_stated_whole_share_quantity(self, name: str) -> None:
+        """2b.2 flips OC-G3's old fractional-dollar pins; decisions and visibility stay unchanged."""
         fund = dm.SCENARIOS[name].fundamentals
         if name == "S2_buy_clean":
             fund = {**fund, "financial_health": {"debt_to_equity": 0.5}}
         result = await dm.run(name, fundamentals=fund)
-        before = BEFORE[name]["card_sizing"]
+        expected = {"S2_buy_clean": (178.0, 712.0, 2), "T1_extreme_risk_bullish": (0.0, None, 0),
+                    "T2_starter_weak_setup_quality": (200.0, None, 2)}[name]
         for tier, payload in dm.tiers(result).items():
             sizing = payload["decision_card"]["sizing"]
-            shown = {key: sizing[key] for key in before if sizing.get(key) is not None}
-            assert {"starter_pct", "starter_dollars"} <= shown.keys(), tier
-            assert shown == {key: before[key] for key in shown}, tier
-
+            assert (sizing["starter_dollars"], sizing["full_dollars"], sizing["whole_shares"]) == expected, tier
+            assert sizing["starter_dollars"] == sizing["whole_shares"] * sizing["at_price"], tier
             band = (payload.get("action_zones") or {}).get("position_sizing_range")
             if band is not None:
-                assert (band["starter_pct"], band["max_pct"]) == (before["starter_pct"], before["full_pct_cap"]), tier
-                dollars = band["dollars_for_account"]
-                assert (dollars["min"], dollars["max"]) == (before["starter_dollars"], before["full_dollars"]), tier
-            for low, high in SIZE_TEXT.findall(payload.get("executive_summary") or ""):
-                assert float(low) == before["starter_pct"], tier
-                assert not high or float(high) == before["full_pct_cap"], tier
+                assert (band["starter_pct"], band["max_pct"]) == (sizing["starter_pct"], sizing["full_pct_cap"]), tier
+                assert (band["dollars_for_account"]["min"], band["dollars_for_account"]["max"]) == expected[:2], tier
+        for mode in result["decision_modes"].values():
+            for key, reference in (("starter_position", "starter"), ("max_position", "full")):
+                shown = mode[key]
+                if shown is not None:
+                    canonical = result["decision_card"]["sizing"][reference]
+                    assert shown["pct"] <= canonical["allocation_cap_pct"]
+                    assert shown["dollars"] == shown["shares"] * result["summary"]["current_price"]
+                    assert shown["planned_loss_at_stop"] <= canonical["planned_loss_at_stop"]
 
-        for mode, recorded in MODE_SIZING[name].items():
-            for key, expected in zip(("starter_position", "max_position"), recorded, strict=True):
-                size = result["decision_modes"][mode].get(key)
-                if size is not None:
-                    assert (size["pct"], size["dollars"], size["shares"]) == expected, (mode, key)
 
 
 class TestPreGateCandidate:

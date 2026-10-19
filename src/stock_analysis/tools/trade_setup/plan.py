@@ -8,6 +8,8 @@ from typing import Any
 
 from stock_analysis.tools.trade_setup.setup_rules import TIME_STOP_TRADING_DAYS
 from stock_analysis.utils.market_calendar import add_trading_days
+from stock_analysis.utils.position_sizing import LimitOrigin, calculate_position_sizing
+from stock_analysis.utils.sizing_output import public_sizing
 
 
 class PlanInvariantError(ValueError):
@@ -36,6 +38,7 @@ def build_plan(
     max_position_pct: float,
     now: datetime,
     actionable_price: float,
+    limit_origins: dict[str, LimitOrigin] | None = None,
 ) -> dict[str, Any]:
     entry_price = _finite_positive("trigger_price", setup["trigger_price"])
     stop_price = _finite_positive("stop_price", setup["stop_price"])
@@ -70,21 +73,34 @@ def build_plan(
 
     trading_days = TIME_STOP_TRADING_DAYS[setup["type"]]
 
-    if account_size is None:
-        max_loss_dollars = None
-        shares = None
-        fractional_shares = None
-        position_dollars = None
-    else:
-        risk_dollars = account_size * risk_per_trade_pct / 100.0
-        raw_shares = risk_dollars / risk_per_share
-        cap_shares = (account_size * max_position_pct / 100.0) / anchor
-        fractional_shares = round(min(raw_shares, cap_shares), 4)
-        shares = int(fractional_shares)
-        position_dollars = round(fractional_shares * anchor, 2)
-        max_loss_dollars = round(fractional_shares * risk_per_share, 2)
+    origins = limit_origins or {}
+    exact = calculate_position_sizing(
+        entry_price=anchor,
+        stop_price=round(stop_price, 2),
+        risk_per_trade_pct=risk_per_trade_pct,
+        max_position_pct=max_position_pct,
+        regime_max_pct=100,
+        regime_starter_pct=100,
+        preset_starter_pct=100,
+        account_size=account_size,
+        risk_origin=origins.get("risk_per_trade_pct", "caller"),
+        max_position_origin=origins.get("max_position_pct", "caller"),
+    )
+    sized = public_sizing(exact, horizon="swing")
+    sizing = sized["sizing"]
+    scenario = sizing["full"] if sizing is not None else {}
+    if sizing is not None:
+        sizing["starter"] = None
+        for key in ("regime_max_pct", "regime_starter_pct", "preset_starter_pct"):
+            sizing["limits"][key] = None
+        scenario["binding_constraints"] = [
+            reason for reason in scenario["binding_constraints"] if reason != "regime_maximum"
+        ]
+    if scenario.get("quantity_status") == "below_one_whole_share":
+        entry["condition_text"] = "The setup qualifies, but no whole-share position fits this budget."
+    elif sizing is None:
+        entry["condition_text"] = "The setup qualifies, but a size estimate is unavailable."
 
-    uncapped_pct = risk_per_trade_pct * anchor / risk_per_share
     return {
         "entry": entry,
         "stop": {
@@ -98,11 +114,14 @@ def build_plan(
             "trading_days": trading_days,
             "date": add_trading_days(now.date(), trading_days).isoformat(),
         },
-        "max_loss_dollars": max_loss_dollars,
-        "shares": shares,
-        "fractional_shares": fractional_shares,
-        "position_dollars": position_dollars,
-        "position_pct": round(min(uncapped_pct, max_position_pct), 2),
+        "sizing_status": sized["sizing_status"],
+        "sizing": sizing,
+        "planned_loss_at_stop": scenario.get("planned_loss_at_stop"),
+        "max_loss_dollars": scenario.get("planned_loss_at_stop"),
+        "shares": scenario.get("whole_shares"),
+        "fractional_shares": None,
+        "position_dollars": scenario.get("position_dollars"),
+        "position_pct": scenario.get("allocation_cap_pct" if account_size is None else "position_pct"),
     }
 
 

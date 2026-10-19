@@ -85,13 +85,19 @@ class TestGatedSummary:
             {"S4_earnings_gate_on_hold_or_add": "wait", "S9_weak_liquidity": "avoid"}[name], "starter")
         assert gated_sentences[0] == {
             "S4_earnings_gate_on_hold_or_add": "Decision (mid-term, new money): wait; blocked by earnings_blackout; "
+                                               "No size estimate: new money is wait; blocked by: earnings blackout; "
                                                "reassess on or after Tue Oct 13 (not a buy date)",
-            "S9_weak_liquidity": "Decision (mid-term, new money): avoid; blocked by weak_liquidity; no reassessment "
+            "S9_weak_liquidity": "Decision (mid-term, new money): avoid; blocked by weak_liquidity; "
+                                 "No size estimate: new money is avoid; blocked by: weak liquidity; no reassessment "
                                  "date: re-run analyze after 1-year average daily dollar volume >= $1M"}[name]
-        assert clean_sentences[0] == "Decision (mid-term, new money): starter; size ~2.5%"
+        assert clean_sentences[0].startswith("Decision (mid-term, new money): starter; Starter — Position: $200 ")
+        assert "estimated loss:" in clean_sentences[0]
         assert "size ~" not in gated["executive_summary"]
         assert "Policy:" not in gated["executive_summary"] + clean["executive_summary"]
-        assert gated_sentences[3:] == clean_sentences[3:]
+        assert clean_sentences[3:5] == [
+            "Mid-term sizing only: This planning stop is not monitored or an exit instruction",
+            "Gaps and slippage can make the actual loss larger"]
+        assert gated_sentences[3:] == clean_sentences[5:]
 
 
 class TestSwingVsMidTerm:

@@ -40,7 +40,12 @@ from stock_analysis.tools import (
 )
 from stock_analysis.tools.analyze.projection import normalize_analyze_detail, project_analyze_result
 from stock_analysis.utils.provenance import build_error_response
-from stock_analysis.utils.sizing_inputs import AccountSize, PositionPercent, RiskPercent
+from stock_analysis.utils.sizing_inputs import (
+    AccountSize,
+    PositionPercent,
+    RiskPercent,
+    SwingSizingDefault,
+)
 
 log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(level=getattr(logging, log_level, logging.INFO))
@@ -301,8 +306,8 @@ async def analyze(
 async def analyze_trade_setup(
     symbol: str,
     account_size: AccountSize | None = None,
-    risk_per_trade_pct: RiskPercent = 1.0,
-    max_position_pct: PositionPercent = 10.0,
+    risk_per_trade_pct: RiskPercent = SwingSizingDefault.RISK,
+    max_position_pct: PositionPercent = SwingSizingDefault.POSITION,
 ) -> str:
     """
     Use when the user asks for a swing trade on one stock (days to weeks, long-only).
@@ -526,8 +531,8 @@ async def manage_watchlist(action: str, symbols: list[str] | None = None) -> str
 @mcp.tool
 async def scan_watchlist(
     account_size: AccountSize | None = None,
-    risk_per_trade_pct: RiskPercent = 1.0,
-    max_position_pct: PositionPercent = 10.0,
+    risk_per_trade_pct: RiskPercent = SwingSizingDefault.RISK,
+    max_position_pct: PositionPercent = SwingSizingDefault.POSITION,
 ) -> str:
     """
     Use when the user wants the saved watchlist screened for swing setups (days to

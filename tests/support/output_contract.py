@@ -53,6 +53,7 @@ FIELD_REGISTRY: tuple[Field, ...] = (
     R("decision_card.action_now", A, MID),
     R("decision_card.why.**", A, MID), R("decision_card.exit_triggers.**", C, HOLDER),
     R("decision_card.data_flags.**", D),
+    R("decision_card.sizing_status.**", D),
     R("decision_card.sizing.**", S, MID), R("decision_card.entry.**", S, MID),
     R("decision_card.exit.**", A, HOLDER), R("decision_card.conditions.**", C, MID),
     R("decision_card.next_review.**", C, MID), R("decision_card.confidence", D),

@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased: sizing and caps (in progress)
+
+Response schema remains `"6"`; snapshot version remains `"3.0.0"` during integration.
+
+- Analyze and swing sizing enforce both effective risk and position limits, including defaults. Whole shares determine position dollars and conditional loss; fractional estimates are null.
+- Analyze adds `sizing_status` and canonical assumptions, limits, starter/full scenarios. Missing sizing does not change the research decision. Modes cannot exceed the card, including speculative mode; core has no long-term allocation estimate.
+- Swing adds `planned_loss_at_stop`; `max_loss_dollars` remains an equal alias. Zero-share plans explain that no whole share fits.
+- Entry bands with invalid bounds are unavailable; fallback bands and stop warnings use truthful labels and unrounded comparisons.
+- This work is unreleased. Schema 7, the complete migration inventory and agent guidance follow in the next package. Snapshot 3.0.0, package version and install pins are unchanged.
+
 ## 0.3.0 (2026-10-16): Step 2, one canonical decision
 
 The package version (`meta.server_version`) goes from `0.2.0` to `0.3.0`. Two other versions change independently:

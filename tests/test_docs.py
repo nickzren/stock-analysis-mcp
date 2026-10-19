@@ -60,7 +60,8 @@ def test_docs_state_the_current_versions_and_the_release_pin() -> None:
     newest_heading, newest = next(iter(changelog.items()))
     released = next(m.group(1) for h in changelog if (m := re.match(r"(\d+\.\d+\.\d+) \(", h)))
     readme = _read("README.md")
-    unreleased = _sections(readme, "##").get("Unreleased (main)")
+    unreleased = next((text for heading, text in _sections(readme, "##").items()
+                       if heading.startswith("Unreleased")), None)
     agents = _flat(_read("AGENTS.md"))
 
     assert f'`"{SCHEMA_VERSION}"`' in newest and f'`"{SNAPSHOT_VERSION}"`' in newest

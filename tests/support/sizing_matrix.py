@@ -113,15 +113,16 @@ def digest(name: str, result: dict[str, Any]) -> dict[str, Any]:
             "profile", "account_size", "risk_per_trade_pct", "max_position_pct") if key in values}),
         "decision": dm.digest(result)["decision"],
         "snapshot": result["watchlist_snapshot"],
-        "card": {key: card.get(key) for key in ("sizing", "entry", "exit")},
+        "card": {key: card.get(key) for key in ("sizing", "sizing_status", "entry", "exit")},
         "zones": {key: zones.get(key) for key in ("position_sizing_range", "stop_calculation",
                                                   "basis", "zone_warnings")},
         "modes": {name: {key: mode.get(key) for key in ("action", "starter_position", "max_position",
-                                                       "capital_at_risk")}
+                                                       "capital_at_risk", "account_size_assumption")}
                   for name, mode in result["decision_modes"].items()},
         "summary": result["executive_summary"],
         "tiers": {tier: {"sizing": payload["decision_card"]["sizing"],
-                         "entry": payload["decision_card"]["entry"]}
+                         "entry": payload["decision_card"]["entry"],
+                         "sizing_status": payload["decision_card"]["sizing_status"]}
                   for tier, payload in dm.tiers(result).items()},
     }
 
@@ -178,9 +179,9 @@ def markdown(recording: dict[str, Any]) -> str:
         lines += [
             "Observed current outputs, including remaining limitations; not investment recommendations.",
             "Details, full snapshots and limit origins: `after.json`. The frozen baseline remains `before.json`.",
-            "The implied loss is calculated here from displayed dollars / price × stop distance;",
-            "it may disagree with the whole-share count until the sizing adapters are updated.", "",
-            "Risk/maximum below are the resolved profile-helper values. No claim of completed sizing enforcement.", "",
+            "The implied loss follows the same whole-share amounts as the emitted planned loss.",
+            "Sizing is conditional on a sale at the planning stop; it is not a monitored exit or a guaranteed loss cap.", "",
+            "Risk/maximum below are the effective caller/profile values; both are enforced.", "",
         ]
     lines += ["| Case | Resolved risk / maximum (%), origin | New money / held | Stop | Starter / full (%) |"
               " Starter / full ($) | Starter whole shares | Implied loss starter / full ($) |",
@@ -215,6 +216,32 @@ def markdown(recording: dict[str, Any]) -> str:
               "|---|---|---|---|---|",
               f"| {scan['promoted_card']['action']} | {plan['shares']} | {plan['fractional_shares']} |"
               f" {plan['position_dollars']} | {plan['max_loss_dollars']} |"]
+    if not before:
+        baseline = json.loads((FIXTURE_DIR / "before.json").read_text())
+        lines += ["", "## Changed numerical fields", "",
+                  "Every changed pre-existing numerical sizing field is listed below; duplicated detail tiers are omitted.",
+                  "New canonical scenarios expose ceilings, actual whole-share amounts and conditional loss separately.",
+                  "Core sizes are null because core is long-term; starter-only and blocked actions hide inapplicable sizes.",
+                  "Missing/invalid stops suppress estimates; inverted entry bands lose both bounds. Fractional estimates are null.",
+                  "The policy decisions and every saved snapshot field are checked against the frozen baseline.", "",
+                  "| Path | Before | After | Reason |", "|---|---|---|---|"]
+        def changed(old, new, path):
+            if isinstance(old, dict) and isinstance(new, dict):
+                for key in old:
+                    if key in new and key not in ("tiers", "snapshot", "decision", "inputs", "resolved_profile"):
+                        changed(old[key], new[key], f"{path}.{key}" if path else key)
+            elif isinstance(old, list) and isinstance(new, list):
+                for index, left in enumerate(old):
+                    changed(left, new[index] if index < len(new) else None, f"{path}[{index}]")
+            elif isinstance(old, (int, float)) and not isinstance(old, bool) and old != new:
+                reason = ("Validated entry band" if ".entry.buy_zone" in path else
+                          "Retired fractional estimate" if "fractional_shares" in path else
+                          "Risk/cap enforcement and consistent whole-share amounts")
+                lines.append(f"| `{path}` | {old} | {new} | {reason} |")
+            elif isinstance(old, dict) and new is None:
+                for key, value in old.items():
+                    changed(value, None, f"{path}.{key}")
+        changed(baseline, recording, "")
     return "\n".join(lines) + "\n"
 
 

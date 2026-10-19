@@ -1,4 +1,4 @@
-"""The scan really promotes and forwards limits; v0.3.0 amounts still use fractions."""
+"""The scan promotes with caller limits and whole-share amount consistency."""
 
 import json
 
@@ -22,9 +22,12 @@ async def test_scan_promotes_real_card_and_forwards_sizing_limits():
     assert scan["rows"][0]["blockers"] == ["market_closed"]
     plan = card["plan"]
     assert (plan["shares"], plan["fractional_shares"], plan["position_dollars"], plan["max_loss_dollars"]) == (
-        7, 7.3687, 825.0, 8.25)
+        7, None, 783.72, 7.84)
     entry, stop = plan["entry"]["trigger_price"], plan["stop"]["price"]
-    assert (entry, stop, plan["position_pct"]) == (111.96, 110.84, 8.25)
+    assert (entry, stop, plan["position_pct"]) == (111.96, 110.84, 7.8372)
+    assert plan["max_loss_dollars"] == plan["planned_loss_at_stop"]
+    assert plan["sizing"]["limits"]["risk_origin"] == "caller"
+    assert plan["sizing"]["limits"]["max_position_origin"] == "caller"
     assert plan["shares"] * entry == pytest.approx(783.72)
     assert plan["shares"] * (entry - stop) == pytest.approx(7.84)
 

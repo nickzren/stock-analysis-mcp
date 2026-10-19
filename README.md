@@ -181,3 +181,12 @@ uv run --frozen ruff check src tests
 ## Disclaimer
 
 This tool is for **informational purposes only**. It is not financial advice. Always do your own research and consult a qualified financial advisor before making investment decisions. The authors are not responsible for any financial losses incurred from using this tool.
+
+## Unreleased sizing work
+
+Response schema **6** and snapshot **3.0.0** remain during integration.
+The development branch enforces risk and position limits, including profile defaults.
+Sizing uses whole shares and distinguishes allocation from estimated loss at the
+planning stop. Missing inputs or a budget below one share are explained. The stop
+is not monitored or an exit instruction; gaps and slippage can increase the loss.
+Research decisions are unchanged. Install commands above still use v0.3.0.

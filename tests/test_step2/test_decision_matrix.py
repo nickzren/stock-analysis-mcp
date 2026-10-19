@@ -300,6 +300,29 @@ def _flat(row: Any, path: str = "") -> dict[str, Any]:
     return {k: v for key, value in row.items() for k, v in _flat(value, f"{path}.{key}" if path else key).items()}
 
 
+# Sizing-only package: explicit final cells; decision and snapshot expectations stay frozen.
+SIZING_FINAL_CELLS = {
+    "E2_mixed_fcf_bullish_chart": {"card_sizing.starter_dollars": 200.0, "summary_size": []},
+    "T1_crash_risk": {"mode_sizing.core": [], "summary_size": []},
+    "T1_extreme_risk_bullish": {"card_sizing.starter_dollars": 0.0, "summary_size": []},
+    "T2_starter_weak_setup_quality": {"card_sizing.starter_dollars": 200.0, "mode_sizing.core": [], "summary_size": []},
+    "T4_starter_buy_the_dip": {"card_sizing.starter_dollars": 178.0, "mode_sizing.core": [], "summary_size": []},
+    "T5_dislocation_starter": {"card_sizing.starter_dollars": 0.0, "summary_size": []},
+    "T6_dislocation_buy": {"card_sizing.full_dollars": 780.0, "card_sizing.starter_dollars": 240.0,
+                            "mode_sizing.core": [], "summary_size": []},
+    "T6_dislocation_starter_extreme": {"card_sizing.starter_dollars": 0.0, "summary_size": []},
+}
+for _name, _cells in SIZING_FINAL_CELLS.items():
+    if _name not in BEFORE:
+        continue
+    for _key, _value in _cells.items():
+        _before = _flat(BEFORE[_name]).get(_key)
+        if _key not in _flat(BEFORE[_name]) or _before == _value:
+            ROW_CHANGES[_name].pop(_key, None)
+        else:
+            ROW_CHANGES[_name][_key] = (_before, _value)
+
+
 class TestBeforeTable:
     async def test_the_committed_after_table_matches_the_code(self) -> None:
         """DM-CH1: every scenario's decision digest equals tests/fixtures/decision_matrix/after.json, recorded

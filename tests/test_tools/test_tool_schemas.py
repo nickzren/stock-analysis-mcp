@@ -1243,7 +1243,11 @@ class TestDipAssessmentLogic:
         assert labels["stop_loss"] == "12.5% below current"
         assert result["level_vs_current_labels"] == labels
 
-    def test_action_zone_uses_investor_profile_for_dollars_and_risk_budget(self) -> None:
+    def test_action_zone_adapts_canonical_profile_sizing_after_the_decision(self) -> None:
+        from stock_analysis.tools.analyze.action_zones import build_position_sizing_range
+        from stock_analysis.tools.analyze.investor_profile import resolve_investor_profile
+        from stock_analysis.tools.analyze.sizing import build_analysis_sizing
+
         result = build_action_zones(
             current_price=100.0,
             tech_data={
@@ -1262,7 +1266,16 @@ class TestDipAssessmentLogic:
             },
         )
 
-        sizing = result["position_sizing_range"]
+        assert result["position_sizing_range"] is None
+        canonical = build_analysis_sizing(
+            summary={"current_price": 100.0}, action_zones=result,
+            investor_profile=resolve_investor_profile(
+                profile="speculative", account_size=3000.0, risk_per_trade_pct=1.0, max_position_pct=5.0),
+            risk_data={"atr": {"value": 5.0}}, risk_regime={"classification": "medium"},
+            decision={"new_money": {"action": "buy", "blocked_by": []}},
+        )
+        sizing = build_position_sizing_range(canonical["sizing"], "medium")
         assert sizing["suggested_pct_range"] == [1.0, 5.0]
-        assert sizing["dollars_for_account"] == {"min": 30.0, "max": 150.0, "portfolio_assumption": 3000.0}
+        assert sizing["dollars_for_account"] == {"min": 0.0, "max": 100.0, "portfolio_assumption": 3000.0}
+        assert sizing["shares_range"] == {"min": 0, "max": 1, "at_price": 100.0}
         assert sizing["stop_implied_max"]["pct"] == 5.0

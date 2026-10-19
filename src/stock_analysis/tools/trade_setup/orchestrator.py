@@ -27,8 +27,9 @@ from stock_analysis.tools.trade_setup.setup_rules import (
 )
 from stock_analysis.utils.expected_move import compute_expected_move, select_event_expiration
 from stock_analysis.utils.helpers import valid_price
+from stock_analysis.utils.position_sizing import LimitOrigin
 from stock_analysis.utils.provenance import build_error_response, build_meta
-from stock_analysis.utils.sizing_inputs import normalize_sizing_params
+from stock_analysis.utils.sizing_inputs import SwingSizingDefault, normalize_sizing_params
 from stock_analysis.utils.swing_features import daily_actionable_price
 from stock_analysis.utils.validators import FetchParams
 
@@ -52,13 +53,18 @@ def validate_sizing_params(
 async def analyze_trade_setup(
     symbol: str,
     account_size: float | str | None = None,
-    risk_per_trade_pct: float | str = 1.0,
-    max_position_pct: float | str = 10.0,
+    risk_per_trade_pct: float | str = SwingSizingDefault.RISK,
+    max_position_pct: float | str = SwingSizingDefault.POSITION,
     _now: datetime | None = None,
+    _limit_origins: dict[str, LimitOrigin] | None = None,
 ) -> dict[str, Any]:
     start_time = perf_counter()
     normalized = symbol.upper().strip()
 
+    limit_origins: dict[str, LimitOrigin] = _limit_origins or {
+        "risk_per_trade_pct": "default" if isinstance(risk_per_trade_pct, SwingSizingDefault) else "caller",
+        "max_position_pct": "default" if isinstance(max_position_pct, SwingSizingDefault) else "caller",
+    }
     try:
         account_size, risk_per_trade_pct, max_position_pct = normalize_sizing_params(
             account_size, risk_per_trade_pct, max_position_pct
@@ -164,6 +170,7 @@ async def analyze_trade_setup(
         account_size=account_size,
         risk_per_trade_pct=risk_per_trade_pct,
         max_position_pct=max_position_pct,
+        limit_origins=limit_origins,
         tool_failures=tool_failures,
         expected_move=expected_move,
     )

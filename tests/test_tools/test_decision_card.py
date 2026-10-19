@@ -6,12 +6,14 @@ import pytest
 
 from stock_analysis.tools.analyze.decision import NEW_MONEY_ACTIONS
 from stock_analysis.tools.analyze.decision_card import (
-    _build_sizing,
     _compute_hard_gates,
+    adapt_card_sizing,
     build_conditions,
     build_decision_card,
 )
 from stock_analysis.tools.analyze.gates import GATES
+from stock_analysis.utils.position_sizing import calculate_position_sizing
+from stock_analysis.utils.sizing_output import public_sizing
 from tests.support.decision_matrix import ET, KNIFE, decide_on
 
 
@@ -272,31 +274,36 @@ class TestNewMoneyResolution:
         assert NEW_MONEY_ACTIONS == ("buy", "starter", "wait", "wait_for_data", "insufficient_data", "watch", "avoid")
 
 
-class TestSizing:
-    """Fractional shares emitted alongside whole shares."""
+def _sizing(new_money: dict, *, price: float | None = 100.0, account: float | None = 5000.0) -> dict:
+    exact = calculate_position_sizing(
+        entry_price=price, stop_price=85.0, risk_per_trade_pct=1.0, max_position_pct=8.0,
+        regime_max_pct=8.0, regime_starter_pct=3.0, preset_starter_pct=3.0, account_size=account,
+    )
+    return adapt_card_sizing(public_sizing(exact), new_money)
 
-    def test_fractional_computed_from_dollars_and_price(self) -> None:
-        sizing = _build_sizing(
-            _empty_action_zones(current_price=100.0),
-            {"current_price": 100.0},
-        )
+
+class TestSizing:
+    """Legacy fields adapt the same whole-share scenarios; fractional shares stay null."""
+
+    def test_amount_and_loss_use_the_same_whole_shares(self) -> None:
+        sizing = _sizing({"action": "buy", "blocked_by": []})["sizing"]
         assert sizing["whole_shares"] == 1
-        # $150 starter / $100 = 1.5 shares
-        assert sizing["fractional_shares"] == 1.5
+        assert sizing["starter_dollars"] == 100.0
+        assert sizing["starter"]["planned_loss_at_stop"] == 15.0
+        assert sizing["fractional_shares"] is None
         assert sizing["at_price"] == 100.0
 
-    def test_fractional_none_when_no_price(self) -> None:
-        zones = _empty_action_zones(current_price=100.0)
-        zones["position_sizing_range"]["shares_range"] = {"at_price": None}
-        sizing = _build_sizing(zones, {"current_price": None})
-        assert sizing["fractional_shares"] is None
+    def test_sizing_unavailable_when_no_price(self) -> None:
+        result = _sizing({"action": "buy", "blocked_by": []}, price=None)
+        assert result["sizing"] is None
+        assert result["sizing_status"] == {"status": "unavailable", "reason": "entry_price_unavailable"}
 
-    def test_fractional_none_when_no_dollars(self) -> None:
-        zones = _empty_action_zones(current_price=100.0)
-        zones["position_sizing_range"]["dollars_for_account"] = None
-        sizing = _build_sizing(zones, {"current_price": 100.0})
-        assert sizing["fractional_shares"] is None
-        assert sizing["starter_dollars"] is None
+    def test_percentage_only_when_no_account(self) -> None:
+        result = _sizing({"action": "buy", "blocked_by": []}, account=None)
+        sizing = result["sizing"]
+        assert result["sizing_status"]["status"] == "percentage_only"
+        assert sizing["fractional_shares"] is sizing["whole_shares"] is None
+        assert sizing["starter_dollars"] is sizing["full_dollars"] is None
 
 
 def _card(fixture: dict) -> dict:
@@ -314,6 +321,7 @@ def _card(fixture: dict) -> dict:
     conditions = build_conditions(decision=decision, candidate=policy_action, factors=[], inputs=None, downgrade=[],
                                   support=None)
     return build_decision_card(**fixture, hard_gates=hard_gates, decision=decision, conditions=conditions,
+                               sizing_result=_sizing(decision["new_money"]),
                                data_quality={"fundamentals_status": "available", "staleness_warnings": []}, why=[])
 
 
@@ -345,6 +353,7 @@ class TestDecisionCardSchema:
             "exit_triggers",
             "data_flags",
             "sizing",
+            "sizing_status",
             "entry",
             "exit",
             "conditions",
@@ -386,10 +395,10 @@ class TestDecisionCardSchema:
         # Defaults to 30-day re-evaluation reason
         assert "default" in card["next_review"]["reason"]
 
-    def test_sizing_includes_fractional_shares(self, fixture: dict) -> None:
+    def test_sizing_keeps_fractional_shares_as_a_null_alias(self, fixture: dict) -> None:
         card = _card(fixture)
         assert "fractional_shares" in card["sizing"]
-        assert card["sizing"]["fractional_shares"] is not None
+        assert card["sizing"]["fractional_shares"] is None
 
     def test_a_binding_gate_lists_its_clears_when(self, fixture: dict) -> None:
         """OC-M6: a blackout that tightens buy to wait binds at both horizons: its clears_when is the buy

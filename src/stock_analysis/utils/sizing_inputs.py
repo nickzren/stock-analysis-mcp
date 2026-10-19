@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import re
+from enum import Enum
 from functools import partial
 from numbers import Real
 from typing import Annotated
@@ -11,6 +12,13 @@ from typing import Annotated
 from pydantic import BeforeValidator, Field
 
 _DECIMAL_PATTERN = r"^\s*[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?\s*$"
+
+
+class SwingSizingDefault(float, Enum):
+    """Numeric defaults that remain distinguishable from explicit equal values."""
+
+    RISK = 1.0
+    POSITION = 10.0
 
 
 def normalize_positive_number(

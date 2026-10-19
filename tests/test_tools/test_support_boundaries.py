@@ -13,10 +13,15 @@ from yfinance.scrapers.history import PriceHistory
 from stock_analysis.data import yfinance_client
 from stock_analysis.tools.analyze.action_zones import build_position_sizing_range
 from stock_analysis.tools.analyze.decision_card import _compute_hard_gates
+from stock_analysis.tools.analyze.investor_profile import resolve_investor_profile
 from stock_analysis.tools.analyze.projection import project_analyze_result
+from stock_analysis.tools.analyze.sizing import build_analysis_sizing
 from stock_analysis.utils.scan_screen import screen_symbol
 from stock_analysis.utils.validators import FetchParams
-from stock_analysis.utils.valuation_basis import classify_support, sizing_unavailable_reason
+from stock_analysis.utils.valuation_basis import (
+    classify_support,
+    support_blockers,
+)
 from tests.support import decision_matrix as dm
 from tests.support.decision_matrix import decide_on
 from tests.test_scan_screen import FRESH, make_df, uptrend_breakout_df
@@ -100,14 +105,21 @@ class TestAnalyzeDecision:
 
     @pytest.mark.parametrize(("support", "sized"), [(GBP_STOCK, False), (ETF, False), (US_STOCK, True)])
     def test_r4_6_r4_7_sizing_only_when_supported(self, support: dict[str, Any], sized: bool) -> None:
-        sizing = build_position_sizing_range(
-            current_price=100.0, stop_calculation={"stop_distance_pct": 0.05}, regime_classification="medium",
-            investor_profile={"account_size": 5000.0}, unavailable_reason=sizing_unavailable_reason(support),
+        decision = decide_on({"mid_term": "buy", "long_term": "accumulate"}, support_blockers(support))
+        result = build_analysis_sizing(
+            summary={"current_price": 100.0}, action_zones={"stop_calculation": {"stop_price": 95.0}},
+            investor_profile=resolve_investor_profile(account_size=5000.0), risk_data={"atr": {"value": 2.5}},
+            risk_regime={"classification": "medium"}, decision=decision,
         )
+        sizing = build_position_sizing_range(result["sizing"], "medium")
 
-        assert (sizing["dollars_for_account"] is not None) is sized
-        assert (sizing["shares_range"] is not None) is sized
-        assert (sizing["stop_implied_max"]["dollars_for_account"] is not None) is sized
+        assert (sizing is not None) is sized
+        if sized:
+            assert sizing["dollars_for_account"] is not None
+            assert sizing["shares_range"] is not None
+            assert sizing["stop_implied_max"]["dollars_for_account"] is not None
+        else:
+            assert result["sizing_status"]["status"] == "not_allowed"
 
 
 @pytest.fixture

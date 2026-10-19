@@ -11,93 +11,42 @@ from stock_analysis.utils.valuation_basis import (
     instrument_supported,
     is_unverified,
     metric_reason,
-    sizing_unavailable_reason,
     usable_metric,
 )
 
 
 def build_position_sizing_range(
-    current_price: float | None,
-    stop_calculation: dict[str, Any] | None,
-    regime_classification: str | None,
-    investor_profile: dict[str, Any] | None = None,
-    unavailable_reason: str | None = None,
-) -> dict[str, Any]:
-    """Build a position sizing range from risk regime and profile inputs.
-
-    WP4 (D5): for an unsupported or unverified instrument or currency
-    (``unavailable_reason``), dollar and share amounts are null; percentages stay.
-    """
+    canonical_sizing: dict[str, Any] | None,
+    regime_classification: str | None = None,
+) -> dict[str, Any] | None:
+    """Project legacy zone fields from the card's validated whole-share sizing."""
+    if canonical_sizing is None or canonical_sizing.get("full") is None:
+        return None
+    assumptions, limits = canonical_sizing["assumptions"], canonical_sizing["limits"]
+    starter, full = canonical_sizing["starter"], canonical_sizing["full"]
+    account_size = assumptions["account_size"]
     normalized_regime = "medium" if regime_classification == "moderate" else regime_classification
-    investor_profile = investor_profile or {}
-    account_size = investor_profile.get("account_size")
-    starter_position_pct = investor_profile.get("starter_position_pct")
-    profile_max_position_pct = investor_profile.get("max_position_pct")
-    risk_per_trade_pct = investor_profile.get("risk_per_trade_pct") or 1.0
-
-    pct_min, pct_max, position_sizing_range = _base_sizing_range(normalized_regime)
-
-    if starter_position_pct is not None:
-        pct_min = round(min(pct_min, starter_position_pct), 1)
-    if profile_max_position_pct is not None:
-        pct_max = round(min(pct_max, profile_max_position_pct), 1)
-    if pct_max < pct_min:
-        pct_min = pct_max
-
-    position_sizing_range["suggested_pct_range"] = [pct_min, pct_max]
-    position_sizing_range["max_pct"] = pct_max
-    position_sizing_range["starter_pct"] = pct_min
-    position_sizing_range["risk_per_trade_pct"] = round(float(risk_per_trade_pct), 2)
-    position_sizing_range["profile_cap_pct"] = profile_max_position_pct
-
-    if unavailable_reason:
-        account_size = None
-        position_sizing_range["unavailable_reason"] = unavailable_reason
-
-    dollar_min: float | None = None
-    dollar_max: float | None = None
-    if account_size is not None:
-        dollar_min = round(account_size * pct_min / 100, 2)
-        dollar_max = round(account_size * pct_max / 100, 2)
-        position_sizing_range["dollars_for_account"] = {
-            "min": dollar_min,
-            "max": dollar_max,
+    _, _, base = _base_sizing_range(normalized_regime)
+    return {
+        "suggested_pct_range": [starter["allocation_cap_pct"], full["allocation_cap_pct"]],
+        "max_pct": full["allocation_cap_pct"],
+        "starter_pct": starter["allocation_cap_pct"],
+        "rationale": base["rationale"],
+        "risk_per_trade_pct": limits["risk_per_trade_pct"],
+        "profile_cap_pct": limits["max_position_pct"],
+        "dollars_for_account": {
+            "min": starter["position_dollars"], "max": full["position_dollars"],
             "portfolio_assumption": account_size,
-        }
-    else:
-        position_sizing_range["dollars_for_account"] = None
-
-    if current_price and current_price > 0 and dollar_min is not None and dollar_max is not None:
-        shares_min = int(dollar_min / current_price)
-        shares_max = int(dollar_max / current_price)
-        position_sizing_range["shares_range"] = {
-            "min": shares_min,
-            "max": shares_max,
-            "at_price": current_price,
-        }
-    else:
-        position_sizing_range["shares_range"] = None
-
-    stop_distance = stop_calculation.get("stop_distance_pct") if stop_calculation else None
-    if stop_distance and stop_distance > 0:
-        stop_implied_pct = round(float(risk_per_trade_pct) / stop_distance, 1)
-        if stop_implied_pct > pct_max:
-            stop_implied_pct = pct_max
-        stop_implied_dollars = (
-            round(account_size * stop_implied_pct / 100, 2)
-            if account_size is not None
-            else None
-        )
-        position_sizing_range["stop_implied_max"] = {
-            "pct": stop_implied_pct,
-            "dollars_for_account": stop_implied_dollars,
-            "risk_per_trade_pct": round(float(risk_per_trade_pct), 2),
-            "stop_distance_pct": round(stop_distance * 100, 1),
-        }
-    else:
-        position_sizing_range["stop_implied_max"] = None
-
-    return position_sizing_range
+        } if account_size is not None else None,
+        "shares_range": {
+            "min": starter["whole_shares"], "max": full["whole_shares"], "at_price": assumptions["entry_price"],
+        } if account_size is not None else None,
+        "stop_implied_max": {
+            "pct": full["allocation_cap_pct"], "dollars_for_account": full["position_dollars"],
+            "risk_per_trade_pct": limits["risk_per_trade_pct"],
+            "stop_distance_pct": assumptions["stop_distance_fraction"] * 100,
+        },
+    }
 
 
 def _base_sizing_range(regime_classification: str | None) -> tuple[float, float, dict[str, Any]]:
@@ -219,7 +168,7 @@ def _build_action_levels(
 
     if week_52_low is not None:
         levels["strong_buy_below"] = round(week_52_low * (1 + volatility_band), 2)
-        basis["strong_buy_below"] = "52w_low_plus_1atr"
+        basis["strong_buy_below"] = "52w_low_plus_1atr" if atr_pct is not None else "52w_low_plus_2pct_fallback"
     else:
         levels["strong_buy_below"] = None
         basis["strong_buy_below"] = None
@@ -233,7 +182,7 @@ def _build_action_levels(
 
     if week_52_high is not None:
         levels["reduce_above"] = round(week_52_high * (1 - volatility_band), 2)
-        basis["reduce_above"] = "52w_high_minus_1atr"
+        basis["reduce_above"] = "52w_high_minus_1atr" if atr_pct is not None else "52w_high_minus_2pct_fallback"
     else:
         levels["reduce_above"] = None
         basis["reduce_above"] = None
@@ -433,12 +382,13 @@ def _missing_price_response() -> dict[str, Any]:
 
 def _append_stop_warning(
     zone_warnings: list[str],
-    distance_to_levels: dict[str, float | None],
+    current_price: float,
+    stop_price: float | None,
     atr_pct: float | None,
     stop_min_multiple_required: float,
 ) -> None:
     """Append stop-distance warning when the stop is too tight."""
-    stop_distance = distance_to_levels.get("stop_loss")
+    stop_distance = (stop_price - current_price) / current_price if stop_price is not None else None
     if stop_distance is not None and atr_pct is not None:
         stop_distance_pct_val = abs(stop_distance)
         if stop_distance_pct_val < (stop_min_multiple_required * atr_pct):
@@ -473,8 +423,8 @@ def build_action_zones(
     Build action zones with ATR-based price levels.
 
     ``support`` (WP4, D5): an unsupported instrument gets a ``not_applicable``
-    valuation gate; an unsupported or unverified currency gets no dollar or share
-    sizing. None keeps the pre-WP4 behavior (direct callers and tests).
+    valuation gate. Sizing is attached after the canonical decision is built.
+    None keeps the pre-WP4 valuation behavior (direct callers and tests).
 
     Zones are volatility-adjusted using ATR, not arbitrary percentages.
     Risk regime affects zone interpretation and warnings.
@@ -567,7 +517,8 @@ def build_action_zones(
 
     _append_stop_warning(
         zone_warnings=zone_warnings,
-        distance_to_levels=distance_to_levels,
+        current_price=current_price,
+        stop_price=levels.get("stop_loss"),
         atr_pct=atr_pct,
         stop_min_multiple_required=stop_min_multiple_required,
     )
@@ -575,14 +526,6 @@ def build_action_zones(
         zone_warnings=zone_warnings,
         is_extreme_regime=is_extreme_regime,
         is_high_regime=is_high_regime,
-    )
-
-    position_sizing_range = build_position_sizing_range(
-        current_price=current_price,
-        stop_calculation=stop_calculation,
-        regime_classification=regime_classification,
-        investor_profile=investor_profile,
-        unavailable_reason=sizing_unavailable_reason(support) if support is not None else None,
     )
 
     return {
@@ -595,7 +538,7 @@ def build_action_zones(
         "level_vs_current_labels": level_vs_current_labels,
         "basis": basis,
         "stop_calculation": stop_calculation,
-        "position_sizing_range": position_sizing_range,
+        "position_sizing_range": None,
         "valuation_assessment": valuation_assessment,
         "zone_warnings": zone_warnings or [],
         "method": "atr_valuation_v2",

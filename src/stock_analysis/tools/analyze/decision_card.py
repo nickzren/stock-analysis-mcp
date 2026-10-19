@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from datetime import datetime, timedelta
+from math import isfinite
+from numbers import Real
 from typing import Any
 
 from stock_analysis.tools.analyze.action_zones import zone_after_caps
@@ -144,58 +146,34 @@ def evaluate_gates(
     return hard_gates, frozenset(gate for gate, missing in not_computed.items() if missing)
 
 
-def _build_sizing(
-    action_zones: dict[str, Any],
-    summary: dict[str, Any],
+def adapt_card_sizing(
+    sizing_result: dict[str, Any],
+    new_money: dict[str, Any],
 ) -> dict[str, Any]:
-    """Extract sizing into a flat block; expose fractional shares alongside whole."""
-    position_sizing = action_zones.get("position_sizing_range") or {}
-    current_price = summary.get("current_price")
-
-    starter_pct = position_sizing.get("starter_pct")
-    full_pct_cap = position_sizing.get("max_pct")
-
-    dollars_block = position_sizing.get("dollars_for_account") or {}
-    starter_dollars = dollars_block.get("min") if dollars_block else None
-    full_dollars = dollars_block.get("max") if dollars_block else None
-
-    shares_block = position_sizing.get("shares_range") or {}
-    whole_shares = shares_block.get("min") if shares_block else None
-    at_price = shares_block.get("at_price") or current_price
-
-    fractional_shares: float | None = None
-    if (
-        starter_dollars is not None
-        and at_price is not None
-        and isinstance(at_price, (int, float))
-        and at_price > 0
-    ):
-        fractional_shares = round(starter_dollars / at_price, 4)
-
-    return {
-        "starter_pct": starter_pct,
-        "full_pct_cap": full_pct_cap,
-        "starter_dollars": starter_dollars,
-        "full_dollars": full_dollars,
-        "whole_shares": whole_shares,
-        "fractional_shares": fractional_shares,
-        "at_price": at_price,
-        "unavailable_reason": position_sizing.get("unavailable_reason"),
+    """Apply entry visibility and retain legacy fields from one computed size."""
+    action = new_money["action"]
+    if not entry_allowed(action):
+        blockers = ", ".join(blocker["id"] for blocker in new_money.get("blocked_by", []))
+        reason = f"new_money is {action}" + (f"; blocked by: {blockers}" if blockers else "")
+        return {"sizing": None, "sizing_status": {"status": "not_allowed", "reason": reason}}
+    canonical = sizing_result["sizing"]
+    if canonical is None:
+        return sizing_result
+    starter = canonical["starter"]
+    full = None if starter_only(action) else canonical["full"]
+    sizing = {
+        **canonical,
+        "full": full,
+        "starter_pct": starter["allocation_cap_pct"],
+        "full_pct_cap": full["allocation_cap_pct"] if full else None,
+        "starter_dollars": starter["position_dollars"],
+        "full_dollars": full["position_dollars"] if full else None,
+        "whole_shares": starter["whole_shares"],
+        "fractional_shares": None,
+        "at_price": canonical["assumptions"]["entry_price"],
+        "unavailable_reason": None,
     }
-
-
-def build_entry_sizing(
-    action_zones: dict[str, Any],
-    summary: dict[str, Any],
-    new_money_action: str,
-) -> dict[str, Any] | None:
-    """decision_card.sizing (plan §7 [D-9]): present iff new_money admits an entry; a starter hides the full size."""
-    if not entry_allowed(new_money_action):
-        return None
-    sizing = _build_sizing(action_zones, summary)
-    if starter_only(new_money_action):
-        sizing["full_pct_cap"] = sizing["full_dollars"] = None
-    return sizing
+    return {**sizing_result, "sizing": sizing}
 
 
 def _build_entry(
@@ -207,10 +185,20 @@ def _build_entry(
     if not entry_allowed(new_money_action):
         return None
     levels = action_zones.get("levels") or {}
+    low, high = levels.get("strong_buy_below"), levels.get("accumulate_near")
+    reason = None
+    if low is None or high is None:
+        reason = "missing"
+    elif any(isinstance(value, bool) or not isinstance(value, Real) or not isfinite(value) or value <= 0
+             for value in (low, high)):
+        reason = "invalid"
+    elif low > high:
+        reason = "inverted"
     return {
         "current_price": summary.get("current_price"),
-        "buy_zone_low": levels.get("strong_buy_below"),
-        "buy_zone_high": levels.get("accumulate_near"),
+        "buy_zone_low": None if reason else low,
+        "buy_zone_high": None if reason else high,
+        "entry_band_unavailable": {"reason": reason} if reason else None,
     }
 
 
@@ -362,6 +350,7 @@ def build_decision_card(
     conditions: dict[str, Any],
     data_quality: dict[str, Any],
     why: list[str],
+    sizing_result: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build the compact small-account decision card around decide()'s decision.
 
@@ -371,8 +360,8 @@ def build_decision_card(
         hard_gates: every fired gate (blocking) and one boolean per gates.ANALYZE_GATE_IDS (checks)
         action_now: alias of new_money.action (decision.NEW_MONEY_ACTIONS), kept one release
         why, exit_triggers, data_flags: the deciding evidence, the thesis stop triggers, the data caveats
-        sizing: starter/full pct + dollars + whole/fractional shares, iff new_money is buy or starter
-            (a starter hides the full size)
+        sizing: one validated result for mid-term new money; a starter hides the full size
+        sizing_status: availability and reason, present even when sizing is null
         entry: price and buy band, iff new_money is buy or starter
         exit: stop / invalidation level
         conditions: mid-term buy_only_if / add_only_if / do_not_buy_if / reduce_if / monitor
@@ -381,6 +370,10 @@ def build_decision_card(
     """
     new_money = decision["new_money"]
     long_term = decision[LONG_TERM]
+    if sizing_result is None:
+        sizing_result = adapt_card_sizing({
+            "sizing": None, "sizing_status": {"status": "unavailable", "reason": "sizing_inputs_unavailable"},
+        }, new_money)
     return {
         **decision,
         LONG_TERM: {**long_term, "new_money": {**long_term["new_money"], "conditions": conditions[LONG_TERM]}},
@@ -389,7 +382,8 @@ def build_decision_card(
         "why": why,
         "exit_triggers": _exit_triggers(dislocation_framework, data_quality),
         "data_flags": _data_flags(data_quality, action_zones),
-        "sizing": build_entry_sizing(action_zones, summary, new_money["action"]),
+        "sizing": sizing_result["sizing"],
+        "sizing_status": sizing_result["sizing_status"],
         "entry": _build_entry(action_zones, summary, new_money["action"]),
         "exit": _build_exit(action_zones),
         "conditions": conditions[MID_TERM],

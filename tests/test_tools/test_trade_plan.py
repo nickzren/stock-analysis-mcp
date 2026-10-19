@@ -90,11 +90,11 @@ class TestSizing:
                           account_size=10_000.0, risk_per_trade_pct=1.0,
                           max_position_pct=10.0, now=NOW, actionable_price=100.0)
         # risk budget $100, risk/share $4 -> 25 shares; cap 10% = $1000/101 = 9.9 shares
-        assert plan["fractional_shares"] == 9.901
+        assert plan["fractional_shares"] is None
         assert plan["shares"] == 9
-        assert plan["position_dollars"] == round(9.901 * 101.0, 2)
-        assert plan["max_loss_dollars"] == round(9.901 * 4.0, 2)
-        assert plan["position_pct"] == 10.0
+        assert plan["position_dollars"] == 9 * 101.0
+        assert plan["max_loss_dollars"] == plan["planned_loss_at_stop"] == 9 * 4.0
+        assert plan["position_pct"] == 9.09
 
     def test_null_sizing_without_account(self) -> None:
         plan = build_plan(make_setup(), action="enter_on_trigger", session="closed",
@@ -116,9 +116,10 @@ class TestSizing:
                           max_position_pct=10.0, now=NOW, actionable_price=105.0)
         assert plan["stop"]["distance_pct"] == round(8.0 / 105.0, 4)
         # risk budget $100 / $8 = 12.5 shares; cap 10% = $1000/105 = 9.5238 shares
-        assert plan["fractional_shares"] == 9.5238
-        assert plan["max_loss_dollars"] == round(9.5238 * 8.0, 2)
-        assert plan["position_dollars"] == round(9.5238 * 105.0, 2)
+        assert plan["fractional_shares"] is None
+        assert plan["shares"] == 9
+        assert plan["max_loss_dollars"] == plan["planned_loss_at_stop"] == 9 * 8.0
+        assert plan["position_dollars"] == 9 * 105.0
         # entry.trigger_price stays the LEVEL, not the anchor
         assert plan["entry"]["trigger_price"] == 101.0
         # stop.price stays level/structure-based
