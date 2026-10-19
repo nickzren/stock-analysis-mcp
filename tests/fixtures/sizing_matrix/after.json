@@ -5769,7 +5769,7 @@
         "valuation_gate": "attractive",
         "volatility_ann": 0.35
       },
-      "summary": "Decision (mid-term, new money): wait; blocked by earnings_blackout; No size estimate: new money is wait; blocked by: earnings blackout; reassess on or after Tue Oct 13 (not a buy date). If held: hold. Long-term (1-5y): wait; blocked by earnings_blackout; reassess on or after Tue Oct 13 (not a buy date). Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "summary": "Decision (mid-term, new money): wait; blocked by earnings_blackout; reassess on or after Tue Oct 13 (not a buy date). If held: hold. Long-term (1-5y): wait; blocked by earnings_blackout; reassess on or after Tue Oct 13 (not a buy date). Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
       "tiers": {
         "decision": {
           "entry": null,
@@ -13325,7 +13325,7 @@
         "valuation_gate": "attractive",
         "volatility_ann": 0.35
       },
-      "summary": "Decision (mid-term, new money): buy; Starter: no whole-share position fits this budget; Full: no whole-share position fits this budget; risk budget: 0.001% (caller); position cap: 10% (profile). If held: hold. Long-term (1-5y): buy. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "summary": "Decision (mid-term, new money): buy; Starter: no whole-share position fits this budget; Full: no whole-share position fits this budget; risk budget: 1e-3% (caller); position cap: 10% (profile). If held: hold. Long-term (1-5y): buy. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
       "tiers": {
         "decision": {
           "entry": {

@@ -67,6 +67,10 @@
   The planning stop is neither monitored nor a holder exit instruction. Swing's
   `max_loss_dollars` is an equal-value deprecated alias for `planned_loss_at_stop`;
   zero-share plans keep their setup action but explain that no whole share fits.
+- Sizing prose shortens numbers with `~` only when rounded. Actual amounts and
+  percentages round to nearest; ceilings round down. Tiny positive values remain
+  visible in scientific notation. Canonical numeric fields are unchanged. Blocked
+  summaries state the action and blockers once; structured sizing status keeps its reason.
 - Entry bands with missing, invalid or inverted bounds have both bounds null and
   `entry_band_unavailable`; the reference price and research decisions remain.
   Existing stop-distance fields retain their original units. Stop warnings use

@@ -564,7 +564,6 @@ async def test_a_non_dislocation_knife_shows_no_admitting_surface() -> None:
         "core": ("avoid", "long_term_avoid"), "balanced": ("avoid", None), "speculative": ("avoid", "new_money_avoid")}
     assert result["executive_summary"].startswith(
         f"Decision (mid-term, new money): avoid; blocked by falling_knife; "
-        f"No size estimate: new money is avoid; blocked by: falling knife; "
         f"no reassessment date: re-run analyze "
         f"after {knife}. If held: hold. Long-term (1-5y): avoid; blocked by falling_knife;")
     assert "size ~" not in result["executive_summary"] and "small starter" not in result["executive_summary"]

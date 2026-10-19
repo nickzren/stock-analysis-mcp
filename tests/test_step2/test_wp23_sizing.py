@@ -49,8 +49,11 @@ def assert_sizing_presence(result: dict[str, Any]) -> None:
         assert len(sizes) == int(available), tier
         if available:
             assert "estimated loss" in payload["executive_summary"] or "no whole-share position" in payload["executive_summary"]
-        else:
+        elif entry:
             assert "No size estimate:" in payload["executive_summary"]
+        else:
+            assert "No size estimate:" not in payload["executive_summary"]
+            assert shown["sizing_status"]["status"] == "not_allowed"
     assert "policy_action" not in result
     for name in MODES:
         mode = result["decision_modes"][name]
@@ -184,7 +187,7 @@ def test_entry_sizing_by_action(action: str, full: bool) -> None:
     sizing = card["sizing"]
     if action not in ENTRY_ACTIONS:
         assert sizing is None and card["sizing_status"]["status"] == "not_allowed"
-        assert "No size estimate:" in size_text(action, sizing, card["sizing_status"])
+        assert size_text(action, sizing, card["sizing_status"]) is None
         return
     assert (sizing["starter_pct"], sizing["starter_dollars"], sizing["whole_shares"]) == (3.0, 100.0, 1)
     assert (sizing["full_pct_cap"], sizing["full_dollars"]) == ((5.0, 200.0) if full else (None, None))

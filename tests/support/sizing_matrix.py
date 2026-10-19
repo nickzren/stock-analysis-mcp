@@ -217,6 +217,18 @@ def markdown(recording: dict[str, Any]) -> str:
               f"| {scan['promoted_card']['action']} | {plan['shares']} | {plan['fractional_shares']} |"
               f" {plan['position_dollars']} | {plan['max_loss_dollars']} |"]
     if not before:
+        lines += ["", "## Availability", "",
+                  "| Case | Sizing status | Reason | Starter quantity | Full quantity | Entry band |",
+                  "|---|---|---|---|---|---|"]
+        for name, row in recording["analyze"].items():
+            card = row["card"]
+            size = card["sizing"] or {}
+            status = card["sizing_status"]
+            entry_band = (card.get("entry") or {}).get("entry_band_unavailable")
+            lines.append(f"| {name} | {status['status']} | {status['reason'] or '—'} | "
+                         f"{(size.get('starter') or {}).get('quantity_status', '—')} | "
+                         f"{(size.get('full') or {}).get('quantity_status', '—')} | "
+                         f"{entry_band['reason'] if entry_band else '—'} |")
         baseline = json.loads((FIXTURE_DIR / "before.json").read_text())
         lines += ["", "## Changed numerical fields", "",
                   "Every changed pre-existing numerical sizing field is listed below; duplicated detail tiers are omitted.",

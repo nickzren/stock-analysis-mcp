@@ -105,7 +105,6 @@ def test_summary_mixed_affordability_is_per_scenario():
 @pytest.mark.parametrize(("action", "reason", "expected"), [
     ("buy", "stop_price_missing", "planning stop"),
     ("starter", "atr_invalid", "ATR"),
-    ("wait", "new_money_wait", "wait"),
 ])
 def test_missing_size_uses_the_status_reason_even_when_research_says_buy(action, reason, expected):
     phrase = size_text(action, None, {"status": "not_allowed" if action == "wait" else "unavailable", "reason": reason})
@@ -116,8 +115,8 @@ def test_missing_size_uses_the_status_reason_even_when_research_says_buy(action,
 
 def test_summary_does_not_round_tiny_positive_limits_to_zero():
     phrase = size_text("buy", sizing(account_size=None, risk_per_trade_pct=0.00000001))
-    assert "5e-08%" in phrase or "0.00000005%" in phrase
-    assert "risk budget: 1e-08%" in phrase or "risk budget: 0.00000001%" in phrase
+    assert "5e-8%" in phrase or "0.00000005%" in phrase
+    assert "risk budget: 1e-8%" in phrase or "risk budget: 0.00000001%" in phrase
     assert "ceiling: 0%" not in phrase
 
 
@@ -128,3 +127,58 @@ def test_holder_and_long_term_segments_never_receive_mid_term_sizes():
     segments = horizon_segments(card)
     assert "Position:" in segments[0]
     assert "Position:" not in segments[1] and "Position:" not in segments[2]
+
+
+def test_summary_rounds_non_round_account_prose_without_changing_the_numbers():
+    import copy
+    import re
+
+    canonical = sizing(account_size=12345.67, risk_per_trade_pct=1.0)
+    before = copy.deepcopy(canonical)
+    phrase = size_text("buy", canonical)
+    assert "Position: $300 (~2.43% of the account); estimated loss: ~0.49%" in phrase
+    assert "Position: $600 (~4.86% of the account); estimated loss: ~0.97%" in phrase
+    assert not re.search(r"\d\.\d{6}", phrase)
+    assert canonical == before
+
+
+def test_summary_rounds_every_percentage_ceiling_down():
+    import re
+    from decimal import Decimal
+
+    canonical = sizing(account_size=None, risk_per_trade_pct=0.2599, max_position_pct=1.2999)
+    phrase = size_text("buy", canonical)
+    displayed = re.findall(r"(?:allocation|loss) ceiling: ~?([\d.e+-]+)%", phrase)
+    expected = [canonical[scenario][field] for scenario in ("starter", "full")
+                for field in ("allocation_cap_pct", "ceiling_risk_pct")]
+    assert len(displayed) == 4
+    assert all(Decimal(shown) <= Decimal(str(exact)) for shown, exact in zip(displayed, expected, strict=True))
+    assert "allocation ceiling: ~1.29%" in phrase
+    assert "estimated loss ceiling: ~0.25%" in phrase
+    assert "risk budget: ~0.25%" in phrase and "position cap: ~1.29%" in phrase
+
+
+def test_tiny_positive_loss_and_subcent_position_prose_never_look_like_zero():
+    import re
+    from decimal import Decimal
+
+    canonical = sizing(entry_price=0.000123456, stop_price=0.0001, account_size=0.01,
+                       risk_per_trade_pct=10.0)
+    phrase = size_text("buy", canonical)
+    assert not re.search(r"\d\.\d{6}", phrase)
+    for shown in re.findall(r"Position: ~?\$([\d.e+-]+)", phrase):
+        assert Decimal(shown) > 0
+    assert "Position: ~$2.5e-4" in phrase
+    tiny = size_text("buy", sizing(account_size=10_000_000.0, entry_price=100.0, stop_price=99.999))
+    assert "estimated loss: 2.5e-5%" in tiny
+    assert "estimated loss: 0%" not in tiny
+
+
+def test_blocked_summary_does_not_repeat_the_sizing_status_reason():
+    new_money = {"action": "wait", "blocked_by": [{"id": "earnings_blackout"}],
+                 "earliest_reassessment": None}
+    card = {"new_money": new_money, "if_held": {"action": "hold"}, "long_term": {"new_money": new_money},
+            "sizing": None, "sizing_status": {"status": "not_allowed", "reason":
+                "new_money is wait; blocked by: earnings_blackout"}}
+    assert horizon_segments(card)[0] == "Decision (mid-term, new money): wait; blocked by earnings_blackout."
+    assert card["sizing_status"]["reason"] == "new_money is wait; blocked by: earnings_blackout"

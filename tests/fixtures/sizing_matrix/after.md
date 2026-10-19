@@ -54,6 +54,37 @@ at the scan fixture's own clock, 2026-03-10T08:00:00-04:00, with synthetic data 
 |---|---|---|---|---|
 | enter_on_trigger | 7 | None | 783.72 | 7.84 |
 
+## Availability
+
+| Case | Sizing status | Reason | Starter quantity | Full quantity | Entry band |
+|---|---|---|---|---|---|
+| core_narrow | available | — | available | available | — |
+| core_wide | available | — | available | available | — |
+| balanced_narrow | available | — | available | available | — |
+| balanced_wide | available | — | available | available | — |
+| speculative_narrow | available | — | available | available | — |
+| speculative_wide | available | — | available | available | — |
+| balanced_low_wide | available | — | available | available | — |
+| balanced_high_wide | available | — | available | available | — |
+| balanced_extreme_wide | available | — | below_one_whole_share | — | — |
+| rounded_stop_warning | available | — | available | available | — |
+| missing_atr_pct | available | — | available | available | — |
+| speculative_binding | available | — | available | available | — |
+| risk_only | available | — | available | available | — |
+| cap_only_tight | available | — | available | available | — |
+| cap_only_wide | available | — | available | available | — |
+| both_overrides | available | — | below_one_whole_share | below_one_whole_share | — |
+| tiny_risk | available | — | below_one_whole_share | below_one_whole_share | — |
+| tiny_cap | available | — | below_one_whole_share | below_one_whole_share | — |
+| small_account | available | — | below_one_whole_share | available | — |
+| no_account | percentage_only | — | percentage_only | percentage_only | — |
+| no_atr | unavailable | stop_price_missing | — | — | — |
+| negative_stop | unavailable | stop_price_invalid | — | — | inverted |
+| inverted_band | available | — | available | available | inverted |
+| starter | available | — | available | — | — |
+| earnings_blocked | not_allowed | new_money is wait; blocked by: earnings_blackout | — | — | — |
+| speculative_mode_override | available | — | below_one_whole_share | below_one_whole_share | — |
+
 ## Changed numerical fields
 
 Every changed pre-existing numerical sizing field is listed below; duplicated detail tiers are omitted.

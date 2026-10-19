@@ -38,6 +38,10 @@ async def test_current_recording_has_baseline_reference_without_claiming_recorde
     text = (tmp_path / "after.md").read_text()
     assert "current output table" in text
     assert "after.json" in text
+    assert "## Availability" in text
+    assert "below_one_whole_share" in text
+    assert "stop_price_missing" in text
+    assert "not_allowed" in text
     assert "sizing falls back to 1%" not in text
     assert "v0.3.0 before table" not in text
     original = {path.name: path.read_bytes() for path in tmp_path.iterdir()}

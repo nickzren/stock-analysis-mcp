@@ -85,10 +85,9 @@ class TestGatedSummary:
             {"S4_earnings_gate_on_hold_or_add": "wait", "S9_weak_liquidity": "avoid"}[name], "starter")
         assert gated_sentences[0] == {
             "S4_earnings_gate_on_hold_or_add": "Decision (mid-term, new money): wait; blocked by earnings_blackout; "
-                                               "No size estimate: new money is wait; blocked by: earnings blackout; "
                                                "reassess on or after Tue Oct 13 (not a buy date)",
             "S9_weak_liquidity": "Decision (mid-term, new money): avoid; blocked by weak_liquidity; "
-                                 "No size estimate: new money is avoid; blocked by: weak liquidity; no reassessment "
+                                 "no reassessment "
                                  "date: re-run analyze after 1-year average daily dollar volume >= $1M"}[name]
         assert clean_sentences[0].startswith("Decision (mid-term, new money): starter; Starter — Position: $200 ")
         assert "estimated loss:" in clean_sentences[0]

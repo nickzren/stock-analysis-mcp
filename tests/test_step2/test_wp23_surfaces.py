@@ -84,8 +84,11 @@ async def test_the_summary_opens_with_three_linted_horizon_segments(name: str) -
     if sizing is not None:
         assert "Position:" in first or "no whole-share position" in first or "allocation ceiling:" in first
         assert first.count("risk budget:") == 1
-    else:
+    elif entry_allowed(new_money["action"]):
         assert "No size estimate:" in first
+    else:
+        assert "No size estimate:" not in first
+        assert card["sizing_status"]["status"] == "not_allowed"
     assert second == f"If held: {words(held['action'])}."
     assert third.startswith(PREFIXES[2] + words(long["action"]))
     assert result["executive_summary"].count("risk budget:") == first.count("risk budget:")
@@ -131,9 +134,7 @@ async def test_named_segments(name: str, segments: tuple[str, str, str]) -> None
     buy/starter candidates, candidate avoid, dated, conditions-only and unsupported reassessment).
     PD D-9. Sparse business inputs now give holder uncertainty (WP2.5 C2), and now block new money with a separate gate."""
     actual = oc.segments((await dm.run(name))["executive_summary"])[:3]
-    assert "No size estimate:" in actual[0]
-    # The independently pinned decision and reassessment text is unchanged by the sizing disclosure.
-    actual[0] = re.sub(r"; No size estimate: new money is [^;.]+(?:; blocked by: [^;.]+)?", "", actual[0])
+    assert "No size estimate:" not in actual[0]
     assert actual == list(segments)
 
 
@@ -150,7 +151,7 @@ async def test_the_summary_names_both_horizons(name: str, mid: str, held: str, l
     summary = (await dm.run(name, fundamentals=fund))["executive_summary"]
 
     first, second, third = oc.segments(summary)[:3]
-    assert first.startswith(f"Decision (mid-term, new money): {mid};")
+    assert first.split(";")[0].rstrip(".") == f"Decision (mid-term, new money): {mid}"
     assert second == f"If held: {held}."
     assert third == f"Long-term (1-5y): {long}."
 

@@ -1,6 +1,7 @@
 """Executive summary and policy action builders."""
 
 from datetime import date
+from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal, localcontext
 from typing import Any
 
 from stock_analysis.tools.analyze.conditions import candidate_factors
@@ -55,14 +56,20 @@ def _horizon_segment(label: str, new_money: dict[str, Any], size: str | None = N
     return f"{label}: " + "; ".join(parts) + "."
 
 
-def _number(value: int | float) -> str:
-    """Preserve the canonical ceiling and positive tiny values without display rounding."""
-    text = str(value)
-    return text[:-2] if text.endswith(".0") else text
+def _number(value: int | float, *, ceiling: bool = False, prefix: str = "") -> str:
+    """Shorten prose only: ceilings round down, tiny positive values stay visible."""
+    number = Decimal(str(value))
+    scientific = 0 < abs(number) < Decimal("0.01") or abs(number) >= Decimal("1e12")
+    quantum = Decimal(1).scaleb(number.adjusted() - 1) if scientific else Decimal("0.01")
+    with localcontext() as context:
+        context.prec = max(28, len(number.as_tuple().digits) + 2)
+        rounded = number.quantize(quantum, rounding=ROUND_DOWN if ceiling else ROUND_HALF_UP)
+        text = format(rounded.normalize(), "e") if scientific else format(rounded, "f").rstrip("0").rstrip(".")
+    return ("~" if rounded != number else "") + prefix + text
 
 
 def _size_unavailable(status: dict[str, Any] | None) -> str | None:
-    if status is None:
+    if status is None or status.get("status") == "not_allowed":
         return None
     reason = status.get("reason") or "required sizing inputs are unavailable"
     if reason.startswith("stop_price_"):
@@ -89,7 +96,7 @@ def size_text(
     if not entry_allowed(new_money_action) or not sizing:
         return _size_unavailable(sizing_status)
     assumptions, limits = sizing["assumptions"], sizing["limits"]
-    stop = _number(assumptions["stop_price"])
+    stop = _number(assumptions["stop_price"], prefix="$")
     parts: list[str] = []
     for name in ("starter", "full"):
         scenario = sizing.get(name)
@@ -100,17 +107,17 @@ def size_text(
             parts.append(f"{label}: no whole-share position fits this budget")
         elif scenario["quantity_status"] == "percentage_only":
             parts.append(
-                f"{label} allocation ceiling: {_number(scenario['allocation_cap_pct'])}% of the account; "
-                f"estimated loss ceiling: {_number(scenario['ceiling_risk_pct'])}% if sold at ${stop}")
+                f"{label} allocation ceiling: {_number(scenario['allocation_cap_pct'], ceiling=True)}% of the account; "
+                f"estimated loss ceiling: {_number(scenario['ceiling_risk_pct'], ceiling=True)}% if sold at {stop}")
         else:
             parts.append(
-                f"{label} — Position: ${_number(scenario['position_dollars'])} "
+                f"{label} — Position: {_number(scenario['position_dollars'], prefix='$')} "
                 f"({_number(scenario['position_pct'])}% of the account); estimated loss: "
-                f"{_number(scenario['effective_risk_pct'])}% of the account if sold at ${stop}")
+                f"{_number(scenario['effective_risk_pct'])}% of the account if sold at {stop}")
     if assumptions["account_size"] is None:
         parts.append("account size not provided")
-    parts.append(f"risk budget: {_number(limits['risk_per_trade_pct'])}% ({limits['risk_origin']}); "
-                 f"position cap: {_number(limits['max_position_pct'])}% ({limits['max_position_origin']})")
+    parts.append(f"risk budget: {_number(limits['risk_per_trade_pct'], ceiling=True)}% ({limits['risk_origin']}); "
+                 f"position cap: {_number(limits['max_position_pct'], ceiling=True)}% ({limits['max_position_origin']})")
     return "; ".join(parts)
 
 
