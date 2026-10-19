@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import math
 from datetime import date, datetime
 from time import perf_counter
 from typing import Any
@@ -29,6 +28,7 @@ from stock_analysis.tools.trade_setup.setup_rules import (
 from stock_analysis.utils.expected_move import compute_expected_move, select_event_expiration
 from stock_analysis.utils.helpers import valid_price
 from stock_analysis.utils.provenance import build_error_response, build_meta
+from stock_analysis.utils.sizing_inputs import normalize_sizing_params
 from stock_analysis.utils.swing_features import daily_actionable_price
 from stock_analysis.utils.validators import FetchParams
 
@@ -37,39 +37,36 @@ _CORE_TOOL_NAMES = ["stock_summary", "technicals", "risk_metrics", "events_calen
 
 
 def validate_sizing_params(
-    account_size: float | None,
-    risk_per_trade_pct: float,
-    max_position_pct: float,
+    account_size: object,
+    risk_per_trade_pct: object,
+    max_position_pct: object,
 ) -> str | None:
-    """Bounds for sizing inputs; None when valid, else the rejection message."""
-    if account_size is not None and (
-        not math.isfinite(account_size) or account_size <= 0
-    ):
-        return f"account_size must be a finite positive number, got {account_size}"
-    if not math.isfinite(risk_per_trade_pct) or not 0 < risk_per_trade_pct <= 100:
-        return f"risk_per_trade_pct must be finite in (0, 100], got {risk_per_trade_pct}"
-    if not math.isfinite(max_position_pct) or not 0 < max_position_pct <= 100:
-        return f"max_position_pct must be finite in (0, 100], got {max_position_pct}"
+    """Compatibility validator; normalization is shared with the tool entrypoints."""
+    try:
+        normalize_sizing_params(account_size, risk_per_trade_pct, max_position_pct)
+    except ValueError as exc:
+        return str(exc)
     return None
 
 
 async def analyze_trade_setup(
     symbol: str,
-    account_size: float | None = None,
-    risk_per_trade_pct: float = 1.0,
-    max_position_pct: float = 10.0,
+    account_size: float | str | None = None,
+    risk_per_trade_pct: float | str = 1.0,
+    max_position_pct: float | str = 10.0,
     _now: datetime | None = None,
 ) -> dict[str, Any]:
     start_time = perf_counter()
     normalized = symbol.upper().strip()
 
-    param_error = validate_sizing_params(
-        account_size, risk_per_trade_pct, max_position_pct
-    )
-    if param_error is not None:
+    try:
+        account_size, risk_per_trade_pct, max_position_pct = normalize_sizing_params(
+            account_size, risk_per_trade_pct, max_position_pct
+        )
+    except ValueError as exc:
         return build_error_response(
             error_type="invalid_parameters",
-            message=param_error,
+            message=str(exc),
             symbol=normalized,
         )
 

@@ -33,6 +33,28 @@
 - `scripts/record_provider_fixtures.py` records real responses (manual, networked) to the gitignored `tests/fixtures/_recorded/`; never commit recordings.
 - Keep the suite fast enough for routine local validation.
 
+## Sizing Inputs and Calculator (work in progress)
+- `analyze`, `analyze_trade_setup` and `scan_watchlist` validate sizing inputs
+  before symbol lookup, provider reads or watchlist access. Account size must be
+  finite and positive; risk and position limits use percentage points in
+  `(0, 100]`. Decimal/scientific strings are accepted; booleans, nonfinite values,
+  malformed strings and conversion overflow/underflow to zero are rejected.
+  Validation covers values received by the server. FastMCP's client serializes
+  Python NaN/infinity as JSON null; that lost value cannot be distinguished from
+  intentional null (default) at the server. Text "nan"/"inf" is rejected.
+- Analyze's omitted/null limits use the selected profile, without early rounding.
+  Internal `limit_origins` distinguishes caller and profile values. Swing/scan
+  retain their defaults (1% risk, 10% position cap) and reject explicit null
+  limits; all three allow an omitted/null account.
+- `utils/position_sizing.py` is a pure, currently unwired calculator. It uses exact
+  internal `Fraction` values, whole-share counts and independent starter/full
+  availability. It does not choose an action, price or stop. Public adapters and
+  JSON/display precision belong to the next sizing package; current output sizes
+  are not yet governed by this calculator.
+- Keep `tests/fixtures/sizing_matrix/before.json` and `before.md` byte-for-byte.
+  Current offline evidence uses `python -m tests.support.sizing_matrix --after
+  --output-dir <temporary-directory>`. Baseline regeneration is disabled.
+
 ## When Changing Analysis Logic
 - Update schema and invariant tests under `tests/test_schemas.py` and `tests/test_tools/` when score math, section ordering, or required fields change.
 - Keep score math internally consistent and auditable.

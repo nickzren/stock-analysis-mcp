@@ -388,9 +388,9 @@ async def _resolve_symbol_for_analysis(raw_symbol: str) -> str:
 async def analyze_stock(
     symbol: str,
     profile: str = "balanced",
-    account_size: float | None = None,
-    risk_per_trade_pct: float | None = None,
-    max_position_pct: float | None = None,
+    account_size: float | str | None = None,
+    risk_per_trade_pct: float | str | None = None,
+    max_position_pct: float | str | None = None,
     _now: datetime | None = None,
 ) -> dict[str, Any]:
     """
@@ -405,13 +405,13 @@ async def analyze_stock(
     """
     start_time = perf_counter()
     now = _now or datetime.now(_ET)
-    normalized_symbol = await _resolve_symbol_for_analysis(symbol)
     investor_profile = resolve_investor_profile(
         profile=profile,
         account_size=account_size,
         risk_per_trade_pct=risk_per_trade_pct,
         max_position_pct=max_position_pct,
     )
+    normalized_symbol = await _resolve_symbol_for_analysis(symbol)
 
     tool_specs = [
         ("stock_summary", stock_summary(normalized_symbol)),
@@ -422,7 +422,7 @@ async def analyze_stock(
             risk_metrics(
                 normalized_symbol,
                 portfolio_value=investor_profile.get("account_size"),
-                risk_per_trade=investor_profile.get("risk_per_trade_decimal") or 0.01,
+                risk_per_trade=investor_profile["risk_per_trade_decimal"],
             ),
         ),
         ("events_calendar", events_calendar(normalized_symbol, _now=now)),

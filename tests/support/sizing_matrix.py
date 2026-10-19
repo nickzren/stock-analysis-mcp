@@ -1,8 +1,9 @@
-"""Frozen v0.3.0 sizing evidence, including defects; not a future sizing implementation.
+"""Current offline sizing evidence compared with the frozen v0.3.0 baseline.
 
-Run ``python -m tests.support.sizing_matrix --output-dir <directory>``.
-Existing different recordings are never overwritten. All analyze tools are stubbed;
-the transport guard also runs outside pytest. No live prices or user state are read.
+Run ``python -m tests.support.sizing_matrix --after --output-dir <directory>``.
+Baseline regeneration is disabled. Different recordings are never overwritten.
+All analyze tools are stubbed; the transport guard also runs outside pytest.
+No live prices or user state are read.
 """
 
 from __future__ import annotations
@@ -86,7 +87,7 @@ def scenario(name: str) -> dm.Scenario:
         risk["beta"]["value"] = values["beta"]
     risk["atr"] = {"value": atr, "as_pct_of_price": (
         None if atr is None or values.get("atr_pct_missing") else atr / price)}
-    return dm.Scenario("v0.3.0 sizing characterization", tech, copy.deepcopy(dm.QUALITY), risk,
+    return dm.Scenario("offline sizing characterization", tech, copy.deepcopy(dm.QUALITY), risk,
                        events=dm.NEAR if values.get("earnings_blocked") else dm.FAR,
                        profile=values["profile"], account_size=values["account_size"])
 
@@ -150,8 +151,8 @@ async def build() -> dict[str, Any]:
         scan = await build_scan_case()
     if violations:
         raise AssertionError(violation_report(violations))
-    return {"recorded_code": BASE_COMMIT, "clock": dm.FRIDAY_EVENING.isoformat(),
-            "notice": "Observed v0.3.0 behavior, including defects; not the approved future contract.",
+    return {"baseline_code": BASE_COMMIT, "clock": dm.FRIDAY_EVENING.isoformat(),
+            "notice": "Observed current checkout behavior; not a claim of future sizing conformance.",
             "analyze": rows, "swing": swing, "scan": scan}
 
 
@@ -162,17 +163,30 @@ def _implied_loss(amount: Any, price: float, stop: float | None) -> str:
 
 
 def markdown(recording: dict[str, Any]) -> str:
-    lines = ["# Sizing: v0.3.0 before table", "",
-             "Generated from synthetic offline scenarios by `tests.support.sizing_matrix`. Do not edit by hand.",
-             "This records defects, not recommendations. Details, full snapshots and limit origins: `before.json`.",
-             "The loss column is computed for this report from the displayed dollars / price × stop distance;",
-             "it is not a field emitted by v0.3.0 and can disagree with its whole-share count.", "",
-             "Risk/maximum below are the resolved profile-helper values, not necessarily the raw input.",
-             "For `tiny_risk`, the supplied 0.001% rounds to 0 here, then sizing falls back to 1%.", "",
-             "| Case | Resolved risk / maximum (%), origin | New money / held | Stop | Starter / full (%) |"
-             " Starter / full ($) | Starter whole shares | Implied loss starter / full ($) |",
-             "|---|---|---|---|---|---|---|---|"]
-    for name, row in recording["analyze"].items():
+    before = "recorded_code" in recording
+    lines = ["# Sizing: v0.3.0 before table" if before else "# Sizing: current output table", "",
+             "Generated from synthetic offline scenarios by `tests.support.sizing_matrix`. Do not edit by hand."]
+    if before:
+        lines += [
+            "This records defects, not recommendations. Details, full snapshots and limit origins: `before.json`.",
+            "The loss column is computed for this report from the displayed dollars / price × stop distance;",
+            "it is not a field emitted by v0.3.0 and can disagree with its whole-share count.", "",
+            "Risk/maximum below are the resolved profile-helper values, not necessarily the raw input.",
+            "For `tiny_risk`, the supplied 0.001% rounds to 0 here, then sizing falls back to 1%.", "",
+        ]
+    else:
+        lines += [
+            "Observed current outputs, including remaining limitations; not investment recommendations.",
+            "Details, full snapshots and limit origins: `after.json`. The frozen baseline remains `before.json`.",
+            "The implied loss is calculated here from displayed dollars / price × stop distance;",
+            "it may disagree with the whole-share count until the sizing adapters are updated.", "",
+            "Risk/maximum below are the resolved profile-helper values. No claim of completed sizing enforcement.", "",
+        ]
+    lines += ["| Case | Resolved risk / maximum (%), origin | New money / held | Stop | Starter / full (%) |"
+              " Starter / full ($) | Starter whole shares | Implied loss starter / full ($) |",
+              "|---|---|---|---|---|---|---|---|"]
+    for name in CASES:
+        row = recording["analyze"][name]
         size = row["card"]["sizing"] or {}
         stop = row["card"]["exit"]["stop_or_invalidation"]
         price = row["inputs"]["price"]
@@ -185,11 +199,11 @@ def markdown(recording: dict[str, Any]) -> str:
                      f" | {size.get('starter_dollars')} / {size.get('full_dollars')}"
                      f" | {size.get('whole_shares')} | {_implied_loss(size.get('starter_dollars'), price, stop)} /"
                      f" {_implied_loss(size.get('full_dollars'), price, stop)} |")
-    lines += ["", "## Swing quantity mismatch", "",
+    lines += ["", "## Swing quantity mismatch" if before else "## Swing outputs", "",
               "| Case | Whole shares | Fractional shares | Position dollars | Reported max_loss_dollars |",
               "|---|---|---|---|---|"]
-    for name, row in recording["swing"].items():
-        plan = row["plan"]
+    for name in ("fractional_amounts", "zero_whole_shares", "no_account"):
+        plan = recording["swing"][name]["plan"]
         lines.append(f"| {name} | {plan['shares']} | {plan['fractional_shares']} |"
                      f" {plan['position_dollars']} | {plan['max_loss_dollars']} |")
     scan = recording["scan"]
@@ -204,13 +218,19 @@ def markdown(recording: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def write_recording(recording: dict[str, Any], directory: Path) -> None:
-    files = {"before.json": json.dumps(recording, indent=2, sort_keys=True, allow_nan=False) + "\n",
-             "before.md": markdown(recording)}
+def write_recording(recording: dict[str, Any], directory: Path, *, after: bool = False) -> None:
+    if after and "recorded_code" in recording:
+        raise ValueError("frozen baseline cannot be written as after evidence")
+    if not after and "recorded_code" not in recording:
+        raise ValueError("current output is not a frozen baseline; use after=True")
+    prefix = "after" if after else "before"
+    files = {f"{prefix}.json": json.dumps(recording, indent=2, sort_keys=True, allow_nan=False) + "\n",
+             f"{prefix}.md": markdown(recording)}
     for name, content in files.items():
         target = directory / name
         if target.exists() and target.read_bytes() != content.encode():
-            raise ValueError(f"refusing to overwrite frozen baseline: {target}")
+            label = "after recording" if after else "frozen baseline"
+            raise ValueError(f"refusing to overwrite {label}: {target}")
     directory.mkdir(parents=True, exist_ok=True)
     for name, content in files.items():
         target = directory / name
@@ -220,9 +240,14 @@ def write_recording(recording: dict[str, Any], directory: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--after", action="store_true", help="record current outputs as after evidence")
+    mode.add_argument("--baseline", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
-    write_recording(asyncio.run(build()), args.output_dir)
+    if not args.after:
+        parser.error("the v0.3.0 baseline is frozen; use --after for current outputs")
+    write_recording(asyncio.run(build()), args.output_dir, after=True)
 
 
 if __name__ == "__main__":

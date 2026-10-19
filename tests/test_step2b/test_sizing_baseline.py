@@ -1,7 +1,7 @@
-"""Characterize v0.3.0; these defect pins must change deliberately in later 2b work.
+"""Preserve the v0.3.0 recording and identify each approved sizing change.
 
-The immutable recording remains available for before/after comparisons. No new
-arithmetic or input validation is implemented by these tests.
+The calculator is not connected to public sizing until 2b.2. For now only input
+precision and internal limit-origin metadata change these recorded scenarios.
 """
 
 import copy
@@ -18,10 +18,22 @@ from tests.support import sizing_matrix as sm
 BEFORE = json.loads((sm.FIXTURE_DIR / "before.json").read_text())
 
 
+def expected_after_inputs(name):
+    expected = copy.deepcopy(BEFORE["analyze"][name])
+    expected["resolved_profile"]["limit_origins"] = expected["limit_origins"]
+    if name == "tiny_risk":
+        expected["resolved_profile"].update(risk_per_trade_pct=0.001, risk_per_trade_decimal=0.00001)
+        sizing = expected["zones"]["position_sizing_range"]
+        # Input precision is fixed; legacy display rounding remains for 2b.2.
+        sizing["risk_per_trade_pct"] = 0.0
+        sizing["stop_implied_max"].update(risk_per_trade_pct=0.0, pct=0.0, dollars_for_account=0.0)
+    return expected
+
+
 @pytest.mark.parametrize("name", sm.CASES)
-async def test_current_sizing_surfaces_match_frozen_recording(name):
+async def test_current_sizing_surfaces_only_change_approved_input_details(name):
     result = await sm.run_case(name)
-    assert sm.digest(name, result) == BEFORE["analyze"][name]
+    assert sm.digest(name, result) == expected_after_inputs(name)
     for tier, payload in dm.tiers(result).items():
         assert payload["watchlist_snapshot"] == result["watchlist_snapshot"], tier
 
@@ -42,7 +54,7 @@ async def test_current_amounts_independently_pin_default_and_override_defects(na
     assert result["decision_card"]["new_money"]["action"] == "buy"
 
 
-async def test_stop_budget_is_only_a_diagnostic_and_tiny_risk_falls_back():
+async def test_stop_budget_remains_diagnostic_but_tiny_risk_no_longer_falls_back():
     result = await sm.run_case("risk_only")
     size = result["action_zones"]["position_sizing_range"]
     assert size["stop_implied_max"]["pct"] == 1.2  # rounded 1.25; not applied
@@ -53,7 +65,7 @@ async def test_stop_budget_is_only_a_diagnostic_and_tiny_risk_falls_back():
         card["sizing"]["at_price"] - card["exit"]["stop_or_invalidation"])
     assert implied_loss == 160 > 25
     tiny = await sm.run_case("tiny_risk")
-    assert tiny["action_zones"]["position_sizing_range"]["risk_per_trade_pct"] == 1.0
+    assert tiny["action_zones"]["position_sizing_range"]["risk_per_trade_pct"] == 0.0
 
 
 async def test_sizing_inputs_do_not_change_decisions_or_any_snapshot_field():
@@ -118,9 +130,8 @@ def test_swing_amounts_follow_fractional_not_whole_quantity():
     assert zero["entry"]["condition_text"] == "Trigger already satisfied — enter at market"
 
 
-async def test_generator_is_reproducible_and_cannot_replace_a_frozen_file(tmp_path):
-    recording = await sm.build()
-    assert recording == BEFORE
+def test_frozen_recording_can_be_copied_but_not_replaced(tmp_path):
+    recording = copy.deepcopy(BEFORE)
     sm.write_recording(recording, tmp_path)
     for filename in ("before.json", "before.md"):
         assert (tmp_path / filename).read_bytes() == (sm.FIXTURE_DIR / filename).read_bytes()

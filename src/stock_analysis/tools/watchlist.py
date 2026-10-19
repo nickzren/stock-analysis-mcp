@@ -12,13 +12,11 @@ import pytz
 from stock_analysis.data.cache_manager import classify_session
 from stock_analysis.data.yfinance_client import fetch_history
 from stock_analysis.tools.trade_setup.card import SWING_HORIZON
-from stock_analysis.tools.trade_setup.orchestrator import (
-    analyze_trade_setup,
-    validate_sizing_params,
-)
+from stock_analysis.tools.trade_setup.orchestrator import analyze_trade_setup
 from stock_analysis.utils.freshness import FRESHNESS_GATE_IDS, freshness_leg
 from stock_analysis.utils.provenance import build_error_response
 from stock_analysis.utils.scan_screen import DAILY_LEG, screen_symbol
+from stock_analysis.utils.sizing_inputs import normalize_sizing_params
 from stock_analysis.utils.validators import FetchParams
 from stock_analysis.utils.watch_store import (
     MAX_WATCHLIST,
@@ -94,18 +92,19 @@ async def manage_watchlist(
 
 
 async def scan_watchlist(
-    account_size: float | None = None,
-    risk_per_trade_pct: float = 1.0,
-    max_position_pct: float = 10.0,
+    account_size: float | str | None = None,
+    risk_per_trade_pct: float | str = 1.0,
+    max_position_pct: float | str = 10.0,
     _now: datetime | None = None,
     data_dir: Path | None = None,
 ) -> dict[str, Any]:
-    param_error = validate_sizing_params(
-        account_size, risk_per_trade_pct, max_position_pct
-    )
-    if param_error is not None:
+    try:
+        account_size, risk_per_trade_pct, max_position_pct = normalize_sizing_params(
+            account_size, risk_per_trade_pct, max_position_pct
+        )
+    except ValueError as exc:
         return build_error_response(
-            error_type="invalid_parameters", message=param_error,
+            error_type="invalid_parameters", message=str(exc),
         )
 
     directory = data_dir or resolve_data_dir()

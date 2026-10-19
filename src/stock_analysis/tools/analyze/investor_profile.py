@@ -17,6 +17,7 @@ from stock_analysis.tools.analyze.dislocation_framework import (
     classify_dislocation_opportunity,
 )
 from stock_analysis.utils.helpers import format_compact_number
+from stock_analysis.utils.sizing_inputs import normalize_positive_number
 from stock_analysis.utils.valuation_basis import sizing_unavailable_reason
 
 _PROFILE_PRESETS: dict[str, dict[str, Any]] = {
@@ -58,9 +59,9 @@ _PROFILE_ALIASES = {
 
 def resolve_investor_profile(
     profile: str | None = None,
-    account_size: float | None = None,
-    risk_per_trade_pct: float | None = None,
-    max_position_pct: float | None = None,
+    account_size: float | str | None = None,
+    risk_per_trade_pct: float | str | None = None,
+    max_position_pct: float | str | None = None,
 ) -> dict[str, Any]:
     """Resolve a caller-supplied investor profile into a normalized config."""
     normalized_profile = (profile or "balanced").strip().lower()
@@ -69,17 +70,18 @@ def resolve_investor_profile(
         valid = ", ".join(sorted(_PROFILE_PRESETS))
         raise ValueError(f"Invalid profile '{profile}'. Expected one of: {valid}")
 
-    if account_size is not None and account_size <= 0:
-        raise ValueError("account_size must be greater than 0")
-    if risk_per_trade_pct is not None and risk_per_trade_pct <= 0:
-        raise ValueError("risk_per_trade_pct must be greater than 0")
-    if max_position_pct is not None and max_position_pct <= 0:
-        raise ValueError("max_position_pct must be greater than 0")
-
     preset = _PROFILE_PRESETS[normalized_profile]
-    resolved_risk = risk_per_trade_pct if risk_per_trade_pct is not None else preset["risk_per_trade_pct"]
+    account_size = (
+        normalize_positive_number(account_size, field="account_size")
+        if account_size is not None else None
+    )
+    resolved_risk = (
+        normalize_positive_number(risk_per_trade_pct, field="risk_per_trade_pct", maximum=100)
+        if risk_per_trade_pct is not None else preset["risk_per_trade_pct"]
+    )
     resolved_max_position = (
-        max_position_pct if max_position_pct is not None else preset["max_position_pct"]
+        normalize_positive_number(max_position_pct, field="max_position_pct", maximum=100)
+        if max_position_pct is not None else preset["max_position_pct"]
     )
 
     account_bucket = "unknown"
@@ -97,13 +99,17 @@ def resolve_investor_profile(
         "profile": normalized_profile,
         "label": preset["label"],
         "description": preset["description"],
-        "account_size": round(account_size, 2) if account_size is not None else None,
+        "account_size": account_size,
         "account_size_status": "provided" if account_size is not None else "not_provided",
         "account_bucket": account_bucket,
         "small_account": bool(account_size is not None and account_size < 25_000),
-        "risk_per_trade_pct": round(resolved_risk, 2),
-        "risk_per_trade_decimal": round(resolved_risk / 100, 4),
-        "max_position_pct": round(resolved_max_position, 2),
+        "risk_per_trade_pct": resolved_risk,
+        "risk_per_trade_decimal": resolved_risk / 100,
+        "max_position_pct": resolved_max_position,
+        "limit_origins": {
+            "risk_per_trade_pct": "caller" if risk_per_trade_pct is not None else "profile",
+            "max_position_pct": "caller" if max_position_pct is not None else "profile",
+        },
         "starter_position_pct": round(preset["starter_position_pct"], 2),
         "add_on_confirmation_pct": round(preset["add_on_confirmation_pct"], 2),
     }

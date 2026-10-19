@@ -40,6 +40,7 @@ from stock_analysis.tools import (
 )
 from stock_analysis.tools.analyze.projection import normalize_analyze_detail, project_analyze_result
 from stock_analysis.utils.provenance import build_error_response
+from stock_analysis.utils.sizing_inputs import AccountSize, PositionPercent, RiskPercent
 
 log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(level=getattr(logging, log_level, logging.INFO))
@@ -243,9 +244,9 @@ async def get_news(symbol: str, days: int = 7) -> str:
 async def analyze(
     symbol: str,
     profile: str = "balanced",
-    account_size: float | None = None,
-    risk_per_trade_pct: float | None = None,
-    max_position_pct: float | None = None,
+    account_size: AccountSize | None = None,
+    risk_per_trade_pct: RiskPercent | None = None,
+    max_position_pct: PositionPercent | None = None,
     detail: str = "standard",
 ) -> str:
     """
@@ -263,13 +264,15 @@ async def analyze(
     analyze, not a buy date. Rendering guide:
     `stock-analysis://guides/analyze-rendering`.
 
+    Sizing accepts finite numbers or decimal/scientific strings, never booleans.
+
     Args:
         symbol: Ticker or company name
         profile: core, balanced or speculative;
             changes sizing only, never the decision
-        account_size: Account size for dollar sizing
-        risk_per_trade_pct: Risk budget for sizing
-        max_position_pct: Single-position cap
+        account_size: Optional account value > 0
+        risk_per_trade_pct: Account risk %, (0, 100]
+        max_position_pct: Position cap %, (0, 100]
         detail: standard (default), decision or full
 
     Returns:
@@ -297,9 +300,9 @@ async def analyze(
 @mcp.tool
 async def analyze_trade_setup(
     symbol: str,
-    account_size: float | None = None,
-    risk_per_trade_pct: float = 1.0,
-    max_position_pct: float = 10.0,
+    account_size: AccountSize | None = None,
+    risk_per_trade_pct: RiskPercent = 1.0,
+    max_position_pct: PositionPercent = 10.0,
 ) -> str:
     """
     Use when the user asks for a swing trade on one stock (days to weeks, long-only).
@@ -318,9 +321,9 @@ async def analyze_trade_setup(
 
     Args:
         symbol: Stock ticker symbol
-        account_size: Optional account size in dollars for share sizing (must be > 0)
-        risk_per_trade_pct: Percent of account risked between entry and stop, in (0, 100] (default 1.0)
-        max_position_pct: Hard cap on position size as percent of account, in (0, 100] (default 10.0)
+        account_size: Optional account value > 0; a finite number or decimal/scientific string, not a boolean
+        risk_per_trade_pct: Risk budget in (0, 100] percentage points; number or decimal/scientific string, not a boolean (default 1)
+        max_position_pct: Position cap in (0, 100] percentage points; number or decimal/scientific string, not a boolean (default 10)
 
     Returns:
         JSON trade-setup card
@@ -522,9 +525,9 @@ async def manage_watchlist(action: str, symbols: list[str] | None = None) -> str
 
 @mcp.tool
 async def scan_watchlist(
-    account_size: float | None = None,
-    risk_per_trade_pct: float = 1.0,
-    max_position_pct: float = 10.0,
+    account_size: AccountSize | None = None,
+    risk_per_trade_pct: RiskPercent = 1.0,
+    max_position_pct: PositionPercent = 10.0,
 ) -> str:
     """
     Use when the user wants the saved watchlist screened for swing setups (days to
@@ -538,9 +541,9 @@ async def scan_watchlist(
     current state. Informational only — not financial advice.
 
     Args:
-        account_size: Optional account size in dollars for card sizing (> 0)
-        risk_per_trade_pct: Percent of account risked per trade, in (0, 100]
-        max_position_pct: Position cap as percent of account, in (0, 100]
+        account_size: Optional account value > 0; a finite number or decimal/scientific string, not a boolean
+        risk_per_trade_pct: Risk budget in (0, 100] percentage points; number or decimal/scientific string, not a boolean (default 1)
+        max_position_pct: Position cap in (0, 100] percentage points; number or decimal/scientific string, not a boolean (default 10)
 
     Returns:
         JSON scan report (changes, rows, warnings, errors)
