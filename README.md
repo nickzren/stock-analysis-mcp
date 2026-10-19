@@ -91,7 +91,7 @@ data; unverifiable earnings cap the card at `watch`.
 guarantee that every suggestion fits the risk budget. Use `analyze_trade_setup`
 for stop-based risk sizing; `risk_per_trade_pct=1` means 1% of the account.
 
-Responses use schema **6**; snapshots use **3.0.0**.
+Released v0.3.0 responses use schema **6**; snapshots use **3.0.0**.
 [CHANGELOG.md](CHANGELOG.md) covers field meanings, migration, and known limitations.
 
 ## Decision
@@ -184,9 +184,15 @@ This tool is for **informational purposes only**. It is not financial advice. Al
 
 ## Unreleased sizing work
 
-Response schema **6** and snapshot **3.0.0** remain during integration.
-The development branch enforces risk and position limits, including profile defaults.
-Sizing uses whole shares and distinguishes allocation from estimated loss at the
-planning stop. Missing inputs or a budget below one share are explained. The stop
-is not monitored or an exit instruction; gaps and slippage can increase the loss.
-Research decisions are unchanged. Install commands above still use v0.3.0.
+Development responses use schema **7**; snapshots remain **3.0.0**. Package
+version and install pins remain v0.3.0. The released behavior above is unchanged.
+
+Sizing now enforces caller or profile/default risk and position caps, using whole
+shares. Read `decision_card.sizing_status` and its reason when sizing is null;
+a `buy` or `starter` can lack a valid size. `percentage_only` means no account was
+provided; `below_one_whole_share` applies separately to each scenario. Allocation
+and estimated loss at the planning stop are separate. The stop is not monitored
+or a holder exit instruction; gaps and slippage can increase the loss.
+
+Research decisions are unchanged. See the [schema 6 → 7 migration](CHANGELOG.md#unreleased-sizing-and-caps)
+for inputs, defaults, fields and compatibility aliases.

@@ -33,7 +33,7 @@
 - `scripts/record_provider_fixtures.py` records real responses (manual, networked) to the gitignored `tests/fixtures/_recorded/`; never commit recordings.
 - Keep the suite fast enough for routine local validation.
 
-## Sizing Inputs and Output (unreleased)
+## Sizing Inputs and Output (unreleased schema 7)
 - `analyze`, `analyze_trade_setup` and `scan_watchlist` validate sizing inputs
   before symbol lookup, provider reads or watchlist access. Account size must be
   finite and positive; risk and position limits use percentage points in
@@ -45,7 +45,12 @@
 - Analyze's omitted/null limits use the selected profile, without early rounding.
   Internal `limit_origins` distinguishes caller and profile values. Swing/scan
   retain their defaults (1% risk, 10% position cap) and reject explicit null
-  limits; all three allow an omitted/null account.
+  limits; all three allow an omitted/null account. Public `limits.risk_origin`
+  and `limits.max_position_origin` use `caller`, `profile` or `default`; explicit
+  default-valued inputs still say `caller` (swing/scan use `SwingSizingDefault`
+  internally to preserve omission). Account size is account value, not buying
+  power; this standalone allocation cap does not include existing holdings/orders
+  or establish remaining add capacity.
 - `utils/position_sizing.py` calculates exact internal fractions, then
   `utils/sizing_output.py` produces numeric JSON without rounding ceilings upward.
   Unrepresentable positive values or monetary products that cannot round-trip as
@@ -54,7 +59,10 @@
   fields derive from it. Swing uses the same arithmetic with its existing anchor
   and the stop price actually returned. Limits include profile/default budgets.
 - `decision_card.sizing_status` explains blocked or missing estimates at every
-  tier. `sizing` is null for blocked actions or unusable entry/stop/ATR; otherwise
+  tier. When sizing is null, report this status and its reason; never infer the
+  reason from the action alone. A `buy` or `starter` can have unavailable sizing
+  without changing the research decision. `sizing` is null for blocked actions
+  or unusable entry/stop/ATR; otherwise
   it contains assumptions (including price provenance), effective limits and
   separate `starter`/`full` scenarios. `full` is null under starter. Each scenario
   exposes allocation ceilings, whole shares, position dollars, conditional
@@ -63,20 +71,32 @@
   `below_one_whole_share`, independently of the other scenario.
 - Legacy flat fields project the same whole-share quantities; fractional shares
   and speculative `capital_at_risk` are null. Core mode carries no size because
-  its horizon is long term. Other mode ceilings can only reduce the card's size.
+  its horizon is long term. Other mode ceilings can only reduce the card's size,
+  including speculative on default calls. `capital_at_risk` has no account-value
+  replacement field; account context is `sizing.assumptions.account_size`.
   The planning stop is neither monitored nor a holder exit instruction. Swing's
   `max_loss_dollars` is an equal-value deprecated alias for `planned_loss_at_stop`;
   zero-share plans keep their setup action but explain that no whole share fits.
+  Position allocation is separate from conditional loss at the stop; gaps and
+  slippage can make the actual loss larger. No estimate promises maximum loss.
 - Sizing prose shortens numbers with `~` only when rounded. Actual amounts and
   percentages round to nearest; ceilings round down. Tiny positive values remain
   visible in scientific notation. Canonical numeric fields are unchanged. Blocked
   summaries state the action and blockers once; structured sizing status keeps its reason.
 - Entry bands with missing, invalid or inverted bounds have both bounds null and
   `entry_band_unavailable`; the reference price and research decisions remain.
-  Existing stop-distance fields retain their original units. Stop warnings use
-  the unrounded distance; a fallback 2% band is labelled as such.
-- Schema 7 and the coordinated guide/prompt migration are still pending the next
-  package. This branch is unreleased; the installed v0.3.0 is unchanged.
+  Existing stop-distance fields retain their original units: analyze
+  `stop_calculation.stop_distance_pct` and swing `plan.stop.distance_pct` are
+  fractions rounded to four decimals; zone `stop_implied_max.stop_distance_pct`
+  is percentage points without display rounding. Prefer canonical
+  `assumptions.stop_distance_fraction`. Zone `stop_implied_max` now adapts the
+  final full cap and whole-share dollars. Stop warnings use the unrounded
+  distance; fallback labels are `52w_low_plus_2pct_fallback` and
+  `52w_high_minus_2pct_fallback`, never an invented stop.
+- Response schema 7 and the coordinated guide/prompt migration are unreleased.
+  Package version 0.3.0, snapshot 3.0.0 and v0.3.0 install pins are unchanged.
+  CHANGELOG.md contains the schema 6 → 7 canonical fields and one-release legacy
+  adapter inventory; the historical 0.3.0 section still describes schema 6.
 - Keep `tests/fixtures/sizing_matrix/before.json` and `before.md` byte-for-byte.
   Current offline evidence uses `python -m tests.support.sizing_matrix --after
   --output-dir <temporary-directory>`. Baseline regeneration is disabled.
@@ -86,7 +106,7 @@
 - Keep score math internally consistent and auditable.
 - If you change user-visible output semantics, update the relevant examples in `README.md`.
 
-## Decision Contract (schema 6)
+## Decision Contract (schema 7)
 - `analyze` decides once, gates first: `tools/analyze/decision.py` (`decide()`,
   pure) over the `GATES` registry in `tools/analyze/gates.py`. Every other
   action-like surface (executive summary, decision modes, dislocation, dip,
@@ -209,11 +229,13 @@
 
 ## Common Schema Gotchas
 - Two versions move independently: `meta.schema_version` (response schema,
-  `SCHEMA_VERSION` in `src/stock_analysis/__init__.py`, now "6"; v0.2.0 shipped
-  "5") and `watchlist_snapshot.snapshot_version` (`normalize.SNAPSHOT_VERSION`,
+  `SCHEMA_VERSION` in `src/stock_analysis/__init__.py`, now "7" unreleased;
+  v0.3.0 shipped "6", v0.2.0 shipped "5") and `watchlist_snapshot.snapshot_version`
+  (`normalize.SNAPSHOT_VERSION`,
   now "3.0.0"; v0.2.0 shipped "2.0.0"). CHANGELOG.md lists every field that
   changed meaning or units since schema 4; the 0.3.0 section covers schema 6
-  and snapshot 3.0.0. Record future output changes under "Unreleased".
+  and snapshot 3.0.0. The Unreleased section covers schema 7 sizing. Record
+  future output changes under "Unreleased".
 - `technicals` returns `current_price` at the top level, not under a `summary` object.
 - `analyze` returns price, name, sector, market cap, and currency under `summary`, not as duplicated top-level fields.
 - Support boundaries (WP4, D5): `summary.support` (and the trade card's
@@ -334,9 +356,11 @@
   card; there is no `wait_for_fresh_data`.
 - `analyze_trade_setup` sizing is R-based (risk budget ÷ stop distance) under
   `plan`. `analyze` sizing is `decision_card.sizing`, present only when new money
-  is `buy` or `starter` (a starter hides the full size); the accumulation-style
-  `action_zones.position_sizing_range` is null unless new money is `buy`.
-  Dollar/share fields are `null` (not `0`) when `account_size` is omitted.
+  is `buy` or `starter` and sizing inputs are valid (a starter hides full size);
+  read `decision_card.sizing_status` and its reason for a null estimate.
+  `action_zones.position_sizing_range` also requires new money `buy`.
+  Dollar/share fields are `null` (not `0`) when `account_size` is omitted;
+  per-scenario `below_one_whole_share` instead reports zero actual amounts.
 - `analyze_trade_setup.freshness.as_of` is a market-data bar timestamp, never
   fetch time; `basis="unverifiable"` forces `wait_for_data`.
 - When `analyze_trade_setup.action` is not `trade_now`/`enter_on_trigger`, do not

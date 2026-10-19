@@ -81,14 +81,15 @@ def cls(path: str) -> str | None:
 
 
 def test_the_guide_sizes_only_from_the_card() -> None:
-    """OC-RF13: sizing comes only from decision_card.sizing and null means no entry size; can_start_now is
+    """OC-RF13: sizing comes only from decision_card.sizing; null uses its status/reason. can_start_now is
     deprecated, never the source; price_zone and levels are diagnostics, the dip section is timing context,
     diagnostics are pre-gate inputs and third-party content is attributed, none of them advice. RF. Review fix
     (G): a starter shows only the starter size, conditions are not sufficient, and nothing loosens an action."""
     guide = flat(GUIDE)
 
     assert "Size only from `decision_card.sizing`." in guide
-    assert 'When it is null, say "no entry size: new_money is <action>".' in guide
+    assert ("When sizing is null, report `decision_card.sizing_status` and its reason; "
+            "do not infer the reason from the action alone.") in guide
     assert "Never derive a size from levels, zones, presets, modes, or ratings." in guide
     assert "Under a mid-term `starter`, show the starter size only; the full-size fields are null." in guide
     assert "They are necessary, not sufficient: meeting them never permits a buy by itself; re-run analyze." in guide
@@ -199,9 +200,9 @@ async def test_sizing_names_its_horizon() -> None:
     assert s_row and s_row[1].startswith("Sizing, mid-term new money only:") and SIZING_HORIZON in s_row[1]
     assert ("Size only from `decision_card.sizing`, mid-term new money only; there is no long-term or holder size, "
             f"so {SIZING_HORIZON}.") in flat(mcp.instructions or "")
-    assert "`decision_card.sizing` (mid-term new money only, never long-term or holder; null: no entry size)" in (
+    assert "`decision_card.sizing` (mid-term new money only, never long-term or holder)." in (
         analyze_doc)
-    assert (f"`decision_card.sizing`, mid-term new money only (when null: no entry size); {SIZING_HORIZON}"
+    assert (f"`decision_card.sizing`, mid-term new money only; {SIZING_HORIZON}"
             in prompt("full_analysis"))
     assert [k for k, t in (await texts()).items()
             if "`decision_card.sizing`" in t and "mid-term new money only" not in flat(t)] == []

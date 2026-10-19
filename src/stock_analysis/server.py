@@ -60,7 +60,7 @@ Start with `analyze`. A bare ticker ("Analyze HOOD") never triggers a question: 
 - long-term new money, 1-5 years: `decision_card.long_term.new_money`.
 There is no long-term holder decision; label holder guidance mid-term, never substitute the long-term new-money action. Horizons are independent.
 
-Report each new-money action verbatim with its `blocked_by`, and `decision_card.if_held` action verbatim with its `basis`. Adding requires `add_allowed`; a basis is no permission to add. Never upgrade past `blocked_by`: no narrative, zone, dip, rating or news turns it into a buy. List `unevaluated` gates beside entry as not checked, never cleared. Size only from `decision_card.sizing`, mid-term new money only; there is no long-term or holder size, so never attach it to a long-term or holder answer. When null, say "no entry size: new_money is <action>". `earliest_reassessment` means re-run analyze, not a buy date. `diagnostics`, `action_zones.price_zone`, dip and third-party data (analysts, news, ownership, options) are context, not advice.
+Report each new-money action verbatim with its `blocked_by`, and `decision_card.if_held` action verbatim with its `basis`. Adding requires `add_allowed`; a basis is no permission to add. Never upgrade past `blocked_by`: no narrative, zone, dip, rating or news turns it into a buy. List `unevaluated` gates beside entry as not checked, never cleared. Size only from `decision_card.sizing`, mid-term new money only; there is no long-term or holder size, so never attach it to a long-term or holder answer. When sizing is null, report `decision_card.sizing_status` and its reason; do not infer the reason from the action alone. Missing sizing does not change the research action. Report percentage-only and zero-share scenarios separately. `earliest_reassessment` means re-run analyze, not a buy date. `diagnostics`, `action_zones.price_zone`, dip and third-party data (analysts, news, ownership, options) are context, not advice.
 
 Rendering: `stock-analysis://guides/analyze-rendering`."""
 
@@ -255,33 +255,23 @@ async def analyze(
     detail: str = "standard",
 ) -> str:
     """
-    Use when asked about new money, a holding or the long-term view of a stock.
-    A bare ticker means this tool.
+    Use when asked about new money or holdings. A bare ticker means this tool.
 
-    `decision_card` (every detail level) holds `decision_card.new_money`
-    (mid-term, 3-12 months) and `decision_card.long_term.new_money` (1-5
-    years), each with `blocked_by`, and `decision_card.if_held` for a holder
-    (mid-term only). A one-year period defaults to mid-term unless long term is
-    explicit; there is no long-term holder decision.
-    Report each action verbatim and never upgrade past `blocked_by`. Size only
-    from `decision_card.sizing` (mid-term new money only, never long-term or
-    holder; null: no entry size). `earliest_reassessment` is a date to re-run
-    analyze, not a buy date. Rendering guide:
+    `decision_card.new_money` (mid-term, 3-12 months); `decision_card.long_term.new_money` (1-5 years); `decision_card.if_held` for a holder (mid-term only).
+    Report actions verbatim; never upgrade past `blocked_by`.
+
+    Size only from `decision_card.sizing` (mid-term new money only, never long-term or holder).
+    When sizing is null, report `decision_card.sizing_status` and its reason; do not infer the reason from the action alone.
+    Missing sizing does not change the research action.
+    `earliest_reassessment`: re-run analyze, not a buy date.
+    `profile` changes sizing only, never the decision.
+
+    Sizing: finite numbers or decimal/scientific strings; surrounding whitespace and a sign allowed; never booleans, NaN/infinity, overflow or underflow to zero.
+    Limits: (0, 100] percentage points; 1 means 1%; 0.01 means 0.01%.
+    `account_size`: >0; account-value assumption, not available buying power.
+    Validate before symbol lookup, provider reads or watchlist access.
+    Omitted/null limits use the selected profile. Omitted/null account gives percentage-only sizing if available.
     `stock-analysis://guides/analyze-rendering`.
-
-    Sizing accepts finite numbers or decimal/scientific strings, never booleans.
-
-    Args:
-        symbol: Ticker or company name
-        profile: core, balanced or speculative;
-            changes sizing only, never the decision
-        account_size: Optional account value > 0
-        risk_per_trade_pct: Account risk %, (0, 100]
-        max_position_pct: Position cap %, (0, 100]
-        detail: standard (default), decision or full
-
-    Returns:
-        JSON analysis payload.
     """
     try:
         normalized_detail = normalize_analyze_detail(detail)
@@ -324,11 +314,21 @@ async def analyze_trade_setup(
     structure for it; do not mix `analyze` fields into this card; label any
     forward-looking levels as conditions to watch, not a plan.
 
+    Sizing accepts finite numbers or decimal/scientific strings, with surrounding
+    whitespace and a sign; never booleans. Reject NaN/infinity, malformed strings
+    (including currency/percent suffixes, grouping separators, underscores and hex),
+    lists/objects, and conversion overflow or underflow to zero. Limits are
+    percentage points: 1 means 1%; 0.01 means 0.01%. Validation runs before symbol
+    lookup, provider reads or watchlist access. Native NaN/infinity serialized by
+    a client as JSON null is indistinguishable from intentional null.
+    Omitted/null account gives percentage-only sizing when an estimate is available.
+    Omitted limits use 1% risk and 10% position cap; explicit null limits are rejected.
+
     Args:
         symbol: Stock ticker symbol
-        account_size: Optional account value > 0; a finite number or decimal/scientific string, not a boolean
-        risk_per_trade_pct: Risk budget in (0, 100] percentage points; number or decimal/scientific string, not a boolean (default 1)
-        max_position_pct: Position cap in (0, 100] percentage points; number or decimal/scientific string, not a boolean (default 10)
+        account_size: Optional finite value > 0; account-value assumption, not available buying power
+        risk_per_trade_pct: Risk budget in (0, 100] percentage points (default 1)
+        max_position_pct: Standalone allocation cap in (0, 100] percentage points (default 10)
 
     Returns:
         JSON trade-setup card
@@ -545,10 +545,22 @@ async def scan_watchlist(
     `changes` lists screen/card transitions since the last scan; `rows` is the full
     current state. Informational only — not financial advice.
 
+    Sizing accepts finite numbers or decimal/scientific strings, with surrounding
+    whitespace and a sign; never booleans. Reject NaN/infinity, malformed strings
+    (including currency/percent suffixes, grouping separators, underscores and hex),
+    lists/objects, and conversion overflow or underflow to zero. Limits are
+    percentage points: 1 means 1%; 0.01 means 0.01%. Validation runs before symbol
+    lookup, provider reads or watchlist access. Native NaN/infinity serialized by
+    a client as JSON null is indistinguishable from intentional null.
+    Omitted/null account gives percentage-only sizing in promoted cards when an
+    estimate is available. Sizing inputs are forwarded to promoted cards;
+    scan rows contain no plan or sizing.
+    Omitted limits use 1% risk and 10% position cap; explicit null limits are rejected.
+
     Args:
-        account_size: Optional account value > 0; a finite number or decimal/scientific string, not a boolean
-        risk_per_trade_pct: Risk budget in (0, 100] percentage points; number or decimal/scientific string, not a boolean (default 1)
-        max_position_pct: Position cap in (0, 100] percentage points; number or decimal/scientific string, not a boolean (default 10)
+        account_size: Optional finite value > 0; account-value assumption, not available buying power
+        risk_per_trade_pct: Risk budget in (0, 100] percentage points (default 1)
+        max_position_pct: Standalone allocation cap in (0, 100] percentage points (default 10)
 
     Returns:
         JSON scan report (changes, rows, warnings, errors)

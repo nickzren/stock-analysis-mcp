@@ -68,10 +68,13 @@ If you need detailed presentation rules, read:
 When you present the result, lead with:
 1. `decision_card`: `decision_card.new_money` (mid-term) and `decision_card.long_term.new_money`, each action verbatim with its `blocked_by`, then `decision_card.if_held` action verbatim with its `basis`
 2. `executive_summary`, verbatim
-3. `decision_card.sizing`, mid-term new money only (when null: no entry size); never attach it to a long-term or holder answer
+3. `decision_card.sizing`, mid-term new money only; never attach it to a long-term or holder answer
 4. `decision_modes.core`, `decision_modes.balanced` and `decision_modes.speculative`, with any `capped_by`
 5. `dislocation_framework` (its `action` mirrors the card)
 6. `verdict`, `action_zones`, `dip_assessment` and the catalyst-rich `news_summary`, as diagnostics, timing and third-party context
+
+When sizing is null, report `decision_card.sizing_status` and its reason; do not infer the reason from the action alone.
+Missing sizing does not change the research action. Follow the rendering guide for separate percentage-only and zero-share scenarios, assumptions and conditional loss disclosures.
 
 Never upgrade past `blocked_by`. Keep the response decision-focused and use the exact fields from the tool output instead of inventing a new schema.""",
                 }
@@ -145,6 +148,12 @@ Then provide:
 3. **Tax Implications**: Short-term vs long-term status and impact
 4. **Exit Plan**: `decision_card.exit`, `decision_card.exit_triggers` and `decision_card.conditions.reduce_if`
 5. **New Money**: `decision_card.new_money.action` with its `blocked_by`, for any addition
+
+For additions, size only from `decision_card.sizing`, mid-term new money only; never attach it to a long-term or holder answer.
+When sizing is null, report `decision_card.sizing_status` and its reason; do not infer the reason from the action alone.
+Missing sizing does not change the research action. This is a standalone allocation estimate, never remaining add capacity: existing holdings, outstanding orders and available buying power are unknown.
+This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger.
+For assumptions, conditional loss and separate percentage-only/zero-share disclosures, follow `stock-analysis://guides/analyze-rendering`.
 
 The decision comes from analyze, not from P/L, tax or technical signals alone. Report it verbatim as mid-term.
 There is no long-term holder decision; do not substitute the long-term new-money action for one.

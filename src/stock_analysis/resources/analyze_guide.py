@@ -77,17 +77,57 @@ present in the response. The decision card is present at every detail level.
 
 6. Position sizing (mid-term new money only):
    - Size only from `decision_card.sizing`.
-   - When it is null, say "no entry size: new_money is <action>".
+   - When sizing is null, report `decision_card.sizing_status` and its reason;
+     do not infer the reason from the action alone. `not_allowed` names the
+     action and applicable blockers; `unavailable` names the missing or invalid
+     input, or `numeric_range_unavailable` when the estimate cannot be represented
+     without losing numerical precision. For example: "No size estimate: a valid planning stop is unavailable."
+     Missing sizing does not change the research action. Keep the returned
+     new-money, holder and long-term actions; never invent a size or imply zero risk.
    - Under a mid-term `starter`, show the starter size only; the full-size
-     fields are null.
+     fields are null. Sizing requires an allowed entry and valid inputs.
    - There is no long-term or holder size: never attach `decision_card.sizing`
      or `decision_card.entry` to a long-term or holder answer.
-   - Dollar and share amounts need `account_size`.
+   - Beside the size show `decision_card.sizing.assumptions.entry_price` (E),
+     `decision_card.sizing.assumptions.stop_price` (S),
+     `decision_card.sizing.assumptions.price_provenance` and
+     `decision_card.sizing.assumptions.stop_basis`. The ATR planning reference is
+     recomputed per request; it is not a saved holder stop and does not apply
+     automatically to every price in the reference band.
+   - Show effective budgets from `decision_card.sizing.limits`, including
+     `risk_origin` and `max_position_origin` (caller, profile or default).
+     `max_position_pct` caps this standalone allocation. Existing holdings,
+     outstanding orders and available buying power are unknown. This estimate is
+     never remaining add capacity or an enforced aggregate portfolio cap.
+   - Render `decision_card.sizing.starter` and `decision_card.sizing.full`
+     separately when present. Check each scenario independently: one may fit a
+     whole share while the other does not. Show `allocation_cap_pct` as a ceiling,
+     plus `binding_constraints`; never call a ceiling an actual filled position.
+     For `available`, use that scenario's `whole_shares`, `position_dollars`,
+     `position_pct`, `planned_loss_at_stop` and `effective_risk_pct`:
+     "Position: $P (Y% of the account); estimated loss: X% of the account if sold at $S."
+     X is effective risk after whole-share rounding, not the input budget.
+   - For every non-null sizing result state:
+     "This planning stop is not monitored or an exit instruction."
+     "Estimated loss if sold at this stop price. Gaps and slippage can make the actual loss larger."
+     Never promise a maximum loss. Shortened numbers need `~`; never round a cap
+     upward or hide a positive amount as zero. Use scientific notation when needed.
+   - `percentage_only`: show allocation and hypothetical loss ceilings
+     (`allocation_cap_pct`, `ceiling_risk_pct`), conditional on sale at S.
+     Account size was not provided: do not invent shares, dollars or a filled position.
+   - `below_one_whole_share`: no whole-share position fits this budget.
+     The scenario's shares and derived dollars/loss are zero; preserve its research
+     action and do not imply an affordable order. Never invent fractional-share support.
+     Percentage-only and zero-share results are non-null scenarios, not missing sizing.
    - Never derive a size from levels, zones, presets, modes, or ratings.
    - `decision_card.entry` is a reference band; it is null unless
      mid-term new money is `buy` or `starter`.
-     For the quoted entry, use the returned action and `decision_card.sizing.at_price`,
-     even outside that band. Never invent an entry-price gate from the band.
+     If `entry_band_unavailable` is non-null, report its reason: both bounds are null,
+     independently of the reference price and sizing availability. For a valid size,
+     use the returned action and `decision_card.sizing.at_price`, even outside that band
+     (the same E). Never invent an entry-price gate from the band. When sizing is null, use
+     `decision_card.entry.current_price` as the reference only if returned.
+     If the reference is unavailable, say so; never invent a size or stop.
 
 7. Verdict summary:
    - Tilt and confidence.

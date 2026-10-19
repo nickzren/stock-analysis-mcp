@@ -1,15 +1,214 @@
 # Changelog
 
-## Unreleased: sizing and caps (in progress)
+## Unreleased: sizing and caps
 
-Response schema remains `"6"`; snapshot version remains `"3.0.0"` during integration.
+**Response schema:** `meta.schema_version` goes from `"6"` to `"7"`.
+Package version (`meta.server_version`) remains `0.3.0`; snapshot version remains
+`"3.0.0"`. Install pins remain v0.3.0. This section describes development code;
+the released 0.3.0 history below still describes schema 6.
 
-- Analyze and swing sizing enforce both effective risk and position limits, including defaults. Whole shares determine position dollars and conditional loss; fractional estimates are null.
-- Analyze adds `sizing_status` and canonical assumptions, limits, starter/full scenarios. Missing sizing does not change the research decision. Modes cannot exceed the card, including speculative mode; core has no long-term allocation estimate.
-- Swing adds `planned_loss_at_stop`; `max_loss_dollars` remains an equal alias. Zero-share plans explain that no whole share fits.
-- Sizing summaries use marked approximations for readability, round ceilings down and preserve tiny positive values. Blocked summaries avoid repeating the blocker; numeric fields are unchanged.
-- Entry bands with invalid bounds are unavailable; fallback bands and stop warnings use truthful labels and unrounded comparisons.
-- This work is unreleased. Schema 7, the complete migration inventory and agent guidance follow in the next package. Snapshot 3.0.0, package version and install pins are unchanged.
+### Behavior and inputs
+
+Sizing enforces both effective risk and position ceilings, including omitted
+limits. The selected profile still supplies the same defaults:
+
+| Tool/profile | Risk budget | Maximum allocation | Starter preset |
+|---|---:|---:|---:|
+| `analyze`, core | 0.5% | 8% | 2% |
+| `analyze`, balanced (default) | 1% | 10% | 2.5% |
+| `analyze`, speculative | 1.5% | 6% | 1% |
+| `analyze_trade_setup` / `scan_watchlist` | 1% | 10% | No starter scenario |
+
+- `account_size` is an optional account-value assumption, **not available buying
+  power**. `max_position_pct` caps this standalone allocation; existing holdings,
+  outstanding orders and remaining add capacity are unknown. It does not enforce
+  an aggregate portfolio cap.
+- `risk_per_trade_pct` and `max_position_pct` use percentage points: `1` means 1%,
+  `0.01` means 0.01%. Each must be finite in `(0, 100]`; supplied `account_size`
+  must be finite and positive. Small positive values are not rounded into defaults.
+- All three tools accept JSON numbers or decimal strings, including trimmed,
+  signed and scientific forms such as `" +1.5 "` and `"1e-3"`. They reject
+  booleans before coercion, NaN/infinity, empty or malformed strings, `%`/currency
+  suffixes, separators, underscores, hex notation, lists/objects, and conversion
+  overflow or underflow to zero. Validation precedes search, provider and
+  watchlist access. MCP validation can return a framework tool error naming the
+  field, rather than application `invalid_parameters` JSON. FastMCP's client
+  serializes Python NaN/infinity to JSON null before sending; the server cannot
+  distinguish that from intentional null. Text `"nan"` / `"inf"` is rejected.
+- Analyze's omitted/null risk and maximum each use the selected profile; an
+  explicit override replaces only that limit. Swing/scan omission uses 1%/10%,
+  but explicit null risk or maximum is rejected. Omitted/null account is accepted
+  in all three tools.
+- Public `limits.risk_origin` / `limits.max_position_origin` are `caller`,
+  `profile` (analyze defaults), or `default` (swing/scan defaults). Explicit values
+  equal to a default still say `caller`; internal `SwingSizingDefault` markers
+  preserve omission through the MCP boundary and scan promotion. Analyze's
+  internal `limit_origins` is mapped into these public fields. `scan_watchlist`
+  forwards validated limits to promoted swing cards but returns no plan or sizing
+  in scan rows; scan plan columns remain deferred.
+
+Default sizes can shrink. With a $10,000 account, balanced/medium, entry $100 and
+stop $80, the default 1% risk budget reduces full allocation from 8%/$800 to
+5%/$500 (5 shares, $100 planned loss). Risk-only override 0.25% retains the 10%
+profile maximum but allows a 1.25% ceiling: 1 share/$100, $20 planned loss. A 2%
+maximum alone retains default 1% risk and allows 2 shares/$200, $40 planned loss.
+Ceilings are not minimum purchases.
+
+Decisions, scores, gates, horizons, holder guidance and snapshot fields/hashes
+are unchanged. `decision_card.action_now` remains the compatibility alias.
+Alternative modes may reduce the selected profile's canonical size, never raise
+it or replace its risk budget. **Speculative mode can no longer show a larger
+size than the selected profile's canonical card, including calls without
+overrides.** Its action and horizon are unchanged. Core mode has no allocation
+estimate because its decision is long term; selecting the core *profile* still
+permits mid-term card sizing.
+
+### Canonical sizing and availability
+
+`decision_card.sizing_status` is `{status, reason}` at every detail tier, outside
+nullable `decision_card.sizing`. When sizing is null, report this status and its
+reason; do not infer the reason from the action alone or change the research
+action.
+
+| Outer `status` | `sizing` | Meaning |
+|---|---|---|
+| `not_allowed` | null | New money is blocked; `reason` names the action and applicable blockers. Takes precedence over missing sizing inputs. |
+| `unavailable` | null | Entry is allowed but a required input or numeric representation is unusable; read `reason`. |
+| `percentage_only` | Present | No account assumption; allocation and hypothetical loss ceilings only. `reason` is null. |
+| `available` | Present | Account and inputs are valid; each scenario can still fit zero shares. `reason` is null. |
+
+Missing/nonfinite/nonpositive entry, stop or ATR suppress size; `0 < stop < entry`
+is required. Reasons include `entry_price_missing` / `entry_price_invalid`,
+`stop_price_missing` / `stop_price_invalid`, `atr_missing` / `atr_invalid`, and
+`stop_not_below_entry`. The shared calculator can report
+`entry_price_unavailable`, `stop_price_unavailable` or `atr_unavailable`;
+`sizing_inputs_unavailable` is the card-builder fallback.
+`numeric_range_unavailable` covers positive values outside numeric JSON range or
+whole-share monetary products that cannot round-trip exactly as numeric JSON.
+It suppresses the estimate instead of emitting infinity, zero risk or a rounded
+share-product amount.
+
+Canonical `sizing` contains `horizon` (`mid_term` for analyze, `swing` for trade
+plans), `loss_disclosure`, `assumptions`, `limits`, `starter` and `full`:
+
+| Block | Fields and meaning |
+|---|---|
+| `assumptions` | `entry_price`, `stop_price`: the selected reference and actual returned stop; `stop_distance_fraction` = (entry − stop) / entry. `stop_basis` is `atr` for analyze and `provided` for swing; `atr` is null for a provided stop. `account_size` is null when omitted. Analyze also carries `price_provenance`, copied from `summary.price_provenance`. |
+| `limits` | `risk_per_trade_pct`, `max_position_pct`, `risk_origin`, `max_position_origin`: effective inputs and origins. `regime_max_pct`, `regime_starter_pct`, `preset_starter_pct`: unchanged analyze policy caps; all three are null for swing. `risk_cap_pct` = risk budget percentage / stop-distance fraction. `risk_budget_dollars` = account × risk percentage / 100, or null without an account. |
+| Each scenario | `quantity_status`; `allocation_cap_pct`, `allocation_cap_dollars`: enforced allocation ceilings. `ceiling_risk_pct`: hypothetical loss percentage at that ceiling. `whole_shares`, `position_dollars`, `planned_loss_at_stop`, `position_pct`, `effective_risk_pct`: actual whole-share quantity, allocation and conditional loss. `binding_constraints` lists tied binding caps in deterministic order; `limitations` separately reports quantity granularity. |
+
+For analyze, full allocation is the minimum of risk, maximum-position and regime
+caps; starter also obeys regime and preset starter caps. `full` is null under a
+`starter` action. Swing has only `full`; `starter` is null. Constraint names are
+`caller_risk_budget`, `profile_risk_budget` or `default_risk_budget`;
+`caller_max_position`, `profile_max_position` or `default_max_position`;
+`regime_maximum`, `regime_starter`, and `preset_starter`. Reduced mode scenarios
+use the applicable `<mode>_<starter|full>_cap` constraint.
+
+Each scenario's `quantity_status` is independent:
+
+- `available`: one or more whole shares fit. Quantity is floored under **both**
+  allocation and risk budgets; `position_dollars` = shares × entry and
+  `planned_loss_at_stop` = shares × (entry − stop). `position_pct` and
+  `effective_risk_pct` divide those actual amounts by the account and multiply
+  by 100. Monetary values retain sub-cent precision when needed.
+- `below_one_whole_share`: quantity and actual allocation/loss fields are zero;
+  the ceilings remain valid. Starter can be zero while full fits a share. This
+  is not a null estimate or an affordable fractional-share order.
+- `percentage_only`: `whole_shares`, `allocation_cap_dollars`, `position_dollars`,
+  `planned_loss_at_stop`, `position_pct` and `effective_risk_pct` are null.
+  `allocation_cap_pct` and `ceiling_risk_pct` remain available; no filled position
+  or dollar loss is implied.
+
+`limitations` contains `whole_share_granularity` when flooring reduces the
+permitted quantity, otherwise `[]`; it is `[]` for percentage-only scenarios.
+The stop is a current-reference planning assumption, recomputed per request,
+not a monitored stop, holder exit instruction or a stop for every buy-zone price.
+**Estimated loss if sold at this stop price. Gaps and slippage can make the actual
+loss larger.** It is never a guaranteed maximum loss.
+
+### Schema 6 → 7 compatibility inventory
+
+Flat sizing fields remain adapters for one release. Migrate to the canonical
+scenario fields above. Null-size status replaces action-only explanations.
+
+**Card — paths below `decision_card.sizing`:**
+
+| Legacy field | Schema 7 value / replacement |
+|---|---|
+| `starter_pct`, `full_pct_cap` | `starter.allocation_cap_pct`, `full.allocation_cap_pct`: ceilings, now risk-enforced; full stays null for starter-only actions. |
+| `starter_dollars`, `full_dollars` | Corresponding scenario `position_dollars`, now whole-share amounts rather than percentage-based allocations. Full stays null for starter-only actions. |
+| `whole_shares` | Starter scenario only: use `starter.whole_shares` or `full.whole_shares` explicitly. |
+| `fractional_shares` | Deprecated, always null; use the scenario's `whole_shares`. No fractional-lot support is implied. |
+| `at_price` | `assumptions.entry_price`. |
+| `unavailable_reason` | Still null whenever sizing is present. Use outer `decision_card.sizing_status` and its reason when sizing is null. |
+
+**Zones — paths below `action_zones.position_sizing_range`:** the entire block is
+null unless new money is `buy` **and** canonical sizing is non-null (including
+`percentage_only`). A starter has no zone sizing range.
+
+| Legacy field | Schema 7 value / replacement |
+|---|---|
+| `suggested_pct_range`, `starter_pct`, `max_pct` | Starter/full `allocation_cap_pct` pair, starter cap and full cap. Both range ends are ceilings, not a minimum/maximum purchase instruction. |
+| `risk_per_trade_pct`, `profile_cap_pct` | Canonical `limits.risk_per_trade_pct`, `limits.max_position_pct`; explicit caller values are retained, despite the legacy profile label. |
+| `dollars_for_account` | `min` / `max` now use starter/full `position_dollars`; `portfolio_assumption` is `assumptions.account_size`. Entire block null without an account. |
+| `shares_range` | `min` / `max` are starter/full `whole_shares`; `at_price` is `assumptions.entry_price`. Entire block null without an account. |
+| `stop_implied_max` | Despite its legacy name, `pct` is the **final enforced full allocation cap**, not the uncapped risk-implied cap; `dollars_for_account` is full `position_dollars`, not cap dollars. `risk_per_trade_pct` is the effective budget. Use canonical `limits.risk_cap_pct` for the risk-only ceiling. |
+| `stop_implied_max.stop_distance_pct` | Percentage points from `assumptions.stop_distance_fraction × 100`, no longer rounded to one decimal. |
+| `rationale` | Regime rationale unchanged. |
+
+**Modes — paths below `decision_modes`:** `core.starter_position` and
+`core.max_position` are always null. Balanced/speculative `starter_position`
+requires both canonical and mode entry permission plus valid sizing;
+`max_position` additionally requires both actions to be `buy` (speculative's
+remains null). Smaller mode presets still apply.
+
+| Legacy field | Schema 7 value / replacement |
+|---|---|
+| `starter_position` / `max_position`: `pct`, `dollars`, `shares` | Mode-capped scenario `allocation_cap_pct`, whole-share `position_dollars`, `whole_shares`. Blocks now also contain every canonical scenario field above and `horizon: mid_term`. Compare actual `position_pct` with the cap explicitly. |
+| `speculative.capital_at_risk` (`capital_at_risk`) | Deprecated, always null; previously echoed the account. Read the relevant scenario's `planned_loss_at_stop` for conditional loss and card `assumptions.account_size` for account context. No public `account_size_assumption` field is introduced. |
+
+**Swing — paths below `analyze_trade_setup.plan` (`plan`):** the existing setup,
+entry anchor, stop, targets and action remain. New `sizing_status` and `sizing`
+follow the canonical contract above. The returned stop supplies the calculation,
+including its existing two-decimal quantization.
+
+| Legacy field | Schema 7 value / replacement |
+|---|---|
+| `shares`, `position_dollars` | `sizing.full.whole_shares`, `sizing.full.position_dollars`; dollars now use whole shares rather than the rounded fractional quantity. |
+| `fractional_shares` | Deprecated, always null. |
+| `max_loss_dollars` | Deprecated equal-value alias of new `planned_loss_at_stop` for one release; both mirror `sizing.full.planned_loss_at_stop`, now based on whole shares. They are null without an account or valid estimate. |
+| `position_pct` | Actual whole-share `sizing.full.position_pct` with an account; `sizing.full.allocation_cap_pct` without one; null if sizing is unavailable. Previously a rounded allocation ceiling in both cases. |
+| `entry.condition_text` | Zero shares: “The setup qualifies, but no whole-share position fits this budget.” Unavailable sizing: “The setup qualifies, but a size estimate is unavailable.” The setup action is retained. |
+| `stop.distance_pct` (`distance_pct`) | Still a fraction, rounded to four decimals; use canonical `assumptions.stop_distance_fraction` for sizing. |
+
+### Entry bands, units and summaries
+
+- `decision_card.entry` stays present for `buy`/`starter` even when sizing is
+  unavailable. Its `buy_zone_low` / `buy_zone_high` are now **both null** if either
+  bound is missing, nonfinite, nonpositive or inverted. New
+  `entry_band_unavailable` is `{reason: "missing" | "invalid" | "inverted"}` or
+  null for a valid band. `current_price`, source levels and research decisions
+  remain. A valid current-reference size does not prove the band usable.
+- The two legacy `stop_distance_pct` fields keep their units: analyze
+  `action_zones.stop_calculation.stop_distance_pct` is a fraction rounded to four
+  decimals (`0.04` means 4%); zone `stop_implied_max.stop_distance_pct` is percentage
+  points (`4` means 4%) without the former one-decimal rounding. Swing
+  `plan.stop.distance_pct` is also a four-decimal fraction. These ambiguous paths
+  are deprecated in favor of canonical `assumptions.stop_distance_fraction`.
+  `stop_too_tight` now compares the unrounded selected distance.
+- Missing ATR's 2% fallback band is labelled
+  `action_zones.basis.strong_buy_below: 52w_low_plus_2pct_fallback` and
+  `action_zones.basis.reduce_above: 52w_high_minus_2pct_fallback`. A fallback band
+  does not invent a planning stop or enable sizing.
+- `executive_summary` keeps its three horizon segments, but replaces the old
+  “size ~a-b%” clause with separate starter/full allocation and conditional-loss
+  descriptions, effective limits and origins. Percentage-only and zero-share
+  scenarios have their own wording. Allowed entries with null sizing name the
+  unavailable input; blocked summaries state the action and blockers once.
+  The planning-stop disclosure follows valid sizing. Human prose uses `~` only
+  for rounded values, rounds ceilings down and keeps tiny positives visible in
+  scientific notation; canonical numeric fields do not follow display rounding.
 
 ## 0.3.0 (2026-10-16): Step 2, one canonical decision
 

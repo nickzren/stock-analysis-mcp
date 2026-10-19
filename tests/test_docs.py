@@ -1,9 +1,4 @@
-"""WP2.4: schema 6 and the docs that describe it (plan §10 WP2.4, D-13; §9 tables; §8 S-C16; BL-F3).
-
-The version pin; the docs' versions and the README's release pin; the CHANGELOG section that introduces schema 6
-naming every removal; the README / AGENTS.md action and field-class tables and the snapshot-vs-scan horizon
-labels.
-"""
+"""Public versions, release pins, historical decisions and the schema-7 sizing migration."""
 
 import re
 from pathlib import Path
@@ -12,12 +7,14 @@ from stock_analysis import SCHEMA_VERSION
 from stock_analysis.tools.analyze.decision import NEW_MONEY_ACTIONS
 from stock_analysis.tools.analyze.gates import ANALYZE_GATE_IDS
 from stock_analysis.utils.normalize import SNAPSHOT_FIELDS, SNAPSHOT_VERSION
+from stock_analysis.utils.position_sizing import SizingAssumptions, SizingLimits, SizingScenario
 from stock_analysis.utils.provenance import build_meta
 from tests.support.output_contract import CLASSES
 
 ROOT = Path(__file__).resolve().parents[1]
 HORIZONS = ("In `watchlist_snapshot`, `new_money_action` and `if_held_action` are the mid-term decision and "
             "`long_term_action` the long-term one; `scan_watchlist` state holds swing-card actions.")
+SCHEMA_7 = '`meta.schema_version` goes from `"6"` to `"7"`'
 SCHEMA_6 = '`meta.schema_version` goes from `"5"` to `"6"`'
 PRICE_ZONE_ALERTS = ("`price_zone` follows the uncapped bands, so a capped name (falling knife, extended decline, "
                      "extreme risk, valuation headwind) can now report zone moves the capped `zone` did not; they are context, not advice.")
@@ -46,10 +43,10 @@ def _schema_6_section() -> str:
     return found[0]
 
 
-def test_schema_version_is_6() -> None:
-    """T1 (schema 6, D-13): SCHEMA_VERSION and every response's meta.schema_version are "6". RF."""
-    assert SCHEMA_VERSION == "6"
-    assert build_meta("analyze_stock")["schema_version"] == "6"
+def test_schema_version_is_7() -> None:
+    """Sizing changes advance the response contract without advancing the snapshot."""
+    assert SCHEMA_VERSION == "7"
+    assert build_meta("analyze_stock")["schema_version"] == "7"
 
 
 def test_docs_state_the_current_versions_and_the_release_pin() -> None:
@@ -100,3 +97,38 @@ def test_readme_and_agents_carry_the_decision_tables_and_horizons() -> None:
         assert [c for c in CLASSES if f"| {c} |" not in text] == [], name
         assert HORIZONS in _flat(text), name
     assert HORIZONS in _flat(_schema_6_section())
+
+
+def test_schema_7_migration_names_canonical_fields_and_legacy_adapters() -> None:
+    """The current migration covers the canonical shape and every legacy sizing adapter."""
+    newest = next(iter(_sections(_read("CHANGELOG.md"), "##").values()))
+    assert SCHEMA_7 in newest
+    for shape in (SizingAssumptions, SizingLimits, SizingScenario):
+        assert [field for field in shape.__annotations__ if f"`{field}`" not in newest] == []
+    legacy = (
+        "decision_card.sizing", "starter_pct", "full_pct_cap", "starter_dollars", "full_dollars",
+        "whole_shares", "fractional_shares", "at_price", "unavailable_reason",
+        "action_zones.position_sizing_range", "suggested_pct_range", "max_pct", "profile_cap_pct",
+        "dollars_for_account", "portfolio_assumption", "shares_range", "stop_implied_max",
+        "decision_modes", "starter_position", "max_position", "pct", "dollars", "shares",
+        "capital_at_risk", "plan", "max_loss_dollars", "position_pct", "distance_pct",
+        "stop_distance_pct", "buy_zone_low", "buy_zone_high", "entry_band_unavailable",
+    )
+    assert [field for field in legacy if f"`{field}`" not in newest] == []
+    assert "numeric_range_unavailable" in newest
+    assert "below_one_whole_share" in newest
+    assert "percentage_only" in newest
+
+
+def test_unreleased_guidance_explains_null_sizing_without_changing_the_install_pin() -> None:
+    """A buy can lack a size; current guidance must not infer availability from the action."""
+    readme_sections = _sections(_read("README.md"), "##")
+    unreleased = next(text for heading, text in readme_sections.items() if heading.startswith("Unreleased"))
+    for text in (unreleased, _read("AGENTS.md")):
+        assert "decision_card.sizing_status" in text
+        assert "its reason" in text
+        assert "percentage_only" in text
+        assert "below_one_whole_share" in text
+    assert "v0.3.0" in unreleased
+    assert "Analyze HOOD" in _read("README.md")
+    assert "pending the next" not in _read("AGENTS.md")

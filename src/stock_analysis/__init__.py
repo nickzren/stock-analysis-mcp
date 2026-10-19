@@ -27,4 +27,6 @@ SERVER_VERSION = get_server_version()
 # v6: Step 2 one canonical decision (see CHANGELOG.md, Step 2): decision_card new_money / if_held /
 #     long_term, gates first; policy_action -> diagnostics.pre_gate_policy; sizing only for buy/starter;
 #     price_zone; freshness and earnings-verification gates in analyze; snapshot 3.0.0
-SCHEMA_VERSION = "6"
+# v7: Shared sizing limits and whole-share amounts, explicit availability/quantity status,
+#     conditional loss and legacy adapters (see CHANGELOG.md); snapshot remains 3.0.0
+SCHEMA_VERSION = "7"
