@@ -41,7 +41,10 @@
 - Known unsupported instruments return `not_assessed`; unknown classification
   returns `insufficient_data`. For applicable stocks: assessed runway below four
   quarters, then broken business, yields `review_exit`; otherwise a required
-  unknown yields `insufficient_data`; otherwise qualified `hold`. Known failure
+  unknown yields `insufficient_data`; otherwise qualified `hold`. An evaluated
+  business check requires `intact`, `mixed` or `broken`; an evaluated runway check
+  requires `adequate`, `watch` or `critical`. Unrecognized labels become
+  `not_evaluated`, retaining the raw label and evidence for diagnostics. Known failure
   wins over another unknown, and both remain disclosed. Only the runway component
   can be not applicable for a stock. Preserve the existing classifier's non-burner
   and profitability exemptions without calling negative FCF positive.

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from typing import Any, Literal
 
 ComponentState = Literal["evaluated", "not_evaluated", "not_applicable"]
@@ -133,6 +133,13 @@ def build_holder_evidence(*, support: dict[str, Any], fundamentals_status: str,
     return HolderEvidence(applicability, business_check, runway_check, tuple(factors))
 
 
+def _validated_component(check: ComponentEvidence, name: str, labels: tuple[str, ...]) -> ComponentEvidence:
+    if check.state == "evaluated" and check.classification not in labels:
+        return replace(check, state="not_evaluated",
+                       reason=f"Unrecognized {name} classification; this check was not evaluated.")
+    return check
+
+
 def long_term_if_held(evidence: HolderEvidence | None) -> dict[str, Any]:
     """Applicability first, then proven component failures, missing checks and qualified hold."""
     if evidence is None or evidence.applicability != "applicable":
@@ -147,7 +154,8 @@ def long_term_if_held(evidence: HolderEvidence | None) -> dict[str, Any]:
                 "assessment_status": state, "checks": {"business": asdict(check), "cash_runway": asdict(check)},
                 "watch_factors": [], "review_when": [reason]}
 
-    business, runway = evidence.business, evidence.cash_runway
+    business = _validated_component(evidence.business, "business", ("intact", "mixed", "broken"))
+    runway = _validated_component(evidence.cash_runway, "cash runway", ("adequate", "watch", "critical"))
     failures = [code for hit, code in (
         (runway.state == "evaluated" and runway.classification == "critical", "runway_critical"),
         (business.state == "evaluated" and business.classification == "broken", "business_broken")) if hit]

@@ -19,7 +19,7 @@ BUSINESS = {
 }
 WATCH_FACTOR = {"code": "net_debt", "reason": "Debt exceeds cash.", "evidence": {"net_cash_positive": False}}
 RUNWAY = {
-    "pass": ComponentEvidence("evaluated", "pass", "Runway sufficient.", {"cash_runway_quarters": 10}),
+    "pass": ComponentEvidence("evaluated", "adequate", "Runway sufficient.", {"cash_runway_quarters": 10}),
     "watch": ComponentEvidence("evaluated", "watch", "Runway needs review.", {"cash_runway_quarters": 6}),
     "critical": ComponentEvidence("evaluated", "critical", "Runway under four quarters.",
                                   {"cash_runway_quarters": 2}),
@@ -143,3 +143,49 @@ def test_applicable_company_cannot_skip_the_business_component():
     result = long_term_if_held(HolderEvidence('applicable', absent, RUNWAY['exempt']))
     assert result['action'] == 'insufficient_data'
     assert result['reasons'] == ['business_not_evaluated']
+
+
+@pytest.mark.parametrize("component,label", [
+    (component, label)
+    for component in ("business", "cash_runway")
+    for label in ("unknown", "", "future_label")
+] + [("business", "adequate"), ("cash_runway", "intact")])
+@pytest.mark.parametrize("other_failed", [False, True])
+def test_evaluated_requires_a_recognized_component_label(component, label, other_failed):
+    components = {"business": BUSINESS["broken" if other_failed else "intact"],
+                  "cash_runway": RUNWAY["critical" if other_failed else "pass"]}
+    invalid = ComponentEvidence("evaluated", label, "Previously marked evaluated.",
+                                {"reported_value": 12}, {"reported_value": None}, "Period unavailable.")
+    components[component] = invalid
+    source = HolderEvidence("applicable", **components)
+    original = deepcopy(source)
+    result = long_term_if_held(source)
+    missing = f"{component}_not_evaluated"
+    if other_failed:
+        failure = "runway_critical" if component == "business" else "business_broken"
+        assert result["action"] == "review_exit"
+        assert result["basis"] == failure
+        assert result["reasons"] == [failure, missing]
+        assert result["assessment_status"] == "evaluated"
+    else:
+        assert result["action"] == "insufficient_data"
+        assert result["basis"] == "thesis_unknown"
+        assert result["reasons"] == [missing]
+        assert result["assessment_status"] == "not_evaluated"
+    check = result["checks"][component]
+    assert check["state"] == "not_evaluated"
+    assert check["classification"] == label  # Keep the unrecognized label as diagnostic evidence.
+    assert "Unrecognized" in check["reason"]
+    assert check["evidence"] == invalid.evidence
+    assert check["periods"] == invalid.periods
+    assert check["periods_reason"] == invalid.periods_reason
+    assert any(component.replace("_", " ") in text for text in result["review_when"])
+    assert source == original
+
+
+def test_both_evaluated_unknown_labels_remain_two_missing_checks():
+    unknown = ComponentEvidence("evaluated", "unknown", "Unrecognized.", {})
+    result = long_term_if_held(HolderEvidence("applicable", unknown, unknown))
+    assert result["action"] == "insufficient_data"
+    assert result["reasons"] == ["business_not_evaluated", "cash_runway_not_evaluated"]
+    assert all(check["state"] == "not_evaluated" for check in result["checks"].values())
