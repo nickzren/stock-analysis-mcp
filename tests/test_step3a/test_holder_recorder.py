@@ -30,13 +30,28 @@ async def test_capture_is_deterministic_and_matches_before_without_claiming_reco
     assert recording == await hm.build()
     before = json.loads((hm.FIXTURE_DIR / "before.json").read_text())
     assert before.pop("recorded_code") == hm.BASE_COMMIT
-    assert recording == {"baseline_code": hm.BASE_COMMIT, **before}
+    previous_fields = copy.deepcopy(recording)
+    for row in previous_fields["stocks"].values():
+        assert isinstance(row["result"]["decision_card"]["long_term"].pop("if_held"), dict)
+    assert previous_fields == {"baseline_code": hm.BASE_COMMIT, **before}
     hm.write_recording(recording, tmp_path)
     assert json.loads((tmp_path / "after.json").read_text()) == recording
-    assert "current output table" in (tmp_path / "after.md").read_text()
+    current_table = (tmp_path / "after.md").read_text()
+    assert "current output table" in current_table
+    assert "Long-term held / basis" in current_table
+    for row in recording["stocks"].values():
+        holder = row["result"]["decision_card"]["long_term"]["if_held"]
+        assert f"{holder['action']} / {holder['basis']}" in current_table
     original = {p.name: p.read_bytes() for p in tmp_path.iterdir()}
     hm.write_recording(recording, tmp_path)
     assert {p.name: p.read_bytes() for p in tmp_path.iterdir()} == original
+
+
+def test_frozen_markdown_renderer_is_unchanged():
+    before = json.loads((hm.FIXTURE_DIR / "before.json").read_text())
+    before["stocks"] = {name: before["stocks"][name] for name in hm.STOCK_CASES}
+    before["positions"] = {name: before["positions"][name] for name in hm.POSITION_CASES}
+    assert hm.markdown(before) == (hm.FIXTURE_DIR / "before.md").read_text()
 
 
 def test_cannot_relabel_before_as_after(tmp_path):
@@ -84,3 +99,9 @@ def test_after_cli_writes_only_current_files(monkeypatch, tmp_path):
     monkeypatch.setattr(sys, "argv", ["holder_matrix", "--after", "--output-dir", str(tmp_path)])
     hm.main()
     assert {p.name for p in tmp_path.iterdir()} == {"after.json", "after.md"}
+
+
+async def test_checked_in_after_matches_current_recorder():
+    recording = await hm.build()
+    assert recording == json.loads((hm.FIXTURE_DIR / 'after.json').read_text())
+    assert hm.markdown(recording) == (hm.FIXTURE_DIR / 'after.md').read_text()

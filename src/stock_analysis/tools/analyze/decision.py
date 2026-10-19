@@ -15,6 +15,7 @@ from stock_analysis.tools.analyze.gates import (
     disclose,
     disclosure_order,
 )
+from stock_analysis.tools.analyze.holder import HolderEvidence, long_term_if_held
 from stock_analysis.tools.analyze.reassessment import earliest_reassessment
 
 MID_TERM, LONG_TERM = "mid_term", "long_term"
@@ -139,23 +140,27 @@ def decide(
     today: date,
     support: Mapping[str, Any] | None,
     thesis_evaluable: bool = True,
+    holder_evidence: HolderEvidence | None = None,
 ) -> dict[str, Any]:
     """new_money = most_restrictive(map(candidate), every applicable fired gate's outcome), per horizon (D-5).
 
     ``candidate`` is the pre-gate policy (no knife override, no support cap); ``blocking`` the fired analyze
     gates (unique ids); ``unevaluated`` the ids of applicable gates not computed. Gates never reach if_held;
-    add_allowed follows the gated mid-term action.
+    Long-term ownership reads explicit component evidence; each add_allowed follows its own horizon.
     """
     mid_mapped = map_candidate(MID_TERM, candidate.get(MID_TERM))
     long_mapped = map_candidate(LONG_TERM, candidate.get(LONG_TERM))
     new_money = _new_money(MID_TERM, mid_mapped, blocking, unevaluated, window, today, support)
     held = if_held(thesis=thesis, candidate_action=mid_mapped, dislocation=dislocation, tilt=tilt,
                    thesis_evaluable=thesis_evaluable)
+    long_money = _new_money(LONG_TERM, long_mapped, blocking, unevaluated, window, today, support)
+    long_held = long_term_if_held(holder_evidence)
     return {
         "horizon": MID_TERM,
         "new_money": new_money,
         "if_held": {"action": held["action"], "add_allowed": entry_allowed(new_money["action"]),
                     "basis": held["basis"]},
         "long_term": {"horizon": LONG_TERM,
-                      "new_money": _new_money(LONG_TERM, long_mapped, blocking, unevaluated, window, today, support)},
+                      "new_money": long_money,
+                      "if_held": {**long_held, "add_allowed": entry_allowed(long_money["action"])}},
     }

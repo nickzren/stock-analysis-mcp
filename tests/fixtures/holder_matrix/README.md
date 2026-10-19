@@ -1,11 +1,14 @@
 # Holder and position characterization
 
 Frozen synthetic observations from v0.4.0 production code at `c9fba4a` (MCP SDK
-1.30.0, schema 7, snapshot 3.0.0). This package changes tests only. It does not
-implement the approved holder design, endorse the legacy tax assumptions or
-claim that investment recommendations work.
+1.30.0, schema 7, snapshot 3.0.0). The baseline package changed tests only. It does not
+endorse the legacy tax assumptions or claim that investment recommendations work.
+The separate current capture now includes the unreleased long-term holder core.
 
-- `before.md`: short stock/position table.
+- `before.md`: frozen stock/position table.
+- `after.json` / `after.md`: current outputs with the new long-term holder object.
+  Every old output value is compared with the baseline after removing only
+  `decision_card.long_term.if_held`; snapshots remain exactly 3.0.0.
 - `before.json`: source inputs, source-call counts, selected price/provenance,
   full decision cards/sizing, verdict and business evidence, modes/zones,
   summaries and **complete** stock snapshots; position responses omit only
@@ -36,7 +39,8 @@ The business-failure-plus-unknown-runway and critical-runway-plus-unknown-busine
 combinations are not claimed as end-to-end baseline rows. Bounded probes did not
 produce them through today's coupled classifier: the unprofitability evidence
 that enables runway calculation also makes the business component assessable.
-The approved pure-component boundary tests belong in the later holder package.
+The pure-component tests cover these injected states separately; they are not
+claims about provider payloads or observed investment performance.
 
 Position cases record gains/losses, optional/fractional/zero/negative inputs,
 365/366-day and leap-date boundaries, future/invalid dates, missing/nonpositive
@@ -94,8 +98,9 @@ uv run --frozen --offline python -m tests.support.holder_matrix --after --output
 
 Current captures use `baseline_code` as a reference. The frozen JSON uses
 `recorded_code` to identify the production source that actually produced it.
-Tests compare the remaining content exactly at characterization time. The two
-Markdown titles distinguish before/current evidence.
+Tests compare all old content exactly after removing only the new long-term
+holder object. The current Markdown adds its own holder action/basis column;
+the frozen renderer stays byte-identical.
 
 Baseline generation is permanently disabled (`--baseline`, or omitting `--after`,
 fails before any work). The recorder never writes before files, refuses to relabel
@@ -108,4 +113,5 @@ The before files have literal SHA-256 pins independent of generated current
 outputs. Keep them and all earlier decision/sizing fixtures byte-identical.
 As later approved changes land, replace the relevant current-behavior assertions
 and write separate after evidence; never regenerate or hand-edit the baseline to
-make tests pass. App versions, inputs and behavior remain unchanged in this package.
+make tests pass. App versions and inputs stay unchanged. Only the new holder object is added in
+the current holder-core package; position behavior is still the legacy baseline.

@@ -33,6 +33,30 @@
 - `scripts/record_provider_fixtures.py` records real responses (manual, networked) to the gitignored `tests/fixtures/_recorded/`; never commit recordings.
 - Keep the suite fast enough for routine local validation.
 
+## Unreleased Long-Term Holder Core
+- `decision_card.long_term.if_held` is computed once before projection and retained
+  at every detail level. `tools/analyze/holder.py` consumes explicit applicability
+  and business/runway evidence from the existing classifier; no entry/price rule
+  or aggregate tilt becomes a long-term exit rule.
+- Known unsupported instruments return `not_assessed`; unknown classification
+  returns `insufficient_data`. For applicable stocks: assessed runway below four
+  quarters, then broken business, yields `review_exit`; otherwise a required
+  unknown yields `insufficient_data`; otherwise qualified `hold`. Known failure
+  wins over another unknown, and both remain disclosed. Only the runway component
+  can be not applicable for a stock. Preserve the existing classifier's non-burner
+  and profitability exemptions without calling negative FCF positive.
+- `checks` retain state, classification, reason, contributing values and each
+  available input's own period metadata. Unknown periods are null with a reason;
+  never substitute a composite fiscal period or fetch timestamp. `watch_factors`
+  retain known concerns/evidence; unknown net cash is not a known negative.
+- Long-term `add_allowed` follows long-term new money only, with no personal
+  capacity or sizing implication. Existing mid-term/new-money/sizing output and
+  all snapshot 3.0.0 fields remain unchanged. The holder snapshot field and 4.0.0
+  version first ship together in the later snapshot package.
+- This intermediate branch adds the card object only. Position routing/context,
+  summary and agent guidance are subsequent packages; schema stays 7 and the
+  package/install pin stays 0.4.0 until the coordinated release work.
+
 ## Sizing Inputs and Output (schema 7)
 - `analyze`, `analyze_trade_setup` and `scan_watchlist` validate sizing inputs
   before symbol lookup, provider reads or watchlist access. Account size must be
@@ -159,7 +183,7 @@
   (`market_closed`) and plan 8 (`plan_invariant_violation`) are card-only. A new
   gate id must be a `GATES` entry with the same class and rank in every tool
   (only `liquidity_missing` differs: data class in analyze).
-- `if_held` (first match): runway < 4 quarters or business broken →
+- Mid-term `if_held` (first match): runway < 4 quarters or business broken →
   `review_exit` (`runway_critical` / `business_broken`); required thesis evidence
   unknown → `insufficient_data` (`thesis_unknown`); candidate admits new
   money → `hold`; dislocation candidate → `hold` (`price_broken_more_than_business`);

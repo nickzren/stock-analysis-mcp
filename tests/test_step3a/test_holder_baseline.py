@@ -23,13 +23,15 @@ async def test_stock_observation_includes_inputs_decisions_sizing_and_complete_s
     assert row["inputs"] == case.payloads()
     assert row["profile"] == case.profile
     assert row["account_size"] == case.account_size
-    assert hm.stock_digest(result) == row["result"]
+    previous_fields = hm.stock_digest(result)
+    assert isinstance(previous_fields["decision_card"]["long_term"].pop("if_held"), dict)
+    assert previous_fields == row["result"]
     for tier, payload in dm.tiers(result).items():
         assert payload["watchlist_snapshot"] == result["watchlist_snapshot"], tier
         card = payload["decision_card"]
         for key in ("new_money", "if_held", "long_term", "sizing", "sizing_status"):
             assert card[key] == result["decision_card"][key], (name, tier, key)
-        assert "if_held" not in card["long_term"]  # absent, not known-null
+        assert isinstance(card["long_term"]["if_held"], dict)
     assert result["watchlist_snapshot"]["snapshot_version"] == "3.0.0"
     assert "long_term_if_held_action" not in result["watchlist_snapshot"]
 
@@ -58,7 +60,7 @@ async def test_current_midterm_etf_answer_is_not_a_longterm_holder_assessment():
     assert weak["decision_card"]["if_held"]["action"] == "reduce"
     for result in (strong, weak):
         assert result["summary"]["support"]["instrument"]["status"] == "unsupported"
-        assert "if_held" not in result["decision_card"]["long_term"]
+        assert result["decision_card"]["long_term"]["if_held"]["action"] == "not_assessed"
     assert (await hm.run_position("etf"))["result"] == (await hm.run_position("gain"))["result"]
 
 

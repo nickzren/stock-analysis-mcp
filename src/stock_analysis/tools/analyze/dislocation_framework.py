@@ -69,6 +69,8 @@ def classify_dislocation_opportunity(
         mismatch_verdict["status"] = "unclear"
 
     return {
+        "business_integrity": business_integrity,
+        "balance_sheet_safety": balance_sheet_safety,
         "business_evaluable": business_evaluable,
         "runway_evaluable": runway_evaluable,
         "setup_status": setup_status,

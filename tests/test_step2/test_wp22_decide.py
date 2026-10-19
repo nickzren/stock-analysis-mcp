@@ -481,7 +481,7 @@ async def test_the_card_carries_one_decision(name: str) -> None:
 
     assert list(card)[:len(CARD_KEYS)] == CARD_KEYS
     assert (card["horizon"], list(card["long_term"]), card["long_term"]["horizon"]) == (
-        "mid_term", ["horizon", "new_money"], "long_term")
+        "mid_term", ["horizon", "new_money", "if_held"], "long_term")
     assert (list(mid), list(long)) == (NEW_MONEY_KEYS, [*NEW_MONEY_KEYS, "conditions"])  # WP2.3: §2, §7e
     for decision in (mid, long):
         assert decision["action"] in ORDER

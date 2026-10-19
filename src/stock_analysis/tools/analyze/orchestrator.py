@@ -43,6 +43,7 @@ from stock_analysis.tools.analyze.executive_summary import (
     build_policy_action,
 )
 from stock_analysis.tools.analyze.gates import check_price_freshness, earnings_window, thesis_codes
+from stock_analysis.tools.analyze.holder import build_holder_evidence
 from stock_analysis.tools.analyze.investor_profile import (
     build_decision_modes,
     resolve_investor_profile,
@@ -1104,6 +1105,9 @@ async def analyze_stock(
                           (thesis_signals["business_evaluable"] and thesis_signals["runway_evaluable"])),
         dislocation=thesis_signals["is_dislocation_candidate"], tilt=verdict.get("tilt"),
         window=earnings_window(earnings, today), today=today, support=support,
+        holder_evidence=build_holder_evidence(
+            support=support, fundamentals_status=fundamentals_status, fundamentals=thesis_fundamentals,
+            source=fund_data, signals=thesis_signals),
     )
     # Only binding conditions, per horizon (plan §7e), from the same uncapped candidate.
     valuation_assessment = action_zones.get("valuation_assessment") or {}
