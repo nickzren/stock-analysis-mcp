@@ -1,5 +1,174 @@
 # Changelog
 
+## Unreleased: longer-term holders and position context
+
+The package stays `0.4.0` until a separately approved release.
+**Response schema:** `meta.schema_version` goes from `"7"` to `"8"`.
+**Stock snapshot:** `snapshot_version` goes from `"3.0.0"` to `"4.0.0"`.
+Install pins remain v0.4.0; this section describes unreleased code. Mid-term
+holder actions, both new-money decisions, gates and entry sizing are unchanged.
+The schema-7 sizing fields and compatibility aliases remain in place.
+
+### Long-term ownership and routing
+
+`decision_card.long_term.if_held` is a separate 1–5-year ownership assessment,
+identical at every response tier. It does not reuse long-term entry permission
+as an exit rule. Applicability is checked before company evidence:
+
+| `action` | Meaning |
+|---|---|
+| `not_assessed` | Known instrument outside the company rubric, including ETFs and preferred shares. This is a coverage boundary, not missing company data. |
+| `insufficient_data` | Classification is unverified, or required business/runway evidence is unavailable with no demonstrated failure. |
+| `review_exit` | Applicable company has cash runway below four quarters or a broken business under the existing rules. A known failure wins over another missing check. |
+| `hold` | Available checks have not demonstrated a thesis failure. This is not an endorsement or a promise of returns; retain known concerns and the separate suitability assessment. |
+
+`basis` is the first matching reason; `reasons` keeps other failures and missing
+checks. `assessment_status` is `evaluated`, `not_evaluated` or `not_applicable`.
+`checks.business` and `checks.cash_runway` retain `state`, `classification`,
+`reason`, `evidence`, `periods` and `periods_reason`. Financial periods belong to
+each input; unknown periods stay unknown. `watch_factors` lists known concerns
+with evidence; `review_when` states what deserves another look. `add_allowed`
+follows long-term new money only, not personal capacity.
+
+The `checks` keys are `business` and `cash_runway`. Evaluated business labels are
+`intact`, `mixed`, `broken`; runway labels are `adequate`, `watch`, `critical`.
+Unknown labels do not pass a check. Existing non-burner/runway exemptions remain;
+they do not assert positive cash flow. Neither chart signals, entry gates,
+valuation, the purchase price nor profile selection triggers a long-term exit.
+
+“Analyze HOOD” and a bare holder question keep the labelled 3–12-month default.
+One year/12 months defaults to mid-term unless long term is explicit; “hold for
+five years” selects long term without a question. Stock-only holder questions
+use the matching `analyze` field. With personal context, use
+`analyze_my_position(horizon=...)` once, without a preceding duplicate analysis.
+Contradictory or unsupported horizons still need clarification.
+
+The executive summary keeps three segments; its long-term segment now separates
+new money from ownership. Preserve a caution/avoid/unknown long-term fit with
+its actual reasons beside `hold`. For ETFs: “This tool does not assess long-term
+ETF ownership; its company rules do not apply.” Do not borrow the mid-term
+answer or ask for company cash-runway data. Mid-term `thesis_unknown` and
+long-term `applicability_unverified` can describe the same unavailable input:
+the long-term policy checks applicability first and names that narrower cause.
+
+### Position inputs and calculations
+
+`analyze_my_position` keeps the existing argument names/order, makes
+`cost_basis`, `purchase_date` and `shares` optional, and adds `horizon`
+(`mid_term` default, `long_term`), `portfolio_value` and `max_holding_pct`.
+
+- Monetary inputs are USD. `portfolio_value` is the caller's total portfolio
+  **including this holding**, not cash or buying power. Cost and shares describe
+  the current split-adjusted position; no broker, lot or corporate-action
+  reconciliation is performed. Do not silently convert non-USD amounts.
+- Numeric inputs accept JSON numbers or decimal strings, including scientific
+  notation. Cost must be finite and nonnegative; genuine zero is accepted.
+  Shares and portfolio value must be finite and positive; the holding ceiling
+  is in `(0, 100]` percentage points. Reject booleans before framework coercion,
+  malformed strings, NaN/infinity, overflow and positive underflow to zero.
+  Omitted/null optional context is accepted. FastMCP serializes Python
+  NaN/infinity as JSON null before sending; text `"nan"`/`"inf"` is rejected.
+- Validate numeric/horizon inputs before data access. Bad dates return
+  `invalid_parameters` before analysis; the date must be a real `YYYY-MM-DD`,
+  no later than today in Eastern Time. `holding.days_held` counts elapsed
+  calendar days, never a tax category.
+- The tool runs one analysis and uses its chosen price/provenance for both the
+  stock assessment and personal arithmetic. This adds source work compared with
+  the former technicals-only call; unchanged latency is not promised. Technical
+  diagnostics use the already-fetched input, with no second price fetch.
+- Personal amounts require verified USD per-share `EQUITY`/`ETF` units. This
+  permits ETF, preferred-share and USD ADR arithmetic independently of company
+  assessment or entry eligibility. Unknown units or non-USD prices suppress
+  dependent amounts with reasons, not an invented exchange rate.
+- Gain/loss is price-only: no dividends, fees, tax or realized trades. Zero cost
+  permits dollar gain/loss but no return fraction. Missing inputs null only
+  dependent values. Stale/fallback prices may show labelled historical amounts,
+  but never evaluate the allocation check. Unrepresentable calculations return
+  null with `numeric_range_unavailable`.
+- Allocation compares unrounded values with the caller's ceiling; equality
+  meets it. A holding above the supplied portfolio total is inconsistent, not
+  clamped to 100%. There is no default ceiling, remaining add capacity, trim
+  amount, long-term size, monitoring or saved holding state.
+
+### Schema 7 → 8 response inventory
+
+**Analyze:** add the complete `decision_card.long_term.if_held` object described
+above. Standard and decision tiers now retain `verdict.horizon_fit` with its
+actual reasons, so a qualified holder answer does not lose suitability concerns.
+The executive-summary long-term segment now includes that assessment
+and any caution/avoid/unknown fit with its reasons, except for `not_assessed`
+coverage answers. Those explain the coverage limit; company suitability remains
+in structured diagnostics. Existing mid-term exits and
+technical levels retain their horizon; they do not become long-term stops.
+
+**Position:** the following blocks are new or changed:
+
+| Path / block | Schema 8 meaning |
+|---|---|
+| `position_card` | `horizon`, `holder_assessment` and `new_money` copy the requested canonical horizon. `context_status`, `review_status`, `concentration_check` and `addition_context` are personal context only. |
+| `context_status` | `{status, reasons}`: `available`, `partial`, `not_supplied` or `inconsistent`; it never changes the stock decision. |
+| `concentration_check` | `{status, weight_pct, ceiling_pct, threshold_basis, reasons}`. `threshold_basis` is `user_supplied` or null; there is no profile ceiling. |
+| `review_status` | Label as **Allocation check**: `above_limit` maps to `review_allocation`, `within_limit` to `no_allocation_trigger`; `not_evaluated` and `not_requested` remain as named. A stock `reduce`/`review_exit` never becomes an allocation all-clear. |
+| `addition_context` | Keeps addition eligibility separate from an exceeded personal ceiling or an unevaluated requested allocation check. No remaining buying capacity is implied. |
+| `position` | Existing `cost_basis`, `current_price`, `shares`, `current_value`, `gain_loss` (fraction) and `gain_loss_dollars` now use the selected analysis price and validated units. Add `portfolio_value`, `max_holding_pct`, `portfolio_weight_pct` (percentage points), `calculation_reasons`, `price_provenance` and `price_context`. |
+| `price_context` | `{status, as_of, qualification}` distinguishes `current`, `historical`, `unavailable`; these are research prices, not verified account values. |
+| `holding` | `purchase_date` and `days_held` are optional descriptive context. |
+| `assumptions` | Lists user-reported USD/split-adjusted units, portfolio-total meaning, price-only P&L and allocation limitations. |
+| `suitability` | `{horizon, fit, reasons, note}` retains the requested horizon's fit and actual reasons independently of the holder action. |
+| `data_quality` | Carries the shared analysis disclosures, alongside its `data_provenance`. |
+| `tax.status`, `tax.reason` | `not_assessed` and an explanation; no personalized tax or sale-quantity estimate. |
+
+If a portfolio tool is also shown, its generic 20% single-position / 30% sector
+flags remain separate. The position tool's explicitly supplied ceiling governs
+this allocation check; neither tool's flags override the other's threshold.
+
+**Removed or relocated position paths:**
+
+| Previous path | Replacement / reason |
+|---|---|
+| `current_signals` | `diagnostics.technicals.current_signals`; diagnostic labels only. |
+| `sell_signals` | Boolean/null flags move to `diagnostics.technicals.flags`, including actual bearish MACD evidence. |
+| `sell_signals.active_count` | Removed; no competing technical sell score. |
+| `support_levels` | `diagnostics.technicals.reference_levels` (`sma_50`, `sma_200`, `atr_1x_below`, `recent_low_1m`), with `quote_currency` and a diagnostic note. These references are not monitored and are not holder exit instructions. |
+| `holding.is_long_term`, `holding.days_to_long_term` | Removed; elapsed days do not establish tax treatment. |
+| `tax.type`, `tax.rate_if_sold_now`, `tax.rate_if_long_term`, `tax.tax_on_gain_now`, `tax.tax_if_waited`, `tax.potential_savings` | Removed; use `tax.status`/`tax.reason`. The fixed rates and waiting-for-tax-savings advice are retired. |
+
+The position prompt's personal inputs are optional. It leads with the requested
+holder action/reason, then the Allocation check and separate addition status;
+no tax details or a second analyze call are required. Mid-term new-money sizing
+remains the only analyze size: do not attach its ATR planning stop to ownership.
+
+### Snapshot 3.0.0 → 4.0.0
+
+Only `long_term_if_held_action` is added: `hold`, `review_exit`,
+`insufficient_data`, `not_assessed`, or null when unavailable. The new key and
+version appear together. Its value enters the hash; personal inputs, P&L,
+allocation status and holder reasons do not. `if_held_action` remains mid-term,
+and `long_term_action` remains long-term **new money**. The old fields' enums
+and all released field sets stay frozen.
+
+- **4→4:** holder appearance/disappearance/change is material, including evidence
+  loss/recovery. A `not_assessed` transition is described as coverage/action
+  change, not recovered financial data or proven investment deterioration.
+- **3→4:** compare the existing fields with 3.0.0 semantics, including its three
+  actions, `price_zone` and `unevaluated_gate_ids`. The new holder field is
+  `not_comparable`, not a phantom change. One warning explains the addition;
+  a version-only change is not material.
+- **1.x/2→4:** retain the earlier restrictions on action/zone comparisons,
+  pre-2.0.0 signals and unevaluated gates; the new holder field is also
+  `not_comparable`. Do not treat these as the compatible 3→4 pair.
+- A complete 4.0.0 snapshot requires the new key and its valid enum/null before
+  analysis. Older validators keep their own rules. All detail levels share one
+  snapshot; `detect_changes` returns it unchanged. Ordinary clock/age exclusions
+  remain. A reason-only change without a tracked action/gate change is not
+  promised as an alert.
+
+**Rollback:** v0.4.0 cannot read 4.0.0 snapshots. Preserve older snapshots or
+start a new baseline after rollback; **never relabel** a 4.0.0 snapshot as 3.0.0.
+The live MCP remains on v0.4.0 until the whole-part review, an approved release
+and a verified tagged install. Saved holdings, anchored holder stops, bank/REIT
+models and swing-trade semantics remain outside this change.
+
 ## 0.4.0 (2026-10-19): sizing and caps
 
 The package version (`meta.server_version`) goes from `0.3.0` to `0.4.0`.

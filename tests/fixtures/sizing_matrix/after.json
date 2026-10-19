@@ -194,6 +194,7 @@
         "is_unprofitable": null,
         "long_term_action": "starter",
         "long_term_fit": "caution",
+        "long_term_if_held_action": "hold",
         "market_cap": 10000000000,
         "mid_term_fit": "caution",
         "new_money_action": "starter",
@@ -212,8 +213,8 @@
         "score": 0.5,
         "sector": null,
         "snapshot_as_of_date": "2026-10-10",
-        "snapshot_hash": "2852b9f03f5f8fe7",
-        "snapshot_version": "3.0.0",
+        "snapshot_hash": "5765599ebfebf889",
+        "snapshot_version": "4.0.0",
         "support_currency": "supported",
         "support_instrument": "supported",
         "symbol": "ACME",
@@ -222,7 +223,7 @@
         "valuation_gate": "attractive",
         "volatility_ann": 0.75
       },
-      "summary": "Decision (mid-term, new money): starter; Starter: no whole-share position fits this budget; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): starter. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has extreme risk (vol 75.0%, dd -30.0%). Fundamentals: revenue_yoy +12.0%; net_margin 20.0%. Technicals are strong (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%).",
+      "summary": "Decision (mid-term, new money): starter; Starter: no whole-share position fits this budget; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): new money: starter; if held: hold (no demonstrated thesis failure); not an endorsement; suitability: caution (extreme_risk). Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has extreme risk (vol 75.0%, dd -30.0%). Fundamentals: revenue_yoy +12.0%; net_margin 20.0%. Technicals are strong (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%).",
       "tiers": {
         "decision": {
           "entry": {
@@ -694,6 +695,7 @@
         "is_unprofitable": null,
         "long_term_action": "buy",
         "long_term_fit": "ok",
+        "long_term_if_held_action": "hold",
         "market_cap": 10000000000,
         "mid_term_fit": "ok",
         "new_money_action": "buy",
@@ -712,8 +714,8 @@
         "score": 0.75,
         "sector": null,
         "snapshot_as_of_date": "2026-10-10",
-        "snapshot_hash": "8afa7e975e30c777",
-        "snapshot_version": "3.0.0",
+        "snapshot_hash": "43ad023a06fdcbe3",
+        "snapshot_version": "4.0.0",
         "support_currency": "supported",
         "support_instrument": "supported",
         "symbol": "ACME",
@@ -722,7 +724,7 @@
         "valuation_gate": "attractive",
         "volatility_ann": 0.5
       },
-      "summary": "Decision (mid-term, new money): buy; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.4% of the account if sold at $80; Full \u2014 Position: $500 (5% of the account); estimated loss: 1% of the account if sold at $80; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): buy. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has high risk (vol 50.0%, dd -30.0%). Fundamentals: revenue_yoy +12.0%; net_margin 20.0%. Technicals are strong (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%).",
+      "summary": "Decision (mid-term, new money): buy; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.4% of the account if sold at $80; Full \u2014 Position: $500 (5% of the account); estimated loss: 1% of the account if sold at $80; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): new money: buy; if held: hold (no demonstrated thesis failure); not an endorsement. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has high risk (vol 50.0%, dd -30.0%). Fundamentals: revenue_yoy +12.0%; net_margin 20.0%. Technicals are strong (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%).",
       "tiers": {
         "decision": {
           "entry": {
@@ -1261,6 +1263,7 @@
         "is_unprofitable": null,
         "long_term_action": "buy",
         "long_term_fit": "ok",
+        "long_term_if_held_action": "hold",
         "market_cap": 10000000000,
         "mid_term_fit": "ok",
         "new_money_action": "buy",
@@ -1279,8 +1282,8 @@
         "score": 0.75,
         "sector": null,
         "snapshot_as_of_date": "2026-10-10",
-        "snapshot_hash": "207c79d0db07e7bd",
-        "snapshot_version": "3.0.0",
+        "snapshot_hash": "860a84083fb9356a",
+        "snapshot_version": "4.0.0",
         "support_currency": "supported",
         "support_instrument": "supported",
         "symbol": "ACME",
@@ -1289,7 +1292,7 @@
         "valuation_gate": "attractive",
         "volatility_ann": 0.2
       },
-      "summary": "Decision (mid-term, new money): buy; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.4% of the account if sold at $80; Full \u2014 Position: $500 (5% of the account); estimated loss: 1% of the account if sold at $80; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): buy. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "summary": "Decision (mid-term, new money): buy; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.4% of the account if sold at $80; Full \u2014 Position: $500 (5% of the account); estimated loss: 1% of the account if sold at $80; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): new money: buy; if held: hold (no demonstrated thesis failure); not an endorsement. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
       "tiers": {
         "decision": {
           "entry": {
@@ -1848,6 +1851,7 @@
         "is_unprofitable": null,
         "long_term_action": "buy",
         "long_term_fit": "ok",
+        "long_term_if_held_action": "hold",
         "market_cap": 10000000000,
         "mid_term_fit": "ok",
         "new_money_action": "buy",
@@ -1866,8 +1870,8 @@
         "score": 0.75,
         "sector": null,
         "snapshot_as_of_date": "2026-10-10",
-        "snapshot_hash": "8a4032a7ae8abf3c",
-        "snapshot_version": "3.0.0",
+        "snapshot_hash": "629eee32836ff9d7",
+        "snapshot_version": "4.0.0",
         "support_currency": "supported",
         "support_instrument": "supported",
         "symbol": "ACME",
@@ -1876,7 +1880,7 @@
         "valuation_gate": "attractive",
         "volatility_ann": 0.35
       },
-      "summary": "Decision (mid-term, new money): buy; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.08% of the account if sold at $96; Full \u2014 Position: $800 (8% of the account); estimated loss: 0.32% of the account if sold at $96; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): buy. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "summary": "Decision (mid-term, new money): buy; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.08% of the account if sold at $96; Full \u2014 Position: $800 (8% of the account); estimated loss: 0.32% of the account if sold at $96; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): new money: buy; if held: hold (no demonstrated thesis failure); not an endorsement. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
       "tiers": {
         "decision": {
           "entry": {
@@ -2417,6 +2421,7 @@
         "is_unprofitable": null,
         "long_term_action": "buy",
         "long_term_fit": "ok",
+        "long_term_if_held_action": "hold",
         "market_cap": 10000000000,
         "mid_term_fit": "ok",
         "new_money_action": "buy",
@@ -2435,8 +2440,8 @@
         "score": 0.75,
         "sector": null,
         "snapshot_as_of_date": "2026-10-10",
-        "snapshot_hash": "8a4032a7ae8abf3c",
-        "snapshot_version": "3.0.0",
+        "snapshot_hash": "629eee32836ff9d7",
+        "snapshot_version": "4.0.0",
         "support_currency": "supported",
         "support_instrument": "supported",
         "symbol": "ACME",
@@ -2445,7 +2450,7 @@
         "valuation_gate": "attractive",
         "volatility_ann": 0.35
       },
-      "summary": "Decision (mid-term, new money): buy; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.4% of the account if sold at $80; Full \u2014 Position: $500 (5% of the account); estimated loss: 1% of the account if sold at $80; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): buy. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "summary": "Decision (mid-term, new money): buy; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.4% of the account if sold at $80; Full \u2014 Position: $500 (5% of the account); estimated loss: 1% of the account if sold at $80; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): new money: buy; if held: hold (no demonstrated thesis failure); not an endorsement. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
       "tiers": {
         "decision": {
           "entry": {
@@ -2992,6 +2997,7 @@
         "is_unprofitable": null,
         "long_term_action": "buy",
         "long_term_fit": "ok",
+        "long_term_if_held_action": "hold",
         "market_cap": 10000000000,
         "mid_term_fit": "ok",
         "new_money_action": "buy",
@@ -3010,8 +3016,8 @@
         "score": 0.75,
         "sector": null,
         "snapshot_as_of_date": "2026-10-10",
-        "snapshot_hash": "8a4032a7ae8abf3c",
-        "snapshot_version": "3.0.0",
+        "snapshot_hash": "629eee32836ff9d7",
+        "snapshot_version": "4.0.0",
         "support_currency": "supported",
         "support_instrument": "supported",
         "symbol": "ACME",
@@ -3020,7 +3026,7 @@
         "valuation_gate": "attractive",
         "volatility_ann": 0.35
       },
-      "summary": "Decision (mid-term, new money): buy; Starter: no whole-share position fits this budget; Full: no whole-share position fits this budget; risk budget: 0.25% (caller); position cap: 0.5% (caller). If held: hold. Long-term (1-5y): buy. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "summary": "Decision (mid-term, new money): buy; Starter: no whole-share position fits this budget; Full: no whole-share position fits this budget; risk budget: 0.25% (caller); position cap: 0.5% (caller). If held: hold. Long-term (1-5y): new money: buy; if held: hold (no demonstrated thesis failure); not an endorsement. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
       "tiers": {
         "decision": {
           "entry": {
@@ -3564,6 +3570,7 @@
         "is_unprofitable": null,
         "long_term_action": "buy",
         "long_term_fit": "ok",
+        "long_term_if_held_action": "hold",
         "market_cap": 10000000000,
         "mid_term_fit": "ok",
         "new_money_action": "buy",
@@ -3582,8 +3589,8 @@
         "score": 0.75,
         "sector": null,
         "snapshot_as_of_date": "2026-10-10",
-        "snapshot_hash": "8a4032a7ae8abf3c",
-        "snapshot_version": "3.0.0",
+        "snapshot_hash": "629eee32836ff9d7",
+        "snapshot_version": "4.0.0",
         "support_currency": "supported",
         "support_instrument": "supported",
         "symbol": "ACME",
@@ -3592,7 +3599,7 @@
         "valuation_gate": "attractive",
         "volatility_ann": 0.35
       },
-      "summary": "Decision (mid-term, new money): buy; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.4% of the account if sold at $80; Full \u2014 Position: $200 (2% of the account); estimated loss: 0.4% of the account if sold at $80; risk budget: 1% (profile); position cap: 2% (caller). If held: hold. Long-term (1-5y): buy. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "summary": "Decision (mid-term, new money): buy; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.4% of the account if sold at $80; Full \u2014 Position: $200 (2% of the account); estimated loss: 0.4% of the account if sold at $80; risk budget: 1% (profile); position cap: 2% (caller). If held: hold. Long-term (1-5y): new money: buy; if held: hold (no demonstrated thesis failure); not an endorsement. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
       "tiers": {
         "decision": {
           "entry": {
@@ -4128,6 +4135,7 @@
         "is_unprofitable": null,
         "long_term_action": "buy",
         "long_term_fit": "ok",
+        "long_term_if_held_action": "hold",
         "market_cap": 10000000000,
         "mid_term_fit": "ok",
         "new_money_action": "buy",
@@ -4146,8 +4154,8 @@
         "score": 0.75,
         "sector": null,
         "snapshot_as_of_date": "2026-10-10",
-        "snapshot_hash": "8a4032a7ae8abf3c",
-        "snapshot_version": "3.0.0",
+        "snapshot_hash": "629eee32836ff9d7",
+        "snapshot_version": "4.0.0",
         "support_currency": "supported",
         "support_instrument": "supported",
         "symbol": "ACME",
@@ -4156,7 +4164,7 @@
         "valuation_gate": "attractive",
         "volatility_ann": 0.35
       },
-      "summary": "Decision (mid-term, new money): buy; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.4% of the account if sold at $80; Full \u2014 Position: $500 (5% of the account); estimated loss: 1% of the account if sold at $80; risk budget: 1% (profile); position cap: 8% (caller). If held: hold. Long-term (1-5y): buy. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "summary": "Decision (mid-term, new money): buy; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.4% of the account if sold at $80; Full \u2014 Position: $500 (5% of the account); estimated loss: 1% of the account if sold at $80; risk budget: 1% (profile); position cap: 8% (caller). If held: hold. Long-term (1-5y): new money: buy; if held: hold (no demonstrated thesis failure); not an endorsement. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
       "tiers": {
         "decision": {
           "entry": {
@@ -4713,6 +4721,7 @@
         "is_unprofitable": null,
         "long_term_action": "buy",
         "long_term_fit": "ok",
+        "long_term_if_held_action": "hold",
         "market_cap": 10000000000,
         "mid_term_fit": "ok",
         "new_money_action": "buy",
@@ -4731,8 +4740,8 @@
         "score": 0.75,
         "sector": null,
         "snapshot_as_of_date": "2026-10-10",
-        "snapshot_hash": "8a4032a7ae8abf3c",
-        "snapshot_version": "3.0.0",
+        "snapshot_hash": "629eee32836ff9d7",
+        "snapshot_version": "4.0.0",
         "support_currency": "supported",
         "support_instrument": "supported",
         "symbol": "ACME",
@@ -4741,7 +4750,7 @@
         "valuation_gate": "attractive",
         "volatility_ann": 0.35
       },
-      "summary": "Decision (mid-term, new money): buy; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.08% of the account if sold at $96; Full \u2014 Position: $800 (8% of the account); estimated loss: 0.32% of the account if sold at $96; risk budget: 0.5% (profile); position cap: 8% (profile). If held: hold. Long-term (1-5y): buy. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "summary": "Decision (mid-term, new money): buy; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.08% of the account if sold at $96; Full \u2014 Position: $800 (8% of the account); estimated loss: 0.32% of the account if sold at $96; risk budget: 0.5% (profile); position cap: 8% (profile). If held: hold. Long-term (1-5y): new money: buy; if held: hold (no demonstrated thesis failure); not an endorsement. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
       "tiers": {
         "decision": {
           "entry": {
@@ -5279,6 +5288,7 @@
         "is_unprofitable": null,
         "long_term_action": "buy",
         "long_term_fit": "ok",
+        "long_term_if_held_action": "hold",
         "market_cap": 10000000000,
         "mid_term_fit": "ok",
         "new_money_action": "buy",
@@ -5297,8 +5307,8 @@
         "score": 0.75,
         "sector": null,
         "snapshot_as_of_date": "2026-10-10",
-        "snapshot_hash": "8a4032a7ae8abf3c",
-        "snapshot_version": "3.0.0",
+        "snapshot_hash": "629eee32836ff9d7",
+        "snapshot_version": "4.0.0",
         "support_currency": "supported",
         "support_instrument": "supported",
         "symbol": "ACME",
@@ -5307,7 +5317,7 @@
         "valuation_gate": "attractive",
         "volatility_ann": 0.35
       },
-      "summary": "Decision (mid-term, new money): buy; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.4% of the account if sold at $80; Full \u2014 Position: $200 (2% of the account); estimated loss: 0.4% of the account if sold at $80; risk budget: 0.5% (profile); position cap: 8% (profile). If held: hold. Long-term (1-5y): buy. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "summary": "Decision (mid-term, new money): buy; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.4% of the account if sold at $80; Full \u2014 Position: $200 (2% of the account); estimated loss: 0.4% of the account if sold at $80; risk budget: 0.5% (profile); position cap: 8% (profile). If held: hold. Long-term (1-5y): new money: buy; if held: hold (no demonstrated thesis failure); not an endorsement. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
       "tiers": {
         "decision": {
           "entry": {
@@ -5741,6 +5751,7 @@
         "is_unprofitable": null,
         "long_term_action": "wait",
         "long_term_fit": "ok",
+        "long_term_if_held_action": "hold",
         "market_cap": 10000000000,
         "mid_term_fit": "ok",
         "new_money_action": "wait",
@@ -5759,8 +5770,8 @@
         "score": 0.75,
         "sector": null,
         "snapshot_as_of_date": "2026-10-10",
-        "snapshot_hash": "ed954c4d6053df75",
-        "snapshot_version": "3.0.0",
+        "snapshot_hash": "9e70a09b57458422",
+        "snapshot_version": "4.0.0",
         "support_currency": "supported",
         "support_instrument": "supported",
         "symbol": "ACME",
@@ -5769,7 +5780,7 @@
         "valuation_gate": "attractive",
         "volatility_ann": 0.35
       },
-      "summary": "Decision (mid-term, new money): wait; blocked by earnings_blackout; reassess on or after Tue Oct 13 (not a buy date). If held: hold. Long-term (1-5y): wait; blocked by earnings_blackout; reassess on or after Tue Oct 13 (not a buy date). Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "summary": "Decision (mid-term, new money): wait; blocked by earnings_blackout; reassess on or after Tue Oct 13 (not a buy date). If held: hold. Long-term (1-5y): new money: wait; blocked by earnings_blackout; reassess on or after Tue Oct 13 (not a buy date); if held: hold (no demonstrated thesis failure); not an endorsement. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
       "tiers": {
         "decision": {
           "entry": null,
@@ -6040,6 +6051,7 @@
         "is_unprofitable": null,
         "long_term_action": "buy",
         "long_term_fit": "ok",
+        "long_term_if_held_action": "hold",
         "market_cap": 10000000000,
         "mid_term_fit": "ok",
         "new_money_action": "buy",
@@ -6058,8 +6070,8 @@
         "score": 0.75,
         "sector": null,
         "snapshot_as_of_date": "2026-10-10",
-        "snapshot_hash": "08c1326b92c6b298",
-        "snapshot_version": "3.0.0",
+        "snapshot_hash": "b0ec6c31b5a6c616",
+        "snapshot_version": "4.0.0",
         "support_currency": "supported",
         "support_instrument": "supported",
         "symbol": "ACME",
@@ -6068,7 +6080,7 @@
         "valuation_gate": "attractive",
         "volatility_ann": 0.35
       },
-      "summary": "Decision (mid-term, new money): buy; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.4% of the account if sold at $80; Full \u2014 Position: $500 (5% of the account); estimated loss: 1% of the account if sold at $80; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): buy. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "summary": "Decision (mid-term, new money): buy; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.4% of the account if sold at $80; Full \u2014 Position: $500 (5% of the account); estimated loss: 1% of the account if sold at $80; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): new money: buy; if held: hold (no demonstrated thesis failure); not an endorsement. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
       "tiers": {
         "decision": {
           "entry": {
@@ -6634,6 +6646,7 @@
         "is_unprofitable": null,
         "long_term_action": "buy",
         "long_term_fit": "ok",
+        "long_term_if_held_action": "hold",
         "market_cap": 10000000000,
         "mid_term_fit": "ok",
         "new_money_action": "buy",
@@ -6652,8 +6665,8 @@
         "score": 0.75,
         "sector": null,
         "snapshot_as_of_date": "2026-10-10",
-        "snapshot_hash": "8a4032a7ae8abf3c",
-        "snapshot_version": "3.0.0",
+        "snapshot_hash": "629eee32836ff9d7",
+        "snapshot_version": "4.0.0",
         "support_currency": "supported",
         "support_instrument": "supported",
         "symbol": "ACME",
@@ -6662,7 +6675,7 @@
         "valuation_gate": "attractive",
         "volatility_ann": 0.35
       },
-      "summary": "Decision (mid-term, new money): buy; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.08% of the account if sold at $96; Full \u2014 Position: $800 (8% of the account); estimated loss: 0.32% of the account if sold at $96; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): buy. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "summary": "Decision (mid-term, new money): buy; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.08% of the account if sold at $96; Full \u2014 Position: $800 (8% of the account); estimated loss: 0.32% of the account if sold at $96; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): new money: buy; if held: hold (no demonstrated thesis failure); not an endorsement. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
       "tiers": {
         "decision": {
           "entry": {
@@ -7095,6 +7108,7 @@
         "is_unprofitable": null,
         "long_term_action": "starter",
         "long_term_fit": "caution",
+        "long_term_if_held_action": "hold",
         "market_cap": 10000000000,
         "mid_term_fit": "caution",
         "new_money_action": "starter",
@@ -7113,8 +7127,8 @@
         "score": 0.5,
         "sector": null,
         "snapshot_as_of_date": "2026-10-10",
-        "snapshot_hash": "3d6f6b0ab0fe71a4",
-        "snapshot_version": "3.0.0",
+        "snapshot_hash": "55adf50dd5ef7b36",
+        "snapshot_version": "4.0.0",
         "support_currency": "supported",
         "support_instrument": "supported",
         "symbol": "ACME",
@@ -7123,7 +7137,7 @@
         "valuation_gate": "attractive",
         "volatility_ann": 0.75
       },
-      "summary": "Decision (mid-term, new money): starter; No size estimate: a valid planning stop is unavailable. If held: hold. Long-term (1-5y): starter. Acme has extreme risk (vol 75.0%, dd -30.0%). Fundamentals: revenue_yoy +12.0%; net_margin 20.0%. Technicals are strong (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%).",
+      "summary": "Decision (mid-term, new money): starter; No size estimate: a valid planning stop is unavailable. If held: hold. Long-term (1-5y): new money: starter; if held: hold (no demonstrated thesis failure); not an endorsement; suitability: caution (extreme_risk). Acme has extreme risk (vol 75.0%, dd -30.0%). Fundamentals: revenue_yoy +12.0%; net_margin 20.0%. Technicals are strong (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%).",
       "tiers": {
         "decision": {
           "entry": {
@@ -7413,6 +7427,7 @@
         "is_unprofitable": null,
         "long_term_action": "buy",
         "long_term_fit": "ok",
+        "long_term_if_held_action": "hold",
         "market_cap": 10000000000,
         "mid_term_fit": "ok",
         "new_money_action": "buy",
@@ -7431,8 +7446,8 @@
         "score": 0.75,
         "sector": null,
         "snapshot_as_of_date": "2026-10-10",
-        "snapshot_hash": "8a4032a7ae8abf3c",
-        "snapshot_version": "3.0.0",
+        "snapshot_hash": "629eee32836ff9d7",
+        "snapshot_version": "4.0.0",
         "support_currency": "supported",
         "support_instrument": "supported",
         "symbol": "ACME",
@@ -7441,7 +7456,7 @@
         "valuation_gate": "attractive",
         "volatility_ann": 0.35
       },
-      "summary": "Decision (mid-term, new money): buy; Starter allocation ceiling: 2.5% of the account; estimated loss ceiling: 0.5% if sold at $80; Full allocation ceiling: 5% of the account; estimated loss ceiling: 1% if sold at $80; account size not provided; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): buy. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "summary": "Decision (mid-term, new money): buy; Starter allocation ceiling: 2.5% of the account; estimated loss ceiling: 0.5% if sold at $80; Full allocation ceiling: 5% of the account; estimated loss ceiling: 1% if sold at $80; account size not provided; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): new money: buy; if held: hold (no demonstrated thesis failure); not an endorsement. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
       "tiers": {
         "decision": {
           "entry": {
@@ -7853,6 +7868,7 @@
         "is_unprofitable": null,
         "long_term_action": "buy",
         "long_term_fit": "ok",
+        "long_term_if_held_action": "hold",
         "market_cap": 10000000000,
         "mid_term_fit": "ok",
         "new_money_action": "buy",
@@ -7871,8 +7887,8 @@
         "score": 0.75,
         "sector": null,
         "snapshot_as_of_date": "2026-10-10",
-        "snapshot_hash": "8a4032a7ae8abf3c",
-        "snapshot_version": "3.0.0",
+        "snapshot_hash": "629eee32836ff9d7",
+        "snapshot_version": "4.0.0",
         "support_currency": "supported",
         "support_instrument": "supported",
         "symbol": "ACME",
@@ -7881,7 +7897,7 @@
         "valuation_gate": "attractive",
         "volatility_ann": 0.35
       },
-      "summary": "Decision (mid-term, new money): buy; No size estimate: a valid planning stop is unavailable. If held: hold. Long-term (1-5y): buy. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "summary": "Decision (mid-term, new money): buy; No size estimate: a valid planning stop is unavailable. If held: hold. Long-term (1-5y): new money: buy; if held: hold (no demonstrated thesis failure); not an endorsement. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
       "tiers": {
         "decision": {
           "entry": {
@@ -8166,6 +8182,7 @@
         "is_unprofitable": null,
         "long_term_action": "buy",
         "long_term_fit": "ok",
+        "long_term_if_held_action": "hold",
         "market_cap": 10000000000,
         "mid_term_fit": "ok",
         "new_money_action": "buy",
@@ -8184,8 +8201,8 @@
         "score": 0.75,
         "sector": null,
         "snapshot_as_of_date": "2026-10-10",
-        "snapshot_hash": "8a4032a7ae8abf3c",
-        "snapshot_version": "3.0.0",
+        "snapshot_hash": "629eee32836ff9d7",
+        "snapshot_version": "4.0.0",
         "support_currency": "supported",
         "support_instrument": "supported",
         "symbol": "ACME",
@@ -8194,7 +8211,7 @@
         "valuation_gate": "attractive",
         "volatility_ann": 0.35
       },
-      "summary": "Decision (mid-term, new money): buy; Starter \u2014 Position: $100 (1% of the account); estimated loss: 0.2% of the account if sold at $80; Full \u2014 Position: $100 (1% of the account); estimated loss: 0.2% of the account if sold at $80; risk budget: 0.25% (caller); position cap: 10% (profile). If held: hold. Long-term (1-5y): buy. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "summary": "Decision (mid-term, new money): buy; Starter \u2014 Position: $100 (1% of the account); estimated loss: 0.2% of the account if sold at $80; Full \u2014 Position: $100 (1% of the account); estimated loss: 0.2% of the account if sold at $80; risk budget: 0.25% (caller); position cap: 10% (profile). If held: hold. Long-term (1-5y): new money: buy; if held: hold (no demonstrated thesis failure); not an endorsement. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
       "tiers": {
         "decision": {
           "entry": {
@@ -8765,6 +8782,7 @@
         "is_unprofitable": null,
         "long_term_action": "buy",
         "long_term_fit": "ok",
+        "long_term_if_held_action": "hold",
         "market_cap": 10000000000,
         "mid_term_fit": "ok",
         "new_money_action": "buy",
@@ -8783,8 +8801,8 @@
         "score": 0.75,
         "sector": null,
         "snapshot_as_of_date": "2026-10-10",
-        "snapshot_hash": "403efafddb5a0097",
-        "snapshot_version": "3.0.0",
+        "snapshot_hash": "40fb3447f600217f",
+        "snapshot_version": "4.0.0",
         "support_currency": "supported",
         "support_instrument": "supported",
         "symbol": "ACME",
@@ -8793,7 +8811,7 @@
         "valuation_gate": "attractive",
         "volatility_ann": 0.5
       },
-      "summary": "Decision (mid-term, new money): buy; Starter \u2014 Position: $198 (1.98% of the account); estimated loss: 0.08% of the account if sold at $95; Full \u2014 Position: $594 (5.94% of the account); estimated loss: 0.24% of the account if sold at $95; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): buy. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has high risk (vol 50.0%, dd -30.0%). Fundamentals: revenue_yoy +12.0%; net_margin 20.0%. Technicals are strong (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%).",
+      "summary": "Decision (mid-term, new money): buy; Starter \u2014 Position: $198 (1.98% of the account); estimated loss: 0.08% of the account if sold at $95; Full \u2014 Position: $594 (5.94% of the account); estimated loss: 0.24% of the account if sold at $95; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): new money: buy; if held: hold (no demonstrated thesis failure); not an endorsement. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has high risk (vol 50.0%, dd -30.0%). Fundamentals: revenue_yoy +12.0%; net_margin 20.0%. Technicals are strong (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%).",
       "tiers": {
         "decision": {
           "entry": {
@@ -9366,6 +9384,7 @@
         "is_unprofitable": null,
         "long_term_action": "buy",
         "long_term_fit": "ok",
+        "long_term_if_held_action": "hold",
         "market_cap": 10000000000,
         "mid_term_fit": "ok",
         "new_money_action": "buy",
@@ -9384,8 +9403,8 @@
         "score": 0.75,
         "sector": null,
         "snapshot_as_of_date": "2026-10-10",
-        "snapshot_hash": "8b33d822e970a49d",
-        "snapshot_version": "3.0.0",
+        "snapshot_hash": "3d8e0ddd49ed8e36",
+        "snapshot_version": "4.0.0",
         "support_currency": "supported",
         "support_instrument": "supported",
         "symbol": "ACME",
@@ -9394,7 +9413,7 @@
         "valuation_gate": "attractive",
         "volatility_ann": 0.35
       },
-      "summary": "Decision (mid-term, new money): buy; Starter: no whole-share position fits this budget; Full \u2014 Position: $50 (5% of the account); estimated loss: 0.2% of the account if sold at $48; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): buy. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "summary": "Decision (mid-term, new money): buy; Starter: no whole-share position fits this budget; Full \u2014 Position: $50 (5% of the account); estimated loss: 0.2% of the account if sold at $48; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): new money: buy; if held: hold (no demonstrated thesis failure); not an endorsement. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
       "tiers": {
         "decision": {
           "entry": {
@@ -9937,6 +9956,7 @@
         "is_unprofitable": null,
         "long_term_action": "buy",
         "long_term_fit": "ok",
+        "long_term_if_held_action": "hold",
         "market_cap": 10000000000,
         "mid_term_fit": "ok",
         "new_money_action": "buy",
@@ -9955,8 +9975,8 @@
         "score": 0.75,
         "sector": null,
         "snapshot_as_of_date": "2026-10-10",
-        "snapshot_hash": "8a4032a7ae8abf3c",
-        "snapshot_version": "3.0.0",
+        "snapshot_hash": "629eee32836ff9d7",
+        "snapshot_version": "4.0.0",
         "support_currency": "supported",
         "support_instrument": "supported",
         "symbol": "ACME",
@@ -9965,7 +9985,7 @@
         "valuation_gate": "attractive",
         "volatility_ann": 0.35
       },
-      "summary": "Decision (mid-term, new money): buy; Starter \u2014 Position: $100 (1% of the account); estimated loss: 0.3% of the account if sold at $70; Full \u2014 Position: $500 (5% of the account); estimated loss: 1.5% of the account if sold at $70; risk budget: 1.5% (profile); position cap: 6% (profile). If held: hold. Long-term (1-5y): buy. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "summary": "Decision (mid-term, new money): buy; Starter \u2014 Position: $100 (1% of the account); estimated loss: 0.3% of the account if sold at $70; Full \u2014 Position: $500 (5% of the account); estimated loss: 1.5% of the account if sold at $70; risk budget: 1.5% (profile); position cap: 6% (profile). If held: hold. Long-term (1-5y): new money: buy; if held: hold (no demonstrated thesis failure); not an endorsement. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
       "tiers": {
         "decision": {
           "entry": {
@@ -10529,6 +10549,7 @@
         "is_unprofitable": null,
         "long_term_action": "buy",
         "long_term_fit": "ok",
+        "long_term_if_held_action": "hold",
         "market_cap": 10000000000,
         "mid_term_fit": "ok",
         "new_money_action": "buy",
@@ -10547,8 +10568,8 @@
         "score": 0.55,
         "sector": null,
         "snapshot_as_of_date": "2026-10-10",
-        "snapshot_hash": "bc61cd35ad312c4d",
-        "snapshot_version": "3.0.0",
+        "snapshot_hash": "05bef2f138d497aa",
+        "snapshot_version": "4.0.0",
         "support_currency": "supported",
         "support_instrument": "supported",
         "symbol": "ACME",
@@ -10559,7 +10580,7 @@
         "valuation_gate": "attractive",
         "volatility_ann": 0.22
       },
-      "summary": "Decision (mid-term, new money): buy; Starter: no whole-share position fits this budget; Full: no whole-share position fits this budget; risk budget: 1% (profile); position cap: 0.5% (caller). If held: hold. Long-term (1-5y): buy. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (golden cross, MACD bullish, 1M +12.0%, 3M +10.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "summary": "Decision (mid-term, new money): buy; Starter: no whole-share position fits this budget; Full: no whole-share position fits this budget; risk budget: 1% (profile); position cap: 0.5% (caller). If held: hold. Long-term (1-5y): new money: buy; if held: hold (no demonstrated thesis failure); not an endorsement. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (golden cross, MACD bullish, 1M +12.0%, 3M +10.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
       "tiers": {
         "decision": {
           "entry": {
@@ -11120,6 +11141,7 @@
         "is_unprofitable": null,
         "long_term_action": "buy",
         "long_term_fit": "ok",
+        "long_term_if_held_action": "hold",
         "market_cap": 10000000000,
         "mid_term_fit": "ok",
         "new_money_action": "buy",
@@ -11138,8 +11160,8 @@
         "score": 0.75,
         "sector": null,
         "snapshot_as_of_date": "2026-10-10",
-        "snapshot_hash": "8a4032a7ae8abf3c",
-        "snapshot_version": "3.0.0",
+        "snapshot_hash": "629eee32836ff9d7",
+        "snapshot_version": "4.0.0",
         "support_currency": "supported",
         "support_instrument": "supported",
         "symbol": "ACME",
@@ -11148,7 +11170,7 @@
         "valuation_gate": "attractive",
         "volatility_ann": 0.35
       },
-      "summary": "Decision (mid-term, new money): buy; Starter \u2014 Position: $100 (1% of the account); estimated loss: 0.04% of the account if sold at $96; Full \u2014 Position: $600 (6% of the account); estimated loss: 0.24% of the account if sold at $96; risk budget: 1.5% (profile); position cap: 6% (profile). If held: hold. Long-term (1-5y): buy. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "summary": "Decision (mid-term, new money): buy; Starter \u2014 Position: $100 (1% of the account); estimated loss: 0.04% of the account if sold at $96; Full \u2014 Position: $600 (6% of the account); estimated loss: 0.24% of the account if sold at $96; risk budget: 1.5% (profile); position cap: 6% (profile). If held: hold. Long-term (1-5y): new money: buy; if held: hold (no demonstrated thesis failure); not an endorsement. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
       "tiers": {
         "decision": {
           "entry": {
@@ -11679,6 +11701,7 @@
         "is_unprofitable": null,
         "long_term_action": "buy",
         "long_term_fit": "ok",
+        "long_term_if_held_action": "hold",
         "market_cap": 10000000000,
         "mid_term_fit": "ok",
         "new_money_action": "buy",
@@ -11697,8 +11720,8 @@
         "score": 0.75,
         "sector": null,
         "snapshot_as_of_date": "2026-10-10",
-        "snapshot_hash": "8a4032a7ae8abf3c",
-        "snapshot_version": "3.0.0",
+        "snapshot_hash": "629eee32836ff9d7",
+        "snapshot_version": "4.0.0",
         "support_currency": "supported",
         "support_instrument": "supported",
         "symbol": "ACME",
@@ -11707,7 +11730,7 @@
         "valuation_gate": "attractive",
         "volatility_ann": 0.35
       },
-      "summary": "Decision (mid-term, new money): buy; Starter \u2014 Position: $100 (1% of the account); estimated loss: 0.2% of the account if sold at $80; Full \u2014 Position: $600 (6% of the account); estimated loss: 1.2% of the account if sold at $80; risk budget: 1.5% (profile); position cap: 6% (profile). If held: hold. Long-term (1-5y): buy. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "summary": "Decision (mid-term, new money): buy; Starter \u2014 Position: $100 (1% of the account); estimated loss: 0.2% of the account if sold at $80; Full \u2014 Position: $600 (6% of the account); estimated loss: 1.2% of the account if sold at $80; risk budget: 1.5% (profile); position cap: 6% (profile). If held: hold. Long-term (1-5y): new money: buy; if held: hold (no demonstrated thesis failure); not an endorsement. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
       "tiers": {
         "decision": {
           "entry": {
@@ -12211,6 +12234,7 @@
         "is_unprofitable": null,
         "long_term_action": "buy",
         "long_term_fit": "ok",
+        "long_term_if_held_action": "hold",
         "market_cap": 10000000000,
         "mid_term_fit": "ok",
         "new_money_action": "starter",
@@ -12229,8 +12253,8 @@
         "score": 0.75,
         "sector": null,
         "snapshot_as_of_date": "2026-10-10",
-        "snapshot_hash": "5fc52f8f28e59b6f",
-        "snapshot_version": "3.0.0",
+        "snapshot_hash": "8632ebba986a6b93",
+        "snapshot_version": "4.0.0",
         "support_currency": "supported",
         "support_instrument": "supported",
         "symbol": "ACME",
@@ -12239,7 +12263,7 @@
         "valuation_gate": "attractive",
         "volatility_ann": 0.35
       },
-      "summary": "Decision (mid-term, new money): starter; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.4% of the account if sold at $80; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): buy. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "summary": "Decision (mid-term, new money): starter; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.4% of the account if sold at $80; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): new money: buy; if held: hold (no demonstrated thesis failure); not an endorsement. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
       "tiers": {
         "decision": {
           "entry": {
@@ -12717,6 +12741,7 @@
         "is_unprofitable": null,
         "long_term_action": "buy",
         "long_term_fit": "ok",
+        "long_term_if_held_action": "hold",
         "market_cap": 10000000000,
         "mid_term_fit": "ok",
         "new_money_action": "buy",
@@ -12735,8 +12760,8 @@
         "score": 0.75,
         "sector": null,
         "snapshot_as_of_date": "2026-10-10",
-        "snapshot_hash": "8a4032a7ae8abf3c",
-        "snapshot_version": "3.0.0",
+        "snapshot_hash": "629eee32836ff9d7",
+        "snapshot_version": "4.0.0",
         "support_currency": "supported",
         "support_instrument": "supported",
         "symbol": "ACME",
@@ -12745,7 +12770,7 @@
         "valuation_gate": "attractive",
         "volatility_ann": 0.35
       },
-      "summary": "Decision (mid-term, new money): buy; Starter: no whole-share position fits this budget; Full: no whole-share position fits this budget; risk budget: 1% (profile); position cap: 0.06% (caller). If held: hold. Long-term (1-5y): buy. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "summary": "Decision (mid-term, new money): buy; Starter: no whole-share position fits this budget; Full: no whole-share position fits this budget; risk budget: 1% (profile); position cap: 0.06% (caller). If held: hold. Long-term (1-5y): new money: buy; if held: hold (no demonstrated thesis failure); not an endorsement. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
       "tiers": {
         "decision": {
           "entry": {
@@ -13297,6 +13322,7 @@
         "is_unprofitable": null,
         "long_term_action": "buy",
         "long_term_fit": "ok",
+        "long_term_if_held_action": "hold",
         "market_cap": 10000000000,
         "mid_term_fit": "ok",
         "new_money_action": "buy",
@@ -13315,8 +13341,8 @@
         "score": 0.75,
         "sector": null,
         "snapshot_as_of_date": "2026-10-10",
-        "snapshot_hash": "8a4032a7ae8abf3c",
-        "snapshot_version": "3.0.0",
+        "snapshot_hash": "629eee32836ff9d7",
+        "snapshot_version": "4.0.0",
         "support_currency": "supported",
         "support_instrument": "supported",
         "symbol": "ACME",
@@ -13325,7 +13351,7 @@
         "valuation_gate": "attractive",
         "volatility_ann": 0.35
       },
-      "summary": "Decision (mid-term, new money): buy; Starter: no whole-share position fits this budget; Full: no whole-share position fits this budget; risk budget: 1e-3% (caller); position cap: 10% (profile). If held: hold. Long-term (1-5y): buy. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+      "summary": "Decision (mid-term, new money): buy; Starter: no whole-share position fits this budget; Full: no whole-share position fits this budget; risk budget: 1e-3% (caller); position cap: 10% (profile). If held: hold. Long-term (1-5y): new money: buy; if held: hold (no demonstrated thesis failure); not an endorsement. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
       "tiers": {
         "decision": {
           "entry": {

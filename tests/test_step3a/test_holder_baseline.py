@@ -1,5 +1,6 @@
 """Observed v0.4.0 behavior. Later packages replace defect pins, never the before files."""
 
+import copy
 import hashlib
 import json
 
@@ -7,6 +8,7 @@ import pytest
 
 from tests.support import decision_matrix as dm
 from tests.support import holder_matrix as hm
+from tests.support import output_contract as oc
 
 BEFORE = json.loads((hm.FIXTURE_DIR / "before.json").read_text())
 
@@ -23,15 +25,24 @@ async def test_stock_observation_includes_inputs_decisions_sizing_and_complete_s
     assert row["account_size"] == case.account_size
     previous_fields = hm.stock_digest(result)
     assert isinstance(previous_fields["decision_card"]["long_term"].pop("if_held"), dict)
-    assert previous_fields == row["result"]
+    before = copy.deepcopy(row["result"])
+    old_snapshot = before.pop("watchlist_snapshot")
+    snapshot = previous_fields.pop("watchlist_snapshot")
+    assert {key: snapshot[key] for key in old_snapshot if key not in {"snapshot_version", "snapshot_hash"}} == {
+        key: value for key, value in old_snapshot.items() if key not in {"snapshot_version", "snapshot_hash"}}
+    old_segments = oc.segments(before.pop("executive_summary"))
+    new_segments = oc.segments(previous_fields.pop("executive_summary"))
+    assert new_segments[:2] == old_segments[:2]
+    assert new_segments[3:] == old_segments[3:]
+    assert previous_fields == before
     for tier, payload in dm.tiers(result).items():
         assert payload["watchlist_snapshot"] == result["watchlist_snapshot"], tier
         card = payload["decision_card"]
         for key in ("new_money", "if_held", "long_term", "sizing", "sizing_status"):
             assert card[key] == result["decision_card"][key], (name, tier, key)
         assert isinstance(card["long_term"]["if_held"], dict)
-    assert result["watchlist_snapshot"]["snapshot_version"] == "3.0.0"
-    assert "long_term_if_held_action" not in result["watchlist_snapshot"]
+    assert result["watchlist_snapshot"]["snapshot_version"] == "4.0.0"
+    assert result["watchlist_snapshot"]["long_term_if_held_action"] == result["decision_card"]["long_term"]["if_held"]["action"]
 
 
 INVALID_POSITIONS = {"negative_cost", "zero_shares", "negative_shares", "future_date", "invalid_date"}
@@ -137,7 +148,7 @@ async def test_source_inventory_changes_from_technicals_only_to_one_full_analysi
     row = await hm.run_position("gain")
     assert BEFORE["positions"]["gain"]["technical_reads"] == 1
     assert row["source_reads"] == dict.fromkeys(dm.TOOLS, 1)
-    assert row["result"]["meta"]["schema_version"] == "7"
+    assert row["result"]["meta"]["schema_version"] == "8"
 
 
 async def test_position_clock_is_explicit_et_not_host_wall_time():

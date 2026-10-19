@@ -90,7 +90,7 @@ async def test_the_summary_opens_with_three_linted_horizon_segments(name: str) -
         assert "No size estimate:" not in first
         assert card["sizing_status"]["status"] == "not_allowed"
     assert second == f"If held: {words(held['action'])}."
-    assert third.startswith(PREFIXES[2] + words(long["action"]))
+    assert third.startswith(PREFIXES[2] + "new money: " + words(long["action"]))
     assert result["executive_summary"].count("risk budget:") == first.count("risk budget:")
     assert not oc.advice(first) or entry_allowed(new_money["action"]), first
     assert not oc.advice(third) or long["action"] in ENTRY_ACTIONS, third
@@ -135,7 +135,10 @@ async def test_named_segments(name: str, segments: tuple[str, str, str]) -> None
     PD D-9. Sparse business inputs now give holder uncertainty (WP2.5 C2), and now block new money with a separate gate."""
     actual = oc.segments((await dm.run(name))["executive_summary"])[:3]
     assert "No size estimate:" not in actual[0]
-    assert actual == list(segments)
+    assert actual[:2] == list(segments[:2])
+    # The original long-term new-money clause is retained before the new holder clause.
+    assert actual[2].split("; if held:")[0] + "." == segments[2].replace(
+        "Long-term (1-5y): ", "Long-term (1-5y): new money: ")
 
 
 @pytest.mark.parametrize(("name", "mid", "held", "long"), [
@@ -153,7 +156,7 @@ async def test_the_summary_names_both_horizons(name: str, mid: str, held: str, l
     first, second, third = oc.segments(summary)[:3]
     assert first.split(";")[0].rstrip(".") == f"Decision (mid-term, new money): {mid}"
     assert second == f"If held: {held}."
-    assert third == f"Long-term (1-5y): {long}."
+    assert third.startswith(f"Long-term (1-5y): new money: {long}; if held: ")
 
 
 def _card(earliest: dict[str, Any] | None, action: str = "wait") -> dict[str, Any]:

@@ -46,9 +46,9 @@ def decisions(body):
     return {key: card[key] for key in ("new_money", "if_held", "long_term", "hard_gates", "action_now")}
 
 
-def test_sizing_response_migration_keeps_snapshot_version():
-    assert SCHEMA_VERSION == "7"
-    assert SNAPSHOT_VERSION == "3.0.0"
+def test_holder_migration_versions_are_separate_from_sizing_policy():
+    assert SCHEMA_VERSION == "8"
+    assert SNAPSHOT_VERSION == "4.0.0"
 
 
 @pytest.mark.parametrize("action", ["buy", "starter"])
@@ -64,7 +64,7 @@ async def test_client_missing_atr_explains_null_size_without_changing_decisions(
             for tier in TIERS:
                 body = await payload(client, "analyze", symbol="ACME", account_size=10_000, detail=tier)
                 card = body["decision_card"]
-                assert body["meta"]["schema_version"] == "7"
+                assert body["meta"]["schema_version"] == "8"
                 assert card["new_money"]["action"] == action
                 assert card["sizing"] is None
                 assert card["sizing_status"] == {"status": "unavailable", "reason": "stop_price_missing"}
@@ -88,8 +88,12 @@ async def test_client_all_tiers_keep_visibility_and_per_scenario_quantity_status
     for tier, body in zip(TIERS, outputs, strict=True):
         card = body["decision_card"]
         size = card["sizing"]
-        assert body["meta"]["schema_version"] == "7"
-        assert body["watchlist_snapshot"] == expected_snapshot
+        assert body["meta"]["schema_version"] == "8"
+        assert {key: body["watchlist_snapshot"][key] for key in expected_snapshot
+                if key not in {"snapshot_version", "snapshot_hash"}} == {
+            key: value for key, value in expected_snapshot.items()
+            if key not in {"snapshot_version", "snapshot_hash"}}
+        assert body["watchlist_snapshot"] == outputs[0]["watchlist_snapshot"]
         assert card["sizing_status"] == outputs[0]["decision_card"]["sizing_status"]
         assert size == outputs[0]["decision_card"]["sizing"]
         if name == "earnings_blocked":

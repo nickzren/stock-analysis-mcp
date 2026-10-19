@@ -5,7 +5,7 @@ A actionable (from decide(); declares its horizon), S sizing (subset of A), C co
 N our narrative, P pre-gate (full tier only, under diagnostics), T third-party, E static config echo.
 Globs are root-anchored: `prefix.**` matches `prefix` itself (a null or empty leaf) and everything under
 it; `*` is one key; `[*]` is a list item. The most specific row wins: more literal segments, then an exact
-row over a `.**` row. watchlist_snapshot (snapshot 3.0.0, plan §8) is registered like every other root.
+row over a `.**` row. watchlist_snapshot (snapshot 4.0.0, plan §8) is registered like every other root.
 The WP2.5 live smoke calls registry_violations() on live payloads.
 """
 
@@ -120,9 +120,10 @@ FIELD_REGISTRY: tuple[Field, ...] = (
     R("risk_summary.**", D, tiers=SF), R("events_summary.**", D, tiers=SF), R("signals.**", D, tiers=FULL),
     R("market_context.**", D, tiers=FULL), R("relative_performance.**", D, tiers=SF),
     R("sector_comparison.**", D, tiers=SF), R("quality.**", D, tiers=FULL), R("valuation_context.**", D, tiers=FULL),
-    # watchlist_snapshot 3.0.0 (plan §8): closed key by key; the canonical actions, the fired and the unevaluated
+    # watchlist_snapshot 4.0.0 (plan §8): closed key by key; the canonical actions, the fired and the unevaluated
     # gate ids are A
     R("watchlist_snapshot.new_money_action", A, MID), R("watchlist_snapshot.if_held_action", A, HOLDER),
+    R("watchlist_snapshot.long_term_if_held_action", A, LONG),
     R("watchlist_snapshot.long_term_action", A, LONG), R("watchlist_snapshot.hard_gate_ids.**", A, MID),
     R("watchlist_snapshot.unevaluated_gate_ids.**", A, MID),
     *(R(f"watchlist_snapshot.{key}", D) for key in (

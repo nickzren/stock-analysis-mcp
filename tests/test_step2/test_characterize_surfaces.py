@@ -265,14 +265,12 @@ def position_decision_text() -> str:
 
 
 class TestPositionDecisionPrompt:
-    def test_the_prompt_decides_from_analyze(self) -> None:
-        """SC-CH15 (flipped by WP2.4): position_decision calls analyze first for the decision, then
-        analyze_my_position for P/L and tax, and asks for decision_card.if_held.action in the holder vocabulary,
-        not HOLD / SELL / TRIM and not get_technicals (plan §9). G from WP2.4."""
+    def test_the_prompt_uses_one_canonical_position_analysis(self) -> None:
+        """3a.3 deliberately replaces the former double-call and tax prompt."""
         text = position_decision_text()
 
-        assert re.findall(r"^\d+\. (\w+)\(", text, flags=re.MULTILINE) == ["analyze", "analyze_my_position"]
-        assert "`decision_card.if_held.action`" in text
+        assert re.findall(r"^\d+\. (\w+)\(", text, flags=re.MULTILINE) == ["analyze_my_position"]
+        assert "`position_card.holder_assessment`" in text
         assert [a for a in IF_HELD_ACTIONS if not re.search(rf"\b{a}\b", text)] == []
         assert "HOLD / SELL / TRIM" not in text and "get_technicals" not in text
 
@@ -287,8 +285,7 @@ class TestPositionDecisionPrompt:
                 reads[name] = await position_module.analyze_position(
                     "ACME", cost_basis=80.0, purchase_date="2025-01-02", _now=scenario.now,
                 )
-        # Prompt routing changes in 3a.3; keep its existing first call for this package.
-        assert re.findall(r"^\d+\. (\w+)\(", position_decision_text(), flags=re.MULTILINE)[0] == "analyze"
+        assert re.findall(r"^\d+\. (\w+)\(", position_decision_text(), flags=re.MULTILINE) == ["analyze_my_position"]
         assert {name: (result["position_card"]["holder_assessment"]["action"],
                        result["position_card"]["holder_assessment"]["basis"])
                 for name, result in reads.items()} == {

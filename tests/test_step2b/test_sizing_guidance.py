@@ -10,8 +10,7 @@ NULL_RULE = ("When sizing is null, report `decision_card.sizing_status` and its 
              "do not infer the reason from the action alone.")
 
 
-@pytest.mark.parametrize("key", ["instructions", "guide", "tool:analyze", "prompt:full_analysis",
-                                  "prompt:position_decision"])
+@pytest.mark.parametrize("key", ["instructions", "guide", "tool:analyze", "prompt:full_analysis"])
 async def test_null_guidance_uses_status_and_preserves_research_action(key):
     text = flat((await texts())[key])
     assert NULL_RULE in text
@@ -53,11 +52,12 @@ async def test_guide_separates_availability_quantity_and_conditional_loss():
 
 async def test_position_prompt_keeps_sizing_separate_from_holder_decision():
     text = flat((await texts())["prompt:position_decision"])
-    for needle in ("never attach it to a long-term or holder answer",
-                   "This planning stop is not monitored or an exit instruction.",
-                   "Gaps and slippage can make the actual loss larger.",
-                   "standalone allocation", "remaining add capacity"):
+    for needle in ("Do not attach entry sizing or ATR planning stops to this answer",
+                   "this position call supplies no entry size",
+                   "No remaining add capacity is assessed",
+                   "Technical references are unmonitored diagnostics, not holder exit instructions"):
         assert needle in text, needle
+
 
 
 @pytest.mark.parametrize("tool", ["analyze", "analyze_trade_setup", "scan_watchlist"])

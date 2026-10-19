@@ -201,5 +201,5 @@ async def test_client_context_changes_cannot_feed_analysis_or_persist_personal_d
     for record in records[1:]:
         for field in ("decision_card", "watchlist_snapshot", "action_zones", "decision_modes", "verdict"):
             assert record[field] == records[0][field], field
-        assert record["watchlist_snapshot"]["snapshot_version"] == "3.0.0"
+        assert record["watchlist_snapshot"]["snapshot_version"] == "4.0.0"
     assert {p.relative_to(data_dir): p.read_bytes() for p in data_dir.rglob("*") if p.is_file()} == original

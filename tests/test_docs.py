@@ -1,4 +1,4 @@
-"""Public versions, release pins, historical decisions and the schema-7 sizing migration."""
+"""Public versions, release pins, historical decisions and the holder and sizing migrations."""
 
 import re
 from pathlib import Path
@@ -14,6 +14,7 @@ from tests.support.output_contract import CLASSES
 ROOT = Path(__file__).resolve().parents[1]
 HORIZONS = ("In `watchlist_snapshot`, `new_money_action` and `if_held_action` are the mid-term decision and "
             "`long_term_action` the long-term one; `scan_watchlist` state holds swing-card actions.")
+SCHEMA_8 = '`meta.schema_version` goes from `"7"` to `"8"`'
 SCHEMA_7 = '`meta.schema_version` goes from `"6"` to `"7"`'
 SCHEMA_6 = '`meta.schema_version` goes from `"5"` to `"6"`'
 PRICE_ZONE_ALERTS = ("`price_zone` follows the uncapped bands, so a capped name (falling knife, extended decline, "
@@ -37,16 +38,20 @@ def _sections(markdown: str, level: str) -> dict[str, str]:
     return dict(zip(parts[1::2], parts[2::2], strict=True))
 
 
-def _schema_6_section() -> str:
-    found = [body for body in _sections(_read("CHANGELOG.md"), "##").values() if SCHEMA_6 in body]
-    assert len(found) == 1, "exactly one CHANGELOG section introduces schema 6"
+def _migration_section(version_text: str) -> str:
+    found = [body for body in _sections(_read("CHANGELOG.md"), "##").values() if version_text in body]
+    assert len(found) == 1, "exactly one CHANGELOG section introduces each response schema"
     return found[0]
 
 
-def test_schema_version_is_7() -> None:
-    """Sizing changes advance the response contract without advancing the snapshot."""
-    assert SCHEMA_VERSION == "7"
-    assert build_meta("analyze_stock")["schema_version"] == "7"
+def _schema_6_section() -> str:
+    return _migration_section(SCHEMA_6)
+
+
+def test_schema_version_is_8() -> None:
+    """Holder, position and snapshot guidance ship under the coordinated response contract."""
+    assert SCHEMA_VERSION == "8"
+    assert build_meta("analyze_stock")["schema_version"] == "8"
 
 
 def test_docs_state_the_current_versions_and_the_release_pin() -> None:
@@ -100,8 +105,8 @@ def test_readme_and_agents_carry_the_decision_tables_and_horizons() -> None:
 
 
 def test_schema_7_migration_names_canonical_fields_and_legacy_adapters() -> None:
-    """The current migration covers the canonical shape and every legacy sizing adapter."""
-    newest = next(iter(_sections(_read("CHANGELOG.md"), "##").values()))
+    """The released migration stays complete when newer response schemas are introduced."""
+    newest = _migration_section(SCHEMA_7)
     assert SCHEMA_7 in newest
     for shape in (SizingAssumptions, SizingLimits, SizingScenario):
         assert [field for field in shape.__annotations__ if f"`{field}`" not in newest] == []
@@ -133,3 +138,44 @@ def test_current_guidance_explains_null_sizing_and_conditional_loss() -> None:
     assert "The planning stop is not monitored" in _flat(readme)
     assert "gaps and slippage can increase the loss" in _flat(readme)
     assert "pending the next" not in _read("AGENTS.md")
+
+
+def test_schema_8_migration_covers_holder_and_position_contracts() -> None:
+    section = _migration_section(SCHEMA_8)
+    fields = (
+        "decision_card.long_term.if_held", "action", "basis", "reasons", "assessment_status",
+        "checks", "business", "cash_runway", "state", "classification", "reason", "evidence",
+        "periods", "periods_reason", "watch_factors", "review_when", "add_allowed",
+        "position_card", "horizon", "holder_assessment", "new_money", "context_status",
+        "review_status", "concentration_check", "addition_context", "threshold_basis",
+        "portfolio_value", "max_holding_pct", "portfolio_weight_pct", "calculation_reasons",
+        "price_provenance", "price_context", "assumptions", "suitability", "tax.status",
+        "holding.is_long_term", "holding.days_to_long_term", "tax.type", "tax.rate_if_sold_now",
+        "tax.rate_if_long_term", "tax.tax_on_gain_now", "tax.tax_if_waited", "tax.potential_savings",
+        "current_signals", "sell_signals", "sell_signals.active_count", "support_levels",
+        "diagnostics.technicals.current_signals", "diagnostics.technicals.flags",
+        "diagnostics.technicals.reference_levels", "long_term_if_held_action",
+    )
+    assert [field for field in fields if f"`{field}`" not in section] == []
+    assert SNAPSHOT_FIELDS["4.0.0"] - SNAPSHOT_FIELDS["3.0.0"] == {"long_term_if_held_action"}
+    for value in ("not_assessed", "insufficient_data", "review_allocation", "no_allocation_trigger",
+                  "not_evaluated", "not_requested", "numeric_range_unavailable"):
+        assert f"`{value}`" in section
+    for text in ("USD", "decimal strings", "before", "one analysis", "price-only", "including this holding",
+                 "no default", "not monitored", "personal", "3→4", "1.x/2→4", "4→4", "not_comparable",
+                 "never relabel", "entry sizing", "source work"):
+        assert text in section
+
+
+def test_unreleased_holder_docs_keep_release_scope_and_allocation_separate() -> None:
+    readme = _read("README.md")
+    section = _sections(readme, "##")["Unreleased (main): longer-term holders"]
+    assert "I own AAPL and plan to hold for five years" in section
+    assert "schema **8**" in section and "**4.0.0**" in section
+    for text in ("decision_card.long_term.if_held", "analyze_my_position", "optional", "USD",
+                 "not_assessed", "Allocation check", "No tax estimate", "not an endorsement"):
+        assert text in section
+    assert "This tool does not assess long-term ETF ownership" in section
+    assert "one year" in section
+    assert "v0.4.0" in section
+    assert "suitability" in section and "reasons" in section

@@ -26,10 +26,8 @@ from datetime import datetime
 from typing import Any
 
 # Snapshot format version - bump when normalization logic changes.
-# 3.0.0 (Step 2, plan §8): the canonical decision (new_money / if_held / long_term actions) and the neutral
-# price_zone replace the pre-gate action codes, decision_action_now and zone; hard_gate_ids lists every fired gate
-# and unevaluated_gate_ids every gate whose input failed (not evaluated, so never cleared).
-SNAPSHOT_VERSION = "3.0.0"
+# 4.0.0 adds the long-term holder action; all 3.0.0 fields retain their meanings.
+SNAPSHOT_VERSION = "4.0.0"
 # Each version's field set, frozen: detect_changes validates and compares a previous snapshot on its own
 # version's fields and ignores any other key. 1.0.0 lists the enriched copy's fields (zone, fits, signals).
 SNAPSHOT_FIELDS: dict[str, frozenset[str]] = {
@@ -59,10 +57,18 @@ SNAPSHOT_FIELDS: dict[str, frozenset[str]] = {
         "long_term_fit", "bullish_signals", "bearish_signals", "hard_gate_ids", "unevaluated_gate_ids",
         "support_instrument", "support_currency", "price_source", "price_as_of", "as_of_kind", "price_stale",
     }),
+    "4.0.0": frozenset({
+        "snapshot_version", "symbol", "snapshot_hash", "snapshot_as_of_date", "price", "market_cap", "sector",
+        "tilt", "confidence", "score", "new_money_action", "if_held_action", "long_term_action", "valuation_gate",
+        "is_unprofitable", "risk_regime", "volatility_ann", "next_catalyst", "price_zone", "mid_term_fit",
+        "long_term_fit", "bullish_signals", "bearish_signals", "hard_gate_ids", "unevaluated_gate_ids",
+        "support_instrument", "support_currency", "price_source", "price_as_of", "as_of_kind", "price_stale",
+        "long_term_if_held_action",
+    }),
 }
 # Versions detect_changes accepts as a previous snapshot (a literal: never derived from SNAPSHOT_VERSION).
-COMPATIBLE_SNAPSHOT_VERSIONS = frozenset({"1.0.0", "1.1.0", "2.0.0", "3.0.0"})
-# Required in every snapshot; a 3.0.0 snapshot must also carry every 3.0.0 field, older versions may lack some.
+COMPATIBLE_SNAPSHOT_VERSIONS = frozenset({"1.0.0", "1.1.0", "2.0.0", "3.0.0", "4.0.0"})
+# Required in every snapshot; 3.0.0 and 4.0.0 also require their complete field sets.
 SNAPSHOT_IDENTITY_KEYS = ("snapshot_version", "symbol")
 # Left out of snapshot_hash because they move with the clock, not with market data:
 # fetch dates and staleness (an age past a threshold).
@@ -585,6 +591,7 @@ def build_watchlist_snapshot(raw: dict[str, Any]) -> dict[str, Any]:
         "new_money_action": _section(decision_card.get("new_money")).get("action"),
         "if_held_action": _section(decision_card.get("if_held")).get("action"),
         "long_term_action": long_term.get("action"),
+        "long_term_if_held_action": _section(_section(decision_card.get("long_term")).get("if_held")).get("action"),
         "valuation_gate": valuation.get("gate"),
         "is_unprofitable": valuation.get("is_unprofitable") or None,
         # Every fired gate (decision_card.hard_gates.blocking), not only those that set an action

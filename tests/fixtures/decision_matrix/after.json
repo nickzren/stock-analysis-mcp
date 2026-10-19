@@ -119,7 +119,7 @@
       "long_term_action": "wait_for_data",
       "new_money_action": "wait_for_data",
       "price_zone": "near_52w_high",
-      "snapshot_hash": "53b2fc37bf6a0275",
+      "snapshot_hash": "f1aa94ba8c33e928",
       "unevaluated_gate_ids": [
         "thesis_broken"
       ]
@@ -243,7 +243,7 @@
       "long_term_action": "avoid",
       "new_money_action": "avoid",
       "price_zone": "below_sma200",
-      "snapshot_hash": "45b1fa411d48ce62",
+      "snapshot_hash": "a0e1b3d8f66fa5c2",
       "unevaluated_gate_ids": []
     },
     "source": "PH A",
@@ -371,7 +371,7 @@
       "long_term_action": "avoid",
       "new_money_action": "avoid",
       "price_zone": "below_sma200",
-      "snapshot_hash": "9bef9b7509c9b156",
+      "snapshot_hash": "897f0c77d7748da9",
       "unevaluated_gate_ids": []
     },
     "source": "PH B",
@@ -504,7 +504,7 @@
       "long_term_action": "wait_for_data",
       "new_money_action": "wait_for_data",
       "price_zone": "above_sma50",
-      "snapshot_hash": "0b0aac29a9bd959d",
+      "snapshot_hash": "6b29886c0fd7afdc",
       "unevaluated_gate_ids": [
         "thesis_broken"
       ]
@@ -644,7 +644,7 @@
       "long_term_action": "wait_for_data",
       "new_money_action": "wait_for_data",
       "price_zone": "above_sma50",
-      "snapshot_hash": "fa8835eea2d32e7d",
+      "snapshot_hash": "4bfa4b17b5a95863",
       "unevaluated_gate_ids": [
         "thesis_broken"
       ]
@@ -776,7 +776,7 @@
       "long_term_action": "wait_for_data",
       "new_money_action": "avoid",
       "price_zone": "below_sma200",
-      "snapshot_hash": "343d3005baf131e4",
+      "snapshot_hash": "17e0ece36905e7fa",
       "unevaluated_gate_ids": [
         "thesis_broken"
       ]
@@ -904,7 +904,7 @@
       "long_term_action": "avoid",
       "new_money_action": "avoid",
       "price_zone": "below_sma200",
-      "snapshot_hash": "837dc0c9f88ab627",
+      "snapshot_hash": "54911bfd99c96903",
       "unevaluated_gate_ids": []
     },
     "source": "PH C",
@@ -1028,7 +1028,7 @@
       "long_term_action": "wait",
       "new_money_action": "avoid",
       "price_zone": "below_sma200",
-      "snapshot_hash": "5888703da6f73227",
+      "snapshot_hash": "2208acd0f9948f70",
       "unevaluated_gate_ids": []
     },
     "source": "PH D2",
@@ -1139,7 +1139,7 @@
       "long_term_action": "buy",
       "new_money_action": "avoid",
       "price_zone": "below_sma200",
-      "snapshot_hash": "79b7f94c379555ce",
+      "snapshot_hash": "8761a43ec3442683",
       "unevaluated_gate_ids": []
     },
     "source": "PH D",
@@ -1254,7 +1254,7 @@
       "long_term_action": "starter",
       "new_money_action": "starter",
       "price_zone": "above_sma50",
-      "snapshot_hash": "87a39b94b512e243",
+      "snapshot_hash": "6b0dac85f4f752a7",
       "unevaluated_gate_ids": []
     },
     "source": "PH E2",
@@ -1373,7 +1373,7 @@
       "long_term_action": "watch",
       "new_money_action": "avoid",
       "price_zone": "below_sma200",
-      "snapshot_hash": "999e344e787a8d25",
+      "snapshot_hash": "625d89b3269adc48",
       "unevaluated_gate_ids": []
     },
     "source": "PH ETF bearish",
@@ -1495,7 +1495,7 @@
       "long_term_action": "watch",
       "new_money_action": "watch",
       "price_zone": "above_sma50",
-      "snapshot_hash": "b65354f07c28c38a",
+      "snapshot_hash": "cc3d03980f74a35b",
       "unevaluated_gate_ids": []
     },
     "source": "PH ETF bullish",
@@ -1623,7 +1623,7 @@
       "long_term_action": "avoid",
       "new_money_action": "avoid",
       "price_zone": "above_sma50",
-      "snapshot_hash": "610de81a41234ce5",
+      "snapshot_hash": "46754a7341a6c7bf",
       "unevaluated_gate_ids": []
     },
     "source": "PH E",
@@ -1734,7 +1734,7 @@
       "long_term_action": "wait",
       "new_money_action": "avoid",
       "price_zone": "below_sma200",
-      "snapshot_hash": "09fc3d4bb5561936",
+      "snapshot_hash": "b73bb92579dba0e6",
       "unevaluated_gate_ids": []
     },
     "source": "PH F3",
@@ -1867,7 +1867,7 @@
       "long_term_action": "watch",
       "new_money_action": "watch",
       "price_zone": "above_sma50",
-      "snapshot_hash": "b01d6caa1861bd96",
+      "snapshot_hash": "4fb756e2de1d7992",
       "unevaluated_gate_ids": [
         "thesis_broken"
       ]
@@ -1997,7 +1997,7 @@
       "long_term_action": "avoid",
       "new_money_action": "avoid",
       "price_zone": "below_sma200",
-      "snapshot_hash": "9bd8ff32294b6100",
+      "snapshot_hash": "6fe96a62b136bb7d",
       "unevaluated_gate_ids": []
     },
     "source": "PH G",
@@ -2130,7 +2130,7 @@
       "long_term_action": "avoid",
       "new_money_action": "avoid",
       "price_zone": "above_sma50",
-      "snapshot_hash": "bb70048d02270da9",
+      "snapshot_hash": "623096ca7a9e4429",
       "unevaluated_gate_ids": []
     },
     "source": "PH CH7 burner (D-1c)",
@@ -2263,7 +2263,7 @@
       "long_term_action": "wait_for_data",
       "new_money_action": "wait_for_data",
       "price_zone": "above_sma50",
-      "snapshot_hash": "8fc0e32c85c34832",
+      "snapshot_hash": "edbe18374cd98b46",
       "unevaluated_gate_ids": [
         "thesis_broken"
       ]
@@ -2400,7 +2400,7 @@
       "long_term_action": "wait_for_data",
       "new_money_action": "wait_for_data",
       "price_zone": "below_sma200",
-      "snapshot_hash": "254427f6205d7d15",
+      "snapshot_hash": "11ea88b82d9c4d5b",
       "unevaluated_gate_ids": [
         "thesis_broken"
       ]
@@ -2533,7 +2533,7 @@
       "long_term_action": "wait_for_data",
       "new_money_action": "avoid",
       "price_zone": "below_sma200",
-      "snapshot_hash": "ae626fdc728eb2ee",
+      "snapshot_hash": "e738fc089408ba8a",
       "unevaluated_gate_ids": [
         "thesis_broken"
       ]
@@ -2674,7 +2674,7 @@
       "long_term_action": "wait_for_data",
       "new_money_action": "wait_for_data",
       "price_zone": "above_sma50",
-      "snapshot_hash": "ea6dc8d9fa025ced",
+      "snapshot_hash": "c6d86a249d9cb14f",
       "unevaluated_gate_ids": [
         "thesis_broken"
       ]
@@ -2812,7 +2812,7 @@
       "long_term_action": "wait_for_data",
       "new_money_action": "avoid",
       "price_zone": "below_sma200",
-      "snapshot_hash": "1388d7140999f7cc",
+      "snapshot_hash": "cbc7eb5d42cdd07d",
       "unevaluated_gate_ids": [
         "thesis_broken"
       ]
@@ -2942,7 +2942,7 @@
       "long_term_action": "avoid",
       "new_money_action": "avoid",
       "price_zone": "below_sma200",
-      "snapshot_hash": "57898847da669529",
+      "snapshot_hash": "0782b42025464c38",
       "unevaluated_gate_ids": []
     },
     "source": "OC S6",
@@ -3065,7 +3065,7 @@
       "long_term_action": "watch",
       "new_money_action": "watch",
       "price_zone": "below_sma200",
-      "snapshot_hash": "f39dbcaf2021580f",
+      "snapshot_hash": "8c7365596bdbf509",
       "unevaluated_gate_ids": [
         "falling_knife"
       ]
@@ -3198,7 +3198,7 @@
       "long_term_action": "insufficient_data",
       "new_money_action": "insufficient_data",
       "price_zone": "above_sma50",
-      "snapshot_hash": "90f589344c5a73ff",
+      "snapshot_hash": "38aa82fc2ade7981",
       "unevaluated_gate_ids": [
         "missing_runway",
         "thesis_broken"
@@ -3340,7 +3340,7 @@
       "long_term_action": "avoid",
       "new_money_action": "avoid",
       "price_zone": "above_sma50",
-      "snapshot_hash": "635308e8ab09cee5",
+      "snapshot_hash": "00aefae0dd2a3d9f",
       "unevaluated_gate_ids": [
         "thesis_broken"
       ]
@@ -3457,7 +3457,7 @@
       "long_term_action": "buy",
       "new_money_action": "starter",
       "price_zone": "above_sma50",
-      "snapshot_hash": "dfc5e963a753cb5d",
+      "snapshot_hash": "f9d6f0827a315b20",
       "unevaluated_gate_ids": []
     },
     "source": "OC RF7 mid starter, long buy",
@@ -3574,7 +3574,7 @@
       "long_term_action": "starter",
       "new_money_action": "starter",
       "price_zone": "above_sma50",
-      "snapshot_hash": "2a20f7a5df2067f0",
+      "snapshot_hash": "553b5e8f6078db7d",
       "unevaluated_gate_ids": []
     },
     "source": "OC T1",
@@ -3702,7 +3702,7 @@
       "long_term_action": "starter",
       "new_money_action": "wait",
       "price_zone": "near_52w_high",
-      "snapshot_hash": "a28bc918105f6242",
+      "snapshot_hash": "c35b9cfd2a3149fb",
       "unevaluated_gate_ids": []
     },
     "source": "OC RF7 mid wait, long starter",
@@ -3815,7 +3815,7 @@
       "long_term_action": "buy",
       "new_money_action": "starter",
       "price_zone": "above_sma50",
-      "snapshot_hash": "6ddfc46bad519ba1",
+      "snapshot_hash": "b4876dc22fe3824c",
       "unevaluated_gate_ids": []
     },
     "source": "OC T2",
@@ -3945,7 +3945,7 @@
       "long_term_action": "wait_for_data",
       "new_money_action": "wait_for_data",
       "price_zone": "above_sma50",
-      "snapshot_hash": "5d3255862740c79f",
+      "snapshot_hash": "4b0e188e8d78522f",
       "unevaluated_gate_ids": [
         "thesis_broken"
       ]
@@ -4063,7 +4063,7 @@
       "long_term_action": "buy",
       "new_money_action": "starter",
       "price_zone": "below_sma200",
-      "snapshot_hash": "c6d60fd72a9b2680",
+      "snapshot_hash": "e996c742bb6d9d7a",
       "unevaluated_gate_ids": []
     },
     "source": "OC RF3 starter (D-9)",
@@ -4182,7 +4182,7 @@
       "long_term_action": "starter",
       "new_money_action": "starter",
       "price_zone": "above_sma50",
-      "snapshot_hash": "7829d774325354c4",
+      "snapshot_hash": "c965f63b4a8870f1",
       "unevaluated_gate_ids": []
     },
     "source": "OC M9 dislocation starter (D-9)",
@@ -4304,7 +4304,7 @@
       "long_term_action": "buy",
       "new_money_action": "buy",
       "price_zone": "below_sma200",
-      "snapshot_hash": "bc61cd35ad312c4d",
+      "snapshot_hash": "05bef2f138d497aa",
       "unevaluated_gate_ids": [
         "falling_knife"
       ]
@@ -4431,7 +4431,7 @@
       "long_term_action": "starter",
       "new_money_action": "starter",
       "price_zone": "below_sma200",
-      "snapshot_hash": "448a212cb07bf459",
+      "snapshot_hash": "51460a6e38d91b62",
       "unevaluated_gate_ids": [
         "falling_knife"
       ]
@@ -4564,7 +4564,7 @@
       "long_term_action": "wait_for_data",
       "new_money_action": "avoid",
       "price_zone": "below_sma200",
-      "snapshot_hash": "ae766c9f640c6b0d",
+      "snapshot_hash": "f4a59262a435a7d9",
       "unevaluated_gate_ids": [
         "thesis_broken"
       ]

@@ -264,7 +264,8 @@ class TestDiffEdges:
 # Fields only a 2.0.0 snapshot carries, and the legacy signal lists, which are ambiguous.
 NEW_FIELDS = ["as_of_kind", "price_as_of", "price_source", "price_stale", "support_currency", "support_instrument"]
 V3_FIELDS = ["if_held_action", "long_term_action", "new_money_action", "price_zone",
-             "unevaluated_gate_ids"]  # 3.0.0 only
+             "unevaluated_gate_ids"]  # 3.0.0 additions
+CURRENT_FIELDS = [*V3_FIELDS, "long_term_if_held_action"]
 LEGACY_SIGNALS = ["bearish_signals", "bullish_signals"]
 
 
@@ -276,14 +277,14 @@ class TestR72LegacySnapshots:
 
         assert response["material_changes"] == []
         assert response["not_comparable"] == sorted(
-            [*LEGACY_SIGNALS, "long_term_fit", "mid_term_fit", *NEW_FIELDS, *V3_FIELDS])
+            [*LEGACY_SIGNALS, "long_term_fit", "mid_term_fit", *NEW_FIELDS, *CURRENT_FIELDS])
         assert response["hash_changed"] is None
 
     async def test_an_old_enriched_snapshot_has_no_phantom_changes(self, detect: Any) -> None:
         response = await detect(legacy_enriched_snapshot(as_0609fde(raw_result())))
 
         assert response["material_changes"] == []
-        assert response["not_comparable"] == sorted([*LEGACY_SIGNALS, *NEW_FIELDS, *V3_FIELDS])
+        assert response["not_comparable"] == sorted([*LEGACY_SIGNALS, *NEW_FIELDS, *CURRENT_FIELDS])
 
     async def test_a_failed_source_tool_does_not_turn_old_signal_lists_into_alerts(self, detect: Any) -> None:
         failed = {"tool_failures": [{"tool": "ownership_analysis", "error": "data_unavailable"}],
@@ -333,7 +334,7 @@ class TestR73AbsentVersusNull:
         del previous["tilt"]
         response = await detect(previous, verdict__tilt="bearish")
         assert response["material_changes"] == []
-        assert response["not_comparable"] == sorted(["tilt", *V3_FIELDS])
+        assert response["not_comparable"] == sorted(["tilt", *CURRENT_FIELDS])
         assert "tilt" not in response["changes"]
 
     async def test_a_null_signal_list_that_becomes_known_is_one_change_not_new_signals(self, detect: Any) -> None:
@@ -505,8 +506,8 @@ class TestOddSections:
 class TestOneSnapshot:
     def test_the_snapshot_is_versioned_and_complete(self) -> None:
         snapshot = BASE
-        assert snapshot["snapshot_version"] == SNAPSHOT_VERSION == "3.0.0"
-        assert set(snapshot) == SNAPSHOT_FIELDS["3.0.0"]
+        assert snapshot["snapshot_version"] == SNAPSHOT_VERSION == "4.0.0"
+        assert set(snapshot) == SNAPSHOT_FIELDS["4.0.0"]
         assert (snapshot["new_money_action"], snapshot["if_held_action"], snapshot["long_term_action"],
                 snapshot["price_zone"], snapshot["mid_term_fit"], snapshot["long_term_fit"]) == (
             "buy", "hold", "buy", "below_sma200", "good", "fair")
@@ -544,4 +545,4 @@ class TestOneSnapshot:
         snapshots = [project_analyze_result(result, detail)["watchlist_snapshot"]
                      for detail in ("decision", "standard", "full")]
         assert snapshots[0] == snapshots[1] == snapshots[2] == result["watchlist_snapshot"]
-        assert snapshots[0]["snapshot_version"] == "3.0.0" and "price_zone" in snapshots[0]
+        assert snapshots[0]["snapshot_version"] == "4.0.0" and "price_zone" in snapshots[0]

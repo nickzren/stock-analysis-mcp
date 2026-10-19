@@ -53,13 +53,16 @@
   never substitute a composite fiscal period or fetch timestamp. `watch_factors`
   retain known concerns/evidence; unknown net cash is not a known negative.
 - Long-term `add_allowed` follows long-term new money only, with no personal
-  capacity or sizing implication. Existing mid-term/new-money/sizing output and
-  all snapshot 3.0.0 fields remain unchanged. The holder snapshot field and 4.0.0
-  version first ship together in the later snapshot package.
-- The intermediate branch includes the holder core and position context below.
-  Shared summary/agent guidance and the coordinated schema/snapshot migration
-  remain in the next package; schema stays 7, snapshot 3.0.0 and the package/install
-  pin stays 0.4.0 until that work and the separately approved release.
+  capacity or sizing implication. Existing mid-term/new-money/sizing output is
+  unchanged. Snapshot 4.0.0 adds only the long-term holder action; its new key
+  and version are emitted together, with every released field set frozen.
+- Unreleased code uses schema 8 and snapshot 4.0.0; the package and install pin
+  stay 0.4.0. Live use waits for the whole-part review, an approved release and
+  a verified tagged install. No implementation branch changes the live config.
+
+- Every analyze tier retains `verdict.horizon_fit`, including its actual reasons;
+  entry/holder decisions and suitability remain separate. The guide reads
+  `verdict.horizon_fit.reasons`, not generic verdict reasons.
 
 ## Unreleased Position Context
 - `analyze_my_position` defaults to `mid_term`, accepts `long_term`, and makes
@@ -103,13 +106,14 @@
   `quote_currency`; there is no
   top-level sell_signals/active_count or actionable stop alias. Use actual bearish
   MACD evidence, not inverted bullish evidence. ATR references are unmonitored,
-  not holder exits. Shared prompt/guide routing is deliberately migrated next.
+  not holder exits. The prompt uses one position call and optional context;
+  no separate analyze call or tax details are required.
 - Frozen holder `before.json`/`before.md` remain unchanged. Generate current after
   files using `python -m tests.support.holder_matrix --after --output-dir <new-dir>`.
   Current position rows retain all output except execution duration/source timings,
   and count source tool calls, not Yahoo requests. No position storage is written.
 
-## Sizing Inputs and Output (schema 7)
+## Sizing Inputs and Output (introduced in schema 7)
 - `analyze`, `analyze_trade_setup` and `scan_watchlist` validate sizing inputs
   before symbol lookup, provider reads or watchlist access. Account size must be
   finite and positive; risk and position limits use percentage points in
@@ -169,10 +173,10 @@
   final full cap and whole-share dollars. Stop warnings use the unrounded
   distance; fallback labels are `52w_low_plus_2pct_fallback` and
   `52w_high_minus_2pct_fallback`, never an invented stop.
-- Package version 0.4.0 uses response schema 7; snapshot 3.0.0 is unchanged.
-  Install pins target v0.4.0. CHANGELOG.md contains the schema 6 → 7 canonical
-  fields and one-release legacy adapter inventory; the historical 0.3.0 section
-  still describes schema 6.
+- Released package 0.4.0 uses response schema 7 and snapshot 3.0.0; unreleased
+  code uses schema 8 and snapshot 4.0.0, without changing sizing. Install pins
+  target v0.4.0. CHANGELOG.md's 0.4.0 section preserves the schema 6 → 7 fields
+  and one-release legacy adapters; its 0.3.0 section still describes schema 6.
 - Keep `tests/fixtures/sizing_matrix/before.json` and `before.md` byte-for-byte.
   Current offline evidence uses `python -m tests.support.sizing_matrix --after
   --output-dir <temporary-directory>`. Baseline regeneration is disabled.
@@ -182,7 +186,7 @@
 - Keep score math internally consistent and auditable.
 - If you change user-visible output semantics, update the relevant examples in `README.md`.
 
-## Decision Contract (schema 7)
+## Decision Contract (schema 8, unreleased)
 - `analyze` decides once, gates first: `tools/analyze/decision.py` (`decide()`,
   pure) over the `GATES` registry in `tools/analyze/gates.py`. Every other
   action-like surface (executive summary, decision modes, dislocation, dip,
@@ -194,7 +198,9 @@
               decided_by, unevaluated: [{id, reason}], earliest_reassessment}
   if_held: {action, add_allowed, basis}                    # mid-term
   long_term: {horizon: long_term, new_money: {action, blocked_by, decided_by,
-              unevaluated, earliest_reassessment, conditions: {buy_only_if}}}
+              unevaluated, earliest_reassessment, conditions: {buy_only_if}},
+              if_held: {action, basis, reasons, assessment_status, checks,
+                        watch_factors, review_when, add_allowed}}
   hard_gates: {any_blocking, blocking: [every fired gate], checks: {id: bool}}
   action_now                                               # = new_money.action, one release
   why, exit_triggers, data_flags
@@ -290,12 +296,36 @@
 
 - In `watchlist_snapshot`, `new_money_action` and `if_held_action` are the
   mid-term decision and `long_term_action` the long-term one; `scan_watchlist`
-  state holds swing-card actions. The snapshot has no `horizon` field.
+  state holds swing-card actions. Snapshot 4.0.0 adds `long_term_if_held_action`
+  for long-term ownership; `long_term_action` still means new money. The snapshot
+  has no `horizon` field and holds no personal context.
 - Agent guidance: `server.INSTRUCTIONS` (MCP `instructions=`) carries the horizon
   rule; every tool description starts "Use when …"; the rendering guide
   (`resources/analyze_guide.py`) and the prompts (`prompts/templates.py`) name
-  only existing fields and the canonical vocabulary
-  (`tests/test_step2/test_wp24_guidance.py`).
+  only existing fields and the canonical vocabulary. Instructions must fit
+  2,000 characters and analyze's description 1,200; pin semantics and actual
+  client metadata, not character counts alone.
+- Horizon routing: Analyze HOOD and bare holder questions use mid-term without
+  asking; one year/12 months is mid-term unless long term is explicit. Five
+  years is long term without asking. Clarify conflicting/out-of-range horizons.
+  Stock-only holder questions use the corresponding analyze if_held; personal
+  questions use analyze_my_position once. Its context is optional and USD-only;
+  never invent FX conversion or request cost/date/tax details just to assess a stock.
+- Keep three executive-summary segments; long term labels both new money and
+  ownership. Lead position answers with the requested holder action and reason,
+  then the Allocation check, then additions. Hold means no demonstrated thesis
+  failure, not endorsement: retain caution/avoid/unknown suitability and actual
+  reasons. Entry sizing remains mid-term new money only, never a holder size.
+- For a known ETF say: "This tool does not assess long-term ETF ownership; its
+  company rules do not apply." Never borrow mid-term hold or request company
+  cash-runway evidence. Unknown classification is insufficient_data instead.
+  Mid-term thesis_unknown and long-term applicability_unverified can describe
+  the same unknown classification because the long-term policy names applicability
+  first; the reason codes do not imply different source evidence.
+- Keep addition eligibility separate from personal capacity: disclose an exceeded
+  user ceiling or a requested but unevaluated allocation check beside add_allowed.
+  A portfolio tool's fixed thresholds cannot override the user's position ceiling.
+  No tax estimate, monitored stop or automatic trim is provided.
 - Decision matrix (`tests/support/decision_matrix.py`): after a decision or
   derived-surface change, re-record with
   `uv run --frozen python -m tests.support.decision_matrix --after` (writes
@@ -305,13 +335,15 @@
 
 ## Common Schema Gotchas
 - Two versions move independently: `meta.schema_version` (response schema,
-  `SCHEMA_VERSION` in `src/stock_analysis/__init__.py`, now "7";
-  v0.3.0 shipped "6", v0.2.0 shipped "5") and `watchlist_snapshot.snapshot_version`
+  `SCHEMA_VERSION` in `src/stock_analysis/__init__.py`, now "8";
+  v0.4.0 shipped "7", v0.3.0 shipped "6", v0.2.0 shipped "5") and `watchlist_snapshot.snapshot_version`
   (`normalize.SNAPSHOT_VERSION`,
-  now "3.0.0"; v0.2.0 shipped "2.0.0"). CHANGELOG.md lists every field that
+  now "4.0.0"; v0.3.0/v0.4.0 shipped "3.0.0", v0.2.0 shipped "2.0.0").
+  CHANGELOG.md lists every field that
   changed meaning or units since schema 4; the 0.3.0 section covers schema 6
-  and snapshot 3.0.0. The 0.4.0 section covers schema 7 sizing. Record future
-  output changes under "Unreleased".
+  and snapshot 3.0.0. The 0.4.0 section covers schema 7 sizing; Unreleased covers
+  the schema 8 holder/position migration and snapshot 4.0.0. Keep released history
+  byte-identical and install pins at v0.4.0 until a separately approved release.
 - `technicals` returns `current_price` at the top level, not under a `summary` object.
 - `analyze` returns price, name, sector, market cap, and currency under `summary`, not as duplicated top-level fields.
 - Support boundaries (WP4, D5): `summary.support` (and the trade card's
@@ -623,12 +655,12 @@
   completed valid bar and risk from risk_metrics' own provenance, in sessions
   (warnings `price_stale_N_sessions` / `risk_stale_N_sessions`), and the rest
   in UTC hours.
-- Snapshots (WP7 and Step 2, `normalize.build_watchlist_snapshot`, version
-  3.0.0; `normalize.SNAPSHOT_FIELDS` freezes each version's field set): analyze
+- Snapshots (`normalize.build_watchlist_snapshot`, version
+  4.0.0; `normalize.SNAPSHOT_FIELDS` freezes each version's field set): analyze
   builds one `watchlist_snapshot` before projection (identical at every
   `detail` level) and `detect_changes` uses it as is. It holds the compact,
   enriched (`price_zone`, horizon fit, signals) and decision fields
-  (`new_money_action`, `if_held_action`, `long_term_action`,
+  (`new_money_action`, `if_held_action`, `long_term_action`, `long_term_if_held_action`,
   `hard_gate_ids` = every fired gate, and `unevaluated_gate_ids` = every gate
   whose input failed, from `new_money.unevaluated` at either horizon; 3.0.0
   retired `action_mid_term`,
@@ -649,16 +681,19 @@
   a missing, non-finite or zero start, and `return_1y`'s first-bar fallback; it
   feeds the 3m momentum signals). Non-dict sections read as empty. `detect_changes` checks the
   shape of `previous_snapshot` before analysis (required `snapshot_version` in
-  1.0.0/1.1.0/2.0.0/3.0.0 and `symbol`; a 3.0.0 snapshot must carry every
-  3.0.0 key, null allowed, while an older one may omit fields and its stray
+  1.0.0/1.1.0/2.0.0/3.0.0/4.0.0 and `symbol`; a 3.0.0 or 4.0.0 snapshot must
+  carry every key in its frozen version set, null allowed, while an older one
+  may omit fields and its stray
   keys are ignored; known fields are type-checked, `next_catalyst`'s keys and
   its `window` bounds included) and matches its symbol against the ticker
   analyze resolved, returning `invalid_snapshot` with `problems`. It compares
-  only fields both snapshots carry (the rest are `not_comparable`; across
-  versions the three actions, `price_zone` and `unevaluated_gate_ids` are
-  never compared and the summary names them; a pre-2.0.0
+  only fields both snapshots carry (the rest are `not_comparable`). The explicit
+  3→4 pair compares every previously comparable 3.0.0 field, including its three
+  actions, `price_zone` and `unevaluated_gate_ids`; only the new holder field is
+  not_comparable. For 1.x/2→4, retain the prior cross-version restrictions on
+  actions, zone and unevaluated gates and also exclude the new holder field. A pre-2.0.0
   snapshot's signal lists are treated as absent, since the old producers wrote
-  `[]` or partial lists when a source failed); null -> value is a change, and
+  `[]` or partial lists when a source failed; null -> value is a change, and
   an unknown list on either side is one change, never new or removed items.
   Material: price > 5% (judged before rounding, with a 1e-9 tolerance so an
   exact 5% or 0.10 is not crossed by float error) or a
@@ -666,17 +701,23 @@
   now in the current `unevaluated_gate_ids` is `not_evaluated`,
   `+unevaluated_gate`, never cleared, also against an older snapshot; a gate
   leaving that list is `-unevaluated_gate`), `price_zone`,
-  horizon fit, signals, tilt, confidence, risk regime, the three actions (a
+  horizon fit, signals, tilt, confidence, risk regime, the four actions (a
   new-money change caused only by a freshness gate included), valuation gate,
   support, and a price-source change involving the info fallback (a
   bar <-> close switch, at the close or when the intraday bar goes stale or
   fails, is recorded, not material, per WP5's disclosure-only policy);
   `is_unprofitable` and `price_stale` are kept but not compared.
   `hash_changed` is reported only within one version, separately from
-  `material_changes`; a version change alone is not material, but an older
-  previous snapshot adds a version warning naming the retired fields and the
-  3.0.0 rule changes, and rule-driven gate changes are reported, not
-  suppressed.
+  `material_changes`; a version change alone is not material. A 3→4 migration
+  warning names the added holder field; 1.x/2→4 also names the existing 3.0.0
+  rule changes and retired fields. Rule-driven gate changes remain reported.
+  Only long_term_if_held_action emits not_assessed; existing action enums do
+  not widen. Its 4→4 appearance/disappearance/change is material and enters the
+  hash; not_assessed transitions name coverage, never data recovery or investment
+  deterioration. Personal inputs, P&L, allocation status and holder reasons never
+  enter the stock snapshot. Reason-only changes are not promised as alerts.
+  Downgraded v0.4.0 rejects 4.0.0 snapshots: retain old snapshots or start a new
+  baseline, never relabel a new snapshot as an old version.
 - Session-indexed bars (WP5): rows are never dropped. Daily-or-longer
   `fetch_history` frames pass `keepna=True` (yfinance otherwise drops empty
   session rows); `1d` frames also restore missing volumes: yfinance zero-fills a
@@ -688,8 +729,9 @@
   dividend after the last price row, after the recorder runs). CSV and preview
   rows print whole volumes as integers. Provenance `last_bar_date` and
   `check_data_quality`'s `price_last_bar` use `price_basis.last_valid_bar_date`
-  (the newest valid close, not an empty row), and `analyze_my_position` falls
-  back to `session_close` when the latest row is empty. Intraday frames keep yfinance's defaults. Return
+  (the newest valid close, not an empty row). `analyze_my_position` uses the
+  shared analysis price selection and provenance, including its valid-session
+  fallback. Intraday frames keep yfinance's defaults. Return
   series use `indicators.session_returns` (NaN unless both endpoint prices are
   finite). N-session returns
   (technicals returns, the 1w z-score's latest week, risk benchmark returns,

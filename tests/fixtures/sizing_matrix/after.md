@@ -91,7 +91,7 @@ Every changed pre-existing numerical sizing field is listed below; duplicated de
 New canonical scenarios expose ceilings, actual whole-share amounts and conditional loss separately.
 Core sizes are null because core is long-term; starter-only and blocked actions hide inapplicable sizes.
 Missing/invalid stops suppress estimates; inverted entry bands lose both bounds. Fractional estimates are null.
-The policy decisions and every saved snapshot field are checked against the frozen baseline.
+Policy decisions and pre-existing snapshot data are checked against the frozen baseline; the holder migration changes the version/hash and adds one action.
 
 | Path | Before | After | Reason |
 |---|---|---|---|

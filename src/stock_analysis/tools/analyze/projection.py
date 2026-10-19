@@ -8,7 +8,7 @@ DislocationQuestionSpec = tuple[str, str, str, dict[str, str]]
 SUMMARY_KEYS = (
     "name", "current_price", "price_provenance", "sector", "industry", "market_cap", "currency", "support",
 )
-VERDICT_DECISION_KEYS = ("score", "tilt", "confidence", "components", "pros", "cons")
+VERDICT_DECISION_KEYS = ("score", "tilt", "confidence", "components", "pros", "cons", "horizon_fit")
 DATA_QUALITY_DECISION_KEYS = (
     "completeness", "missing_critical", "data_gaps", "in_flight_jobs", "bar_validity", "warnings", "freshness",
 )

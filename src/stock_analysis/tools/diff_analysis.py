@@ -26,7 +26,7 @@ _FIELD_TYPES: dict[str, str] = {
         ("sector", "tilt", "confidence", "mid_term_fit", "long_term_fit", "action_mid_term", "action_long_term",
          "valuation_gate", "decision_action_now", "zone", "risk_regime", "support_instrument", "support_currency",
          "price_source", "price_as_of", "as_of_kind", "snapshot_as_of_date", "snapshot_hash",
-         "new_money_action", "if_held_action", "long_term_action", "price_zone"),
+         "new_money_action", "if_held_action", "long_term_action", "long_term_if_held_action", "price_zone"),
         "string",
     ),
 }
@@ -55,10 +55,11 @@ _CATALYST_FIELD_TYPES = {
 }
 # Fields a pre-2.0.0 snapshot filled ambiguously (see what_changed), and the versions that fill them reliably.
 _LEGACY_AMBIGUOUS_FIELDS = frozenset({"bullish_signals", "bearish_signals"})
-_RELIABLE_SIGNAL_VERSIONS = frozenset({"2.0.0", "3.0.0"})
+_RELIABLE_SIGNAL_VERSIONS = frozenset({"2.0.0", "3.0.0", "4.0.0"})
 # A previous snapshot of these versions must carry every field of its version (null allowed): the producer
 # always writes them all, so a missing key is truncation, not an older format.
-_COMPLETE_VERSIONS = frozenset({"3.0.0"})
+_COMPLETE_VERSIONS = frozenset({"3.0.0", "4.0.0"})
+_LONG_TERM_HOLDER_ACTIONS_4_0_0 = frozenset({"hold", "review_exit", "insufficient_data", "not_assessed"})
 # The 3.0.0 rules that can move a retained field (gate ids) against an older snapshot (plan §8, D-10).
 _RULE_CHANGES_3_0_0 = (
     "new analyze gates earnings_unverifiable, stale_data, freshness_unverifiable, "
@@ -83,6 +84,7 @@ _SCALAR_FIELDS = (
     ("new_money_action", "new_money_action", "new_money_action"),
     ("if_held_action", "if_held_action", "if_held_action"),
     ("long_term_action", "long_term_action", "long_term_action"),
+    ("long_term_if_held_action", "long_term_if_held_action", "long_term_if_held_action"),
     ("valuation_gate", "valuation_gate", "valuation_gate"),
     ("support_instrument", "support_instrument", "support_instrument"),
     ("support_currency", "support_currency", "support_currency"),
@@ -100,8 +102,8 @@ _DIFFED_FIELDS = (
 def validate_previous_snapshot(snapshot: Any, symbol: str | None) -> list[str]:
     """Problems that make ``snapshot`` unusable as the previous snapshot for ``symbol``
     (empty when it is usable; ``symbol`` None skips the symbol match). Only the fields of
-    the snapshot's own version are checked; any other key is ignored. A 3.0.0 snapshot
-    must carry every 3.0.0 field."""
+    the snapshot's own version are checked; any other key is ignored. Versions 3.0.0
+    and 4.0.0 must carry their complete field sets."""
     if not isinstance(snapshot, dict):
         return ["previous_snapshot must be an object"]
     problems = [f"missing required key: {key}" for key in SNAPSHOT_IDENTITY_KEYS if key not in snapshot]
@@ -123,6 +125,9 @@ def validate_previous_snapshot(snapshot: Any, symbol: str | None) -> list[str]:
         value = snapshot.get(key) if key in fields else None
         if value is not None and not _TYPE_CHECKS[kind](value):
             problems.append(f"{key}: expected {kind.replace('_', ' ')}, got {type(value).__name__}")
+    holder_action = snapshot.get("long_term_if_held_action")
+    if accepted == "4.0.0" and isinstance(holder_action, str) and holder_action not in _LONG_TERM_HOLDER_ACTIONS_4_0_0:
+        problems.append(f"long_term_if_held_action: unsupported action {holder_action!r}")
     catalyst = snapshot.get("next_catalyst")
     if isinstance(catalyst, dict):
         for key, kind in _CATALYST_FIELD_TYPES.items():
@@ -367,6 +372,12 @@ def _build_summary(
         if action.get("changed"):
             parts.append(f"{label}: {action['previous']} -> {action['current']}.")
 
+    holder = changes.get("long_term_if_held_action", {})
+    if holder.get("changed"):
+        parts.append(f"Long-term holder: {holder['previous']} -> {holder['current']}.")
+        if "not_assessed" in (holder["previous"], holder["current"]):
+            parts.append("Long-term assessment coverage changed; this is not a judgment of investment quality.")
+
     hard_gates = changes.get("hard_gates", {})
     if hard_gates.get("new"):
         parts.append(f"New hard gate(s): {', '.join(hard_gates['new'])}.")
@@ -488,9 +499,11 @@ async def what_changed(
         retired = sorted(set(previous_snapshot) - set(current_snapshot))
         warning = (f"snapshot_version changed ({prev_version} -> {curr_version}); field semantics may differ; "
                    f"retired, not compared: {', '.join(retired) or 'none'}")
-        if curr_version == "3.0.0":
+        if prev_version in {"1.0.0", "1.1.0", "2.0.0"} and curr_version in {"3.0.0", "4.0.0"}:
             warning += ("; 3.0.0 rule changes (a gate change may come from these, not from the data): "
                         + "; ".join(_RULE_CHANGES_3_0_0))
+        if curr_version == "4.0.0":
+            warning += "; 4.0.0 adds long_term_if_held_action, not compared with older snapshots"
         warnings.append(warning)
 
     # Only fields both snapshots carry are compared (an absent field is unknown);

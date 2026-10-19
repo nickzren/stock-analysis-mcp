@@ -565,7 +565,7 @@ async def test_a_non_dislocation_knife_shows_no_admitting_surface() -> None:
     assert result["executive_summary"].startswith(
         f"Decision (mid-term, new money): avoid; blocked by falling_knife; "
         f"no reassessment date: re-run analyze "
-        f"after {knife}. If held: hold. Long-term (1-5y): avoid; blocked by falling_knife;")
+        f"after {knife}. If held: hold. Long-term (1-5y): new money: avoid; blocked by falling_knife;")
     assert "size ~" not in result["executive_summary"] and "small starter" not in result["executive_summary"]
     assert (dislocation["action"]["can_start_now"], dislocation["action"]["buy_now"]) == (False, None)
     assert (card["sizing"], card["entry"], result["action_zones"]["position_sizing_range"]) == (None, None, None)

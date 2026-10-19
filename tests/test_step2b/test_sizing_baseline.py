@@ -1,7 +1,7 @@
 """Preserve the v0.3.0 recording and identify each approved sizing change.
 
-The shared calculator now governs public sizing; decisions and snapshots remain
-identical to the frozen before evidence.
+The shared calculator now governs public sizing; decisions and the released snapshot fields remain
+identical to the frozen before evidence; 4.0.0 adds the separate holder action.
 """
 
 import copy
@@ -25,7 +25,10 @@ async def test_current_sizing_matches_after_and_preserves_decisions_and_snapshot
     after = json.loads((sm.FIXTURE_DIR / "after.json").read_text())["analyze"][name]
     assert row == after
     assert row["decision"] == BEFORE["analyze"][name]["decision"]
-    assert row["snapshot"] == BEFORE["analyze"][name]["snapshot"]
+    old_snapshot = BEFORE["analyze"][name]["snapshot"]
+    assert {key: row["snapshot"][key] for key in old_snapshot
+            if key not in {"snapshot_version", "snapshot_hash"}} == {
+        key: value for key, value in old_snapshot.items() if key not in {"snapshot_version", "snapshot_hash"}}
     for tier, payload in dm.tiers(result).items():
         assert payload["watchlist_snapshot"] == result["watchlist_snapshot"], tier
         assert payload["decision_card"]["sizing"] == result["decision_card"]["sizing"], tier

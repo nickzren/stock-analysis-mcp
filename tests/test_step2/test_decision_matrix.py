@@ -335,7 +335,7 @@ class TestBeforeTable:
             assert _normalized(row) == AFTER[name], name
 
     async def test_the_recorded_snapshots_keep_their_retained_fields(self) -> None:
-        """DM-G10 (replaces DM-CH2, retired by WP2.4): each baseline scenario's 3.0.0 snapshot has the 3.0.0 field
+        """DM-G10 (replaces DM-CH2, retired by WP2.4): each baseline scenario's current snapshot has the 4.0.0 field
         set, and every field it keeps from 2.0.0 equals the recorded fixture except hard_gate_ids on the WP2.2
         thesis rows (GATE_CHANGES). G from WP2.4; the 2.0.0 fixtures stay as recorded (DM-G6)."""
         _, snapshots = await dm.build()
@@ -346,7 +346,7 @@ class TestBeforeTable:
         for name, old in recorded.items():
             new = _normalized(snapshots[name])
             changed = {k: (old[k], new[k]) for k in retained if new[k] != old[k]}
-            assert set(new) == SNAPSHOT_FIELDS["3.0.0"], name
+            assert set(new) == SNAPSHOT_FIELDS["4.0.0"], name
             assert changed == ({"hard_gate_ids": GATE_CHANGES[name]} if name in GATE_CHANGES else {}), name
 
     def test_the_after_table_snapshot_follows_the_decision(self) -> None:
@@ -401,10 +401,10 @@ class TestMatrixGuards:
         assert validate_previous_snapshot(snapshot, "ACME") == []
 
     def test_the_generator_refuses_to_record_from_another_snapshot_version(self, tmp_path: Path) -> None:
-        """DM-G4: snapshots_2_0_0/ can only be written by 2.0.0 code; from WP2.4 the code is 3.0.0, so --baseline
+        """DM-G4: snapshots_2_0_0/ can only be written by 2.0.0 code; the current code is 4.0.0, so --baseline
         always refuses before building anything. Holds throughout Step 2."""
-        assert dm.SNAPSHOT_VERSION == "3.0.0"
-        with pytest.raises(SystemExit, match="^refusing to record 2.0.0 snapshots from SNAPSHOT_VERSION 3.0.0$"):
+        assert dm.SNAPSHOT_VERSION == "4.0.0"
+        with pytest.raises(SystemExit, match="^refusing to record 2.0.0 snapshots from SNAPSHOT_VERSION 4.0.0$"):
             dm.record_baseline(tmp_path)
         assert list(tmp_path.iterdir()) == []
 

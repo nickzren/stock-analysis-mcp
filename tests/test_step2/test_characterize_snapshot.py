@@ -128,6 +128,8 @@ async def test_the_snapshot_lists_a_knife_on_an_avoid_candidate(name: str) -> No
 
 # One raw change per diffed field of CLEAN, with the line it must produce.
 MUTATIONS: dict[str, tuple[dict[str, Any], str]] = {
+    "long_term_if_held_action": ({"decision_card__long_term__if_held__action": "hold"},
+                                 "long_term_if_held_action: insufficient_data -> hold"),
     "price": ({"summary__current_price": 95.23}, "price +7.0%"),
     "score": ({"verdict__score": 0.5}, "score +0.20"),
     "hard_gate_ids": ({"decision_card__hard_gates__blocking": firing("falling_knife")}, "+hard_gate: falling_knife"),

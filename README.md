@@ -64,7 +64,7 @@ codex mcp add stock-analysis -- uvx --from git+https://github.com/nickzren/stock
 These commands are pinned to **v0.4.0**. Other MCP clients can use the same `uvx`
 command as a stdio server.
 
-## For agents
+## For agents (v0.4.0)
 
 Start with `analyze(symbol="MSFT")`. It accepts a ticker or company name;
 use `search_symbol` to resolve names before calling other tools.
@@ -101,7 +101,7 @@ Version 0.4.0 responses use schema **7**; snapshots remain **3.0.0**. Research
 decisions are unchanged. See the [schema 6 → 7 migration](CHANGELOG.md#040-2026-10-19-sizing-and-caps)
 for field meanings, defaults, and compatibility aliases.
 
-## Decision
+## Decision (v0.4.0)
 
 `decision_card` holds one decision, made after the hard gates:
 
@@ -110,7 +110,7 @@ for field meanings, defaults, and compatibility aliases.
 - `long_term.new_money`: new money over 1–5 years.
 
 For a holding, `analyze`'s `if_held` is mid-term; `analyze_my_position` adds P/L,
-holding period and tax status. There is no long-term holder decision.
+holding period and tax status. Version 0.4.0 has no long-term holder decision.
 
 `blocked_by` lists the gates that fired and `decided_by` the one that set the action;
 never upgrade past them. Read sizing only from `decision_card.sizing`: mid-term new
@@ -153,6 +153,31 @@ clearing that check alone does not mean buy. Known unsupported instruments do no
 In `watchlist_snapshot`, `new_money_action` and `if_held_action` are the mid-term
 decision and `long_term_action` the long-term one; `scan_watchlist` state holds
 swing-card actions.
+
+## Unreleased (main): longer-term holders
+
+The development code adds response schema **8** and snapshot **4.0.0**. The
+install commands above still use v0.4.0; this feature is not in that release.
+
+> I own AAPL and plan to hold for five years. What supports holding, and what
+> would make me reconsider?
+
+Read `decision_card.long_term.if_held` for the 1–5-year holder answer. A bare
+holder question and one year still default to mid-term unless long term is
+explicit. `hold` means no demonstrated thesis failure, not an endorsement;
+keep the separate suitability fit and its actual reasons visible.
+
+For personal context, call `analyze_my_position` once with the chosen horizon.
+Cost, date, shares, portfolio value and your holding ceiling are optional;
+monetary inputs are USD. **Allocation check** reports only your supplied ceiling,
+not the stock decision or remaining buying power. No tax estimate is provided;
+technical reference levels are not monitored holder stops.
+
+Known ETFs/preferreds return `not_assessed` for long-term ownership. For ETFs:
+“This tool does not assess long-term ETF ownership; its company rules do not
+apply.” Verified USD share prices can still support personal P&L/allocation.
+See the [schema 7 → 8 migration](CHANGELOG.md#unreleased-longer-term-holders-and-position-context)
+for the changed fields and snapshot compatibility.
 
 ## Data and limits
 

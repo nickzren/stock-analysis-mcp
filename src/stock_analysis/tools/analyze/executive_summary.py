@@ -194,7 +194,33 @@ def _humanize_gates_with_numbers(
     return "; ".join(humanized) if humanized else "multiple concerns"
 
 
-def horizon_segments(decision_card: dict[str, Any]) -> tuple[str, str, str]:
+def _long_term_segment(decision_card: dict[str, Any], horizon_fit: dict[str, Any]) -> str:
+    long_term = decision_card["long_term"]
+    text = _horizon_segment("Long-term (1-5y): new money", long_term["new_money"]).removesuffix(".")
+    held = long_term.get("if_held") or {"action": "insufficient_data", "reasons": ["assessment_unavailable"]}
+    text += "; if held: " + _words(held["action"])
+    if held["action"] == "not_assessed":
+        text += " (this tool does not assess long-term ownership of this instrument; its company rules do not apply)"
+    else:
+        reasons = ", ".join(_words(reason) for reason in held.get("reasons", []))
+        if reasons:
+            text += " (" + reasons + ")"
+        if held["action"] == "hold":
+            text += "; not an endorsement"
+        elif held["action"] == "review_exit":
+            text += "; not an immediate sell instruction"
+    fit = horizon_fit.get("long_term")
+    if held["action"] != "not_assessed" and fit in {"avoid", "caution", "unknown"}:
+        fit_reasons = [reason.removeprefix("long_term:").strip().rstrip(".")
+                   for reason in horizon_fit.get("reasons", []) if reason.startswith("long_term:")]
+        text += f"; suitability: {fit}"
+        if fit_reasons:
+            text += " (" + "; ".join(fit_reasons) + ")"
+    return text + "."
+
+
+def horizon_segments(decision_card: dict[str, Any],
+                     horizon_fit: dict[str, Any] | None = None) -> tuple[str, str, str]:
     """The summary's three opening sentences (plan §7 class N): mid-term new money, if held, long term."""
     new_money = decision_card["new_money"]
     return (
@@ -202,7 +228,7 @@ def horizon_segments(decision_card: dict[str, Any]) -> tuple[str, str, str]:
                          size_text(new_money["action"], decision_card.get("sizing"),
                                    decision_card.get("sizing_status"))),
         f"If held: {_words(decision_card['if_held']['action'])}.",
-        _horizon_segment("Long-term (1-5y)", decision_card["long_term"]["new_money"]),
+        _long_term_segment(decision_card, horizon_fit or {}),
     )
 
 
@@ -344,7 +370,7 @@ def build_executive_summary(
     lead_topic = _determine_lead_topic()
 
     # === BUILD SENTENCES: the three horizon segments, then the lead topic ===
-    sentences: list[str] = list(horizon_segments(decision_card))
+    sentences: list[str] = list(horizon_segments(decision_card, horizon_fit))
     if decision_card.get("sizing") is not None:
         sentences.append("Mid-term sizing only: This planning stop is not monitored or an exit instruction.")
         sentences.append("Gaps and slippage can make the actual loss larger.")

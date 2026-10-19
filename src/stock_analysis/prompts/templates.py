@@ -1,5 +1,6 @@
 """Prompt templates for stock analysis."""
 
+import json
 from typing import Any
 
 # Prompt definitions
@@ -17,11 +18,15 @@ PROMPTS = {
         "arguments": [{"name": "symbol", "required": True}],
     },
     "position_decision": {
-        "description": "Holder decision for an existing position (analyze's if_held, with P/L and tax)",
+        "description": "Holder assessment for a selected horizon, with optional personal USD context",
         "arguments": [
             {"name": "symbol", "required": True},
-            {"name": "cost_basis", "required": True},
-            {"name": "purchase_date", "required": True},
+            {"name": "cost_basis", "required": False},
+            {"name": "purchase_date", "required": False},
+            {"name": "shares", "required": False},
+            {"name": "horizon", "required": False},
+            {"name": "portfolio_value", "required": False},
+            {"name": "max_holding_pct", "required": False},
         ],
     },
 }
@@ -66,7 +71,7 @@ If you need detailed presentation rules, read:
 `stock-analysis://guides/analyze-rendering`
 
 When you present the result, lead with:
-1. `decision_card`: `decision_card.new_money` (mid-term) and `decision_card.long_term.new_money`, each action verbatim with its `blocked_by`, then `decision_card.if_held` action verbatim with its `basis`
+1. `decision_card`: `decision_card.new_money` (mid-term) and `decision_card.long_term.new_money`, each action verbatim with its `blocked_by`, then `decision_card.if_held` action verbatim with its `basis` (mid-term), and `decision_card.long_term.if_held` action with its `basis` (long-term)
 2. `executive_summary`, verbatim
 3. `decision_card.sizing`, mid-term new money only; never attach it to a long-term or holder answer
 4. `decision_modes.core`, `decision_modes.balanced` and `decision_modes.speculative`, with any `capped_by`
@@ -126,40 +131,35 @@ Be direct. Never upgrade past `blocked_by`.""",
 
     if name == "position_decision":
         symbol = arguments.get("symbol", "")
-        cost_basis = arguments.get("cost_basis", "")
-        purchase_date = arguments.get("purchase_date", "")
+        horizon = arguments.get("horizon") or "mid_term"
+        call_args = [json.dumps(symbol), f"horizon={json.dumps(horizon)}"]
+        for key in ("cost_basis", "purchase_date", "shares", "portfolio_value", "max_holding_pct"):
+            value = arguments.get(key)
+            if value not in (None, ""):
+                call_args.append(f"{key}={json.dumps(value)}")
+        call = f"analyze_my_position({', '.join(call_args)})"
         return {
-            "messages": [
-                {
-                    "role": "user",
-                    "content": f"""Help me decide what to do with my position in {symbol}.
+            "messages": [{
+                "role": "user",
+                "content": f"""Review my holding in {symbol}, using horizon {horizon}.
 
-Position details:
-- Cost basis: ${cost_basis}
-- Purchase date: {purchase_date}
+Use one tool call:
+1. {call}
 
-Use these tools:
-1. analyze("{symbol}")
-2. analyze_my_position("{symbol}", cost_basis={cost_basis}, purchase_date="{purchase_date}")
+This call supplies the canonical holder assessment and personal context together; do not call analyze or fetch technicals again.
+Optional inputs are user-reported USD context; do not ask for missing inputs unless needed. Omitted cost, date, shares, portfolio value or ceiling stay unknown; never invent them. No implicit currency conversion.
 
 Then provide:
-1. **Decision**: `decision_card.if_held.action` verbatim (hold, reduce, review_exit or insufficient_data) with its `basis`; adding is allowed only when `decision_card.if_held.add_allowed` is true
-2. **Position Status**: Current P/L and holding period
-3. **Tax Implications**: Short-term vs long-term status and impact
-4. **Exit Plan**: `decision_card.exit`, `decision_card.exit_triggers` and `decision_card.conditions.reduce_if`
-5. **New Money**: `decision_card.new_money.action` with its `blocked_by`, for any addition
+1. **Holder assessment**: requested horizon and `position_card.holder_assessment` action verbatim with its basis and reasons (hold, reduce, review_exit, insufficient_data or not_assessed). Hold is not endorsement: preserve the returned suitability fit and its actual reasons, including avoid, caution or unknown.
+2. **Allocation check**: label review_status as "Allocation check". It reflects only the supplied ceiling, never changes or replaces the stock action, and is not a stock all-clear. No ceiling means not requested; missing or stale inputs mean not evaluated. Report any personal review trigger before addition eligibility.
+3. **Position context**: returned P&L, portfolio weight, price provenance and elapsed days only when available. Show missing-input reasons and historical price qualifications; unknown is not zero. Portfolio value includes this holding and is not buying power.
+4. **Addition status**: `position_card.new_money` verbatim with blocked_by; adding requires the holder's add_allowed. Report an exceeded ceiling or unchecked capacity beside it. No remaining add capacity is assessed.
 
-For additions, size only from `decision_card.sizing`, mid-term new money only; never attach it to a long-term or holder answer.
-When sizing is null, report `decision_card.sizing_status` and its reason; do not infer the reason from the action alone.
-Missing sizing does not change the research action. This is a standalone allocation estimate, never remaining add capacity: existing holdings, outstanding orders and available buying power are unknown.
-This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger.
-For assumptions, conditional loss and separate percentage-only/zero-share disclosures, follow `stock-analysis://guides/analyze-rendering`.
+Never borrow the new-money action as a holder answer. For a long-term ETF, say: "This tool does not assess long-term ETF ownership; its company rules do not apply." Do not request company evidence or substitute the mid-term answer. Show any personal allocation check separately.
+No tax estimate, holder stop or sale quantity. Technical references are unmonitored diagnostics, not holder exit instructions. Do not attach entry sizing or ATR planning stops to this answer. For a separate mid-term new-money sizing question, follow `stock-analysis://guides/analyze-rendering`; this position call supplies no entry size.
 
-The decision comes from analyze, not from P/L, tax or technical signals alone. Report it verbatim as mid-term.
-There is no long-term holder decision; do not substitute the long-term new-money action for one.
-`candidate_admits_new_money` describes the pre-gate candidate, not permission to add; `add_allowed` still governs additions.""",
-                }
-            ]
+`candidate_admits_new_money` is a pre-gate basis, not permission to add; add_allowed governs additions. Never upgrade past blocked_by.""",
+            }],
         }
 
     return None

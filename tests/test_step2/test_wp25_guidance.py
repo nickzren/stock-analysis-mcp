@@ -16,16 +16,18 @@ def flat(text: str) -> str:
 def test_one_year_defaults_to_mid_term_unless_long_term_is_explicit() -> None:
     for text in (mcp.instructions or "", GUIDE):
         assert "12 months / one year means mid-term unless long term is explicit" in flat(text)
-    assert 'A bare ticker ("Analyze HOOD") never triggers a question' in (mcp.instructions or "")
+    assert '"Analyze HOOD" or a bare holder question: mid-term (3-12 months), no question' in (mcp.instructions or "")
 
 
-def test_no_long_term_holder_decision_is_claimed() -> None:
+def test_long_term_holder_decision_is_named_without_substituting_new_money() -> None:
     prompt = get_prompt("position_decision", {"symbol": "ACME", "cost_basis": "80",
                                               "purchase_date": "2025-01-02"})
     assert prompt is not None
     readme = Path(__file__).resolve().parents[2].joinpath("README.md").read_text()
     for text in (mcp.instructions or "", GUIDE, prompt["messages"][0]["content"], readme):
-        assert "There is no long-term holder decision" in flat(text)
+        assert "There is no long-term holder decision" not in flat(text)
+    assert "decision_card.long_term.if_held" in GUIDE
+    assert "Never borrow the new-money action as a holder answer" in prompt["messages"][0]["content"]
 
 
 async def test_holder_basis_does_not_grant_permission_to_add() -> None:
@@ -56,7 +58,7 @@ async def test_entry_band_is_a_reference_not_a_new_price_gate() -> None:
 
 
 def test_instructions_disclose_unknown_checks_alongside_entry() -> None:
-    assert "List `unevaluated` gates beside entry as not checked, never cleared" in flat(mcp.instructions or "")
+    assert "List unevaluated gates beside entry as not checked, never cleared" in flat(mcp.instructions or "")
     assert "List `unevaluated` gates as not checked" in flat(GUIDE)
 
 

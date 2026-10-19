@@ -73,7 +73,7 @@ async def test_conditions_and_reassessment_name_evidence_not_a_failed_thesis() -
         if tier == "decision":
             assert "executive_summary" not in shown
         else:
-            assert shown["executive_summary"].count(f"re-run analyze after {clearing}.") == 2
+            assert shown["executive_summary"].count(f"re-run analyze after {clearing}") == 2
         assert shown_card["conditions"]["buy_only_if"] == [clearing]
         assert shown_card["long_term"]["new_money"]["conditions"]["buy_only_if"] == [clearing]
         for money in horizons(shown_card):
@@ -218,5 +218,5 @@ async def test_legacy_snapshot_warning_names_the_new_rule(monkeypatch: pytest.Mo
     change = await compare(monkeypatch, old, current)
     assert GATE in change["changes"]["hard_gates"]["new"]
     assert len(change["warnings"]) == 1
-    assert "2.0.0 -> 3.0.0" in change["warnings"][0]
+    assert "2.0.0 -> 4.0.0" in change["warnings"][0]
     assert GATE in change["warnings"][0]

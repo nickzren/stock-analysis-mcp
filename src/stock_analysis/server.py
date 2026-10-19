@@ -59,16 +59,13 @@ logger = logging.getLogger(__name__)
 
 INSTRUCTIONS = """Stock research from Yahoo Finance. Informational only, not financial advice; no orders.
 
-Start with `analyze`. A bare ticker ("Analyze HOOD") never triggers a question: lead with mid-term (3-12 months). 12 months / one year means mid-term unless long term is explicit. Ask only for two horizons or a period fitting none ("1-2 months"); one matching period ("hold for five years": long term) needs no question.
-- swing, days to weeks: `analyze_trade_setup` or `scan_watchlist`;
-- mid-term new money (default): `decision_card.new_money`;
-- mid-term holding: `decision_card.if_held`; `analyze_my_position` adds P/L and tax, not the decision;
-- long-term new money, 1-5 years: `decision_card.long_term.new_money`.
-There is no long-term holder decision; label holder guidance mid-term, never substitute the long-term new-money action. Horizons are independent.
+"Analyze HOOD" or a bare holder question: mid-term (3-12 months), no question. 12 months / one year means mid-term unless long term is explicit. Five years: long term (1-5 years), no question. Ask only for conflicting or unsupported horizons. Swing: analyze_trade_setup or scan_watchlist.
+Stock-only: analyze's decision_card.new_money / decision_card.if_held are mid-term; decision_card.long_term.new_money / decision_card.long_term.if_held are long-term. Personal context: analyze_my_position(horizon=...) once; inputs optional. Report new-money actions with blocked_by; holders with basis, verbatim. Horizons are independent; never substitute new money for a holder answer.
+not_assessed means the instrument is outside the company rubric, not missing data. Hold is not endorsement: retain fit concerns/reasons. Label review_status "Allocation check"; it never changes the holder action. Adding requires add_allowed; a basis is no permission to add. Disclose an exceeded ceiling or unchecked capacity.
 
-Report each new-money action verbatim with its `blocked_by`, and `decision_card.if_held` action verbatim with its `basis`. Adding requires `add_allowed`; a basis is no permission to add. Never upgrade past `blocked_by`: no narrative, zone, dip, rating or news turns it into a buy. List `unevaluated` gates beside entry as not checked, never cleared. Size only from `decision_card.sizing`, mid-term new money only; there is no long-term or holder size, so never attach it to a long-term or holder answer. When sizing is null, report `decision_card.sizing_status` and its reason; do not infer the reason from the action alone. Missing sizing does not change the research action. Report percentage-only and zero-share scenarios separately. `earliest_reassessment` means re-run analyze, not a buy date. `diagnostics`, `action_zones.price_zone`, dip and third-party data (analysts, news, ownership, options) are context, not advice.
+Never upgrade past blocked_by: narrative, zones, dip, ratings and news cannot loosen it. List unevaluated gates beside entry as not checked, never cleared. Size only from `decision_card.sizing`, mid-term new money only, never long-term or holder. When sizing is null, report `decision_card.sizing_status` and its reason; do not infer the reason from the action alone. Missing sizing does not change the research action. Report percentage-only and zero-share scenarios separately. No monitored holder stops or tax estimates. earliest_reassessment means re-run analyze, not a buy date. Diagnostics, price_zone, dip and third-party analysts/news/ownership/options are context, not advice.
 
-Rendering: `stock-analysis://guides/analyze-rendering`."""
+Rendering: stock-analysis://guides/analyze-rendering."""
 
 mcp = FastMCP(name="stock-analysis", instructions=INSTRUCTIONS)
 
@@ -260,24 +257,21 @@ async def analyze(
     max_position_pct: PositionPercent | None = None,
     detail: str = "standard",
 ) -> str:
-    """
-    Use when asked about new money or holdings. A bare ticker means this tool.
-
-    `decision_card.new_money` (mid-term, 3-12 months); `decision_card.long_term.new_money` (1-5 years); `decision_card.if_held` for a holder (mid-term only).
-    Report actions verbatim; never upgrade past `blocked_by`.
-
-    Size only from `decision_card.sizing` (mid-term new money only, never long-term or holder).
+    """Use when reviewing holdings/new money; a bare ticker means this tool.
+    decision_card.new_money / decision_card.if_held: mid-term (3-12 months).
+    decision_card.long_term.new_money / decision_card.long_term.if_held: long-term (1-5 years).
+    one year: mid-term unless long term is explicit. Actions verbatim; never upgrade past blocked_by.
+    Size only from decision_card.sizing: mid-term new money only, never long-term or holder.
     When sizing is null, report `decision_card.sizing_status` and its reason; do not infer the reason from the action alone.
     Missing sizing does not change the research action.
-    `earliest_reassessment`: re-run analyze, not a buy date.
-    `profile` changes sizing only, never the decision.
-
-    Sizing: finite numbers or decimal/scientific strings; surrounding whitespace and a sign allowed; never booleans, NaN/infinity, overflow or underflow to zero.
-    Limits: (0, 100] percentage points; 1 means 1%; 0.01 means 0.01%.
-    `account_size`: >0; account-value assumption, not available buying power.
+    earliest_reassessment: re-run analyze, not a buy date. profile changes sizing only, never the decision.
+    Sizing: finite numbers or decimal/scientific strings; surrounding whitespace and a sign allowed;
+    never booleans, NaN/infinity, overflow or underflow to zero.
+    Limits: (0,100] percentage points; 1 means 1%; 0.01 means 0.01%.
+    account_size >0: account-value assumption, not available buying power.
     Validate before symbol lookup, provider reads or watchlist access.
-    Omitted/null limits use the selected profile. Omitted/null account gives percentage-only sizing if available.
-    `stock-analysis://guides/analyze-rendering`.
+    Omitted/null limits use the selected profile. Omitted/null account gives percentage-only sizing.
+    stock-analysis://guides/analyze-rendering.
     """
     try:
         normalized_detail = normalize_analyze_detail(detail)
@@ -459,38 +453,37 @@ async def detect_changes(
     symbol: str,
     previous_snapshot: dict[str, Any] | None = None,
 ) -> str:
-    """
-    Use when the user wants to know what changed for a stock since a saved analyze
-    snapshot. `new_money_action` and `if_held_action` are the mid-term decision and
-    `long_term_action` the long-term one; scan_watchlist's saved state holds swing-card
-    actions, so a difference between the two is a different horizon, not a
-    contradiction.
+    """Use when the user wants changes since a saved analyze snapshot.
+    new_money_action and if_held_action are mid-term; long_term_action is long-term
+    new money and long_term_if_held_action is long-term ownership. Scan state is swing.
 
-    Runs fresh analysis and diffs its watchlist_snapshot (snapshot 3.0.0, the same at
-    every analyze detail level) against previous_snapshot. Material changes: price moves
-    >5%, score changes >0.10, and any change in new_money_action, if_held_action or
-    long_term_action, hard gates (a freshness gate, stale_data or
-    freshness_unverifiable, firing or clearing included), gates not evaluated (a gate
-    whose input failed is reported as not evaluated, never as cleared), price_zone,
-    horizon fit, tilt,
-    confidence, risk regime, valuation gate, support, a switch to or from the fallback
-    price source, or a new or removed signal. Fetch times, cache hits, ages, price_stale
-    and the reassessment date never count. A 1.0.0, 1.1.0 or 2.0.0 snapshot is compared
-    on the fields it shares with 3.0.0: its actions and zone are not compared (listed in
-    not_comparable and named in the summary), and a version warning lists the retired
-    fields and the 3.0.0 rule changes that can move a gate.
+    Runs fresh analysis and compares its snapshot 4.0.0, identical across detail levels.
+    Material changes include price moves >5%, score changes >0.10, action appearance,
+    disappearance or change, hard gates (stale_data or freshness_unverifiable firing
+    or clearing included), unevaluated gates, price_zone, horizon fit,
+    tilt, confidence, risk regime, valuation, support, signals and switches involving
+    the fallback price source. An input failure means not evaluated, never cleared.
+    Fetch times, cache hits, ages, price_stale and reassessment dates never count.
+    A transition involving not_assessed is a coverage/action change, not evidence
+    of investment deterioration or recovered company data.
+
+    A 3.0.0 snapshot compares existing fields with unchanged meanings; the new holder
+    field is not_comparable. A 1.0.0, 1.1.0 or 2.0.0 snapshot retains its older
+    action/zone/signal/unevaluated-gate restrictions. Version changes alone are not
+    material; one migration warning explains the differing rules. Personal position
+    inputs never enter snapshots. Preserve an older baseline when downgrading;
+    never relabel a snapshot version.
 
     Args:
-        symbol: Stock ticker symbol
-        previous_snapshot: A previous analyze watchlist_snapshot or detect_changes
-            current_snapshot for the same symbol (optional - if omitted, returns
-            current snapshot only). A snapshot for another symbol, a 3.0.0
-            snapshot missing a field, or a wrong-typed field returns an
-            invalid_snapshot error; keys outside the snapshot's version are ignored.
+        symbol: Stock ticker
+        previous_snapshot: Prior analyze watchlist_snapshot or current_snapshot for
+            this symbol; omit for the current snapshot only. Shapes, types or missing required
+            3.0.0/4.0.0 fields return invalid_snapshot before analysis; the
+            symbol is checked against the resolved ticker afterward.
+            Keys outside the snapshot's version are ignored.
 
     Returns:
-        JSON with changes, material_changes, not_comparable, hash_changed,
-        warnings and a narrative summary
+        JSON changes, material_changes, not_comparable, hash_changed, warnings and summary
     """
     result = await what_changed(symbol=symbol, previous_snapshot=previous_snapshot)
     return _json_response(result)
@@ -666,15 +659,24 @@ def value_memo(symbol: str) -> str:
 
 
 @mcp.prompt
-def position_decision(symbol: str, cost_basis: str, purchase_date: str) -> str:
-    """Holder decision for an existing position: analyze's if_held, with P/L and tax."""
-    result = get_prompt(
-        "position_decision",
-        {"symbol": symbol, "cost_basis": cost_basis, "purchase_date": purchase_date},
-    )
+def position_decision(
+    symbol: str,
+    cost_basis: str = "",
+    purchase_date: str = "",
+    shares: str = "",
+    horizon: str = "mid_term",
+    portfolio_value: str = "",
+    max_holding_pct: str = "",
+) -> str:
+    """Holder assessment for a selected horizon, with optional personal USD context."""
+    result = get_prompt("position_decision", {
+        "symbol": symbol, "cost_basis": cost_basis, "purchase_date": purchase_date,
+        "shares": shares, "horizon": horizon, "portfolio_value": portfolio_value,
+        "max_holding_pct": max_holding_pct,
+    })
     if result:
         return result["messages"][0]["content"]
-    return f"Analyze {symbol} with analyze and read decision_card.if_held."
+    return f"Use analyze_my_position for {symbol} and report its canonical holder assessment."
 
 
 # ============================================================================

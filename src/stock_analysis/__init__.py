@@ -29,4 +29,6 @@ SERVER_VERSION = get_server_version()
 #     price_zone; freshness and earnings-verification gates in analyze; snapshot 3.0.0
 # v7: Shared sizing limits and whole-share amounts, explicit availability/quantity status,
 #     conditional loss and legacy adapters (see CHANGELOG.md); snapshot remains 3.0.0
-SCHEMA_VERSION = "7"
+# v8: Long-term holder assessment, optional canonical position context, tax/technical migration,
+#     and snapshot 4.0.0 (see CHANGELOG.md); package version is independent.
+SCHEMA_VERSION = "8"

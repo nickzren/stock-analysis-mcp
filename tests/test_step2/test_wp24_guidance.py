@@ -3,7 +3,7 @@
 The rendering guide answers from decision_card first at every detail level, never upgrades past blocked_by, sizes
 only from decision_card.sizing and treats zones, dip, diagnostics and third-party data as context; the server sends
 instructions= with the horizon rule; every tool description starts "Use when"; the prompts use the canonical
-vocabulary and position_decision decides from analyze (S-C15). Annex: output_contract.md §9, §10 RF13 and
+vocabulary; position_decision uses its canonical position analysis (3a.3). Annex: output_contract.md §9, §10 RF13 and
 reassessment.md RA.15, "Corrected proposal", as amended by plan §0.
 """
 
@@ -18,6 +18,7 @@ from stock_analysis.server import mcp
 from stock_analysis.tools.analyze.action_zones import PRICE_ZONES
 from stock_analysis.tools.analyze.decision import IF_HELD_ACTIONS, NEW_MONEY_ACTIONS
 from tests.support import decision_matrix as dm
+from tests.support import holder_matrix as hm
 from tests.support import output_contract as oc
 from tests.test_tools.test_tool_surface import EXPECTED_TOOLS
 
@@ -63,6 +64,9 @@ async def leaf_paths() -> set[str]:
         for name in dm.SCENARIOS:
             for shown in dm.tiers(await dm.run(name)).values():
                 _LEAVES.update(path for path, _ in oc.leaves(shown))
+        for name in hm.POSITION_CASES:
+            result = await hm.run_position(name)
+            _LEAVES.update(path for path, _ in oc.leaves(result["result"]))
     return _LEAVES
 
 
@@ -198,10 +202,9 @@ async def test_sizing_names_its_horizon() -> None:
             "long-term or holder answer.") in section
     assert "it is null unless mid-term new money is `buy` or `starter`." in section
     assert s_row and s_row[1].startswith("Sizing, mid-term new money only:") and SIZING_HORIZON in s_row[1]
-    assert ("Size only from `decision_card.sizing`, mid-term new money only; there is no long-term or holder size, "
-            f"so {SIZING_HORIZON}.") in flat(mcp.instructions or "")
-    assert "`decision_card.sizing` (mid-term new money only, never long-term or holder)." in (
-        analyze_doc)
+    assert ("Size only from `decision_card.sizing`, mid-term new money only, never long-term or holder."
+            in flat(mcp.instructions or ""))
+    assert "Size only from decision_card.sizing: mid-term new money only, never long-term or holder." in analyze_doc
     assert (f"`decision_card.sizing`, mid-term new money only; {SIZING_HORIZON}"
             in prompt("full_analysis"))
     assert [k for k, t in (await texts()).items()
@@ -219,24 +222,23 @@ def test_the_server_instructions_state_the_horizon_rule() -> None:
     the guide's URI, within 2,000 characters. PD D-3. Review fix (G): nothing turns an action into a buy, and
     diagnostics, price_zone, the dip and third-party data are context, not advice."""
     text = flat(mcp.instructions or "")
-    assert "`decision_card.if_held` action verbatim with its `basis`" in text  # if_held has no blocked_by
-    assert "Report each action verbatim with its `blocked_by`" not in text
-
-    for needle in ("Informational only, not financial advice", 'A bare ticker ("Analyze HOOD") never triggers a question',
-                   "lead with mid-term (3-12 months)",
-                   "Ask only for two horizons or a period fitting none",
-                   'one matching period ("hold for five years": long term) needs no question',
-                   "swing, days to weeks: `analyze_trade_setup`",
-                   "mid-term new money (default): `decision_card.new_money`",
-                   "mid-term holding: `decision_card.if_held`",
-                   "long-term new money, 1-5 years: `decision_card.long_term.new_money`",
-                   "Never upgrade past `blocked_by`", "no narrative, zone, dip, rating or news turns it into a buy",
-                   "Size only from `decision_card.sizing`", "not a buy date",
-                   "`diagnostics`, `action_zones.price_zone`, dip and third-party data (analysts, "
-                   "news, ownership, options) are context, not advice.",
-                   "stock-analysis://guides/analyze-rendering"):
+    for needle in (
+        "Informational only, not financial advice", "no orders",
+        '\"Analyze HOOD\" or a bare holder question: mid-term (3-12 months), no question',
+        "Ask only for conflicting or unsupported horizons",
+        "Five years: long term (1-5 years), no question",
+        "Swing: analyze_trade_setup or scan_watchlist",
+        "decision_card.new_money / decision_card.if_held are mid-term",
+        "decision_card.long_term.new_money / decision_card.long_term.if_held are long-term",
+        "Report new-money actions with blocked_by; holders with basis, verbatim",
+        "Never upgrade past blocked_by: narrative, zones, dip, ratings and news cannot loosen it",
+        "Size only from `decision_card.sizing`", "not a buy date",
+        "Diagnostics, price_zone, dip and third-party analysts/news/ownership/options are context, not advice",
+        "stock-analysis://guides/analyze-rendering",
+    ):
         assert needle in text, needle
     assert len(mcp.instructions or "") <= 2000
+
 
 
 async def test_the_instructions_reach_the_client() -> None:
@@ -259,9 +261,9 @@ async def test_the_descriptions_route_each_decision() -> None:
     RF."""
     tools = {name: flat(doc) for name, doc in (await descriptions()).items()}
 
-    for needle in ("A bare ticker means this tool", "`decision_card.new_money` (mid-term, 3-12 months)",
-                   "`decision_card.long_term.new_money` (1-5 years)", "`decision_card.if_held` for a holder",
-                   "never upgrade past `blocked_by`", "Size only from `decision_card.sizing`", "not a buy date",
+    for needle in ("a bare ticker means this tool", "decision_card.new_money / decision_card.if_held: mid-term",
+                   "decision_card.long_term.new_money / decision_card.long_term.if_held: long-term",
+                   "never upgrade past blocked_by", "Size only from decision_card.sizing", "not a buy date",
                    "changes sizing only, never the decision"):
         assert needle in tools["analyze"], needle
     assert "position_card.holder_assessment" in tools["analyze_my_position"]
@@ -275,7 +277,7 @@ async def test_saved_records_name_their_horizons() -> None:
     scan_watchlist and analyze_trade_setup that theirs are swing, so a disagreement is a different horizon. RF."""
     tools = {name: flat(doc) for name, doc in (await descriptions()).items()}
 
-    assert ("`new_money_action` and `if_held_action` are the mid-term decision and `long_term_action` the long-term "
-            "one") in tools["detect_changes"]
+    assert ("new_money_action and if_held_action are mid-term; long_term_action is long-term new money and "
+            "long_term_if_held_action is long-term ownership") in tools["detect_changes"]
     assert "not analyze's mid-term decision" in tools["scan_watchlist"]
     assert "Its action is the swing horizon, separate from analyze's mid-term decision" in tools["analyze_trade_setup"]

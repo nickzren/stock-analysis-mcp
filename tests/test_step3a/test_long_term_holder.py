@@ -1,4 +1,4 @@
-"""Step3a.1 pure component rules and unchanged released decisions/snapshots."""
+"""Step3a.1 pure component rules and unchanged released decisions and coordinated holder snapshots."""
 
 import copy
 from datetime import date
@@ -19,7 +19,7 @@ def decide_with(evidence=None, **overrides):
     return decision.decide(**{**values, **overrides})
 
 
-async def test_longterm_holder_is_computed_at_every_tier_without_snapshot_change():
+async def test_longterm_holder_is_computed_at_every_tier_with_one_snapshot():
     result = await hm.run_stock("sound_bullish")
     held = result["decision_card"]["long_term"]["if_held"]
     assert held["action"] == "hold"
@@ -29,8 +29,8 @@ async def test_longterm_holder_is_computed_at_every_tier_without_snapshot_change
     for payload in dm.tiers(result).values():
         assert payload["decision_card"]["long_term"]["if_held"] == held
         assert payload["watchlist_snapshot"] == result["watchlist_snapshot"]
-        assert payload["watchlist_snapshot"]["snapshot_version"] == "3.0.0"
-        assert "long_term_if_held_action" not in payload["watchlist_snapshot"]
+        assert payload["watchlist_snapshot"]["snapshot_version"] == "4.0.0"
+        assert payload["watchlist_snapshot"]["long_term_if_held_action"] == held["action"]
 
 
 @pytest.mark.parametrize("name,action,basis", [

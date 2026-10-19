@@ -7,6 +7,12 @@ Use this guide when presenting the result of the `analyze` tool.
 smaller and `detail="full"` adds the audit sections. Render only the sections
 present in the response. The decision card is present at every detail level.
 12 months / one year means mid-term unless long term is explicit.
+"Analyze HOOD" and a bare "I own X; hold or sell?" use the labelled mid-term
+answer without a question. "Hold for five years" selects long term without a
+question. Ask one focused clarification only for conflicting or unsupported horizons.
+Stock-only holder questions use the matching analyze holder field below. Personal
+context questions use analyze_my_position(horizon=...) once, not analyze followed
+by a second analysis; its inputs are optional.
 
 ## Order
 
@@ -23,13 +29,16 @@ present in the response. The decision card is present at every detail level.
    - If held, mid-term: `decision_card.if_held.action` verbatim, with its `basis`.
      Adding to a holding is allowed only when `decision_card.if_held.add_allowed`
      is true.
-     There is no long-term holder decision; label this guidance mid-term and
-     never substitute the long-term new-money action for it.
    - Long term (1-5 years): `decision_card.long_term.new_money.action`
-     verbatim, with its own `decision_card.long_term.new_money.blocked_by`.
+     verbatim, with its own `decision_card.long_term.new_money.blocked_by`, then
+     `decision_card.long_term.if_held.action` verbatim with its basis and reasons.
+     Label new money and holder separately; neither implies the other. Long-term
+     adding requires `decision_card.long_term.if_held.add_allowed`; that is entry
+     eligibility, not personal capacity.
    - New-money actions: `buy`, `starter`, `wait`, `wait_for_data`,
      `insufficient_data`, `watch`, `avoid`. Holder actions: `hold`, `reduce`,
-     `review_exit`, `insufficient_data`.
+     `review_exit`, `insufficient_data` for mid-term. Long-term holder actions:
+     `hold`, `review_exit`, `insufficient_data`, `not_assessed`.
    - Never upgrade past `blocked_by`: report each action as given. No
      narrative, zone, dip, mode, rating or news item makes it looser (`wait`
      is never shown as `starter`, nor `starter` as `buy`).
@@ -37,9 +46,10 @@ present in the response. The decision card is present at every detail level.
      as not checked.
    - `decision_card.action_now` is a deprecated alias of
      `decision_card.new_money.action`, kept for one release.
-   - Render `why`, `exit`, `exit_triggers`, and `data_flags` when not empty.
+   - Render `why` and `data_flags` when not empty. Existing `exit`, `exit_triggers`
+     and reduce/add conditions are mid-term; never relabel them as long-term exits.
 
-   Holder `basis` explains the action, not an instruction to add:
+   Mid-term holder `basis` explains the action, not an instruction to add:
    - `candidate_admits_new_money` describes the pre-gate candidate, not permission
      to add; `add_allowed` still governs additions.
    - `runway_critical` / `business_broken`: established thesis failure.
@@ -49,6 +59,26 @@ present in the response. The decision card is present at every detail level.
    - `tilt_missing` / `candidate_insufficient`: too little evidence for a holder
      decision. `no_reduction_evidence` means no reduction rule fired, not proof
      that the investment is safe.
+
+   Long-term holder coverage and qualifications:
+   - `not_assessed` means the known instrument is outside the company rubric,
+     not that company data are missing. For SPY or VTI: "This tool does not assess
+     long-term ETF ownership; its company rules do not apply." Do not ask for ETF
+     cash runway or borrow the mid-term holder/long-term new-money answer.
+   - `insufficient_data` means required applicability or business/runway evidence
+     cannot be assessed. Show checks, reasons, watch_factors and review_when;
+     missing evidence is never a pass. A known failure can coexist with an unknown.
+   - `review_exit` prompts review of a demonstrated thesis failure, not an order.
+   - `hold` means no demonstrated thesis failure under these checks, not endorsement.
+     Preserve caution/avoid/unknown horizon fit with actual reasons. For example:
+     "The checks have not demonstrated a thesis failure, but the long-term suitability
+     assessment is avoid because [actual reasons]. This is not an endorsement to
+     keep or add without considering those concerns." In analyze use the reasons
+     from verdict.horizon_fit.reasons for the long-term fit; in a position answer use the actual
+     reasons from suitability.reasons. Do not replace them with a generic warning.
+   - Mid-term `thesis_unknown` and long-term `applicability_unverified` can describe
+     the same missing inputs under different horizon rules; they are not contradictory
+     provider observations. Do not rename the returned basis.
 
 3. Reassessment date (`earliest_reassessment`, one per horizon):
    - It is not a buy date; re-run analyze on or after it and act only on the
@@ -65,12 +95,13 @@ present in the response. The decision card is present at every detail level.
    - They are necessary, not sufficient: meeting them never permits a buy by
      itself; re-run analyze.
    - Under `starter`, `buy_only_if` lists what the full position needs.
-   - Render `add_only_if` only for a holder.
-   - Render `do_not_buy_if`, `reduce_if`, and `monitor` as written.
+   - Render `add_only_if` only for a mid-term holder.
+   - Render `do_not_buy_if`, `reduce_if`, and `monitor` as written and with their
+     returned horizon; never turn mid-term reduce_if into a long-term exit rule.
 
 5. Executive summary (standard and full):
    - Render `executive_summary` verbatim. It opens with the same three horizon
-     segments.
+     segments; the long-term segment separates new money from ownership.
    - Do not paraphrase or rewrite it.
    - If FCF is mentioned, include value and period from
      `fundamentals_summary.cash_flow.free_cash_flow_label`.
@@ -165,7 +196,8 @@ present in the response. The decision card is present at every detail level.
      `thesis_integrity`, and `mismatch_verdict`.
    - `dislocation_framework.action` mirrors the card. Its `can_start_now` is
      deprecated and, like `buy_now`, never the source of a decision.
-   - Always render `dislocation_framework.action.sell_without_attachment_if`.
+   - `dislocation_framework.action.sell_without_attachment_if` is mid-term
+     diagnostic context, not the long-term holder answer or an exit instruction.
 
 10. Decision modes (full):
     - `decision_modes.core` follows the long-term decision (capped by the
@@ -227,11 +259,50 @@ present in the response. The decision card is present at every detail level.
 19. News:
     - Recent headlines when available, attributed to their source.
 
+## Position answers
+
+Use analyze_my_position once when personal context matters. Lead with the requested
+horizon and position_card.holder_assessment action/reason, then any personal review
+trigger, then separate addition eligibility. Cost, purchase date, shares, portfolio
+value and ceiling are optional; do not request data irrelevant to the question.
+The position response supplies its own canonical assessment; do not run analyze again.
+
+| Field/status | Rendering rule |
+|---|---|
+| position_card.review_status | Label "Allocation check", not a stock all-clear. It depends only on concentration_check, never the holder action. |
+| review_allocation | Above the user's stated ceiling: show the actual weight and ceiling beside addition eligibility. |
+| no_allocation_trigger | At or below the supplied ceiling, not an endorsement of the stock or permission to add. |
+| not_evaluated | A requested allocation check lacks usable inputs/current price; capacity was not checked. |
+| not_requested | No ceiling supplied; no default ceiling or conclusion. |
+| context_status | Describes personal inputs only; inconsistent inputs are not a new stock decision. |
+
+The holder action stands even when allocation has no trigger. Stock add_allowed can
+be true while a ceiling is exceeded: show both, never claim remaining add capacity.
+If another portfolio tool supplies fixed concentration flags, your own ceiling governs
+this single-position check; do not substitute those fixed thresholds.
+
+Personal numbers require verified USD per-share equity/ETF units. No implicit currency
+conversion. Cost and shares are user-reported on the current split-adjusted basis.
+A known ETF can have P&L and allocation numbers while its long-term ownership is
+not_assessed. Unknown units suppress dependent values with calculation_reasons.
+A cost basis of zero permits dollar P&L but no return fraction. Missing values stay
+unknown, never zero; display each reason. The portfolio total includes this holding,
+not buying power. A holding larger than that total is inconsistent; don't clamp it.
+Stale or fallback prices are historical context: label position.price_context.as_of and provenance and
+never report a current allocation check from them. No reconciliation is promised.
+
+Tax is not_assessed: no rates, tax-saving estimates, legal long-term category or tax
+recommendation. Supplied purchase date and elapsed days are descriptive only.
+Technical references are unmonitored diagnostics, not holder exit instructions.
+No ATR planning stop, entry size or sale quantity belongs to a long-term holder
+answer. diagnostics.technicals retains technical context without a competing sell
+count. Entry sizing remains the separate mid-term contract above.
+
 ## Field classes
 
 | Class | Meaning | Examples |
 |---|---|---|
-| A | Actionable: only from the decision, with its horizon | `decision_card.new_money.action`, `decision_card.if_held.action`, `decision_card.long_term.new_money.action` |
+| A | Actionable: only from the decision, with its horizon | `decision_card.new_money.action`, `decision_card.if_held.action`, `decision_card.long_term.new_money.action`, `decision_card.long_term.if_held.action` |
 | S | Sizing, mid-term new money only: present only when it is `buy` or `starter`; never attach it to a long-term or holder answer | `decision_card.sizing`, `decision_card.entry` |
 | C | Conditional: predicates, necessary, not sufficient | `decision_card.conditions`, `decision_card.new_money.earliest_reassessment` |
 | D | Diagnostic: describes state, never advice | `action_zones.price_zone`, `dislocation_check.questions`, `verdict.score` |

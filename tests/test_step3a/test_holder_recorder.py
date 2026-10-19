@@ -33,7 +33,15 @@ async def test_capture_is_deterministic_and_accounts_for_the_approved_position_m
     previous_fields = copy.deepcopy(recording)
     for row in previous_fields["stocks"].values():
         assert isinstance(row["result"]["decision_card"]["long_term"].pop("if_held"), dict)
-    assert previous_fields["stocks"] == before["stocks"]
+    for name, row in previous_fields["stocks"].items():
+        old = before["stocks"][name]
+        assert {key: value for key, value in row.items() if key != "result"} == {
+            key: value for key, value in old.items() if key != "result"}
+        # Snapshot and summary migrations are checked against the frozen rows in test_holder_baseline.
+        assert {key: value for key, value in row["result"].items()
+                if key not in {"watchlist_snapshot", "executive_summary"}} == {
+            key: value for key, value in old["result"].items()
+            if key not in {"watchlist_snapshot", "executive_summary"}}
     assert previous_fields["analyze_clock"] == before["analyze_clock"]
     assert previous_fields["baseline_code"] == hm.BASE_COMMIT
     assert previous_fields["position_clock"] == hm.POSITION_CLOCK.isoformat()

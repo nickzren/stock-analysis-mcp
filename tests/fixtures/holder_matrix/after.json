@@ -109,7 +109,7 @@
           "purchase_date": "2026-09-01"
         },
         "meta": {
-          "schema_version": "7",
+          "schema_version": "8",
           "server_version": "0.4.0",
           "tool": "analyze_position"
         },
@@ -405,7 +405,7 @@
           "purchase_date": "2026-09-01"
         },
         "meta": {
-          "schema_version": "7",
+          "schema_version": "8",
           "server_version": "0.4.0",
           "tool": "analyze_position"
         },
@@ -691,7 +691,7 @@
           "purchase_date": "2026-09-01"
         },
         "meta": {
-          "schema_version": "7",
+          "schema_version": "8",
           "server_version": "0.4.0",
           "tool": "analyze_position"
         },
@@ -995,7 +995,7 @@
           "purchase_date": "2026-09-01"
         },
         "meta": {
-          "schema_version": "7",
+          "schema_version": "8",
           "server_version": "0.4.0",
           "tool": "analyze_position"
         },
@@ -1310,7 +1310,7 @@
           "purchase_date": "2025-10-09"
         },
         "meta": {
-          "schema_version": "7",
+          "schema_version": "8",
           "server_version": "0.4.0",
           "tool": "analyze_position"
         },
@@ -1596,7 +1596,7 @@
           "purchase_date": "2025-10-08"
         },
         "meta": {
-          "schema_version": "7",
+          "schema_version": "8",
           "server_version": "0.4.0",
           "tool": "analyze_position"
         },
@@ -1882,7 +1882,7 @@
           "purchase_date": "2026-09-01"
         },
         "meta": {
-          "schema_version": "7",
+          "schema_version": "8",
           "server_version": "0.4.0",
           "tool": "analyze_position"
         },
@@ -2074,7 +2074,7 @@
         "error_type": "invalid_parameters",
         "message": "purchase_date must be a real YYYY-MM-DD date no later than the request date",
         "meta": {
-          "schema_version": "7",
+          "schema_version": "8",
           "server_version": "0.4.0",
           "tool": "error"
         },
@@ -2280,7 +2280,7 @@
           "purchase_date": "2026-09-01"
         },
         "meta": {
-          "schema_version": "7",
+          "schema_version": "8",
           "server_version": "0.4.0",
           "tool": "analyze_position"
         },
@@ -2472,7 +2472,7 @@
         "error_type": "invalid_parameters",
         "message": "purchase_date must be a real YYYY-MM-DD date no later than the request date",
         "meta": {
-          "schema_version": "7",
+          "schema_version": "8",
           "server_version": "0.4.0",
           "tool": "error"
         },
@@ -2678,7 +2678,7 @@
           "purchase_date": "2026-09-01"
         },
         "meta": {
-          "schema_version": "7",
+          "schema_version": "8",
           "server_version": "0.4.0",
           "tool": "analyze_position"
         },
@@ -2975,7 +2975,7 @@
           "purchase_date": "2024-02-29"
         },
         "meta": {
-          "schema_version": "7",
+          "schema_version": "8",
           "server_version": "0.4.0",
           "tool": "analyze_position"
         },
@@ -3261,7 +3261,7 @@
           "purchase_date": "2026-09-01"
         },
         "meta": {
-          "schema_version": "7",
+          "schema_version": "8",
           "server_version": "0.4.0",
           "tool": "analyze_position"
         },
@@ -3453,7 +3453,7 @@
         "error_type": "invalid_parameters",
         "message": "cost_basis must be a finite nonnegative number; decimal numeric strings are accepted",
         "meta": {
-          "schema_version": "7",
+          "schema_version": "8",
           "server_version": "0.4.0",
           "tool": "error"
         },
@@ -3661,7 +3661,7 @@
           "purchase_date": "2026-09-01"
         },
         "meta": {
-          "schema_version": "7",
+          "schema_version": "8",
           "server_version": "0.4.0",
           "tool": "analyze_position"
         },
@@ -3881,7 +3881,7 @@
         "error_type": "invalid_parameters",
         "message": "shares must be a finite positive number; decimal numeric strings are accepted",
         "meta": {
-          "schema_version": "7",
+          "schema_version": "8",
           "server_version": "0.4.0",
           "tool": "error"
         },
@@ -4089,7 +4089,7 @@
           "purchase_date": "2026-09-01"
         },
         "meta": {
-          "schema_version": "7",
+          "schema_version": "8",
           "server_version": "0.4.0",
           "tool": "analyze_position"
         },
@@ -4403,7 +4403,7 @@
           "purchase_date": "2026-09-01"
         },
         "meta": {
-          "schema_version": "7",
+          "schema_version": "8",
           "server_version": "0.4.0",
           "tool": "analyze_position"
         },
@@ -4694,7 +4694,7 @@
           "purchase_date": "2026-09-01"
         },
         "meta": {
-          "schema_version": "7",
+          "schema_version": "8",
           "server_version": "0.4.0",
           "tool": "analyze_position"
         },
@@ -4998,7 +4998,7 @@
           "purchase_date": "2026-09-01"
         },
         "meta": {
-          "schema_version": "7",
+          "schema_version": "8",
           "server_version": "0.4.0",
           "tool": "analyze_position"
         },
@@ -5289,7 +5289,7 @@
           "purchase_date": "2026-09-01"
         },
         "meta": {
-          "schema_version": "7",
+          "schema_version": "8",
           "server_version": "0.4.0",
           "tool": "analyze_position"
         },
@@ -5600,7 +5600,7 @@
           "purchase_date": "2026-09-01"
         },
         "meta": {
-          "schema_version": "7",
+          "schema_version": "8",
           "server_version": "0.4.0",
           "tool": "analyze_position"
         },
@@ -5921,7 +5921,7 @@
           "purchase_date": "2026-09-01"
         },
         "meta": {
-          "schema_version": "7",
+          "schema_version": "8",
           "server_version": "0.4.0",
           "tool": "analyze_position"
         },
@@ -6213,7 +6213,7 @@
           "purchase_date": "2026-09-01"
         },
         "meta": {
-          "schema_version": "7",
+          "schema_version": "8",
           "server_version": "0.4.0",
           "tool": "analyze_position"
         },
@@ -6433,7 +6433,7 @@
         "error_type": "invalid_parameters",
         "message": "shares must be a finite positive number; decimal numeric strings are accepted",
         "meta": {
-          "schema_version": "7",
+          "schema_version": "8",
           "server_version": "0.4.0",
           "tool": "error"
         },
@@ -7058,7 +7058,7 @@
             ]
           }
         },
-        "executive_summary": "Decision (mid-term, new money): avoid; blocked by thesis_broken. If held: review exit. Long-term (1-5y): avoid; blocked by thesis_broken. Acme: long-term fit avoid (revenue -25% YoY). Technicals: 3M -18.0%.",
+        "executive_summary": "Decision (mid-term, new money): avoid; blocked by thesis_broken. If held: review exit. Long-term (1-5y): new money: avoid; blocked by thesis_broken; if held: review exit (business broken); not an immediate sell instruction; suitability: avoid (poor business quality). Acme: long-term fit avoid (revenue -25% YoY). Technicals: 3M -18.0%.",
         "fundamentals_summary": {
           "analyst_estimates": null,
           "burn_metrics": null,
@@ -7299,6 +7299,7 @@
           "is_unprofitable": null,
           "long_term_action": "avoid",
           "long_term_fit": "avoid",
+          "long_term_if_held_action": "review_exit",
           "market_cap": 10000000000,
           "mid_term_fit": "avoid",
           "new_money_action": "avoid",
@@ -7317,8 +7318,8 @@
           "score": -0.75,
           "sector": null,
           "snapshot_as_of_date": "2026-10-10",
-          "snapshot_hash": "45b1fa411d48ce62",
-          "snapshot_version": "3.0.0",
+          "snapshot_hash": "a0e1b3d8f66fa5c2",
+          "snapshot_version": "4.0.0",
           "support_currency": "supported",
           "support_instrument": "supported",
           "symbol": "ACME",
@@ -7865,7 +7866,7 @@
             ]
           }
         },
-        "executive_summary": "Decision (mid-term, new money): avoid; blocked by thesis_broken. If held: review exit. Long-term (1-5y): avoid; blocked by thesis_broken. Acme: long-term fit avoid (revenue -25% YoY). Technicals are strong (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%).",
+        "executive_summary": "Decision (mid-term, new money): avoid; blocked by thesis_broken. If held: review exit. Long-term (1-5y): new money: avoid; blocked by thesis_broken; if held: review exit (business broken); not an immediate sell instruction; suitability: avoid (poor business quality). Acme: long-term fit avoid (revenue -25% YoY). Technicals are strong (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%).",
         "fundamentals_summary": {
           "analyst_estimates": null,
           "burn_metrics": null,
@@ -8106,6 +8107,7 @@
           "is_unprofitable": null,
           "long_term_action": "avoid",
           "long_term_fit": "avoid",
+          "long_term_if_held_action": "review_exit",
           "market_cap": 10000000000,
           "mid_term_fit": "ok",
           "new_money_action": "avoid",
@@ -8124,8 +8126,8 @@
           "score": -0.15000000000000002,
           "sector": null,
           "snapshot_as_of_date": "2026-10-10",
-          "snapshot_hash": "fa4727c31d2e2cbb",
-          "snapshot_version": "3.0.0",
+          "snapshot_hash": "46c224352bb6133a",
+          "snapshot_version": "4.0.0",
           "support_currency": "supported",
           "support_instrument": "supported",
           "symbol": "ACME",
@@ -8609,7 +8611,7 @@
           "status": "unverified",
           "summary": null
         },
-        "executive_summary": "Decision (mid-term, new money): watch; blocked by thesis_unverifiable, unsupported_instrument; no reassessment date: re-run analyze after the stock type is confirmed and the required business and cash-runway data are available and quote type verified as supported. If held: insufficient data. Long-term (1-5y): watch; blocked by thesis_unverifiable, unsupported_instrument. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%).",
+        "executive_summary": "Decision (mid-term, new money): watch; blocked by thesis_unverifiable, unsupported_instrument; no reassessment date: re-run analyze after the stock type is confirmed and the required business and cash-runway data are available and quote type verified as supported. If held: insufficient data. Long-term (1-5y): new money: watch; blocked by thesis_unverifiable, unsupported_instrument; if held: insufficient data (applicability unverified); suitability: unknown (fundamentals unavailable). Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%).",
         "fundamentals_summary": {
           "analyst_estimates": null,
           "burn_metrics": null,
@@ -8838,6 +8840,7 @@
           "is_unprofitable": null,
           "long_term_action": "watch",
           "long_term_fit": "unknown",
+          "long_term_if_held_action": "insufficient_data",
           "market_cap": 10000000000,
           "mid_term_fit": "ok",
           "new_money_action": "watch",
@@ -8856,8 +8859,8 @@
           "score": 0.3,
           "sector": null,
           "snapshot_as_of_date": "2026-10-10",
-          "snapshot_hash": "54fcceafa266b9a1",
-          "snapshot_version": "3.0.0",
+          "snapshot_hash": "6997adff2ebfa294",
+          "snapshot_version": "4.0.0",
           "support_currency": "supported",
           "support_instrument": "unverified",
           "symbol": "ACME",
@@ -9443,7 +9446,7 @@
             ]
           }
         },
-        "executive_summary": "Decision (mid-term, new money): starter; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.08% of the account if sold at $96; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): starter. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals: revenue_yoy +25.0%; net_margin 15.0%; FCF (TTM): -$100M.",
+        "executive_summary": "Decision (mid-term, new money): starter; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.08% of the account if sold at $96; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): new money: starter; if held: hold (no demonstrated thesis failure); not an endorsement; suitability: caution (negative_fcf). Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals: revenue_yoy +25.0%; net_margin 15.0%; FCF (TTM): -$100M.",
         "fundamentals_summary": {
           "analyst_estimates": null,
           "burn_metrics": null,
@@ -9694,6 +9697,7 @@
           "is_unprofitable": null,
           "long_term_action": "starter",
           "long_term_fit": "caution",
+          "long_term_if_held_action": "hold",
           "market_cap": 10000000000,
           "mid_term_fit": "ok",
           "new_money_action": "starter",
@@ -9712,8 +9716,8 @@
           "score": 0.5700000000000001,
           "sector": null,
           "snapshot_as_of_date": "2026-10-10",
-          "snapshot_hash": "87a39b94b512e243",
-          "snapshot_version": "3.0.0",
+          "snapshot_hash": "6b0dac85f4f752a7",
+          "snapshot_version": "4.0.0",
           "support_currency": "supported",
           "support_instrument": "supported",
           "symbol": "ACME",
@@ -10298,7 +10302,7 @@
             ]
           }
         },
-        "executive_summary": "Decision (mid-term, new money): avoid; blocked by thesis_broken; no reassessment date: re-run analyze after cash runway no longer below 4 quarters. If held: review exit. Long-term (1-5y): avoid; blocked by thesis_broken; no reassessment date: re-run analyze after cash runway no longer below 4 quarters. Acme is unprofitable (revenue_yoy +30.0%; net_margin -20.0%; FCF (TTM): -$200M; burn ~$50M/quarter).",
+        "executive_summary": "Decision (mid-term, new money): avoid; blocked by thesis_broken; no reassessment date: re-run analyze after cash runway no longer below 4 quarters. If held: review exit. Long-term (1-5y): new money: avoid; blocked by thesis_broken; no reassessment date: re-run analyze after cash runway no longer below 4 quarters; if held: review exit (runway critical); not an immediate sell instruction; suitability: caution (unprofitable + negative_fcf). Acme is unprofitable (revenue_yoy +30.0%; net_margin -20.0%; FCF (TTM): -$200M; burn ~$50M/quarter).",
         "fundamentals_summary": {
           "analyst_estimates": null,
           "burn_metrics": {
@@ -10562,6 +10566,7 @@
           "is_unprofitable": true,
           "long_term_action": "avoid",
           "long_term_fit": "caution",
+          "long_term_if_held_action": "review_exit",
           "market_cap": 10000000000,
           "mid_term_fit": "caution",
           "new_money_action": "avoid",
@@ -10580,8 +10585,8 @@
           "score": 0.22499999999999998,
           "sector": null,
           "snapshot_as_of_date": "2026-10-10",
-          "snapshot_hash": "bb70048d02270da9",
-          "snapshot_version": "3.0.0",
+          "snapshot_hash": "623096ca7a9e4429",
+          "snapshot_version": "4.0.0",
           "support_currency": "supported",
           "support_instrument": "supported",
           "symbol": "ACME",
@@ -11120,7 +11125,7 @@
             ]
           }
         },
-        "executive_summary": "Decision (mid-term, new money): watch; blocked by unsupported_currency; no reassessment date: re-run analyze after price currency verified as supported. If held: hold. Long-term (1-5y): watch; blocked by unsupported_currency; no reassessment date: re-run analyze after price currency verified as supported. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+        "executive_summary": "Decision (mid-term, new money): watch; blocked by unsupported_currency; no reassessment date: re-run analyze after price currency verified as supported. If held: hold. Long-term (1-5y): new money: watch; blocked by unsupported_currency; no reassessment date: re-run analyze after price currency verified as supported; if held: hold (no demonstrated thesis failure); not an endorsement. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
         "fundamentals_summary": {
           "analyst_estimates": null,
           "burn_metrics": null,
@@ -11358,6 +11363,7 @@
           "is_unprofitable": null,
           "long_term_action": "watch",
           "long_term_fit": "ok",
+          "long_term_if_held_action": "hold",
           "market_cap": 10000000000,
           "mid_term_fit": "ok",
           "new_money_action": "watch",
@@ -11376,8 +11382,8 @@
           "score": 0.75,
           "sector": null,
           "snapshot_as_of_date": "2026-10-10",
-          "snapshot_hash": "7ba90b98f9bda3ec",
-          "snapshot_version": "3.0.0",
+          "snapshot_hash": "32a0feec1f0af1b7",
+          "snapshot_version": "4.0.0",
           "support_currency": "unverified",
           "support_instrument": "supported",
           "symbol": "ACME",
@@ -11922,7 +11928,7 @@
             ]
           }
         },
-        "executive_summary": "Decision (mid-term, new money): wait; blocked by earnings_blackout; reassess on or after Tue Oct 13 (not a buy date). If held: hold. Long-term (1-5y): wait; blocked by earnings_blackout; reassess on or after Tue Oct 13 (not a buy date). Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+        "executive_summary": "Decision (mid-term, new money): wait; blocked by earnings_blackout; reassess on or after Tue Oct 13 (not a buy date). If held: hold. Long-term (1-5y): new money: wait; blocked by earnings_blackout; reassess on or after Tue Oct 13 (not a buy date); if held: hold (no demonstrated thesis failure); not an endorsement. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
         "fundamentals_summary": {
           "analyst_estimates": null,
           "burn_metrics": null,
@@ -12160,6 +12166,7 @@
           "is_unprofitable": null,
           "long_term_action": "wait",
           "long_term_fit": "ok",
+          "long_term_if_held_action": "hold",
           "market_cap": 10000000000,
           "mid_term_fit": "ok",
           "new_money_action": "wait",
@@ -12178,8 +12185,8 @@
           "score": 0.75,
           "sector": null,
           "snapshot_as_of_date": "2026-10-10",
-          "snapshot_hash": "69e01bff30fe0c7b",
-          "snapshot_version": "3.0.0",
+          "snapshot_hash": "99afb28e42aaaadf",
+          "snapshot_version": "4.0.0",
           "support_currency": "supported",
           "support_instrument": "supported",
           "symbol": "ACME",
@@ -12571,7 +12578,7 @@
           "status": "not_applicable",
           "summary": null
         },
-        "executive_summary": "Decision (mid-term, new money): avoid; blocked by unsupported_instrument. If held: reduce. Long-term (1-5y): watch; blocked by unsupported_instrument. SPDR shows neutral technicals (3M -18.0%).",
+        "executive_summary": "Decision (mid-term, new money): avoid; blocked by unsupported_instrument. If held: reduce. Long-term (1-5y): new money: watch; blocked by unsupported_instrument; if held: not assessed (this tool does not assess long-term ownership of this instrument; its company rules do not apply). SPDR shows neutral technicals (3M -18.0%).",
         "fundamentals_summary": {
           "analyst_estimates": null,
           "burn_metrics": null,
@@ -12795,6 +12802,7 @@
           "is_unprofitable": null,
           "long_term_action": "watch",
           "long_term_fit": "unknown",
+          "long_term_if_held_action": "not_assessed",
           "market_cap": null,
           "mid_term_fit": "avoid",
           "new_money_action": "avoid",
@@ -12813,8 +12821,8 @@
           "score": -0.3,
           "sector": null,
           "snapshot_as_of_date": "2026-10-10",
-          "snapshot_hash": "999e344e787a8d25",
-          "snapshot_version": "3.0.0",
+          "snapshot_hash": "625d89b3269adc48",
+          "snapshot_version": "4.0.0",
           "support_currency": "supported",
           "support_instrument": "unsupported",
           "symbol": "ACME",
@@ -13216,7 +13224,7 @@
           "status": "not_applicable",
           "summary": null
         },
-        "executive_summary": "Decision (mid-term, new money): watch; blocked by unsupported_instrument; outside supported scope: no reassessment date. If held: hold. Long-term (1-5y): watch; blocked by unsupported_instrument. SPDR has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%).",
+        "executive_summary": "Decision (mid-term, new money): watch; blocked by unsupported_instrument; outside supported scope: no reassessment date. If held: hold. Long-term (1-5y): new money: watch; blocked by unsupported_instrument; if held: not assessed (this tool does not assess long-term ownership of this instrument; its company rules do not apply). SPDR has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%).",
         "fundamentals_summary": {
           "analyst_estimates": null,
           "burn_metrics": null,
@@ -13442,6 +13450,7 @@
           "is_unprofitable": null,
           "long_term_action": "watch",
           "long_term_fit": "unknown",
+          "long_term_if_held_action": "not_assessed",
           "market_cap": null,
           "mid_term_fit": "ok",
           "new_money_action": "watch",
@@ -13460,8 +13469,8 @@
           "score": 0.3,
           "sector": null,
           "snapshot_as_of_date": "2026-10-10",
-          "snapshot_hash": "b65354f07c28c38a",
-          "snapshot_version": "3.0.0",
+          "snapshot_hash": "cc3d03980f74a35b",
+          "snapshot_version": "4.0.0",
           "support_currency": "supported",
           "support_instrument": "unsupported",
           "symbol": "ACME",
@@ -13863,7 +13872,7 @@
           "status": "not_applicable",
           "summary": null
         },
-        "executive_summary": "Decision (mid-term, new money): watch; blocked by unsupported_instrument; outside supported scope: no reassessment date. If held: hold. Long-term (1-5y): watch; blocked by unsupported_instrument. Vanguard has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%).",
+        "executive_summary": "Decision (mid-term, new money): watch; blocked by unsupported_instrument; outside supported scope: no reassessment date. If held: hold. Long-term (1-5y): new money: watch; blocked by unsupported_instrument; if held: not assessed (this tool does not assess long-term ownership of this instrument; its company rules do not apply). Vanguard has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%).",
         "fundamentals_summary": {
           "analyst_estimates": null,
           "burn_metrics": null,
@@ -14089,6 +14098,7 @@
           "is_unprofitable": null,
           "long_term_action": "watch",
           "long_term_fit": "unknown",
+          "long_term_if_held_action": "not_assessed",
           "market_cap": null,
           "mid_term_fit": "ok",
           "new_money_action": "watch",
@@ -14107,8 +14117,8 @@
           "score": 0.3,
           "sector": null,
           "snapshot_as_of_date": "2026-10-10",
-          "snapshot_hash": "b65354f07c28c38a",
-          "snapshot_version": "3.0.0",
+          "snapshot_hash": "cc3d03980f74a35b",
+          "snapshot_version": "4.0.0",
           "support_currency": "supported",
           "support_instrument": "unsupported",
           "symbol": "ACME",
@@ -14637,7 +14647,7 @@
             ]
           }
         },
-        "executive_summary": "Decision (mid-term, new money): watch; blocked by unsupported_currency; outside supported scope: no reassessment date. If held: hold. Long-term (1-5y): watch; blocked by unsupported_currency; outside supported scope: no reassessment date. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+        "executive_summary": "Decision (mid-term, new money): watch; blocked by unsupported_currency; outside supported scope: no reassessment date. If held: hold. Long-term (1-5y): new money: watch; blocked by unsupported_currency; outside supported scope: no reassessment date; if held: hold (no demonstrated thesis failure); not an endorsement. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
         "fundamentals_summary": {
           "analyst_estimates": null,
           "burn_metrics": null,
@@ -14875,6 +14885,7 @@
           "is_unprofitable": null,
           "long_term_action": "watch",
           "long_term_fit": "ok",
+          "long_term_if_held_action": "hold",
           "market_cap": 10000000000,
           "mid_term_fit": "ok",
           "new_money_action": "watch",
@@ -14893,8 +14904,8 @@
           "score": 0.75,
           "sector": null,
           "snapshot_as_of_date": "2026-10-10",
-          "snapshot_hash": "f451181eaa8b285c",
-          "snapshot_version": "3.0.0",
+          "snapshot_hash": "e82e23f8cca7c818",
+          "snapshot_version": "4.0.0",
           "support_currency": "unsupported",
           "support_instrument": "supported",
           "symbol": "ACME",
@@ -15382,7 +15393,7 @@
             "what_must_remain_true": []
           }
         },
-        "executive_summary": "Decision (mid-term, new money): insufficient data; blocked by data_quality_critical, thesis_unverifiable. If held: insufficient data. Long-term (1-5y): insufficient data; blocked by data_quality_critical, thesis_unverifiable. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%).",
+        "executive_summary": "Decision (mid-term, new money): insufficient data; blocked by data_quality_critical, thesis_unverifiable. If held: insufficient data. Long-term (1-5y): new money: insufficient data; blocked by data_quality_critical, thesis_unverifiable; if held: insufficient data (business not evaluated, cash runway not evaluated); suitability: unknown (fundamentals unavailable). Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%).",
         "fundamentals_summary": {
           "analyst_estimates": null,
           "burn_metrics": null,
@@ -15606,6 +15617,7 @@
           "is_unprofitable": null,
           "long_term_action": "insufficient_data",
           "long_term_fit": "unknown",
+          "long_term_if_held_action": "insufficient_data",
           "market_cap": 10000000000,
           "mid_term_fit": "ok",
           "new_money_action": "insufficient_data",
@@ -15624,8 +15636,8 @@
           "score": null,
           "sector": null,
           "snapshot_as_of_date": "2026-10-10",
-          "snapshot_hash": "4adfb16dd41f72f3",
-          "snapshot_version": "3.0.0",
+          "snapshot_hash": "73fb6fdd6193881b",
+          "snapshot_version": "4.0.0",
           "support_currency": "supported",
           "support_instrument": "supported",
           "symbol": "ACME",
@@ -16138,7 +16150,7 @@
             ]
           }
         },
-        "executive_summary": "Decision (mid-term, new money): wait. If held: hold. Long-term (1-5y): avoid. Acme: long-term fit avoid (negative FCF; revenue -40% YoY; extreme risk (vol 75%, dd -30%)). Technicals are strong (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%).",
+        "executive_summary": "Decision (mid-term, new money): wait. If held: hold. Long-term (1-5y): new money: avoid; if held: hold (no demonstrated thesis failure); not an endorsement; suitability: avoid (extreme_risk + revenue_decline_40pct + negative_fcf). Acme: long-term fit avoid (negative FCF; revenue -40% YoY; extreme risk (vol 75%, dd -30%)). Technicals are strong (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%).",
         "fundamentals_summary": {
           "analyst_estimates": null,
           "burn_metrics": null,
@@ -16388,6 +16400,7 @@
           "is_unprofitable": null,
           "long_term_action": "avoid",
           "long_term_fit": "avoid",
+          "long_term_if_held_action": "hold",
           "market_cap": 10000000000,
           "mid_term_fit": "caution",
           "new_money_action": "wait",
@@ -16406,8 +16419,8 @@
           "score": 0.14,
           "sector": null,
           "snapshot_as_of_date": "2026-10-10",
-          "snapshot_hash": "647e82aad4740158",
-          "snapshot_version": "3.0.0",
+          "snapshot_hash": "baed962e9ecc5e77",
+          "snapshot_version": "4.0.0",
           "support_currency": "supported",
           "support_instrument": "supported",
           "symbol": "ACME",
@@ -16925,7 +16938,7 @@
             "what_must_remain_true": []
           }
         },
-        "executive_summary": "Decision (mid-term, new money): wait for data; blocked by thesis_unverifiable; no reassessment date: re-run analyze after the stock type is confirmed and the required business and cash-runway data are available. If held: insufficient data. Long-term (1-5y): wait for data; blocked by thesis_unverifiable; no reassessment date: re-run analyze after the stock type is confirmed and the required business and cash-runway data are available. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals: net_margin 20.0%.",
+        "executive_summary": "Decision (mid-term, new money): wait for data; blocked by thesis_unverifiable; no reassessment date: re-run analyze after the stock type is confirmed and the required business and cash-runway data are available. If held: insufficient data. Long-term (1-5y): new money: wait for data; blocked by thesis_unverifiable; no reassessment date: re-run analyze after the stock type is confirmed and the required business and cash-runway data are available; if held: insufficient data (business not evaluated). Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals: net_margin 20.0%.",
         "fundamentals_summary": {
           "analyst_estimates": null,
           "burn_metrics": null,
@@ -17152,6 +17165,7 @@
           "is_unprofitable": null,
           "long_term_action": "wait_for_data",
           "long_term_fit": "ok",
+          "long_term_if_held_action": "insufficient_data",
           "market_cap": 10000000000,
           "mid_term_fit": "ok",
           "new_money_action": "wait_for_data",
@@ -17170,8 +17184,8 @@
           "score": 0.3,
           "sector": null,
           "snapshot_as_of_date": "2026-10-10",
-          "snapshot_hash": "0a81bfa45f0e2c3b",
-          "snapshot_version": "3.0.0",
+          "snapshot_hash": "6a4fb7c6b06e7033",
+          "snapshot_version": "4.0.0",
           "support_currency": "supported",
           "support_instrument": "supported",
           "symbol": "ACME",
@@ -17704,7 +17718,7 @@
             ]
           }
         },
-        "executive_summary": "Decision (mid-term, new money): wait; blocked by near_52w_high; no reassessment date: re-run analyze after price leaves the near-52-week-high band. If held: hold. Long-term (1-5y): starter. Acme has extreme risk (vol 75.0%, dd -30.0%). Fundamentals: revenue_yoy +12.0%; net_margin 20.0%. Technicals are strong (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%).",
+        "executive_summary": "Decision (mid-term, new money): wait; blocked by near_52w_high; no reassessment date: re-run analyze after price leaves the near-52-week-high band. If held: hold. Long-term (1-5y): new money: starter; if held: hold (no demonstrated thesis failure); not an endorsement; suitability: caution (extreme_risk). Acme has extreme risk (vol 75.0%, dd -30.0%). Fundamentals: revenue_yoy +12.0%; net_margin 20.0%. Technicals are strong (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%).",
         "fundamentals_summary": {
           "analyst_estimates": null,
           "burn_metrics": null,
@@ -17957,6 +17971,7 @@
           "is_unprofitable": null,
           "long_term_action": "starter",
           "long_term_fit": "caution",
+          "long_term_if_held_action": "hold",
           "market_cap": 10000000000,
           "mid_term_fit": "caution",
           "new_money_action": "wait",
@@ -17975,8 +17990,8 @@
           "score": 0.5,
           "sector": null,
           "snapshot_as_of_date": "2026-10-10",
-          "snapshot_hash": "a28bc918105f6242",
-          "snapshot_version": "3.0.0",
+          "snapshot_hash": "c35b9cfd2a3149fb",
+          "snapshot_version": "4.0.0",
           "support_currency": "supported",
           "support_instrument": "supported",
           "symbol": "ACME",
@@ -18562,7 +18577,7 @@
             ]
           }
         },
-        "executive_summary": "Decision (mid-term, new money): starter; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.08% of the account if sold at $96; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): buy. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+        "executive_summary": "Decision (mid-term, new money): starter; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.08% of the account if sold at $96; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): new money: buy; if held: hold (no demonstrated thesis failure); not an endorsement. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
         "fundamentals_summary": {
           "analyst_estimates": null,
           "burn_metrics": null,
@@ -18796,6 +18811,7 @@
           "is_unprofitable": null,
           "long_term_action": "buy",
           "long_term_fit": "ok",
+          "long_term_if_held_action": "hold",
           "market_cap": 10000000000,
           "mid_term_fit": "ok",
           "new_money_action": "starter",
@@ -18814,8 +18830,8 @@
           "score": 0.75,
           "sector": null,
           "snapshot_as_of_date": "2026-10-10",
-          "snapshot_hash": "9877927d3c5e9419",
-          "snapshot_version": "3.0.0",
+          "snapshot_hash": "ee6dd01e06e7c513",
+          "snapshot_version": "4.0.0",
           "support_currency": "supported",
           "support_instrument": "supported",
           "symbol": "ACME",
@@ -19396,7 +19412,7 @@
             ]
           }
         },
-        "executive_summary": "Decision (mid-term, new money): starter; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.08% of the account if sold at $96; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): starter. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals: revenue_yoy +25.0%; net_margin 15.0%; FCF (TTM): -$100M.",
+        "executive_summary": "Decision (mid-term, new money): starter; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.08% of the account if sold at $96; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): new money: starter; if held: hold (no demonstrated thesis failure); not an endorsement; suitability: caution (negative_fcf). Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals: revenue_yoy +25.0%; net_margin 15.0%; FCF (TTM): -$100M.",
         "fundamentals_summary": {
           "analyst_estimates": null,
           "burn_metrics": null,
@@ -19647,6 +19663,7 @@
           "is_unprofitable": null,
           "long_term_action": "starter",
           "long_term_fit": "caution",
+          "long_term_if_held_action": "hold",
           "market_cap": 10000000000,
           "mid_term_fit": "ok",
           "new_money_action": "starter",
@@ -19665,8 +19682,8 @@
           "score": 0.5700000000000001,
           "sector": null,
           "snapshot_as_of_date": "2026-10-10",
-          "snapshot_hash": "87a39b94b512e243",
-          "snapshot_version": "3.0.0",
+          "snapshot_hash": "6b0dac85f4f752a7",
+          "snapshot_version": "4.0.0",
           "support_currency": "supported",
           "support_instrument": "supported",
           "symbol": "ACME",
@@ -20243,7 +20260,7 @@
             ]
           }
         },
-        "executive_summary": "Decision (mid-term, new money): starter; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.08% of the account if sold at $96; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): buy. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+        "executive_summary": "Decision (mid-term, new money): starter; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.08% of the account if sold at $96; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): new money: buy; if held: hold (no demonstrated thesis failure); not an endorsement. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
         "fundamentals_summary": {
           "analyst_estimates": null,
           "burn_metrics": null,
@@ -20477,6 +20494,7 @@
           "is_unprofitable": null,
           "long_term_action": "buy",
           "long_term_fit": "ok",
+          "long_term_if_held_action": "hold",
           "market_cap": 10000000000,
           "mid_term_fit": "ok",
           "new_money_action": "starter",
@@ -20495,8 +20513,8 @@
           "score": 0.75,
           "sector": null,
           "snapshot_as_of_date": "2026-10-10",
-          "snapshot_hash": "9877927d3c5e9419",
-          "snapshot_version": "3.0.0",
+          "snapshot_hash": "ee6dd01e06e7c513",
+          "snapshot_version": "4.0.0",
           "support_currency": "supported",
           "support_instrument": "supported",
           "symbol": "ACME",
@@ -20977,7 +20995,7 @@
             ]
           }
         },
-        "executive_summary": "Decision (mid-term, new money): avoid. If held: hold. Long-term (1-5y): wait. Acme shows neutral technicals (3M -18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+        "executive_summary": "Decision (mid-term, new money): avoid. If held: hold. Long-term (1-5y): new money: wait; if held: hold (no demonstrated thesis failure); not an endorsement. Acme shows neutral technicals (3M -18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
         "fundamentals_summary": {
           "analyst_estimates": null,
           "burn_metrics": null,
@@ -21205,6 +21223,7 @@
           "is_unprofitable": null,
           "long_term_action": "wait",
           "long_term_fit": "ok",
+          "long_term_if_held_action": "hold",
           "market_cap": 10000000000,
           "mid_term_fit": "avoid",
           "new_money_action": "avoid",
@@ -21223,8 +21242,8 @@
           "score": 0.15000000000000002,
           "sector": null,
           "snapshot_as_of_date": "2026-10-10",
-          "snapshot_hash": "09fc3d4bb5561936",
-          "snapshot_version": "3.0.0",
+          "snapshot_hash": "b73bb92579dba0e6",
+          "snapshot_version": "4.0.0",
           "support_currency": "supported",
           "support_instrument": "supported",
           "symbol": "ACME",
@@ -21804,7 +21823,7 @@
             ]
           }
         },
-        "executive_summary": "Decision (mid-term, new money): starter; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.08% of the account if sold at $96; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): starter. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme is unprofitable (revenue_yoy +30.0%; net_margin -20.0%; FCF (TTM): +$100M). Technicals are strong (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%).",
+        "executive_summary": "Decision (mid-term, new money): starter; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.08% of the account if sold at $96; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): new money: starter; if held: hold (no demonstrated thesis failure); not an endorsement; suitability: caution (unprofitable). Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme is unprofitable (revenue_yoy +30.0%; net_margin -20.0%; FCF (TTM): +$100M). Technicals are strong (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%).",
         "fundamentals_summary": {
           "analyst_estimates": null,
           "burn_metrics": {
@@ -22059,6 +22078,7 @@
           "is_unprofitable": true,
           "long_term_action": "starter",
           "long_term_fit": "caution",
+          "long_term_if_held_action": "hold",
           "market_cap": 10000000000,
           "mid_term_fit": "ok",
           "new_money_action": "starter",
@@ -22077,8 +22097,8 @@
           "score": 0.75,
           "sector": null,
           "snapshot_as_of_date": "2026-10-10",
-          "snapshot_hash": "133e6718676ea049",
-          "snapshot_version": "3.0.0",
+          "snapshot_hash": "f2ba3f3c6ee5a121",
+          "snapshot_version": "4.0.0",
           "support_currency": "supported",
           "support_instrument": "supported",
           "symbol": "ACME",
@@ -22607,7 +22627,7 @@
             ]
           }
         },
-        "executive_summary": "Decision (mid-term, new money): watch; blocked by unsupported_currency; outside supported scope: no reassessment date. If held: hold. Long-term (1-5y): watch; blocked by unsupported_currency; outside supported scope: no reassessment date. Vodafone has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+        "executive_summary": "Decision (mid-term, new money): watch; blocked by unsupported_currency; outside supported scope: no reassessment date. If held: hold. Long-term (1-5y): new money: watch; blocked by unsupported_currency; outside supported scope: no reassessment date; if held: hold (no demonstrated thesis failure); not an endorsement. Vodafone has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
         "fundamentals_summary": {
           "analyst_estimates": null,
           "burn_metrics": null,
@@ -22845,6 +22865,7 @@
           "is_unprofitable": null,
           "long_term_action": "watch",
           "long_term_fit": "ok",
+          "long_term_if_held_action": "hold",
           "market_cap": 10000000000,
           "mid_term_fit": "ok",
           "new_money_action": "watch",
@@ -22863,8 +22884,8 @@
           "score": 0.75,
           "sector": null,
           "snapshot_as_of_date": "2026-10-10",
-          "snapshot_hash": "f451181eaa8b285c",
-          "snapshot_version": "3.0.0",
+          "snapshot_hash": "e82e23f8cca7c818",
+          "snapshot_version": "4.0.0",
           "support_currency": "unsupported",
           "support_instrument": "supported",
           "symbol": "ACME",
@@ -23295,7 +23316,7 @@
           "status": "not_applicable",
           "summary": null
         },
-        "executive_summary": "Decision (mid-term, new money): watch; blocked by unsupported_instrument; outside supported scope: no reassessment date. If held: hold. Long-term (1-5y): watch; blocked by unsupported_instrument. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%).",
+        "executive_summary": "Decision (mid-term, new money): watch; blocked by unsupported_instrument; outside supported scope: no reassessment date. If held: hold. Long-term (1-5y): new money: watch; blocked by unsupported_instrument; if held: not assessed (this tool does not assess long-term ownership of this instrument; its company rules do not apply). Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%).",
         "fundamentals_summary": {
           "analyst_estimates": null,
           "burn_metrics": null,
@@ -23521,6 +23542,7 @@
           "is_unprofitable": null,
           "long_term_action": "watch",
           "long_term_fit": "unknown",
+          "long_term_if_held_action": "not_assessed",
           "market_cap": 10000000000,
           "mid_term_fit": "ok",
           "new_money_action": "watch",
@@ -23539,8 +23561,8 @@
           "score": 0.3,
           "sector": null,
           "snapshot_as_of_date": "2026-10-10",
-          "snapshot_hash": "76fdf74c798014e7",
-          "snapshot_version": "3.0.0",
+          "snapshot_hash": "9c2af5db25bc2d8d",
+          "snapshot_version": "4.0.0",
           "support_currency": "supported",
           "support_instrument": "unsupported",
           "symbol": "ACME",
@@ -24107,7 +24129,7 @@
             ]
           }
         },
-        "executive_summary": "Decision (mid-term, new money): starter; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.08% of the account if sold at $96; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): buy. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+        "executive_summary": "Decision (mid-term, new money): starter; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.08% of the account if sold at $96; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): new money: buy; if held: hold (no demonstrated thesis failure); not an endorsement. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
         "fundamentals_summary": {
           "analyst_estimates": null,
           "burn_metrics": null,
@@ -24343,6 +24365,7 @@
           "is_unprofitable": null,
           "long_term_action": "buy",
           "long_term_fit": "ok",
+          "long_term_if_held_action": "hold",
           "market_cap": 10000000000,
           "mid_term_fit": "ok",
           "new_money_action": "starter",
@@ -24361,8 +24384,8 @@
           "score": 0.75,
           "sector": null,
           "snapshot_as_of_date": "2026-10-10",
-          "snapshot_hash": "d93a7882c397b7da",
-          "snapshot_version": "3.0.0",
+          "snapshot_hash": "be0166d5361a47ed",
+          "snapshot_version": "4.0.0",
           "support_currency": "supported",
           "support_instrument": "supported",
           "symbol": "ACME",
@@ -24845,7 +24868,7 @@
             ]
           }
         },
-        "executive_summary": "Decision (mid-term, new money): avoid. If held: hold. Long-term (1-5y): buy. Acme shows neutral technicals (3M -18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+        "executive_summary": "Decision (mid-term, new money): avoid. If held: hold. Long-term (1-5y): new money: buy; if held: hold (no demonstrated thesis failure); not an endorsement. Acme shows neutral technicals (3M -18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
         "fundamentals_summary": {
           "analyst_estimates": null,
           "burn_metrics": null,
@@ -25073,6 +25096,7 @@
           "is_unprofitable": null,
           "long_term_action": "buy",
           "long_term_fit": "ok",
+          "long_term_if_held_action": "hold",
           "market_cap": 10000000000,
           "mid_term_fit": "avoid",
           "new_money_action": "avoid",
@@ -25091,8 +25115,8 @@
           "score": 0.15000000000000002,
           "sector": null,
           "snapshot_as_of_date": "2026-10-10",
-          "snapshot_hash": "79b7f94c379555ce",
-          "snapshot_version": "3.0.0",
+          "snapshot_hash": "8761a43ec3442683",
+          "snapshot_version": "4.0.0",
           "support_currency": "supported",
           "support_instrument": "supported",
           "symbol": "ACME",
@@ -25659,7 +25683,7 @@
             ]
           }
         },
-        "executive_summary": "Decision (mid-term, new money): starter; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.08% of the account if sold at $96; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): buy. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+        "executive_summary": "Decision (mid-term, new money): starter; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.08% of the account if sold at $96; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): new money: buy; if held: hold (no demonstrated thesis failure); not an endorsement. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
         "fundamentals_summary": {
           "analyst_estimates": null,
           "burn_metrics": null,
@@ -25895,6 +25919,7 @@
           "is_unprofitable": null,
           "long_term_action": "buy",
           "long_term_fit": "ok",
+          "long_term_if_held_action": "hold",
           "market_cap": 10000000000,
           "mid_term_fit": "ok",
           "new_money_action": "starter",
@@ -25913,8 +25938,8 @@
           "score": 0.75,
           "sector": null,
           "snapshot_as_of_date": "2026-10-10",
-          "snapshot_hash": "d93a7882c397b7da",
-          "snapshot_version": "3.0.0",
+          "snapshot_hash": "be0166d5361a47ed",
+          "snapshot_version": "4.0.0",
           "support_currency": "supported",
           "support_instrument": "supported",
           "symbol": "ACME",
@@ -26477,7 +26502,7 @@
             ]
           }
         },
-        "executive_summary": "Decision (mid-term, new money): starter; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.08% of the account if sold at $96; risk budget: 0.5% (profile); position cap: 8% (profile). If held: hold. Long-term (1-5y): buy. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+        "executive_summary": "Decision (mid-term, new money): starter; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.08% of the account if sold at $96; risk budget: 0.5% (profile); position cap: 8% (profile). If held: hold. Long-term (1-5y): new money: buy; if held: hold (no demonstrated thesis failure); not an endorsement. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
         "fundamentals_summary": {
           "analyst_estimates": null,
           "burn_metrics": null,
@@ -26713,6 +26738,7 @@
           "is_unprofitable": null,
           "long_term_action": "buy",
           "long_term_fit": "ok",
+          "long_term_if_held_action": "hold",
           "market_cap": 10000000000,
           "mid_term_fit": "ok",
           "new_money_action": "starter",
@@ -26731,8 +26757,8 @@
           "score": 0.75,
           "sector": null,
           "snapshot_as_of_date": "2026-10-10",
-          "snapshot_hash": "d93a7882c397b7da",
-          "snapshot_version": "3.0.0",
+          "snapshot_hash": "be0166d5361a47ed",
+          "snapshot_version": "4.0.0",
           "support_currency": "supported",
           "support_instrument": "supported",
           "symbol": "ACME",
@@ -27264,7 +27290,7 @@
             ]
           }
         },
-        "executive_summary": "Decision (mid-term, new money): avoid; blocked by falling_knife. If held: hold. Long-term (1-5y): avoid; blocked by falling_knife; no reassessment date: re-run analyze after falling-knife rubric score below 4. Acme shows neutral technicals (1M -12.0%, 3M -35.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+        "executive_summary": "Decision (mid-term, new money): avoid; blocked by falling_knife. If held: hold. Long-term (1-5y): new money: avoid; blocked by falling_knife; no reassessment date: re-run analyze after falling-knife rubric score below 4; if held: hold (no demonstrated thesis failure); not an endorsement. Acme shows neutral technicals (1M -12.0%, 3M -35.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
         "fundamentals_summary": {
           "analyst_estimates": null,
           "burn_metrics": null,
@@ -27496,6 +27522,7 @@
           "is_unprofitable": null,
           "long_term_action": "avoid",
           "long_term_fit": "ok",
+          "long_term_if_held_action": "hold",
           "market_cap": 10000000000,
           "mid_term_fit": "avoid",
           "new_money_action": "avoid",
@@ -27514,8 +27541,8 @@
           "score": 0.15000000000000002,
           "sector": null,
           "snapshot_as_of_date": "2026-10-10",
-          "snapshot_hash": "837dc0c9f88ab627",
-          "snapshot_version": "3.0.0",
+          "snapshot_hash": "54911bfd99c96903",
+          "snapshot_version": "4.0.0",
           "support_currency": "supported",
           "support_instrument": "supported",
           "symbol": "ACME",
@@ -28078,7 +28105,7 @@
             ]
           }
         },
-        "executive_summary": "Decision (mid-term, new money): starter; Starter \u2014 Position: $100 (1% of the account); estimated loss: 0.04% of the account if sold at $96; risk budget: 1.5% (profile); position cap: 6% (profile). If held: hold. Long-term (1-5y): buy. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+        "executive_summary": "Decision (mid-term, new money): starter; Starter \u2014 Position: $100 (1% of the account); estimated loss: 0.04% of the account if sold at $96; risk budget: 1.5% (profile); position cap: 6% (profile). If held: hold. Long-term (1-5y): new money: buy; if held: hold (no demonstrated thesis failure); not an endorsement. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
         "fundamentals_summary": {
           "analyst_estimates": null,
           "burn_metrics": null,
@@ -28314,6 +28341,7 @@
           "is_unprofitable": null,
           "long_term_action": "buy",
           "long_term_fit": "ok",
+          "long_term_if_held_action": "hold",
           "market_cap": 10000000000,
           "mid_term_fit": "ok",
           "new_money_action": "starter",
@@ -28332,8 +28360,8 @@
           "score": 0.75,
           "sector": null,
           "snapshot_as_of_date": "2026-10-10",
-          "snapshot_hash": "d93a7882c397b7da",
-          "snapshot_version": "3.0.0",
+          "snapshot_hash": "be0166d5361a47ed",
+          "snapshot_version": "4.0.0",
           "support_currency": "supported",
           "support_instrument": "supported",
           "symbol": "ACME",
@@ -28892,7 +28920,7 @@
             ]
           }
         },
-        "executive_summary": "Decision (mid-term, new money): wait for data; blocked by stale_data; no reassessment date: re-run analyze after current market data with a verifiable timestamp: a current price and a current daily history. If held: hold. Long-term (1-5y): wait for data; blocked by stale_data; no reassessment date: re-run analyze after current market data with a verifiable timestamp: a current price and a current daily history. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+        "executive_summary": "Decision (mid-term, new money): wait for data; blocked by stale_data; no reassessment date: re-run analyze after current market data with a verifiable timestamp: a current price and a current daily history. If held: hold. Long-term (1-5y): new money: wait for data; blocked by stale_data; no reassessment date: re-run analyze after current market data with a verifiable timestamp: a current price and a current daily history; if held: hold (no demonstrated thesis failure); not an endorsement. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
         "fundamentals_summary": {
           "analyst_estimates": null,
           "burn_metrics": null,
@@ -29130,6 +29158,7 @@
           "is_unprofitable": null,
           "long_term_action": "wait_for_data",
           "long_term_fit": "ok",
+          "long_term_if_held_action": "hold",
           "market_cap": 10000000000,
           "mid_term_fit": "ok",
           "new_money_action": "wait_for_data",
@@ -29148,8 +29177,8 @@
           "score": 0.75,
           "sector": null,
           "snapshot_as_of_date": "2026-10-10",
-          "snapshot_hash": "836bf1a23367945a",
-          "snapshot_version": "3.0.0",
+          "snapshot_hash": "1c17c09f7c8cf67c",
+          "snapshot_version": "4.0.0",
           "support_currency": "supported",
           "support_instrument": "supported",
           "symbol": "ACME",
@@ -29731,7 +29760,7 @@
             "what_must_remain_true": []
           }
         },
-        "executive_summary": "Decision (mid-term, new money): wait for data; blocked by missing_runway, thesis_unverifiable; no reassessment date: re-run analyze after burn metrics available, or the company no longer unprofitable (P/E meaningful) and the stock type is confirmed and the required business and cash-runway data are available. If held: insufficient data. Long-term (1-5y): wait for data; blocked by missing_runway, thesis_unverifiable; no reassessment date: re-run analyze after burn metrics available, or the company no longer unprofitable (P/E meaningful) and the stock type is confirmed and the required business and cash-runway data are available. Acme is unprofitable (revenue_yoy +30.0%; net_margin -20.0%; FCF (TTM): -$200M; burn ~$50M/quarter). Technicals are strong (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%).",
+        "executive_summary": "Decision (mid-term, new money): wait for data; blocked by missing_runway, thesis_unverifiable; no reassessment date: re-run analyze after burn metrics available, or the company no longer unprofitable (P/E meaningful) and the stock type is confirmed and the required business and cash-runway data are available. If held: insufficient data. Long-term (1-5y): new money: wait for data; blocked by missing_runway, thesis_unverifiable; no reassessment date: re-run analyze after burn metrics available, or the company no longer unprofitable (P/E meaningful) and the stock type is confirmed and the required business and cash-runway data are available; if held: insufficient data (cash runway not evaluated); suitability: caution (unprofitable + burn_metrics_missing + negative_fcf). Acme is unprofitable (revenue_yoy +30.0%; net_margin -20.0%; FCF (TTM): -$200M; burn ~$50M/quarter). Technicals are strong (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%).",
         "fundamentals_summary": {
           "analyst_estimates": null,
           "burn_metrics": {
@@ -29997,6 +30026,7 @@
           "is_unprofitable": true,
           "long_term_action": "wait_for_data",
           "long_term_fit": "caution",
+          "long_term_if_held_action": "insufficient_data",
           "market_cap": 10000000000,
           "mid_term_fit": "ok",
           "new_money_action": "wait_for_data",
@@ -30015,8 +30045,8 @@
           "score": 0.3,
           "sector": null,
           "snapshot_as_of_date": "2026-10-10",
-          "snapshot_hash": "e8916fba935af707",
-          "snapshot_version": "3.0.0",
+          "snapshot_hash": "e01dd6551d707043",
+          "snapshot_version": "4.0.0",
           "support_currency": "supported",
           "support_instrument": "supported",
           "symbol": "ACME",
@@ -30585,7 +30615,7 @@
             ]
           }
         },
-        "executive_summary": "Decision (mid-term, new money): starter; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.08% of the account if sold at $96; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): buy. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
+        "executive_summary": "Decision (mid-term, new money): starter; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.08% of the account if sold at $96; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): new money: buy; if held: hold (no demonstrated thesis failure); not an endorsement. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme has a strong technical setup (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%). Fundamentals are solid (revenue_yoy +12.0%; net_margin 20.0%).",
         "fundamentals_summary": {
           "analyst_estimates": null,
           "burn_metrics": null,
@@ -30821,6 +30851,7 @@
           "is_unprofitable": null,
           "long_term_action": "buy",
           "long_term_fit": "ok",
+          "long_term_if_held_action": "hold",
           "market_cap": 10000000000,
           "mid_term_fit": "ok",
           "new_money_action": "starter",
@@ -30839,8 +30870,8 @@
           "score": 0.75,
           "sector": null,
           "snapshot_as_of_date": "2026-10-10",
-          "snapshot_hash": "d93a7882c397b7da",
-          "snapshot_version": "3.0.0",
+          "snapshot_hash": "be0166d5361a47ed",
+          "snapshot_version": "4.0.0",
           "support_currency": "supported",
           "support_instrument": "supported",
           "symbol": "ACME",
@@ -31446,7 +31477,7 @@
             ]
           }
         },
-        "executive_summary": "Decision (mid-term, new money): starter; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.08% of the account if sold at $96; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): starter. Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme is unprofitable (revenue_yoy +30.0%; net_margin -20.0%; FCF (TTM): -$200M; burn ~$50M/quarter). Technicals are strong (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%).",
+        "executive_summary": "Decision (mid-term, new money): starter; Starter \u2014 Position: $200 (2% of the account); estimated loss: 0.08% of the account if sold at $96; risk budget: 1% (profile); position cap: 10% (profile). If held: hold. Long-term (1-5y): new money: starter; if held: hold (no demonstrated thesis failure); not an endorsement; suitability: caution (unprofitable + negative_fcf). Mid-term sizing only: This planning stop is not monitored or an exit instruction. Gaps and slippage can make the actual loss larger. Acme is unprofitable (revenue_yoy +30.0%; net_margin -20.0%; FCF (TTM): -$200M; burn ~$50M/quarter). Technicals are strong (above SMA200, golden cross, MACD bullish, 1M +12.0%, 3M +18.0%).",
         "fundamentals_summary": {
           "analyst_estimates": null,
           "burn_metrics": {
@@ -31716,6 +31747,7 @@
           "is_unprofitable": true,
           "long_term_action": "starter",
           "long_term_fit": "caution",
+          "long_term_if_held_action": "hold",
           "market_cap": 10000000000,
           "mid_term_fit": "ok",
           "new_money_action": "starter",
@@ -31734,8 +31766,8 @@
           "score": 0.525,
           "sector": null,
           "snapshot_as_of_date": "2026-10-10",
-          "snapshot_hash": "02e5f5ea59338490",
-          "snapshot_version": "3.0.0",
+          "snapshot_hash": "54cd758cd2f0e452",
+          "snapshot_version": "4.0.0",
           "support_currency": "supported",
           "support_instrument": "supported",
           "symbol": "ACME",

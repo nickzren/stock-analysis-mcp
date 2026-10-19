@@ -4,12 +4,13 @@ Frozen synthetic observations from v0.4.0 production code at `c9fba4a` (MCP SDK
 1.30.0, schema 7, snapshot 3.0.0). The baseline package changed tests only. It does not
 endorse the legacy tax assumptions or claim that investment recommendations work.
 The separate current capture includes the unreleased long-term holder core and
-stateless position context.
+stateless position context, summary guidance and the coordinated schema 8 / snapshot 4.0.0 migration.
 
 - `before.md`: frozen stock/position table.
-- `after.json` / `after.md`: current stock and position outputs. Stock values
-  match the baseline after removing only `decision_card.long_term.if_held`;
-  snapshots remain exactly 3.0.0. Position output deliberately changes as below.
+- `after.json` / `after.md`: current stock and position outputs. Existing stock decisions/sizing
+  match the baseline. The new `decision_card.long_term.if_held`, long-term summary
+  segment, and snapshot 4.0.0 version/hash/new holder action are the explicit stock
+  changes; all pre-existing snapshot data stay equal. Position output changes as below.
 - `before.json`: source inputs, source-call counts, selected price/provenance,
   full decision cards/sizing, verdict and business evidence, modes/zones,
   summaries and **complete** stock snapshots; position responses omit only

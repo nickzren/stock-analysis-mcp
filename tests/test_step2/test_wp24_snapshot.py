@@ -11,6 +11,7 @@ in tests/fixtures/decision_matrix/snapshots_2_0_0/ (frozen, DM-G6).
 """
 
 import copy
+import hashlib
 import importlib
 import json
 from collections.abc import Awaitable, Callable
@@ -28,6 +29,7 @@ from stock_analysis.utils.normalize import (
     COMPATIBLE_SNAPSHOT_VERSIONS,
     SNAPSHOT_FIELDS,
     SNAPSHOT_VERSION,
+    canonical_dumps,
 )
 from tests.support import decision_matrix as dm
 from tests.support import freshness_frames as fr
@@ -48,6 +50,7 @@ Detect = Callable[[Any, dict[str, Any]], Awaitable[dict[str, Any]]]
 
 ACTIONS = ("new_money_action", "if_held_action", "long_term_action")
 V3_ONLY = ["if_held_action", "long_term_action", "new_money_action", "price_zone", "unevaluated_gate_ids"]
+CURRENT_ONLY = sorted([*V3_ONLY, "long_term_if_held_action"])
 RETIRED_2_0_0 = ["action_long_term", "action_mid_term", "decision_action_now", "zone"]
 # Frozen 3.0.0 vocabularies. Do not update: a vocabulary change bumps SNAPSHOT_VERSION (annex SN §3, R5).
 NEW_MONEY_3_0_0 = frozenset({"buy", "starter", "wait", "wait_for_data", "insufficient_data", "watch", "avoid"})
@@ -61,13 +64,13 @@ RULE_NOTE = ("3.0.0 rule changes (a gate change may come from these, not from th
              "falling_knife and weak_liquidity give avoid, earnings gates give wait, liquidity_missing is a data "
              "gate; falling_knife is evaluated for every instrument, unsupported ones included; a missing beta "
              "alone no longer fires data_quality_critical; zone is replaced by price_zone")
-GOLDEN = {"3.0.0": "b497ea0025ed4f8b"}  # raw_result() in test_snapshot_consistency
+GOLDEN = {"3.0.0": "b497ea0025ed4f8b", "4.0.0": "08601740c4dbe061"}  # raw_result() in test_snapshot_consistency
 
 
 def version_warning(previous: str, retired: list[str]) -> str:
-    """The one version warning (plan §8, annex SN §4): the retired fields, then the 3.0.0 rule note."""
-    return (f"snapshot_version changed ({previous} -> 3.0.0); field semantics may differ; retired, not compared: "
-            f"{', '.join(retired)}; {RULE_NOTE}")
+    """The one migration warning retains the 3.0.0 rule note and explains the 4.0.0 addition."""
+    return (f"snapshot_version changed ({previous} -> 4.0.0); field semantics may differ; retired, not compared: "
+            f"{', '.join(retired)}; {RULE_NOTE}; 4.0.0 adds long_term_if_held_action, not compared with older snapshots")
 
 
 def recorded(name: str) -> dict[str, Any]:
@@ -113,27 +116,27 @@ async def clean() -> dict[str, Any]:
 
 
 def test_the_accepted_versions_are_a_literal() -> None:
-    """SN-R14: the accepted set is the literal {1.0.0, 1.1.0, 2.0.0, 3.0.0}, one frozen field set per version, and
-    the producer's version is 3.0.0 (a plain bump would have rejected 2.0.0, normalize.py:34). RF."""
-    assert SNAPSHOT_VERSION == "3.0.0"
-    assert COMPATIBLE_SNAPSHOT_VERSIONS == {"1.0.0", "1.1.0", "2.0.0", "3.0.0"} == set(SNAPSHOT_FIELDS)
+    """The current producer is 4.0.0; all released versions retain separate frozen field sets."""
+    assert SNAPSHOT_VERSION == "4.0.0"
+    assert COMPATIBLE_SNAPSHOT_VERSIONS == {"1.0.0", "1.1.0", "2.0.0", "3.0.0", "4.0.0"} == set(SNAPSHOT_FIELDS)
     assert [len(SNAPSHOT_FIELDS[v]) for v in ("1.0.0", "1.1.0", "2.0.0", "3.0.0")] == [22, 24, 30, 31]
     assert SNAPSHOT_FIELDS["3.0.0"] == (SNAPSHOT_FIELDS["2.0.0"] - set(RETIRED_2_0_0)) | set(V3_ONLY)
     assert set().union(*SNAPSHOT_FIELDS.values()) - {"snapshot_version", "symbol"} == set(diff_module._FIELD_TYPES)
 
 
-@pytest.mark.parametrize("kind", ["1.0.0", "1.1.0", "2.0.0", "3.0.0"])
-async def test_hashes_compare_only_within_3_0_0(detect: Detect, kind: str) -> None:
-    """SN-R18: hash_changed is None against a 1.0.0, 1.1.0 or 2.0.0 previous and a bool against a 3.0.0 one.
-    RF (the 2.0.0 case; 1.x and 3.0.0 are G; m0 kills the 2.0.0 case)."""
+@pytest.mark.parametrize("kind", ["1.0.0", "1.1.0", "2.0.0", "3.0.0", "4.0.0"])
+async def test_hashes_compare_only_within_the_current_version(detect: Detect, kind: str) -> None:
+    """Hash equality is meaningful only within 4.0.0, never across a version boundary."""
     result = await clean()
     previous = {"1.0.0": as_1_0_0(legacy_compact_snapshot(as_0609fde(result))),
                 "1.1.0": legacy_compact_snapshot(as_0609fde(result)), "2.0.0": recorded(CLEAN),
-                "3.0.0": result["watchlist_snapshot"]}[kind]
+                "3.0.0": {**{key: result["watchlist_snapshot"][key] for key in SNAPSHOT_FIELDS["3.0.0"]},
+                          "snapshot_version": "3.0.0"},
+                "4.0.0": result["watchlist_snapshot"]}[kind]
 
     response = await detect(previous, result)
 
-    assert response["hash_changed"] is (False if kind == "3.0.0" else None)
+    assert response["hash_changed"] is (False if kind == "4.0.0" else None)
 
 
 # --- The producer (SN-R8, R20, OC-RF12) -------------------------------------------------------------------------
@@ -141,14 +144,14 @@ async def test_hashes_compare_only_within_3_0_0(detect: Detect, kind: str) -> No
 
 @pytest.mark.parametrize("name", dm.SCENARIOS)
 async def test_the_snapshot_records_the_decision(name: str) -> None:
-    """SN-R8 and OC-RF12 (amended, plan §0 #10): every scenario's snapshot has exactly the 3.0.0 fields; its
+    """SN-R8 and OC-RF12 (amended, plan §0 #10): every scenario's snapshot has exactly the 4.0.0 fields; its
     actions are new_money, if_held and long_term.new_money (plan §0 #18), hard_gate_ids is every fired gate
     (decision_card.hard_gates.blocking, never null when the card is built), price_zone is action_zones.price_zone;
     no action_mid_term, action_long_term, decision_action_now, zone or blocked_by key. RF."""
     result = await dm.run(name)
     card, snapshot = result["decision_card"], result["watchlist_snapshot"]
 
-    assert set(snapshot) == SNAPSHOT_FIELDS["3.0.0"]
+    assert set(snapshot) == SNAPSHOT_FIELDS["4.0.0"]
     assert [snapshot[f] for f in ACTIONS] == [card["new_money"]["action"], card["if_held"]["action"],
                                                card["long_term"]["new_money"]["action"]]
     assert snapshot["hard_gate_ids"] == sorted(g["id"] for g in card["hard_gates"]["blocking"])
@@ -169,7 +172,7 @@ async def test_a_gated_hold_or_add_records_no_pre_gate_code() -> None:
 
 
 async def test_the_zone_sentence_reads_price_zone(detect: Detect) -> None:
-    """OC-RF12 (amended): 3 -> 3, a price_zone move is one line and the summary's zone sentence names price_zone;
+    """OC-RF12 (amended): 4 -> 4, a price_zone move is one line and the summary's zone sentence names price_zone;
     the capped pre-gate zone moving alone is not a change (SN-R19). RF."""
     result = await clean()
 
@@ -180,15 +183,18 @@ async def test_the_zone_sentence_reads_price_zone(detect: Detect) -> None:
 
 
 def test_the_hash_is_pinned_per_version() -> None:
-    """SN-R20: a fixed raw gives the literal 3.0.0 field set and GOLDEN[SNAPSHOT_VERSION]; a scope change
-    without a version bump fails here. RF."""
+    """The new producer hash is pinned, and its unchanged released projection retains the 3.0.0 hash."""
     snapshot = raw_result()["watchlist_snapshot"]
 
-    assert set(snapshot) == SNAPSHOT_FIELDS["3.0.0"]
+    assert set(snapshot) == SNAPSHOT_FIELDS["4.0.0"]
     assert snapshot["snapshot_hash"] == GOLDEN[SNAPSHOT_VERSION]
+    released = {key: value for key, value in snapshot.items() if key in SNAPSHOT_FIELDS["3.0.0"]}
+    released["snapshot_version"] = "3.0.0"
+    hashed = {key: value for key, value in released.items() if key not in _UNHASHED_SNAPSHOT_KEYS}
+    assert hashlib.sha256(canonical_dumps(hashed).encode()).hexdigest()[:16] == GOLDEN["3.0.0"]
 
 
-# --- 3 -> 3 (SN-R1, R2, R4, R6, R7, R19) ------------------------------------------------------------------------
+# --- 4 -> 4 (SN-R1, R2, R4, R6, R7, R19) ------------------------------------------------------------------------
 
 ACTION_PATHS = {
     "new_money_action": ("decision_card__new_money__action", "New money", NEW_MONEY_ACTIONS),
@@ -202,7 +208,7 @@ TRANSITIONS = [(field, a, b) for field, (_, _, vocabulary) in ACTION_PATHS.items
 @pytest.mark.parametrize(("field", "before", "after"), TRANSITIONS)
 async def test_every_action_transition_is_material(detect: Detect, field: str, before: str | None,
                                                    after: str | None) -> None:
-    """SN-R1, R2: 3 -> 3, every ordered transition of each action field over its vocabulary and None (56 + 20 +
+    """SN-R1, R2: 4 -> 4, every ordered transition of each action field over its vocabulary and None (56 + 20 +
     56) gives exactly its line, its summary sentence and hash_changed True. RF."""
     path, label, _ = ACTION_PATHS[field]
     result = await clean()
@@ -327,7 +333,9 @@ async def test_a_3_0_0_snapshot_missing_any_field_is_invalid(detect: Detect, key
     """SN-R3: a 3.0.0 previous must carry every 3.0.0 field (null allowed): one missing key gives invalid_snapshot
     with exactly that problem, before any analysis. RF."""
     result = await clean()
-    previous = {k: v for k, v in result["watchlist_snapshot"].items() if k != key}
+    previous = {k: v for k, v in result["watchlist_snapshot"].items() if k in SNAPSHOT_FIELDS["3.0.0"]}
+    previous["snapshot_version"] = "3.0.0"
+    del previous[key]
 
     response = await detect(previous, result)
 
@@ -345,7 +353,7 @@ async def test_stray_3_0_0_keys_on_a_2_0_0_snapshot_are_ignored(detect: Detect) 
     response = await detect(previous, await clean())
 
     assert diff_module.validate_previous_snapshot(previous, "ACME") == []
-    assert (response["material_changes"], response["not_comparable"]) == ([], V3_ONLY)
+    assert (response["material_changes"], response["not_comparable"]) == ([], CURRENT_ONLY)
     assert not set(STRAY) & set(response["changes"])
 
 
@@ -367,7 +375,7 @@ def test_an_unknown_version_still_type_checks_every_key() -> None:
     assert problems == ["unsupported snapshot_version: '9.0.0'", "price: expected number, got str"]
 
 
-# --- 2 -> 3 (SN-R9-R12, R15, R22) [D-10] ------------------------------------------------------------------------
+# --- 2 -> 4 (SN-R9-R12, R15, R22) [D-10] ------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("name", sorted(set(dm.SCENARIOS) & {p.stem for p in dm.SNAPSHOT_DIR.glob("*.json")}))
@@ -375,14 +383,14 @@ async def test_the_recorded_2_0_0_snapshots_migrate(detect: Detect, name: str) -
     """SN-R9 (PD D-10) and SN-R22 (amended): against its WP2.0 recording, each baseline scenario reports exactly
     the rule-driven gate lines of the before/after table (broken and unverifiable thesis), never an action or
     zone line; the three actions and price_zone are not_comparable and named in the summary; hash_changed is
-    None; one version warning names the retired fields and the 3.0.0 rule changes. PD D-10."""
+    None; one version warning names the retired fields, the 3.0.0 rule changes and the added holder field. PD D-10."""
     response = await detect(recorded(name), await dm.run(name))
     before, after = GATE_CHANGES.get(name, ([], []))
 
     assert response["material_changes"] == [f"+hard_gate: {g}" for g in after if g not in before]
-    assert (response["not_comparable"], response["hash_changed"]) == (V3_ONLY, None)
+    assert (response["not_comparable"], response["hash_changed"]) == (CURRENT_ONLY, None)
     assert response["summary"].endswith(
-        "Not compared with the previous 2.0.0 snapshot: if_held_action, long_term_action, new_money_action, "
+        "Not compared with the previous 2.0.0 snapshot: if_held_action, long_term_action, long_term_if_held_action, new_money_action, "
         "price_zone, unevaluated_gate_ids.")
     assert response["warnings"] == [version_warning("2.0.0", RETIRED_2_0_0)]
 
@@ -406,7 +414,7 @@ async def test_a_relabelled_knife_outcome_is_not_a_change(detect: Detect) -> Non
 
 
 # A retained diffed field changed in the current run, against the 2.0.0 recording of the row, with the line the
-# same change gives 3 -> 3 (SN-C3) and so 2 -> 2.
+# same change gives 4 -> 4 (SN-C3) and so 2 -> 2.
 RETAINED: dict[str, tuple[str, dict[str, Any], str]] = {
     **{field: (CLEAN, *MUTATIONS[field]) for field in (
         "price", "score", "hard_gate_ids", "mid_term_fit", "long_term_fit", "bullish_signals", "bearish_signals",
@@ -472,7 +480,7 @@ def test_the_rule_note_names_every_new_analyze_gate() -> None:
     assert all(g in diff_module._RULE_CHANGES_3_0_0[0] for g in new)
 
 
-# --- 1.x -> 3 (SN-R16, R17) [D-10] ------------------------------------------------------------------------------
+# --- 1.x -> 4 (SN-R16, R17) [D-10] ------------------------------------------------------------------------------
 
 LEGACY = {
     "1.0.0_compact": (lambda raw: as_1_0_0(legacy_compact_snapshot(as_0609fde(raw))), ["action_long_term",
@@ -500,7 +508,7 @@ async def test_a_1_x_snapshot_migrates(detect: Detect, kind: str) -> None:
     extra = (["long_term_fit", "mid_term_fit"] if kind.endswith("compact") else []) + (
         ["hard_gate_ids"] if kind.startswith("1.0.0") else [])
     assert response["material_changes"] == []
-    assert response["not_comparable"] == sorted(["bearish_signals", "bullish_signals", *FIELDS_2_0_0, *V3_ONLY,
+    assert response["not_comparable"] == sorted(["bearish_signals", "bullish_signals", *FIELDS_2_0_0, *CURRENT_ONLY,
                                                   *extra])
     assert response["warnings"] == [version_warning(kind[:5], retired)]
 
@@ -518,7 +526,8 @@ async def test_an_action_only_change_against_1_1_0_is_disclosed(detect: Detect) 
     assert response["material_changes"] == []
     assert response["summary"] == (
         "ACME: No material changes detected. Not compared with the previous 1.1.0 snapshot: bearish_signals, "
-        "bullish_signals, if_held_action, long_term_action, long_term_fit, mid_term_fit, new_money_action, "
+        "bullish_signals, if_held_action, long_term_action, long_term_fit, long_term_if_held_action, mid_term_fit, "
+        "new_money_action, "
         "price_source, price_zone, support_currency, support_instrument, unevaluated_gate_ids.")
 
 
