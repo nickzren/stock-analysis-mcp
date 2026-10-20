@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 Stock research for Claude Code, Codex, and other MCP clients. Get buy, wait, or
-avoid guidance, plus hold/sell signals for positions you own—with valuation,
+avoid guidance, plus holder assessments for positions you own—with valuation,
 chart signals, risks, and earnings context.
 
 Decision-card hard gates can block a buy for a falling knife, earnings risk, weak
@@ -26,7 +26,8 @@ No extra parameters needed. For more specific questions:
 | Question | What you get |
 |---|---|
 | “Analyze MSFT. What supports buying, and what would make you wait?” | A decision card, supporting evidence, blockers, and conditions to revisit. |
-| “I own 20 AAPL shares bought at $150 on 2025-01-02. Should I hold or sell?” | Mid-term holder guidance from `analyze`, plus position P&L and holding-period context. |
+| “I own AAPL and plan to hold for five years. What supports holding, and what would make me reconsider?” | Long-term holder evidence, concerns, and reasons to review. |
+| “I own 20 AAPL shares bought at $150. My portfolio is $20,000; my holding ceiling is 10%.” | The holder assessment, P&L, and a separate check against your ceiling. |
 | “Compare MSFT, AAPL, and GOOGL.” | Valuation, growth, profitability, and momentum side by side. |
 | “Any swing setup on HOOD? Account $3,000, risk 1%, position cap 10%.” | Entry, stop, targets, and stop-based sizing when a setup is actionable. |
 | “Add AAPL and MSFT to my watchlist, then scan for setups.” | A saved watchlist and setup screen; later scans highlight changes. |
@@ -52,19 +53,19 @@ Choose your client:
 **Claude Code**
 
 ```bash
-claude mcp add -s user stock-analysis -- uvx --from git+https://github.com/nickzren/stock-analysis-mcp@v0.4.0 stock-analysis
+claude mcp add -s user stock-analysis -- uvx --from git+https://github.com/nickzren/stock-analysis-mcp@v0.5.0 stock-analysis
 ```
 
 **Codex**
 
 ```bash
-codex mcp add stock-analysis -- uvx --from git+https://github.com/nickzren/stock-analysis-mcp@v0.4.0 stock-analysis
+codex mcp add stock-analysis -- uvx --from git+https://github.com/nickzren/stock-analysis-mcp@v0.5.0 stock-analysis
 ```
 
-These commands are pinned to **v0.4.0**. Other MCP clients can use the same `uvx`
+These commands are pinned to **v0.5.0**. Other MCP clients can use the same `uvx`
 command as a stdio server.
 
-## For agents (v0.4.0)
+## For agents
 
 Start with `analyze(symbol="MSFT")`. It accepts a ticker or company name;
 use `search_symbol` to resolve names before calling other tools.
@@ -73,7 +74,7 @@ use `search_symbol` to resolve names before calling other tools.
 |---|---|
 | General stock decision | `analyze`: `detail="standard"` by default; `"decision"` for a smaller response, `"full"` for the audit detail. |
 | Long-only swing trade, days to weeks | `analyze_trade_setup` |
-| Existing holding | `analyze` for `decision_card.if_held`; `analyze_my_position` for P&L and tax context (`symbol`, `cost_basis`, `purchase_date`; optional `shares`). |
+| Existing holding | Stock-only: `analyze` for the requested horizon’s `if_held`; with personal context: one `analyze_my_position` call, with optional inputs. |
 | Compare 2–5 stocks / review portfolio exposure | `compare` / `analyze_portfolio` |
 | Recheck a stock | Save `watchlist_snapshot`; pass it as `previous_snapshot` to `detect_changes`. |
 | Maintain and scan up to 25 symbols | `manage_watchlist` / `scan_watchlist` |
@@ -97,20 +98,33 @@ Read `decision_card.sizing_status` and its reason when sizing is null; a `buy` o
 stop are separate. The planning stop is not monitored or a holder exit instruction;
 gaps and slippage can increase the loss. Existing holdings and buying power are unknown.
 
-Version 0.4.0 responses use schema **7**; snapshots remain **3.0.0**. Research
-decisions are unchanged. See the [schema 6 → 7 migration](CHANGELOG.md#040-2026-10-19-sizing-and-caps)
-for field meanings, defaults, and compatibility aliases.
+Version 0.5.0 responses use schema **8** and snapshots **4.0.0**. See the
+[schema 7 → 8 migration](CHANGELOG.md#050-2026-10-20-longer-term-holders-and-position-context)
+for position fields, holder guidance, and snapshot compatibility.
 
-## Decision (v0.4.0)
+## Decision
 
 `decision_card` holds one decision, made after the hard gates:
 
 - `new_money`: what to do with new money over 3–12 months (one year defaults here unless long term is explicit);
 - `if_held`: what to do if you already own it: `hold`, `reduce`, `review_exit` or `insufficient_data`;
-- `long_term.new_money`: new money over 1–5 years.
+- `long_term.new_money`: new money over 1–5 years;
+- `long_term.if_held`: ownership over 1–5 years: `hold`, `review_exit`, `insufficient_data` or `not_assessed`.
 
-For a holding, `analyze`'s `if_held` is mid-term; `analyze_my_position` adds P/L,
-holding period and tax status. Version 0.4.0 has no long-term holder decision.
+Read `decision_card.long_term.if_held` for the 1–5-year holder answer. A bare
+holder question and one year default to mid-term unless long term is explicit.
+`hold` means no demonstrated thesis failure, not an endorsement; keep the separate
+suitability fit and its actual reasons visible.
+
+For personal context, call `analyze_my_position` once with the chosen horizon.
+Cost, date, shares, portfolio value and your holding ceiling are optional;
+monetary inputs are USD. **Allocation check** reports only your supplied ceiling,
+not the stock decision or remaining buying power. No tax estimate is provided;
+technical reference levels are not monitored holder stops.
+
+Known ETFs/preferreds return `not_assessed` for long-term ownership. For ETFs:
+“This tool does not assess long-term ETF ownership; its company rules do not
+apply.” Verified USD share prices can still support personal P&L/allocation.
 
 `blocked_by` lists the gates that fired and `decided_by` the one that set the action;
 never upgrade past them. Read sizing only from `decision_card.sizing`: mid-term new
@@ -150,34 +164,9 @@ clearing that check alone does not mean buy. Known unsupported instruments do no
 | T | Analyst, news, ownership and options data | Third-party data, attributed. |
 | E | Mode labels and descriptions | Static configuration. |
 
-In `watchlist_snapshot`, `new_money_action` and `if_held_action` are the mid-term
-decision and `long_term_action` the long-term one; `scan_watchlist` state holds
-swing-card actions.
-
-## Unreleased (main): longer-term holders
-
-The development code adds response schema **8** and snapshot **4.0.0**. The
-install commands above still use v0.4.0; this feature is not in that release.
-
-> I own AAPL and plan to hold for five years. What supports holding, and what
-> would make me reconsider?
-
-Read `decision_card.long_term.if_held` for the 1–5-year holder answer. A bare
-holder question and one year still default to mid-term unless long term is
-explicit. `hold` means no demonstrated thesis failure, not an endorsement;
-keep the separate suitability fit and its actual reasons visible.
-
-For personal context, call `analyze_my_position` once with the chosen horizon.
-Cost, date, shares, portfolio value and your holding ceiling are optional;
-monetary inputs are USD. **Allocation check** reports only your supplied ceiling,
-not the stock decision or remaining buying power. No tax estimate is provided;
-technical reference levels are not monitored holder stops.
-
-Known ETFs/preferreds return `not_assessed` for long-term ownership. For ETFs:
-“This tool does not assess long-term ETF ownership; its company rules do not
-apply.” Verified USD share prices can still support personal P&L/allocation.
-See the [schema 7 → 8 migration](CHANGELOG.md#unreleased-longer-term-holders-and-position-context)
-for the changed fields and snapshot compatibility.
+In `watchlist_snapshot`, `new_money_action` / `if_held_action` mean mid-term
+new money / holder; `long_term_action` / `long_term_if_held_action` mean long-term
+new money / holder. `scan_watchlist` state holds swing-card actions.
 
 ## Data and limits
 

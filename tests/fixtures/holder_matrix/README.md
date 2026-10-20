@@ -3,7 +3,7 @@
 Frozen synthetic observations from v0.4.0 production code at `c9fba4a` (MCP SDK
 1.30.0, schema 7, snapshot 3.0.0). The baseline package changed tests only. It does not
 endorse the legacy tax assumptions or claim that investment recommendations work.
-The separate current capture includes the unreleased long-term holder core and
+The separate current capture includes the long-term holder core and
 stateless position context, summary guidance and the coordinated schema 8 / snapshot 4.0.0 migration.
 
 - `before.md`: frozen stock/position table.

@@ -33,7 +33,7 @@
 - `scripts/record_provider_fixtures.py` records real responses (manual, networked) to the gitignored `tests/fixtures/_recorded/`; never commit recordings.
 - Keep the suite fast enough for routine local validation.
 
-## Unreleased Long-Term Holder Core
+## Long-Term Holder Core
 - `decision_card.long_term.if_held` is computed once before projection and retained
   at every detail level. `tools/analyze/holder.py` consumes explicit applicability
   and business/runway evidence from the existing classifier; no entry/price rule
@@ -56,15 +56,15 @@
   capacity or sizing implication. Existing mid-term/new-money/sizing output is
   unchanged. Snapshot 4.0.0 adds only the long-term holder action; its new key
   and version are emitted together, with every released field set frozen.
-- Unreleased code uses schema 8 and snapshot 4.0.0; the package and install pin
-  stay 0.4.0. Live use waits for the whole-part review, an approved release and
-  a verified tagged install. No implementation branch changes the live config.
+- Package 0.5.0 uses response schema 8 and snapshot 4.0.0; install pins target
+  v0.5.0. Live configuration changes require separate approval and a verified
+  tagged install. No implementation branch changes the live config.
 
 - Every analyze tier retains `verdict.horizon_fit`, including its actual reasons;
   entry/holder decisions and suitability remain separate. The guide reads
   `verdict.horizon_fit.reasons`, not generic verdict reasons.
 
-## Unreleased Position Context
+## Position Context
 - `analyze_my_position` defaults to `mid_term`, accepts `long_term`, and makes
   cost basis, purchase date and shares optional. Portfolio value and holding
   ceiling are optional. Numeric decimal/scientific strings are accepted; booleans
@@ -173,10 +173,10 @@
   final full cap and whole-share dollars. Stop warnings use the unrounded
   distance; fallback labels are `52w_low_plus_2pct_fallback` and
   `52w_high_minus_2pct_fallback`, never an invented stop.
-- Released package 0.4.0 uses response schema 7 and snapshot 3.0.0; unreleased
-  code uses schema 8 and snapshot 4.0.0, without changing sizing. Install pins
-  target v0.4.0. CHANGELOG.md's 0.4.0 section preserves the schema 6 → 7 fields
-  and one-release legacy adapters; its 0.3.0 section still describes schema 6.
+- Package 0.5.0 uses response schema 8 and snapshot 4.0.0, without changing
+  sizing. Version 0.4.0 introduced schema 7 and snapshot 3.0.0. CHANGELOG.md's
+  0.4.0 section preserves the schema 6 → 7 fields and one-release legacy
+  adapters; its 0.3.0 section still describes schema 6.
 - Keep `tests/fixtures/sizing_matrix/before.json` and `before.md` byte-for-byte.
   Current offline evidence uses `python -m tests.support.sizing_matrix --after
   --output-dir <temporary-directory>`. Baseline regeneration is disabled.
@@ -186,7 +186,7 @@
 - Keep score math internally consistent and auditable.
 - If you change user-visible output semantics, update the relevant examples in `README.md`.
 
-## Decision Contract (schema 8, unreleased)
+## Decision Contract (schema 8)
 - `analyze` decides once, gates first: `tools/analyze/decision.py` (`decide()`,
   pure) over the `GATES` registry in `tools/analyze/gates.py`. Every other
   action-like surface (executive summary, decision modes, dislocation, dip,
@@ -341,9 +341,9 @@
   now "4.0.0"; v0.3.0/v0.4.0 shipped "3.0.0", v0.2.0 shipped "2.0.0").
   CHANGELOG.md lists every field that
   changed meaning or units since schema 4; the 0.3.0 section covers schema 6
-  and snapshot 3.0.0. The 0.4.0 section covers schema 7 sizing; Unreleased covers
+  and snapshot 3.0.0. The 0.4.0 section covers schema 7 sizing; 0.5.0 covers
   the schema 8 holder/position migration and snapshot 4.0.0. Keep released history
-  byte-identical and install pins at v0.4.0 until a separately approved release.
+  byte-identical and install pins at v0.5.0.
 - `technicals` returns `current_price` at the top level, not under a `summary` object.
 - `analyze` returns price, name, sector, market cap, and currency under `summary`, not as duplicated top-level fields.
 - Support boundaries (WP4, D5): `summary.support` (and the trade card's

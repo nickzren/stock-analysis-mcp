@@ -34,4 +34,4 @@ async def test_registered_analyze_carries_holder_without_snapshot_or_sizing_feed
                     assert body['decision_card']['long_term']['if_held'] == expected
                     assert body['watchlist_snapshot'] == reference['watchlist_snapshot']
                     assert body['meta']['schema_version'] == '8'
-                    assert body['meta']['server_version'] == '0.4.0'
+                    assert body['meta']['server_version'] == '0.5.0'

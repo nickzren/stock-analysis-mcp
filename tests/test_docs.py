@@ -14,6 +14,9 @@ from tests.support.output_contract import CLASSES
 ROOT = Path(__file__).resolve().parents[1]
 HORIZONS = ("In `watchlist_snapshot`, `new_money_action` and `if_held_action` are the mid-term decision and "
             "`long_term_action` the long-term one; `scan_watchlist` state holds swing-card actions.")
+SNAPSHOT_4_HORIZONS = ("In `watchlist_snapshot`, `new_money_action` / `if_held_action` mean mid-term "
+                       "new money / holder; `long_term_action` / `long_term_if_held_action` mean long-term "
+                       "new money / holder. `scan_watchlist` state holds swing-card actions.")
 SCHEMA_8 = '`meta.schema_version` goes from `"7"` to `"8"`'
 SCHEMA_7 = '`meta.schema_version` goes from `"6"` to `"7"`'
 SCHEMA_6 = '`meta.schema_version` goes from `"5"` to `"6"`'
@@ -100,7 +103,7 @@ def test_readme_and_agents_carry_the_decision_tables_and_horizons() -> None:
         text = _read(name)
         assert [a for a in NEW_MONEY_ACTIONS if f"| `{a}` |" not in text] == [], name
         assert [c for c in CLASSES if f"| {c} |" not in text] == [], name
-        assert HORIZONS in _flat(text), name
+        assert (SNAPSHOT_4_HORIZONS if name == "README.md" else HORIZONS) in _flat(text), name
     assert HORIZONS in _flat(_schema_6_section())
 
 
@@ -167,15 +170,27 @@ def test_schema_8_migration_covers_holder_and_position_contracts() -> None:
         assert text in section
 
 
-def test_unreleased_holder_docs_keep_release_scope_and_allocation_separate() -> None:
+def test_released_holder_docs_keep_routing_and_allocation_separate() -> None:
     readme = _read("README.md")
-    section = _sections(readme, "##")["Unreleased (main): longer-term holders"]
-    assert "I own AAPL and plan to hold for five years" in section
-    assert "schema **8**" in section and "**4.0.0**" in section
+    sections = _sections(readme, "##")
+    assert "Analyze HOOD" in sections["How to use"]
+    assert "I own AAPL and plan to hold for five years" in sections["How to use"]
+    assert "For agents" in sections and "Decision" in sections
+    assert not any("Unreleased" in heading or "v0.4.0" in heading for heading in sections)
+    assert "schema **8**" in readme and "**4.0.0**" in readme
+    assert readme.count("stock-analysis-mcp@v0.5.0") == 2
+    assert "stock-analysis-mcp@v0.4.0" not in readme
+    assert "CHANGELOG.md#050-2026-10-20-longer-term-holders-and-position-context" in readme
+    decision = _flat(sections["Decision"])
     for text in ("decision_card.long_term.if_held", "analyze_my_position", "optional", "USD",
                  "not_assessed", "Allocation check", "No tax estimate", "not an endorsement"):
-        assert text in section
-    assert "This tool does not assess long-term ETF ownership" in section
-    assert "one year" in section
-    assert "v0.4.0" in section
-    assert "suitability" in section and "reasons" in section
+        assert text in decision
+    assert "This tool does not assess long-term ETF ownership" in decision
+    assert "one year" in decision
+    assert "suitability" in decision and "reasons" in decision
+    assert "analyze_my_position` once" in decision
+    assert "technical reference levels are not monitored holder stops" in decision
+    agents = _read("AGENTS.md")
+    assert "Unreleased" not in agents
+    assert "Package 0.5.0 uses response schema 8 and snapshot 4.0.0" in _flat(agents)
+    assert "install pins at v0.5.0" in _flat(agents)

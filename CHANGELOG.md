@@ -1,12 +1,12 @@
 # Changelog
 
-## Unreleased: longer-term holders and position context
+## 0.5.0 (2026-10-20): longer-term holders and position context
 
-The package stays `0.4.0` until a separately approved release.
+**Package:** `meta.server_version` goes from `0.4.0` to `0.5.0`.
 **Response schema:** `meta.schema_version` goes from `"7"` to `"8"`.
 **Stock snapshot:** `snapshot_version` goes from `"3.0.0"` to `"4.0.0"`.
-Install pins remain v0.4.0; this section describes unreleased code. Mid-term
-holder actions, both new-money decisions, gates and entry sizing are unchanged.
+Mid-term holder actions, both new-money decisions, gates and entry sizing are
+unchanged.
 The schema-7 sizing fields and compatibility aliases remain in place.
 
 ### Long-term ownership and routing
@@ -165,9 +165,9 @@ and all released field sets stay frozen.
 
 **Rollback:** v0.4.0 cannot read 4.0.0 snapshots. Preserve older snapshots or
 start a new baseline after rollback; **never relabel** a 4.0.0 snapshot as 3.0.0.
-The live MCP remains on v0.4.0 until the whole-part review, an approved release
-and a verified tagged install. Saved holdings, anchored holder stops, bank/REIT
-models and swing-trade semantics remain outside this change.
+Upgrade the MCP configuration only after a verified v0.5.0 tagged install. Saved
+holdings, anchored holder stops, bank/REIT models and swing-trade semantics remain
+outside this change.
 
 ## 0.4.0 (2026-10-19): sizing and caps
 
