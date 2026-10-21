@@ -1,9 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.5.2 (2026-10-21): dependency compatibility
 
+**Package:** `meta.server_version` goes from `0.5.1` to `0.5.2`.
 Response schema `"8"` and stock snapshot `"4.0.0"` are unchanged. No decision
-policy or dependency bounds change.
+policy or dependency bounds change. Inputs that previously failed on a missing
+vendor volume, or were reported as `invalid_symbol` for a non-symbol failure,
+can now return different results.
 
 - Fix daily history with missing vendor volume under pandas 3 by combining
   masks without modifying a read-only array.
