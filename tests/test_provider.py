@@ -469,12 +469,14 @@ class TestFreshness:
         # Without expiry, a new Ticker in the same UTC day reads the cached 100.
         assert yf.Ticker(SYMBOL).quarterly_income_stmt.iloc[0, 0] == 100
         assert await fetch_ticker(SYMBOL) is first  # within the ticker TTL
+        calls_before_replacement = len(yf_transport.calls_to("timeseries"))
         clock.advance(cache_manager.get_ttl(cache_manager.DataType.TICKER) + 1)
         replacement = await fetch_ticker(SYMBOL)
 
         assert replacement is not first
         assert replacement.quarterly_income_stmt.iloc[0, 0] == 200
-        assert len(yf_transport.calls_to("timeseries")) == 2
+        assert len(yf_transport.calls_to("timeseries")) > calls_before_replacement
+        assert all(call.status == 200 for call in yf_transport.calls_to("timeseries"))
         ticker_cache.clear()
 
     async def test_info_refetch_expires_the_response_cache(self, monkeypatch: pytest.MonkeyPatch) -> None:

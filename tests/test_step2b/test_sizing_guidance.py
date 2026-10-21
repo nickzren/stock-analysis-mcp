@@ -1,10 +1,12 @@
 """Step 2b guidance uses returned availability and scenario assumptions."""
 
 import pytest
+from fastmcp import Client
 
+from stock_analysis.server import mcp
 from tests.support import decision_matrix as dm
 from tests.support import sizing_matrix as sm
-from tests.test_step2.test_wp24_guidance import descriptions, flat, texts
+from tests.test_step2.test_wp24_guidance import flat, texts
 
 NULL_RULE = ("When sizing is null, report `decision_card.sizing_status` and its reason; "
              "do not infer the reason from the action alone.")
@@ -62,11 +64,15 @@ async def test_position_prompt_keeps_sizing_separate_from_holder_decision():
 
 @pytest.mark.parametrize("tool", ["analyze", "analyze_trade_setup", "scan_watchlist"])
 async def test_numeric_input_contract_is_advertised(tool):
-    text = flat((await descriptions())[tool])
+    async with Client(mcp) as client:
+        metadata = next(item for item in await client.list_tools() if item.name == tool)
+    text = flat(metadata.description or "")
+    account_text = flat(metadata.inputSchema["properties"]["account_size"].get("description", ""))
+    account_rule = "account-value assumption, not available buying power"
+    assert account_rule in text or account_rule in account_text
     for needle in ("finite numbers or decimal/scientific strings", "surrounding whitespace and a sign",
                    "never booleans", "NaN/infinity", "overflow or underflow to zero",
                    "percentage points", "1 means 1%; 0.01 means 0.01%",
-                   "account-value assumption, not available buying power",
                    "before symbol lookup, provider reads or watchlist access"):
         assert needle in text, (tool, needle)
     if tool == "analyze":

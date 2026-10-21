@@ -81,7 +81,7 @@ from stock_analysis.tools.technicals import technicals
 from stock_analysis.utils.helpers import fcf_label_from_cashflow, first_sentences, round_or_none
 from stock_analysis.utils.normalize import build_watchlist_snapshot
 from stock_analysis.utils.price_basis import select_price, session_staleness, to_utc
-from stock_analysis.utils.provenance import build_meta
+from stock_analysis.utils.provenance import SymbolNotFoundError, build_meta
 from stock_analysis.utils.valuation_basis import (
     VERIFIED,
     currency_basis,
@@ -468,6 +468,7 @@ async def _analyze_with_context(
 
     tool_results: dict[str, dict[str, Any] | None] = {}
     tool_failures: list[dict[str, Any]] = []
+    raised_failures: dict[str, Exception] = {}
     tool_timings: dict[str, float] = {}
     data_provenance: dict[str, Any] = {}
 
@@ -475,6 +476,7 @@ async def _analyze_with_context(
         tool_timings[name] = round(duration_ms, 1)
 
         if isinstance(result, Exception):
+            raised_failures[name] = result
             failure = {
                 "tool": name,
                 "error": type(result).__name__,
@@ -1245,10 +1247,16 @@ async def _analyze_with_context(
         "no timezone found",
         "incomplete yfinance info",
     )
+    def invalid_like(failure: dict[str, Any]) -> bool:
+        exception = raised_failures.get(str(failure.get("tool", "")))
+        if exception is None:
+            return failure.get("error") == "invalid_symbol"
+        return isinstance(exception, SymbolNotFoundError) or any(
+            hint in str(exception).lower() for hint in invalid_hints
+        )
+
     invalid_like_failures = bool(critical_failures) and all(
-        failure.get("error") == "invalid_symbol"
-        or any(hint in str(failure.get("message", "")).lower() for hint in invalid_hints)
-        for failure in critical_failures
+        invalid_like(failure) for failure in critical_failures
     )
 
     top_level_error = missing_core_market_data

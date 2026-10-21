@@ -731,6 +731,7 @@ class TestHttpErrorsNeverBecomeResults:
         yf_transport.route("timeseries", "http_404_html", "http_404_html", "quarterly_revenue_100")
         failing = yfinance_client.yf.Ticker(SYMBOL)
         failed = await provider.read_property(failing, "income", lambda t: t.quarterly_income_stmt)
+        failed_calls = len(yf_transport.calls_to("timeseries"))
 
         recovered_ticker = yfinance_client.yf.Ticker(SYMBOL)
         recovered = await provider.read_property(
@@ -739,7 +740,10 @@ class TestHttpErrorsNeverBecomeResults:
 
         assert (failed.status, failed.error_type) == ("failed", "http_404")
         assert recovered.status == "ok" and recovered.payload.iloc[0, 0] == 100
-        assert len(yf_transport.calls_to("timeseries")) == 3  # fresh I/O, not the cached 404
+        calls = yf_transport.calls_to("timeseries")
+        assert len(calls) > failed_calls  # recovery performs new I/O
+        assert [call.status for call in calls[:2]] == [404, 404]
+        assert all(call.status == 200 for call in calls[2:])
 
 
     @pytest.mark.parametrize("failed_fixture", ["http_503_revenue_999", "http_503_empty_series"])
@@ -757,7 +761,9 @@ class TestHttpErrorsNeverBecomeResults:
 
         assert (read.status, read.attempts) == ("ok", 2)
         assert read.payload.iloc[0, 0] == 100
-        assert len(yf_transport.calls_to("timeseries")) == 3
+        statuses = [call.status for call in yf_transport.calls_to("timeseries")]
+        assert statuses[:2] == [503, 503]
+        assert statuses[2:] and all(status == 200 for status in statuses[2:])
         assert ticker_cache.get(SYMBOL) is None  # the Ticker the failed attempt touched
         ticker_cache.clear()
 

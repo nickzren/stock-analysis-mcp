@@ -109,7 +109,9 @@ def test_guide_separates_coverage_fit_allocation_and_personal_numbers():
 
 async def test_change_description_distinguishes_shape_checks_from_symbol_resolution():
     _, tools, _ = await metadata()
-    description = flat(tools["detect_changes"].description)
-    assert "Invalid symbol, types" not in description
-    assert "Shapes, types or missing required" in description
-    assert "symbol is checked against the resolved ticker afterward" in description
+    tool = tools["detect_changes"]
+    description = flat(tool.description or "")
+    parameter_description = flat(tool.inputSchema["properties"]["previous_snapshot"].get("description", ""))
+    assert "Invalid symbol, types" not in description + parameter_description
+    for clause in ("Shapes, types or missing required", "symbol is checked against the resolved ticker afterward"):
+        assert clause in description or clause in parameter_description

@@ -26,6 +26,10 @@
 - Run `uv run ruff check` after code edits.
 - Run `uv run mypy` when touching typed Python code or schemas. `mypy` is available via the `dev` extra in `pyproject.toml`.
 
+## Release Checks
+- Before each release, run `python scripts/check_fresh_dependencies.py --output-dir <new evidence directory>` from a clean committed checkout. The manual check exports that commit, uses uv's default installed interpreter and an empty cache, resolves runtime dependencies from public PyPI, then adds test-only tools at their locked versions without changing the runtime stack. It runs the full offline suite and records versions, source hashes, test totals and skip reasons. It leaves the repo lockfile and `.venv` untouched.
+- A failing fresh-resolution check blocks release unless Nick explicitly names an exception; the evidence must retain `FAIL`. There is no script waiver flag. Keep the locked-stack checks too: a successful fresh run does not replace them.
+
 ## Test Characteristics
 - The suite is unit-test focused and runs offline. An autouse guard in `tests/conftest.py` fails any test that sends a request through a `curl_cffi` or `requests` session (yfinance's transport), or makes an unrouted stub request, even when app code swallows the error. It also points `STOCK_ANALYSIS_DATA_DIR` at a per-test temp dir and yfinance's cookie/tz caches at a session temp dir, disables retry sleeps, and clears provider source caches, job permits/locks and in-flight singleflight entries between tests. Concurrency tests (`tests/test_jobs.py`) block jobs on `threading.Event` barriers and must release them; `FakeSession.hold(source)` blocks a transport request the same way.
 - To test yfinance behavior itself (error suppression, caching, parsing), drive the real pinned library with only its HTTP session stubbed: the `yf_transport` fixture or `stubbed_yfinance_transport()` in `tests/support/transport.py`, with synthetic fixtures under `tests/fixtures/transport/`. `tests/support/fake_ticker.py` is an app-level fake that skips yfinance internals; `tests/support/fake_source.py` (`FakeSource`) stands in for one `provider` read in tool-level tests.
@@ -579,7 +583,12 @@
   `data/yfinance_client.py` (never per call). Retries classify `curl_cffi`
   HTTP status (401 once; 5xx with backoff; 429 and `YFRateLimitError` with
   backoff and a shared cooldown; 404 never), timeouts, connection errors and
-  other transport errors; an unparseable history body is retried, not reported
+  other transport errors. The five existing symbol/no-data cases raise
+  `utils/provenance.SymbolNotFoundError`; only that class maps to
+  `invalid_symbol` in `fetch_or_error`. Other fetch exceptions map to
+  `data_unavailable`. Analyze trusts structured failure types, retaining
+  message hints only for legacy raw exceptions; failure origin stays internal.
+  An unparseable history body is retried, not reported
   as `invalid_symbol`, and every retry attempt clears yfinance's `cache_get`
   LRU so it does fresh I/O. Provider reads cap retry backoff at 4 s (at most
   three attempts). They cache only `ok`/`empty` results

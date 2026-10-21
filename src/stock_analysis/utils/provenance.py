@@ -103,6 +103,10 @@ def build_error_response(
     return response
 
 
+class SymbolNotFoundError(ValueError):
+    """An existing symbol/no-data failure, distinct from an internal ValueError."""
+
+
 class FetchError(Exception):
     """Raised by fetch_or_error when a fetch fails; carries a standard error response."""
 
@@ -114,12 +118,12 @@ class FetchError(Exception):
 async def fetch_or_error(coro: Awaitable[T], symbol: str) -> T:
     """Await a fetch coroutine; raise FetchError with a standard response on failure.
 
-    ValueError maps to error_type='invalid_symbol'; other exceptions map to
+    SymbolNotFoundError maps to 'invalid_symbol'; other exceptions map to
     'data_unavailable'.
     """
     try:
         return await coro
-    except ValueError as e:
+    except SymbolNotFoundError as e:
         raise FetchError(
             build_error_response(
                 error_type="invalid_symbol",

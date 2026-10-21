@@ -202,11 +202,19 @@ class TestEarningsPage:
             assert yf.Ticker(SYMBOL).get_earnings_dates() is None
 
     def test_valid_table_needs_lxml(self, yf_transport: FakeSession) -> None:
-        """Defect (WP2, DL#3): without lxml, a valid earnings table cannot be parsed."""
-        assert importlib.util.find_spec("lxml") is None, (
-            "lxml is installed: replace this test with the WP2 earnings-page parse contract (R2.8)"
-        )
+        """Pin both the older missing-parser defect and the newer parsed table."""
         yf_transport.route("earnings_page", "valid_table")
 
-        with pytest.raises(ImportError, match="lxml"):
-            yf.Ticker(SYMBOL).get_earnings_dates()
+        if importlib.util.find_spec("lxml") is None:
+            with pytest.raises(ImportError, match="lxml"):
+                yf.Ticker(SYMBOL).get_earnings_dates()
+        else:
+            rows = yf.Ticker(SYMBOL).get_earnings_dates()
+            assert rows is not None
+            assert rows.index.strftime("%Y-%m-%d %H:%M %z").tolist() == [
+                "2027-01-27 16:00 -0500", "2026-10-28 16:00 -0400",
+                "2026-07-29 16:00 -0400", "2026-04-29 16:00 -0400",
+            ]
+            assert rows["EPS Estimate"].tolist() == [3.4, 3.1, 2.9, 2.7]
+            assert rows["Reported EPS"].iloc[:2].isna().all()
+            assert rows["Reported EPS"].iloc[2:].tolist() == [3.05, 2.65]

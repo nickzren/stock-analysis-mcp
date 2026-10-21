@@ -41,7 +41,7 @@ from stock_analysis.data.cache_manager import (
 )
 from stock_analysis.utils.market_calendar import session_method
 from stock_analysis.utils.ohlcv import standardize_ohlcv
-from stock_analysis.utils.provenance import utcnow_isoformat_z
+from stock_analysis.utils.provenance import SymbolNotFoundError, utcnow_isoformat_z
 from stock_analysis.utils.validators import FetchParams
 
 logger = logging.getLogger(__name__)
@@ -700,13 +700,13 @@ async def _fetch_history_retry(params: FetchParams) -> RetryResult:
         except (YFTickerMissingError, YFInvalidPeriodError) as e:
             # yfinance raises these (errors not hidden) where it used to return
             # an empty frame; keep them mapped to invalid_symbol.
-            raise ValueError(f"No data returned for {params.symbol}: {e}") from e
+            raise SymbolNotFoundError(f"No data returned for {params.symbol}: {e}") from e
         except (CurlHTTPError, HTTPError) as e:
             # yfinance's time-zone probe falls back to quoteSummary, which 404s
             # for an unknown symbol.
             expire_yfinance_response_cache()
             if http_status(e) == 404:
-                raise ValueError(f"No data returned for {params.symbol}: {e}") from e
+                raise SymbolNotFoundError(f"No data returned for {params.symbol}: {e}") from e
             raise
         except (json.JSONDecodeError, YFDataException) as e:
             # An unparseable body (e.g. an HTML 5xx page) is transient. Drop the
@@ -721,11 +721,11 @@ async def _fetch_history_retry(params: FetchParams) -> RetryResult:
         finally:
             _missing_volume.dates = None
         if df.empty:
-            raise ValueError(f"No data returned for {params.symbol}")
+            raise SymbolNotFoundError(f"No data returned for {params.symbol}")
         # A row without prices (e.g. one yfinance adds for a dividend) has no volume either.
         no_volume = df[["Open", "High", "Low", "Close"]].isna().all(axis=1).to_numpy()
         if missing_volume_dates:
-            no_volume |= [d in missing_volume_dates for d in df.index.date]
+            no_volume = no_volume | [d in missing_volume_dates for d in df.index.date]
         if no_volume.any():
             df["Volume"] = df["Volume"].astype(float)
             df.loc[no_volume, "Volume"] = float("nan")
@@ -760,7 +760,7 @@ async def fetch_history(params: FetchParams) -> pd.DataFrame:
     Raises:
         ServerShuttingDownError: If server is shutting down
         YFinanceRetryError: If all retries exhausted for retryable errors
-        ValueError: If symbol is invalid or no data returned
+        SymbolNotFoundError: If symbol is invalid or no data returned
     """
     retry_result = await _fetch_history_retry(params)
     return retry_result.result
@@ -799,10 +799,10 @@ async def _fetch_info_raw(symbol: str) -> tuple[dict[str, Any], RetryResult]:
             # fails, but only while errors are hidden; keep that fallback.
             fallback = _info_from_quote_endpoint(normalized_symbol)
             if fallback is None:
-                raise ValueError(f"Invalid symbol: {symbol}") from e
+                raise SymbolNotFoundError(f"Invalid symbol: {symbol}") from e
             info = fallback
         if not info:
-            raise ValueError(f"Invalid symbol: {symbol}")
+            raise SymbolNotFoundError(f"Invalid symbol: {symbol}")
 
         # Check completeness using sentinel keys
         completeness = assess_info_completeness(info)
@@ -887,7 +887,7 @@ async def fetch_info(symbol: str) -> dict[str, Any]:
         ServerShuttingDownError: If server is shutting down
         YFinanceRetryError: If all retries exhausted for retryable errors
         YFinanceIncompleteInfoError: If response missing fundamental data
-        ValueError: If symbol is invalid
+        SymbolNotFoundError: If symbol is invalid
     """
     info, _, _ = await fetch_info_with_cache_state(symbol)
     return info

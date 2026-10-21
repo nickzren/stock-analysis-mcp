@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+Response schema `"8"` and stock snapshot `"4.0.0"` are unchanged. No decision
+policy or dependency bounds change.
+
+- Fix daily history with missing vendor volume under pandas 3 by combining
+  masks without modifying a read-only array.
+- Preserve the five existing symbol/no-data cases as `invalid_symbol` using a
+  dedicated exception. Other structured fetch failures report
+  `data_unavailable`, and analyze honors those error types even when their
+  messages resemble a missing symbol. Legacy hints for raw exceptions and the
+  company-name search error path remain unchanged.
+- Make transport and MCP metadata tests work across supported dependency
+  versions while retaining checks for error rejection, fresh retries and cache
+  cleanup. Add a manual fresh-resolution release check alongside the locked
+  suite; failed checks remain recorded as failures.
+
 ## 0.5.1 (2026-10-21): maintenance
 
 **Package:** `meta.server_version` goes from `0.5.0` to `0.5.1`.

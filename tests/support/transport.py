@@ -107,6 +107,7 @@ class RecordedCall:
     url: str
     source: str
     timeout: float | None = None
+    status: int | None = None
 
 
 class FakeSession:
@@ -159,8 +160,8 @@ class FakeSession:
             if violation_sink is not None:
                 violation_sink.append(f"stub transport: unrouted {method} {url}")
             raise UnroutedRequestError(f"unrouted {method} {url}")
-        self.calls.append(RecordedCall(method, url, source, timeout))
         fixture = queue.pop(0) if len(queue) > 1 else queue[0]
+        self.calls.append(RecordedCall(method, url, source, timeout, fixture.status))
         return FakeResponse(fixture, fixture.final_url or url)
 
 
@@ -180,6 +181,10 @@ def stubbed_yfinance_transport(*, hide_exceptions: bool | None = None) -> Iterat
         raise RuntimeError("stubbed_yfinance_transport is already active; it does not nest")
     saved = (data._session, data._cookie_strategy, data._cookie, data._crumb)
     saved_hide = YfConfig.debug.hide_exceptions
+    has_chunked = hasattr(data, "fundamentals_use_chunked")
+    saved_chunked = getattr(data, "fundamentals_use_chunked", False)
+    if has_chunked:
+        data.fundamentals_use_chunked = False
     session = FakeSession()
     data._session = session
     data._get_cookie_and_crumb = lambda timeout=30: ("test-crumb", "basic")
@@ -192,4 +197,6 @@ def stubbed_yfinance_transport(*, hide_exceptions: bool | None = None) -> Iterat
         data._session, data._cookie_strategy, data._cookie, data._crumb = saved
         data.__dict__.pop("_get_cookie_and_crumb", None)
         YfConfig.debug.hide_exceptions = saved_hide
+        if has_chunked:
+            data.fundamentals_use_chunked = saved_chunked
         YfData.cache_get.cache_clear()
