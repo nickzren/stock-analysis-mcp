@@ -7,7 +7,7 @@ import pytest
 import yfinance as yf
 from yfinance.data import YfData
 
-from stock_analysis.data import provider
+from stock_analysis.data import provider, yfinance_client
 from stock_analysis.data.cache_manager import ticker_cache
 from tests.support.fake_ticker import FakeTicker, http_error
 from tests.support.transport import stubbed_yfinance_transport
@@ -87,3 +87,22 @@ async def test_application_earnings_parser_does_not_use_library_html_parsers(
         "2027-01-27", "2026-10-28", "2026-07-29", "2026-04-29",
     ]
     assert len(yf_transport.calls_to("earnings_page")) == 1
+
+
+@pytest.mark.parametrize("statuses", [[], [404], [503], [401, 503]])
+def test_normal_return_rejects_any_recorded_http_error(statuses: list[int]) -> None:
+    payload = {"revenue": 999}
+
+    def suppressed_error() -> dict[str, int]:
+        yfinance_client._job_responses.statuses.extend(statuses)
+        return payload
+
+    read = yfinance_client.preserving_http_status(suppressed_error)
+    if statuses:
+        with pytest.raises(yfinance_client.HiddenHTTPError) as error:
+            read()
+        assert error.value.status == statuses[-1]
+        assert yfinance_client.http_status(error.value) == statuses[-1]
+    else:
+        assert read() is payload
+    assert yfinance_client._job_responses.statuses is None

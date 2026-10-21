@@ -101,7 +101,8 @@ class FakeSubprocess:
 
 
 @pytest.fixture
-def repo(tmp_path: Path) -> Path:
+def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    monkeypatch.setattr(check.tempfile, "tempdir", str(tmp_path))
     path = tmp_path / "repo"
     path.mkdir()
     (path / "uv.lock").write_text("original lock")
@@ -119,7 +120,9 @@ def run_check(repo: Path, failure: str = "") -> tuple[dict[str, Any], FakeSubpro
     return result, runner, output
 
 
-def test_success_preserves_repo_and_records_full_evidence(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_success_preserves_repo_and_records_full_evidence(
+    repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("UV_PROJECT_ENVIRONMENT", str(repo / ".venv"))
     monkeypatch.setenv("PIP_INDEX_URL", "https://unused.invalid")
     result, runner, output = run_check(repo)
@@ -129,6 +132,7 @@ def test_success_preserves_repo_and_records_full_evidence(repo: Path, monkeypatc
     assert "PIP_INDEX_URL" not in runner.environments["fresh-install"]
     assert runner.environments["locked-install"]["UV_PROJECT_ENVIRONMENT"] != str(repo / ".venv")
     work = Path(result["work_directory"])
+    assert work.is_relative_to(tmp_path)
     assert runner.directories["pytest"] == work / "source"
     assert "PYTHONPATH" not in runner.environments["pytest"]
     pytest_command = next(cmd for cmd in runner.calls if "-m" in cmd and "pytest" in cmd)
