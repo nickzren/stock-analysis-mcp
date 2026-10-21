@@ -110,7 +110,6 @@
         },
         "meta": {
           "schema_version": "8",
-          "server_version": "0.5.0",
           "tool": "analyze_position"
         },
         "position": {
@@ -406,7 +405,6 @@
         },
         "meta": {
           "schema_version": "8",
-          "server_version": "0.5.0",
           "tool": "analyze_position"
         },
         "position": {
@@ -692,7 +690,6 @@
         },
         "meta": {
           "schema_version": "8",
-          "server_version": "0.5.0",
           "tool": "analyze_position"
         },
         "position": {
@@ -996,7 +993,6 @@
         },
         "meta": {
           "schema_version": "8",
-          "server_version": "0.5.0",
           "tool": "analyze_position"
         },
         "position": {
@@ -1311,7 +1307,6 @@
         },
         "meta": {
           "schema_version": "8",
-          "server_version": "0.5.0",
           "tool": "analyze_position"
         },
         "position": {
@@ -1597,7 +1592,6 @@
         },
         "meta": {
           "schema_version": "8",
-          "server_version": "0.5.0",
           "tool": "analyze_position"
         },
         "position": {
@@ -1883,7 +1877,6 @@
         },
         "meta": {
           "schema_version": "8",
-          "server_version": "0.5.0",
           "tool": "analyze_position"
         },
         "position": {
@@ -2075,7 +2068,6 @@
         "message": "purchase_date must be a real YYYY-MM-DD date no later than the request date",
         "meta": {
           "schema_version": "8",
-          "server_version": "0.5.0",
           "tool": "error"
         },
         "symbol": "ACME"
@@ -2281,7 +2273,6 @@
         },
         "meta": {
           "schema_version": "8",
-          "server_version": "0.5.0",
           "tool": "analyze_position"
         },
         "position": {
@@ -2473,7 +2464,6 @@
         "message": "purchase_date must be a real YYYY-MM-DD date no later than the request date",
         "meta": {
           "schema_version": "8",
-          "server_version": "0.5.0",
           "tool": "error"
         },
         "symbol": "ACME"
@@ -2679,7 +2669,6 @@
         },
         "meta": {
           "schema_version": "8",
-          "server_version": "0.5.0",
           "tool": "analyze_position"
         },
         "position": {
@@ -2976,7 +2965,6 @@
         },
         "meta": {
           "schema_version": "8",
-          "server_version": "0.5.0",
           "tool": "analyze_position"
         },
         "position": {
@@ -3262,7 +3250,6 @@
         },
         "meta": {
           "schema_version": "8",
-          "server_version": "0.5.0",
           "tool": "analyze_position"
         },
         "position": {
@@ -3454,7 +3441,6 @@
         "message": "cost_basis must be a finite nonnegative number; decimal numeric strings are accepted",
         "meta": {
           "schema_version": "8",
-          "server_version": "0.5.0",
           "tool": "error"
         },
         "symbol": "ACME"
@@ -3662,7 +3648,6 @@
         },
         "meta": {
           "schema_version": "8",
-          "server_version": "0.5.0",
           "tool": "analyze_position"
         },
         "position": {
@@ -3882,7 +3867,6 @@
         "message": "shares must be a finite positive number; decimal numeric strings are accepted",
         "meta": {
           "schema_version": "8",
-          "server_version": "0.5.0",
           "tool": "error"
         },
         "symbol": "ACME"
@@ -4090,7 +4074,6 @@
         },
         "meta": {
           "schema_version": "8",
-          "server_version": "0.5.0",
           "tool": "analyze_position"
         },
         "position": {
@@ -4404,7 +4387,6 @@
         },
         "meta": {
           "schema_version": "8",
-          "server_version": "0.5.0",
           "tool": "analyze_position"
         },
         "position": {
@@ -4695,7 +4677,6 @@
         },
         "meta": {
           "schema_version": "8",
-          "server_version": "0.5.0",
           "tool": "analyze_position"
         },
         "position": {
@@ -4999,7 +4980,6 @@
         },
         "meta": {
           "schema_version": "8",
-          "server_version": "0.5.0",
           "tool": "analyze_position"
         },
         "position": {
@@ -5290,7 +5270,6 @@
         },
         "meta": {
           "schema_version": "8",
-          "server_version": "0.5.0",
           "tool": "analyze_position"
         },
         "position": {
@@ -5601,7 +5580,6 @@
         },
         "meta": {
           "schema_version": "8",
-          "server_version": "0.5.0",
           "tool": "analyze_position"
         },
         "position": {
@@ -5922,7 +5900,6 @@
         },
         "meta": {
           "schema_version": "8",
-          "server_version": "0.5.0",
           "tool": "analyze_position"
         },
         "position": {
@@ -6214,7 +6191,6 @@
         },
         "meta": {
           "schema_version": "8",
-          "server_version": "0.5.0",
           "tool": "analyze_position"
         },
         "position": {
@@ -6434,7 +6410,6 @@
         "message": "shares must be a finite positive number; decimal numeric strings are accepted",
         "meta": {
           "schema_version": "8",
-          "server_version": "0.5.0",
           "tool": "error"
         },
         "symbol": "ACME"

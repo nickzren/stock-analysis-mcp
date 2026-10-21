@@ -59,8 +59,8 @@ def test_schema_version_is_8() -> None:
 
 def test_docs_state_the_current_versions_and_the_release_pin() -> None:
     """T2 (docs pin): the newest CHANGELOG section, the README and AGENTS.md state the code's schema and snapshot
-    versions; the README targets the newest versioned release and labels unreleased content iff the CHANGELOG's newest
-    section is Unreleased. Holds before WP2.4's versions, after them and after the release. G."""
+    versions; the README targets the newest versioned release. Unreleased README content needs a matching CHANGELOG
+    section; maintenance notes with unchanged versions need no README section. G."""
     changelog = _sections(_read("CHANGELOG.md"), "##")
     newest_heading, newest = next(iter(changelog.items()))
     released = next(m.group(1) for h in changelog if (m := re.match(r"(\d+\.\d+\.\d+) \(", h)))
@@ -71,7 +71,8 @@ def test_docs_state_the_current_versions_and_the_release_pin() -> None:
 
     assert f'`"{SCHEMA_VERSION}"`' in newest and f'`"{SNAPSHOT_VERSION}"`' in newest
     assert set(re.findall(r"stock-analysis-mcp@([^\s`\"')]+)", readme)) == {f"v{released}"}
-    assert (unreleased is not None) == newest_heading.startswith("Unreleased")
+    if unreleased is not None:
+        assert newest_heading.startswith("Unreleased")
     assert f"schema **{SCHEMA_VERSION}**" in (unreleased or readme)
     assert f"**{SNAPSHOT_VERSION}**" in (unreleased or readme)
     assert f'now "{SCHEMA_VERSION}"' in agents and f'now "{SNAPSHOT_VERSION}"' in agents

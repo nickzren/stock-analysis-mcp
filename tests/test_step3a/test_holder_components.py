@@ -189,3 +189,69 @@ def test_both_evaluated_unknown_labels_remain_two_missing_checks():
     assert result["action"] == "insufficient_data"
     assert result["reasons"] == ["business_not_evaluated", "cash_runway_not_evaluated"]
     assert all(check["state"] == "not_evaluated" for check in result["checks"].values())
+
+
+@pytest.mark.parametrize("component", ["business", "cash_runway"])
+@pytest.mark.parametrize("state", [None, "", "future_state", True, 42])
+@pytest.mark.parametrize("other_failed", [False, True])
+def test_invalid_component_states_are_missing_with_preserved_evidence(component, state, other_failed):
+    components = {"business": BUSINESS["broken" if other_failed else "intact"],
+                  "cash_runway": RUNWAY["critical" if other_failed else "pass"]}
+    classification = "broken" if component == "business" else "critical"
+    invalid = ComponentEvidence(state, classification, "Previously reported check.",
+        {"reported_value": {"amount": 12}}, {"reported_value": {"period": "TTM"}}, "Input period supplied.")
+    components[component] = invalid
+    source = HolderEvidence("applicable", **components, watch_factors=(deepcopy(WATCH_FACTOR),))
+    original = deepcopy(source)
+    result = long_term_if_held(source)
+    missing = f"{component}_not_evaluated"
+    if other_failed:
+        failure = "runway_critical" if component == "business" else "business_broken"
+        assert result["action"] == "review_exit"
+        assert result["basis"] == failure
+        assert result["reasons"] == [failure, missing]
+        assert result["assessment_status"] == "evaluated"
+    else:
+        assert result["action"] == "insufficient_data"
+        assert result["basis"] == "thesis_unknown"
+        assert result["reasons"] == [missing]
+        assert result["assessment_status"] == "not_evaluated"
+    check = result["checks"][component]
+    assert check["state"] == "not_evaluated"
+    assert check["classification"] == classification
+    assert check["reason"] == f"Unrecognized {component.replace('_', ' ')} state; this check was not evaluated."
+    assert check["evidence"] == invalid.evidence
+    assert check["periods"] == invalid.periods
+    assert check["periods_reason"] == invalid.periods_reason
+    assert result["watch_factors"] == [WATCH_FACTOR]
+    assert any(component.replace("_", " ") in text for text in result["review_when"])
+    assert source == original
+    check["evidence"]["reported_value"]["amount"] = 999
+    check["periods"]["reported_value"]["period"] = "changed"
+    assert source == original
+
+
+@pytest.mark.parametrize("runway", ["exempt", "critical"])
+def test_business_not_applicable_is_normalized_without_losing_known_runway_failure(runway):
+    invalid = ComponentEvidence("not_applicable", "not_applicable", "Business skipped.",
+        {"reported_value": 12}, {"reported_value": None}, "Input period unavailable.")
+    source = HolderEvidence("applicable", invalid, RUNWAY[runway])
+    original = deepcopy(source)
+    result = long_term_if_held(source)
+    check = result["checks"]["business"]
+    assert check["state"] == "not_evaluated"
+    assert check["reason"] == "Business evidence is required for an applicable instrument; this check was not evaluated."
+    assert check["classification"] == invalid.classification
+    assert check["evidence"] == invalid.evidence
+    assert check["periods"] == invalid.periods
+    assert check["periods_reason"] == invalid.periods_reason
+    if runway == "critical":
+        assert result["action"] == "review_exit"
+        assert result["basis"] == "runway_critical"
+        assert result["reasons"] == ["runway_critical", "business_not_evaluated"]
+    else:
+        assert result["action"] == "insufficient_data"
+        assert result["basis"] == "thesis_unknown"
+        assert result["reasons"] == ["business_not_evaluated"]
+        assert result["checks"]["cash_runway"]["state"] == "not_applicable"
+    assert source == original

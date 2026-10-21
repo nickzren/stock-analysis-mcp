@@ -31,7 +31,18 @@
 - To test yfinance behavior itself (error suppression, caching, parsing), drive the real pinned library with only its HTTP session stubbed: the `yf_transport` fixture or `stubbed_yfinance_transport()` in `tests/support/transport.py`, with synthetic fixtures under `tests/fixtures/transport/`. `tests/support/fake_ticker.py` is an app-level fake that skips yfinance internals; `tests/support/fake_source.py` (`FakeSource`) stands in for one `provider` read in tool-level tests.
 - `tests/test_yfinance_transport_contract.py` pins current library behavior, including known defects; a change that alters how a source is read updates those tests deliberately.
 - `scripts/record_provider_fixtures.py` records real responses (manual, networked) to the gitignored `tests/fixtures/_recorded/`; never commit recordings.
+- Current holder recordings omit `meta.server_version` and execution timings,
+  but retain `schema_version`. Client metadata checks compare with the running
+  package version; frozen before recordings and snapshot version pins stay fixed.
 - Keep the suite fast enough for routine local validation.
+
+## Ownership Data
+- Modern `major_holders` frames have a `Value` column indexed by Yahoo field
+  names. Insider and institutional values are already fractions: accept finite,
+  nonnegative real values without scaling or clamping values above 1. Reject
+  booleans, strings and non-finite values with `major_holders_error`; missing
+  keys/frames use `major_holders_unavailable`. Keep legacy two-column percentage
+  conversion separate. These fields are third-party context, not decision inputs.
 
 ## Long-Term Holder Core
 - `decision_card.long_term.if_held` is computed once before projection and retained
@@ -44,7 +55,9 @@
   unknown yields `insufficient_data`; otherwise qualified `hold`. An evaluated
   business check requires `intact`, `mixed` or `broken`; an evaluated runway check
   requires `adequate`, `watch` or `critical`. Unrecognized labels become
-  `not_evaluated`, retaining the raw label and evidence for diagnostics. Known failure
+  `not_evaluated`, retaining the raw label and evidence for diagnostics. Invalid
+  component states and a business exemption on an applicable stock also become
+  `not_evaluated`, with an explanatory reason and preserved evidence. Known failure
   wins over another unknown, and both remain disclosed. Only the runway component
   can be not applicable for a stock. Preserve the existing classifier's non-burner
   and profitability exemptions without calling negative FCF positive.
@@ -184,6 +197,9 @@
 ## When Changing Analysis Logic
 - Update schema and invariant tests under `tests/test_schemas.py` and `tests/test_tools/` when score math, section ordering, or required fields change.
 - Keep score math internally consistent and auditable.
+- Without minimum scoring coverage, verdict component scores remain diagnostics.
+  Skip weight/coverage invariants 3–4 only for an explicit `score_raw: None`;
+  a missing key or numeric zero still runs them, and invariants 1–2 always run.
 - If you change user-visible output semantics, update the relevant examples in `README.md`.
 
 ## Decision Contract (schema 8)

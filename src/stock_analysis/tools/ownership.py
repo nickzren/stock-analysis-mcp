@@ -1,7 +1,9 @@
 """Insider and institutional ownership analysis tool."""
 
 import asyncio
+import math
 from datetime import datetime, timedelta
+from numbers import Real
 from time import perf_counter
 from typing import Any, cast
 
@@ -171,6 +173,8 @@ def _apply_major_holders(
     warnings: list[str],
 ) -> None:
     """Extract ownership percentages from major_holders and apply to results."""
+    insider_activity["insider_pct"] = None
+    institutional["total_institutional_pct"] = None
     if read.status == "failed":
         warnings.append("major_holders_error")
         return
@@ -180,9 +184,25 @@ def _apply_major_holders(
             warnings.append("major_holders_unavailable")
             return
 
-        # major_holders is typically a 2-column DataFrame:
-        #   column 0: percentage value (e.g., "1.50%")
-        #   column 1: description (e.g., "% of Shares Held by All Insider")
+        if len(major.columns) == 1 and "Value" in major.columns:
+            # Modern values are fractions; institutional totals can exceed 100%.
+            for key, target, field in (
+                ("insidersPercentHeld", insider_activity, "insider_pct"),
+                ("institutionsPercentHeld", institutional, "total_institutional_pct"),
+            ):
+                warning = None
+                if key not in major.index:
+                    warning = "major_holders_unavailable"
+                else:
+                    pct = _parse_fraction(major.at[key, "Value"])
+                    target[field] = safe_round(pct, 4)
+                    if pct is None:
+                        warning = "major_holders_error"
+                if warning is not None and warning not in warnings:
+                    warnings.append(warning)
+            return
+
+        # Legacy frames contain a percent value and a description.
         for idx in range(len(major)):
             row = major.iloc[idx]
             description = str(row.iloc[1]).lower() if len(row) > 1 else ""
@@ -328,6 +348,17 @@ def _parse_date(value: Any) -> datetime | None:
         return cast(datetime, pd.to_datetime(value).to_pydatetime().replace(tzinfo=None))
     except Exception:
         return None
+
+
+def _parse_fraction(value: Any) -> float | None:
+    """Accept only finite, nonnegative real fractions without inferring units."""
+    if isinstance(value, bool) or not isinstance(value, Real):
+        return None
+    try:
+        fraction = float(value)
+    except (OverflowError, ValueError):
+        return None
+    return fraction if math.isfinite(fraction) and fraction >= 0 else None
 
 
 def _parse_pct(value: Any) -> float | None:

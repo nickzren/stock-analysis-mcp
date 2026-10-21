@@ -134,6 +134,12 @@ def build_holder_evidence(*, support: dict[str, Any], fundamentals_status: str,
 
 
 def _validated_component(check: ComponentEvidence, name: str, labels: tuple[str, ...]) -> ComponentEvidence:
+    if check.state not in ("evaluated", "not_evaluated", "not_applicable"):
+        return replace(check, state="not_evaluated",
+                       reason=f"Unrecognized {name} state; this check was not evaluated.")
+    if name == "business" and check.state == "not_applicable":
+        return replace(check, state="not_evaluated",
+                       reason="Business evidence is required for an applicable instrument; this check was not evaluated.")
     if check.state == "evaluated" and check.classification not in labels:
         return replace(check, state="not_evaluated",
                        reason=f"Unrecognized {name} classification; this check was not evaluated.")

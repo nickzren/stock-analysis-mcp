@@ -158,6 +158,7 @@ async def run_position(name, **overrides):
     result = copy.deepcopy(result)
     if "meta" in result:
         result["meta"].pop("duration_ms", None)
+        result["meta"].pop("server_version", None)
     # Source timing is measured separately; it is not deterministic business output.
     if "data_quality" in result:
         result["data_quality"].pop("tool_timings", None)

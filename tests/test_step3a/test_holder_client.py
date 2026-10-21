@@ -6,7 +6,7 @@ from datetime import datetime
 import pytest
 from fastmcp import Client
 
-from stock_analysis import server
+from stock_analysis import SERVER_VERSION, server
 from tests.support import decision_matrix as dm
 from tests.support import holder_matrix as hm
 
@@ -34,4 +34,4 @@ async def test_registered_analyze_carries_holder_without_snapshot_or_sizing_feed
                     assert body['decision_card']['long_term']['if_held'] == expected
                     assert body['watchlist_snapshot'] == reference['watchlist_snapshot']
                     assert body['meta']['schema_version'] == '8'
-                    assert body['meta']['server_version'] == '0.5.0'
+                    assert body['meta']['server_version'] == SERVER_VERSION

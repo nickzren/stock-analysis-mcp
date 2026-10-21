@@ -646,6 +646,9 @@ def _validate_verdict_invariants(verdict: dict[str, Any]) -> None:
     3. weights_used keys must match components with non-null scores
     4. coverage_factor must equal sum of weights for used components / total weights
 
+    Invariants 3-4 apply unless score_raw is explicitly None. Without minimum
+    coverage, component scores remain diagnostics rather than a weighted score.
+
     Logs warnings for violations rather than raising (production-safe).
     """
     coverage = verdict.get("coverage", {})
@@ -677,39 +680,40 @@ def _validate_verdict_invariants(verdict: dict[str, Any]) -> None:
                 f"components.{comp_name}={comp_score} but coverage.{cov_key}.used_in_score=False"
             )
 
-    # Invariant 3: weights_used keys must match non-null component scores
-    for comp_name, comp_score in components.items():
-        if comp_score is not None:
-            if comp_name not in weights_used:
-                violations.append(
-                    f"components.{comp_name}={comp_score} but {comp_name} not in weights_used"
-                )
-        else:
-            if comp_name in weights_used:
-                violations.append(
-                    f"components.{comp_name}=None but {comp_name} in weights_used"
-                )
+    if "score_raw" not in verdict or verdict["score_raw"] is not None:
+        # Invariant 3: weights_used keys must match non-null component scores
+        for comp_name, comp_score in components.items():
+            if comp_score is not None:
+                if comp_name not in weights_used:
+                    violations.append(
+                        f"components.{comp_name}={comp_score} but {comp_name} not in weights_used"
+                    )
+            else:
+                if comp_name in weights_used:
+                    violations.append(
+                        f"components.{comp_name}=None but {comp_name} in weights_used"
+                    )
 
-    # Invariant 4: coverage_factor consistency (if calculable)
-    # NOTE: weights_used is RENORMALIZED to sum to 1.0 across used components.
-    # coverage_factor reflects the fraction of full weights actually present.
-    if coverage_factor is not None and weights_used:
-        weights_full = verdict.get("weights_full") or {}
-        full_weight = sum(float(w) for w in weights_full.values() if w is not None)
-        used_full_weight = sum(
-            float(weights_full.get(comp_name, 0.0) or 0.0)
-            for comp_name in weights_used
-        )
-        expected_coverage_factor = (
-            used_full_weight / full_weight
-            if full_weight > 0
-            else None
-        )
-
-        if expected_coverage_factor is not None and abs(expected_coverage_factor - coverage_factor) > 0.0001:
-            violations.append(
-                f"coverage_factor={coverage_factor} but expected_coverage_factor={expected_coverage_factor}"
+        # Invariant 4: coverage_factor consistency (if calculable)
+        # NOTE: weights_used is RENORMALIZED to sum to 1.0 across used components.
+        # coverage_factor reflects the fraction of full weights actually present.
+        if coverage_factor is not None and weights_used:
+            weights_full = verdict.get("weights_full") or {}
+            full_weight = sum(float(w) for w in weights_full.values() if w is not None)
+            used_full_weight = sum(
+                float(weights_full.get(comp_name, 0.0) or 0.0)
+                for comp_name in weights_used
             )
+            expected_coverage_factor = (
+                used_full_weight / full_weight
+                if full_weight > 0
+                else None
+            )
+
+            if expected_coverage_factor is not None and abs(expected_coverage_factor - coverage_factor) > 0.0001:
+                violations.append(
+                    f"coverage_factor={coverage_factor} but expected_coverage_factor={expected_coverage_factor}"
+                )
 
     if violations:
         for v in violations:

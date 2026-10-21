@@ -1,17 +1,20 @@
 """Tests for verdict invariant validation."""
 
 import logging
+from copy import deepcopy
 from typing import Any
 
 import pytest
 
 from stock_analysis.tools.analyze.verdict import _validate_verdict_invariants
+from tests.support import holder_matrix as hm
 
 
-@pytest.fixture
-def base_verdict() -> dict[str, Any]:
+@pytest.fixture(params=[0.235, 0.0], ids=["scored", "neutral"])
+def base_verdict(request: pytest.FixtureRequest) -> dict[str, Any]:
     """Return a valid verdict invariant payload."""
     return {
+        "score_raw": request.param,
         "coverage": {
             "price": {"fetched": True, "used_in_score": True, "reason_excluded": None},
             "fundamentals": {"fetched": True, "used_in_score": True, "reason_excluded": None},
@@ -134,3 +137,64 @@ class TestVerdictInvariants:
             _validate_verdict_invariants(verdict)
 
         # Should not crash
+
+
+@pytest.mark.parametrize("mismatch", ["weights", "coverage_factor"])
+def test_missing_score_raw_does_not_disable_weight_checks(caplog, base_verdict, mismatch):
+    del base_verdict["score_raw"]
+    if mismatch == "weights":
+        base_verdict["weights_used"].pop("fundamentals")
+        expected = "components.fundamentals=0.3 but fundamentals not in weights_used"
+    else:
+        base_verdict["coverage_factor"] = 0.5
+        expected = "coverage_factor=0.5 but expected_coverage_factor=1.0"
+    with caplog.at_level(logging.WARNING):
+        _validate_verdict_invariants(base_verdict)
+    assert expected in caplog.text
+
+
+@pytest.mark.parametrize("diagnostic_only", [True, False])
+def test_explicit_no_score_skips_only_weight_invariants(caplog, base_verdict, diagnostic_only):
+    base_verdict["score_raw"] = None
+    if diagnostic_only:
+        base_verdict["weights_used"] = None
+        base_verdict["coverage_factor"] = None
+    else:
+        base_verdict["coverage_factor"] = 0.5
+    original = deepcopy(base_verdict)
+    with caplog.at_level(logging.WARNING):
+        _validate_verdict_invariants(base_verdict)
+    assert "invariant violation" not in caplog.text.lower()
+    assert base_verdict == original
+
+
+@pytest.mark.parametrize("component_missing", [True, False])
+def test_explicit_no_score_keeps_component_coverage_checks(caplog, base_verdict, component_missing):
+    base_verdict["score_raw"] = None
+    base_verdict["weights_used"] = None
+    base_verdict["coverage_factor"] = None
+    if component_missing:
+        base_verdict["components"]["technicals"] = None
+        expected = "coverage.price.used_in_score=True but components.technicals=None"
+    else:
+        base_verdict["coverage"]["price"]["used_in_score"] = False
+        expected = "components.technicals=0.5 but coverage.price.used_in_score=False"
+    with caplog.at_level(logging.WARNING):
+        _validate_verdict_invariants(base_verdict)
+    assert expected in caplog.text
+
+
+async def test_fundamentals_failure_retains_diagnostics_without_invariant_warning(caplog):
+    with caplog.at_level(logging.WARNING):
+        result = await hm.run_stock("fundamentals_failed")
+    verdict = result["verdict"]
+    assert verdict["score"] is None
+    assert verdict["score_raw"] is None
+    assert verdict["weights_used"] is None
+    assert verdict["coverage_factor"] is None
+    assert verdict["components"]["technicals"] == 1.0
+    assert verdict["coverage"]["price"]["used_in_score"] is True
+    assert verdict["tilt"] is None
+    assert result["decision_card"]["long_term"]["if_held"]["action"] == "insufficient_data"
+    assert result["watchlist_snapshot"]["long_term_if_held_action"] == "insufficient_data"
+    assert "invariant violation" not in caplog.text.lower()
