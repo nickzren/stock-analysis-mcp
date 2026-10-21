@@ -1,13 +1,18 @@
 # Changelog
 
-## Unreleased
+## 0.5.1 (2026-10-21): maintenance
 
-Response schema `"8"` and stock snapshot `"4.0.0"` are unchanged.
+**Package:** `meta.server_version` goes from `0.5.0` to `0.5.1`.
+Response schema `"8"` and stock snapshot `"4.0.0"` are unchanged. Decisions,
+gates, sizing, holder rules and snapshots are unchanged.
 
-- Populate the existing insider and institutional ownership fractions from
-  yfinance's indexed `major_holders` layout. Values remain unscaled, including
-  fractions above 1; invalid values remain null with warnings. Legacy two-column
-  percentage data is still supported.
+- Populate the insider and institutional ownership fractions from yfinance's
+  indexed `major_holders` layout. Values remain unscaled, including fractions
+  above 1; invalid values remain null with warnings. Legacy two-column
+  percentage data is still supported. `insider_activity.insider_pct` is now
+  always present in `get_ownership` and analyze's `ownership_flow` (null when
+  unknown); previously the key was absent. These are third-party context, not
+  decision inputs.
 - Remove false verdict invariant warnings when scoring coverage is unavailable,
   retaining diagnostic component scores and all existing analysis output.
 - Normalize invalid internal holder-check states to `not_evaluated`, preserving
@@ -15,6 +20,8 @@ Response schema `"8"` and stock snapshot `"4.0.0"` are unchanged.
 - Omit package-version labels from current holder recordings and compare client
   metadata with the running version, so package bumps do not churn fixtures.
   Frozen baselines, response schemas and snapshot version pins are unchanged.
+- Update the locked NumPy from yanked 2.4.0 to 2.4.6. No other dependency
+  changes; `pyproject.toml` still requires `numpy>=1.24.0`.
 
 ## 0.5.0 (2026-10-20): longer-term holders and position context
 

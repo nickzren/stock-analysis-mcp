@@ -179,7 +179,7 @@ def test_released_holder_docs_keep_routing_and_allocation_separate() -> None:
     assert "For agents" in sections and "Decision" in sections
     assert not any("Unreleased" in heading or "v0.4.0" in heading for heading in sections)
     assert "schema **8**" in readme and "**4.0.0**" in readme
-    assert readme.count("stock-analysis-mcp@v0.5.0") == 2
+    assert readme.count("stock-analysis-mcp@v0.5.1") == 2
     assert "stock-analysis-mcp@v0.4.0" not in readme
     assert "CHANGELOG.md#050-2026-10-20-longer-term-holders-and-position-context" in readme
     decision = _flat(sections["Decision"])
@@ -193,5 +193,5 @@ def test_released_holder_docs_keep_routing_and_allocation_separate() -> None:
     assert "technical reference levels are not monitored holder stops" in decision
     agents = _read("AGENTS.md")
     assert "Unreleased" not in agents
-    assert "Package 0.5.0 uses response schema 8 and snapshot 4.0.0" in _flat(agents)
-    assert "install pins at v0.5.0" in _flat(agents)
+    assert "Package 0.5.1 uses response schema 8 and snapshot 4.0.0" in _flat(agents)
+    assert "install pins at v0.5.1" in _flat(agents)
