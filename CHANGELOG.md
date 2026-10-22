@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+**Python:** the minimum rises from 3.11 to **3.12**. Python 3.11 is no longer
+supported by the next release. Response schema `"8"` and stock snapshot `"4.0.0"`
+are unchanged; there is no intended analysis, decision or sizing behavior change.
+
+- Target Python 3.12 in package metadata, Ruff and mypy. Internal generic helpers
+  use Python 3.12 type-parameter syntax; their annotation metadata changes, while
+  application behavior is preserved.
+- Keep all retained locked dependency versions unchanged. Remove only the
+  Python-3.11-only dependency and artifacts that cannot serve supported versions.
+- Python 3.11 users can keep their Git install pinned to `v0.5.2`, the last release
+  declaring 3.11 support; its runtime compatibility on 3.11 was not verified.
+  Under default settings, `uvx` can select or download a compatible interpreter.
+  Changing a live MCP registration remains a separate step.
+
 ## 0.5.2 (2026-10-21): dependency compatibility
 
 **Package:** `meta.server_version` goes from `0.5.1` to `0.5.2`.

@@ -3,7 +3,7 @@ name = "stock-analysis"
 version = "0.5.2"
 description = "An MCP server that gives AI agents (Claude Code, Codex, etc.) stock analysis capabilities"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [{ name = "Stock Analysis MCP" }]
 keywords = ["mcp", "stock", "analysis", "claude", "fastmcp"]
@@ -43,14 +43,14 @@ testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
 ignore = ["E501"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 strict = true
 plugins = ["numpy.typing.mypy_plugin"]
 

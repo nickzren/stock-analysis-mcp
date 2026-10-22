@@ -20,7 +20,7 @@ import math
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Literal, TypeGuard, TypeVar
+from typing import Any, Literal, TypeGuard
 from zoneinfo import ZoneInfo
 
 import yfinance as yf
@@ -47,7 +47,6 @@ from stock_analysis.data.yfinance_client import (
 )
 from stock_analysis.utils.provenance import utcnow_isoformat_z
 
-T = TypeVar("T")
 SourceStatus = Literal["ok", "empty", "failed", "unverified"]
 
 _QUOTE_SUMMARY_URL = "https://query2.finance.yahoo.com/v10/finance/quoteSummary/{symbol}"
@@ -244,7 +243,7 @@ def _is_empty(value: Any) -> bool:
         return False
 
 
-async def read_property(ticker: Any, source: str, read: Callable[[Any], T]) -> SourceRead:
+async def read_property[T](ticker: Any, source: str, read: Callable[[Any], T]) -> SourceRead:
     """A network-backed ``Ticker`` property, read as executor jobs (WP3, R3.8).
 
     ``read`` gets the Ticker to read. Each attempt holds the symbol's lock

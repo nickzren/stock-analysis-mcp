@@ -221,7 +221,7 @@ def in_flight_jobs() -> int:
     return _gate.running
 
 
-async def run_job(
+async def run_job[T](
     fn: Callable[[], T],
     *,
     clock: ReadClock,
@@ -273,7 +273,7 @@ class _Flight:
 _flights: dict[Any, _Flight] = {}
 
 
-async def singleflight(key: Any, start: Callable[[], Coroutine[Any, Any, T]]) -> tuple[T, bool]:
+async def singleflight[T](key: Any, start: Callable[[], Coroutine[Any, Any, T]]) -> tuple[T, bool]:
     """Share one in-flight ``start()`` among concurrent callers with the same key.
 
     Returns (result, joined). The work runs in a detached task with no read budget

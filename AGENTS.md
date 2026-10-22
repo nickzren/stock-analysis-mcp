@@ -21,12 +21,14 @@
 - Treat output as informational software, not financial advice. Do not weaken existing disclaimers.
 
 ## Validation
+- Python 3.12 or newer is required. Run the locked validation lane on Python 3.12 to cover the supported minimum.
 - Install dev dependencies with `uv pip install -e ".[dev]"`.
 - Run `uv run pytest` after behavior changes.
 - Run `uv run ruff check` after code edits.
 - Run `uv run mypy` when touching typed Python code or schemas. `mypy` is available via the `dev` extra in `pyproject.toml`.
 
 ## Release Checks
+- Record the interpreter for each lane: the repo locked suite covers Python 3.12, and the fresh check uses uv's default installed compatible interpreter. Fresh dependency resolution on Python 3.12 is not a separate validated lane.
 - Before each release, run `python scripts/check_fresh_dependencies.py --output-dir <new evidence directory>` from a clean committed checkout. The manual check exports that commit, uses uv's default installed interpreter and an empty cache, resolves runtime dependencies from public PyPI, then adds test-only tools at their locked versions without changing the runtime stack. It runs the full offline suite and records versions, source hashes, test totals and skip reasons. It leaves the repo lockfile and `.venv` untouched.
 - A failing fresh-resolution check blocks release unless Nick explicitly names an exception; the evidence must retain `FAIL`. There is no script waiver flag. Keep the locked-stack checks too: a successful fresh run does not replace them.
 

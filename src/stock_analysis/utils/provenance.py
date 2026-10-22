@@ -2,11 +2,9 @@
 
 from collections.abc import Awaitable
 from datetime import UTC, datetime
-from typing import Any, TypeVar
+from typing import Any
 
 from stock_analysis import SCHEMA_VERSION, SERVER_VERSION
-
-T = TypeVar("T")
 
 
 def utcnow_isoformat_z() -> str:
@@ -115,7 +113,7 @@ class FetchError(Exception):
         self.response = response
 
 
-async def fetch_or_error(coro: Awaitable[T], symbol: str) -> T:
+async def fetch_or_error[T](coro: Awaitable[T], symbol: str) -> T:
     """Await a fetch coroutine; raise FetchError with a standard response on failure.
 
     SymbolNotFoundError maps to 'invalid_symbol'; other exceptions map to

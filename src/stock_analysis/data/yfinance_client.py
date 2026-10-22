@@ -13,7 +13,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, TypeVar
+from typing import Any
 
 import pandas as pd
 import pytz
@@ -49,9 +49,6 @@ logger = logging.getLogger(__name__)
 # Error policy (Step 1, D1): surface yfinance read failures as exceptions instead
 # of letting them read as valid empty results. Set once here; never per call.
 YfConfig.debug.hide_exceptions = False
-
-
-T = TypeVar("T")
 
 # Every YfData method that sends a request (data, cookie, crumb, consent) and the
 # argument carrying its timeout.
@@ -148,7 +145,7 @@ def _record_missing_daily_volume() -> None:
 _record_missing_daily_volume()
 
 
-def preserving_http_status(call: Callable[[], T]) -> Callable[[], T]:
+def preserving_http_status[T](call: Callable[[], T]) -> Callable[[], T]:
     """Wrap a blocking yfinance read (run on a worker thread) so that an HTTP error
     response yfinance wouldn't raise fails the read as a ``HiddenHTTPError``
     carrying that status, raised as the response arrives (before yfinance parses
@@ -441,7 +438,7 @@ def _cooldown_began_after(covered: float) -> bool:
     return _rate_limited_until > covered and rate_limit_cooldown_remaining() > 0
 
 
-async def run_job_after_cooldown(fn: Callable[[], T], *, clock: jobs.ReadClock, symbol_lock: str | None = None) -> T:
+async def run_job_after_cooldown[T](fn: Callable[[], T], *, clock: jobs.ReadClock, symbol_lock: str | None = None) -> T:
     """``jobs.run_job`` once no rate-limit cooldown is active. A cooldown that begins
     while the read is queued for a slot is checked again at admission: the read gives
     the slot back, waits it out and queues again, within ``clock``."""
@@ -550,7 +547,7 @@ class RetryResult:
         return prov
 
 
-async def _retry_with_backoff(
+async def _retry_with_backoff[T](
     operation_name: str,
     sync_func: Callable[[], T],
     max_retries: int = _max_retries,
