@@ -1,9 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 (2026-10-22): Python 3.12 minimum
 
-**Python:** the minimum rises from 3.11 to **3.12**. Python 3.11 is no longer
-supported by the next release. Response schema `"8"` and stock snapshot `"4.0.0"`
+**Package:** `meta.server_version` goes from `0.5.2` to `0.6.0`.
+**Python:** the minimum rises from 3.11 to **3.12**; Python 3.11 is no longer
+supported. Response schema `"8"` and stock snapshot `"4.0.0"`
 are unchanged; there is no intended analysis, decision or sizing behavior change.
 
 - Target Python 3.12 in package metadata, Ruff and mypy. Internal generic helpers

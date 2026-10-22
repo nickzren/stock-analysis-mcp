@@ -53,16 +53,16 @@ Choose your client:
 **Claude Code**
 
 ```bash
-claude mcp add -s user stock-analysis -- uvx --from git+https://github.com/nickzren/stock-analysis-mcp@v0.5.2 stock-analysis
+claude mcp add -s user stock-analysis -- uvx --from git+https://github.com/nickzren/stock-analysis-mcp@v0.6.0 stock-analysis
 ```
 
 **Codex**
 
 ```bash
-codex mcp add stock-analysis -- uvx --from git+https://github.com/nickzren/stock-analysis-mcp@v0.5.2 stock-analysis
+codex mcp add stock-analysis -- uvx --from git+https://github.com/nickzren/stock-analysis-mcp@v0.6.0 stock-analysis
 ```
 
-These commands are pinned to **v0.5.2**. Other MCP clients can use the same `uvx`
+These commands are pinned to **v0.6.0**. Other MCP clients can use the same `uvx`
 command as a stdio server.
 
 ## For agents
@@ -98,7 +98,7 @@ Read `decision_card.sizing_status` and its reason when sizing is null; a `buy` o
 stop are separate. The planning stop is not monitored or a holder exit instruction;
 gaps and slippage can increase the loss. Existing holdings and buying power are unknown.
 
-Version 0.5.2 responses use schema **8** and snapshots **4.0.0**, unchanged since 0.5.0. See the
+Version 0.6.0 responses use schema **8** and snapshots **4.0.0**, unchanged since 0.5.0. See the
 [schema 7 → 8 migration](CHANGELOG.md#050-2026-10-20-longer-term-holders-and-position-context)
 for position fields, holder guidance, and snapshot compatibility.
 

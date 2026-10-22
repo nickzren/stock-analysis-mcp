@@ -75,8 +75,8 @@
   capacity or sizing implication. Existing mid-term/new-money/sizing output is
   unchanged. Snapshot 4.0.0 adds only the long-term holder action; its new key
   and version are emitted together, with every released field set frozen.
-- Package 0.5.2 uses response schema 8 and snapshot 4.0.0; install pins target
-  v0.5.2. Live configuration changes require separate approval and a verified
+- Package 0.6.0 uses response schema 8 and snapshot 4.0.0; install pins target
+  v0.6.0. Live configuration changes require separate approval and a verified
   tagged install. No implementation branch changes the live config.
 
 - Every analyze tier retains `verdict.horizon_fit`, including its actual reasons;
@@ -192,7 +192,7 @@
   final full cap and whole-share dollars. Stop warnings use the unrounded
   distance; fallback labels are `52w_low_plus_2pct_fallback` and
   `52w_high_minus_2pct_fallback`, never an invented stop.
-- Package 0.5.2 uses response schema 8 and snapshot 4.0.0, without changing
+- Package 0.6.0 uses response schema 8 and snapshot 4.0.0, without changing
   sizing. Version 0.4.0 introduced schema 7 and snapshot 3.0.0. CHANGELOG.md's
   0.4.0 section preserves the schema 6 → 7 fields and one-release legacy
   adapters; its 0.3.0 section still describes schema 6.
@@ -365,7 +365,7 @@
   changed meaning or units since schema 4; the 0.3.0 section covers schema 6
   and snapshot 3.0.0. The 0.4.0 section covers schema 7 sizing; 0.5.0 covers
   the schema 8 holder/position migration and snapshot 4.0.0. Keep released history
-  byte-identical and install pins at v0.5.2.
+  byte-identical and install pins at v0.6.0.
 - `technicals` returns `current_price` at the top level, not under a `summary` object.
 - `analyze` returns price, name, sector, market cap, and currency under `summary`, not as duplicated top-level fields.
 - Support boundaries (WP4, D5): `summary.support` (and the trade card's
